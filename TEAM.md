@@ -198,22 +198,25 @@ Each interface is tested by at least one integration test
 Limits are set in `config/config.h`. If the team needs more, raise the
 limit there. The numbers below are PicoCar's planned usage.
 
-| Object | Limit | S1 | S2 | S3 | S4 | S5 |
-|---|---|---|---|---|---|---|
-| Task | 32 | 1 | 1 | 1 | 2 | 2 |
-| Semaphore | 16 | | | | | |
-| Event flag | 16 | | | | 1 | 1 |
-| Mailbox | 12 | | | | | |
-| Mutex | 12 | | | | | |
-| Message buffer | 12 | 1 | 1 | | | 2 |
-| Fixed memory pool | 12 | | | | | |
-| Variable memory pool | 12 | | | | | |
-| Cyclic handler | 12 | | 1 | | 1 | 1 |
-| Alarm handler | 12 | | | | | |
+| Object | Limit | Kernel / template | S1 Comms+HMI | S2 Motion | S3 Line | S4 IMU+Safety | S5 Obstacle+Mission | **Total** |
+|---|---|---|---|---|---|---|---|---|
+| Task | 32 | 3: initial task, USB console, WiFi (`cyw43_utk_task` = CommsTask) | 1: HmiTask | 1: MotionTask | 1: LineBarcodeTask | 2: SafetyTask, ImuTask | 2: MissionTask, ObstacleTask | **10** |
+| Message buffer | 12 | – | 1: mbf_telem | 1: mbf_motion | – | – | 2: mbf_mission, mbf_scan | **4** |
+| Event flag | 16 | 3: serial driver ×2, device-manager lock | – | – | – | 1: flg_safety | 1: flg_obst | **5** |
+| Semaphore | 16 | 1: serial driver lock | – | – | – | – | – | **1** |
+| Cyclic handler | 12 | – | – | 1: motion_cyc | – | 1: imu_cyc | 1: range_cyc | **3** |
+| Mutex | 12 | – | – | – | – | – | – | **0** (Week 6 had 1: mtx_snap, replaced by spinlocks, T1-g2) |
+| Mailbox, memory pools, alarm handler | 12 each | – | – | – | – | – | – | **0** |
 
-Planned totals: 7 application tasks, 4 message buffers, 2 event flags,
-0 mutexes (mtx_snap replaced by per-snapshot spinlocks, T1-g2), 3 cyclic
-handlers (motion_cyc, imu_cyc, range_cyc). Objects already created by the
-shared base: mbf_telem, mbf_motion, mbf_mission, mbf_scan, flg_safety, flg_obst.
+Every total is well under its limit, so `config/config.h` is unchanged.
 
-(The kernel's USB and WiFi service tasks also use a few of these.)
+- **Already created by the shared base:** the 4 message buffers and the 2
+  application event flags, plus HmiTask. The other 6 application tasks and
+  the 3 cyclic handlers appear when their owners write them.
+- **Kernel / template column:** counted from the source for this build
+  configuration (`DEVCNF_USE_SER = 1`, `DEVCNF_USE_ADC = 0`,
+  `DEVCNF_USE_IIC = 0`): `sysinit.c`, `usb_console.c`, `cyw43_utk_kernel.c`,
+  `ser_rp2040.c`, `msdrvif.c`, `device.c`. Confirm on the board with
+  `tk_ref_*` if a limit is ever approached.
+- **Not kernel objects:** the per-snapshot spinlocks (`app_lock_t`) and the
+  heartbeat words cost no IDs.
