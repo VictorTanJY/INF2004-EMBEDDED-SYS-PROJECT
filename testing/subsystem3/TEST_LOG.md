@@ -1,6 +1,6 @@
 # Subsystem 3 — test log
 
-**Subsystem:** Consumer (example)  ·  **Student ID:** <student ID>  ·  **Code:** `app_program/subsystem3/`
+**Subsystem:** IR line following and Code 39 barcode (LineBarcodeTask)  ·  **Student ID:** 2500519  ·  **Code:** `app_program/subsystem3/`
 
 See `testing/README.md` for how to run tests and record results.
 
@@ -10,7 +10,9 @@ Define a test here before running it. Test IDs never change.
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S3-U01 | statistics self-consistent (min ≤ max, 0..100) | | auto | `subsystem3_test.c` | `[TEST] S3-U01 PASS` |
+| S3-U01 | line snapshot round trip under its lock | IF-04 | auto | `subsystem3_test.c` | PASS |
+
+_Shared-base checks (interface objects and snapshots). The owner adds the subsystem's own tests below them._
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **manual** = a person observes the result (LED, scope, meter, phone app…).

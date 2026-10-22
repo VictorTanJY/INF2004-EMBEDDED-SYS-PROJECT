@@ -1,42 +1,44 @@
 /*
- *	subsystem3.c
- *	Subsystem 3 -- Consumer: creates its objects and starts its task.
+ *  subsystem3.c
+ *  Subsystem 3 -- Line following and barcode.  Owner: Buddy 3.
  *
- *	APIs shown: tk_cre_mbx, tk_cre_mtx
+ *  STATUS: shared-base stub (line snapshot only).
+ *  TODO (owner): drv_adc (round-robin ADC0-ADC2, 3 kHz total, CLKDIV =
+ *  48 MHz / 3 kHz - 1 = 15999; DMA channel from dma_claim_unused_channel,
+ *  because the radio already claims two), adc_dma_isr registered with
+ *  tk_def_int on core 1, LineBarcodeTask, calibration, Code 39 decoder.
+ *  (DEVCNF_USE_ADC is set to 0 in config/config_device.h.)
  */
 
 #include "subsystem3.h"
 
-EXPORT ID		mbx_samples;	/* IF-01 */
-EXPORT ID		mtx_stats;	/* IF-04 */
-EXPORT APP_STATS	app_stats;
+static app_lock_t   g_line_lock;
+static line_snap_t  g_line_snap;
 
 EXPORT ER subsystem3_init(void)
 {
-	T_CMBX	cmbx = {0};
-	T_CMTX	cmtx = {0};
-
-	/* Mailbox: passes a POINTER to a message (zero copy).  The message
-	   memory must stay valid until the receiver is done with it, which
-	   is why subsystem 2 takes it from its memory pool. */
-	cmbx.mbxatr = TA_TFIFO | TA_MFIFO;	/* FIFO waiters, FIFO messages */
-	mbx_samples = tk_cre_mbx(&cmbx);
-	if (mbx_samples < E_OK) {
-		return mbx_samples;
-	}
-
-	/* Mutex: only one task at a time may touch app_stats.  TA_INHERIT
-	   (priority inheritance) avoids priority inversion: a low-priority
-	   holder is temporarily raised to the waiter's priority. */
-	cmtx.mtxatr = TA_INHERIT;
-	mtx_stats = tk_cre_mtx(&cmtx);
-	return (mtx_stats < E_OK) ? mtx_stats : E_OK;
+    app_lock_init(&g_line_lock);
+    return E_OK;
 }
 
 EXPORT ER subsystem3_start(void)
 {
-	/* Pinned to core 0 (TP_PRC1): opposite core to the producer */
-	ID tid = app_start_task(consumer_task, S3_PRI_CONSUMER, TP_PRC1,
-				"consumer_task");
-	return (tid < E_OK) ? tid : E_OK;
+    /* TODO (owner): app_start_task(line_task, S3_PRI_LINE, S3_CORE_LINE, "line"); */
+    return E_OK;
+}
+
+EXPORT void line_get_snap(line_snap_t * p_out)
+{
+    UINT sts = app_lock(&g_line_lock);
+
+    *p_out = g_line_snap;
+    app_unlock(&g_line_lock, sts);
+}
+
+EXPORT void line_put_snap(line_snap_t const * p_in)
+{
+    UINT sts = app_lock(&g_line_lock);
+
+    g_line_snap = *p_in;
+    app_unlock(&g_line_lock, sts);
 }

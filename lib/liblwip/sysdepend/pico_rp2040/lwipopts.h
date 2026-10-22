@@ -55,6 +55,13 @@
  * room to spare; each slot is only a few bytes. */
 #define MEMP_NUM_SYS_TIMEOUT        (LWIP_NUM_SYS_TIMEOUT_INTERNAL + 4)
 
+/* PicoCar (agreed change, Week 6 6.5 / A14): lwIP's default MQTT output
+ * ring is 256 B, smaller than one worst-case JSON telemetry publish
+ * (~254 B payload + 23 B topic + header ~ 282 B), so mqtt_publish() would
+ * fail with ERR_MEM on every such record. 1 KB holds about three telemetry
+ * publishes plus events. It is allocated with the client from MEM_SIZE. */
+#define MQTT_OUTPUT_RINGBUF_SIZE    1024
+
 #define LWIP_ARP                    1
 #define LWIP_ETHERNET               1
 #define LWIP_ICMP                   1

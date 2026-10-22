@@ -26,7 +26,10 @@
  */
 
 #define DEVCNF_USE_SER		1		// Serial communication device 
-#define DEVCNF_USE_ADC		1		// A/D conversion device
+#define DEVCNF_USE_ADC		0		// A/D conversion device
+		/* PicoCar: 0.  LineBarcodeTask (subsystem 3) drives the ADC
+		   round-robin with DMA; the kernel ADC driver would be a second
+		   owner and installs its own ADC interrupt (Week 6 A3). */
 #define DEVCNF_USE_IIC		0		// I2C communication device
 		/* Off by default so no pins are claimed at boot.  To use I2C,
 		   set this to 1 and choose the pins in

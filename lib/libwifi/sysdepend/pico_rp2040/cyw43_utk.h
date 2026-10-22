@@ -23,6 +23,8 @@ typedef struct {
 
 int32_t cyw43_utk_start(void);
 void cyw43_utk_get_status(T_CYW43_UTK_STATUS *status);
+/* PicoCar: link RSSI in dBm (0 = unknown). WiFi service task only. */
+int32_t cyw43_utk_get_rssi(void);
 void cyw43_utk_task(int32_t stacd, void *exinf);
 
 #endif

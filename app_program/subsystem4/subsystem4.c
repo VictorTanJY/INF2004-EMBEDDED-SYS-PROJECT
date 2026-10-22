@@ -1,52 +1,79 @@
 /*
- *	subsystem4.c
- *	Subsystem 4 -- Monitor: creates its objects and starts its task.
+ *  subsystem4.c
+ *  Subsystem 4 -- IMU and safety.  Owner: Buddy 4 (Purvez).
  *
- *	APIs shown: tk_cre_flg, tk_cre_mbf, tk_cre_alm
+ *  STATUS: shared-base stub.  Creates flg_safety and provides the
+ *  heartbeat words and IMU snapshot.
+ *  TODO (owner): SafetyTask (wait TWF_ORW | TWF_BITCLR on
+ *  SAFETY_BRAKE_MASK with a 20 ms timeout, motor_estop(), latch, FAULT ->
+ *  mbf_mission, heartbeat checks, watchdog feed), drv_watchdog (no SDK
+ *  watchdog is built; 200 ms needs a load of 2 x 200000 because of
+ *  RP2040-E1, and check the watchdog tick is 1 us), ImuTask, drv_imu on
+ *  I2C1 (release RESETS_RESET_I2C1 yourself: it is not released at boot),
+ *  imu_int1_isr in the shared IO_IRQ_BANK0 handler on core 1.
  */
 
 #include "subsystem4.h"
 
-EXPORT ID	mbf_summary;	/* IF-03 */
-EXPORT ID	flg_events;	/* IF-03 */
-EXPORT ID	alm_monitor;
+EXPORT ID g_flg_safety;
+
+static volatile uint32_t g_latched;
+static volatile uint32_t g_hb[SAFETY_HB_COUNT];
+static app_lock_t        g_imu_lock;
+static imu_snap_t        g_imu_snap;
 
 EXPORT ER subsystem4_init(void)
 {
-	T_CFLG	cflg = {0};
-	T_CMBF	cmbf = {0};
-	T_CALM	calm = {0};
+    T_CFLG  cflg = {0};
 
-	/* Event flag: a 32-bit pattern of bits.  Tasks wait for a bit (or a
-	   combination of bits) to be set. */
-	cflg.flgatr  = TA_TFIFO | TA_WMUL;	/* allow several waiters */
-	cflg.iflgptn = 0;			/* all bits clear to begin with */
-	flg_events = tk_cre_flg(&cflg);
-	if (flg_events < E_OK) {
-		return flg_events;
-	}
+    app_lock_init(&g_imu_lock);
 
-	/* Message buffer: COPIES variable-length data into a kernel ring
-	   buffer.  Here it carries short text lines from subsystem 3. */
-	cmbf.mbfatr = TA_TFIFO;
-	cmbf.bufsz  = 4 * S4_SUMMARY_MAX;	/* total buffer size, bytes */
-	cmbf.maxmsz = S4_SUMMARY_MAX;		/* largest single message */
-	mbf_summary = tk_cre_mbf(&cmbf);
-	if (mbf_summary < E_OK) {
-		return mbf_summary;
-	}
+    /* TA_WMUL: a stray second waiter gets queued instead of E_OBJ.  By
+       rule only SafetyTask waits (see subsystem4.h). */
+    cflg.flgatr  = TA_TFIFO | TA_WMUL;
+    cflg.iflgptn = 0;
+    g_flg_safety = tk_cre_flg(&cflg);
 
-	/* Alarm handler: called ONCE, a given time after tk_sta_alm().
-	   The monitor task re-arms it each time round its loop. */
-	calm.almatr = TA_HLNG;
-	calm.almhdr = (FP)monitor_alarm_handler;
-	alm_monitor = tk_cre_alm(&calm);
-	return (alm_monitor < E_OK) ? alm_monitor : E_OK;
+    return (g_flg_safety < E_OK) ? g_flg_safety : E_OK;
 }
 
 EXPORT ER subsystem4_start(void)
 {
-	/* No affinity: the scheduler may run it on either core */
-	ID tid = app_start_task(monitor_task, S4_PRI_MONITOR, 0, "monitor_task");
-	return (tid < E_OK) ? tid : E_OK;
+    /* TODO (owner): start SafetyTask (S4_PRI_SAFETY, S4_CORE_SAFETY) and
+       ImuTask (S4_PRI_IMU, S4_CORE_IMU). */
+    return E_OK;
+}
+
+EXPORT uint32_t safety_get_latched(void)
+{
+    return g_latched;
+}
+
+EXPORT void safety_heartbeat(safety_hb_t task)
+{
+    if ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT)
+    {
+        g_hb[task]++;           /* single writer per word */
+    }
+}
+
+EXPORT uint32_t safety_heartbeat_count(safety_hb_t task)
+{
+    return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_hb[task] : 0u;
+}
+
+EXPORT void imu_get_snap(imu_snap_t * p_out)
+{
+    UINT sts = app_lock(&g_imu_lock);
+
+    *p_out = g_imu_snap;
+    app_unlock(&g_imu_lock, sts);
+}
+
+EXPORT void imu_put_snap(imu_snap_t const * p_in)
+{
+    UINT sts = app_lock(&g_imu_lock);
+
+    g_imu_snap = *p_in;
+    app_unlock(&g_imu_lock, sts);
 }

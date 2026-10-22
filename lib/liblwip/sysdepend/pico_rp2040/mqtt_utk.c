@@ -4,11 +4,30 @@
  *
  *	Runs entirely on the single processor-1-owned task that already owns
  *	the CYW43439 and the rest of lwIP (docs/RELEASE.md safety rule 6):
- *	cyw43_utk_task() (cyw43_utk.c) calls mqtt_utk_start() once, the first
- *	time it observes CYW43_LINK_UP. mqtt.c's own keepalive/ping/retry
- *	timers, and the heartbeat below, both ride the same sys_check_timeouts()
- *	polling that task already does for DHCP and TCP -- nothing extra runs
- *	on any other task or core.
+ *	cyw43_utk_task() (cyw43_utk.c) calls mqtt_utk_init() once before its
+ *	poll loop and mqtt_utk_start() on every pass while the link is up.
+ *	mqtt.c's own keepalive/ping timers, the application poll chain and
+ *	the reconnect back-off all ride the same sys_check_timeouts() polling
+ *	that task already does for DHCP and TCP -- nothing extra runs on any
+ *	other task or core.
+ *
+ *	PicoCar changes from the template demo (Week 6 Section 6.5, A14;
+ *	agreed with the team and the instructor, recorded as IF-11 in TEAM.md):
+ *	  - the 5 s "hb" demo publish is gone: the application publishes a
+ *	    retained status message at 1 Hz from mqtt_utk_app_poll();
+ *	  - keep-alive 60 s -> 10 s, and a Last Will from the application;
+ *	  - fixed 3 s retry -> 1, 2, 4, 8, 16 s exponential back-off, reset on
+ *	    every accepted connection;
+ *	  - subscribes to the application's command topic only, not to the
+ *	    topic it publishes on;
+ *	  - received payloads are passed on byte for byte (the demo replaced
+ *	    non-printable bytes with '.'), and oversized ones are dropped and
+ *	    counted instead of being truncated;
+ *	  - no tm_printf per message: on the dual-core USB build tm_printf
+ *	    masks interrupts on core 0, whose tick drives every cyclic handler.
+ *	    Only connection changes are printed;
+ *	  - mqtt_publish() results are returned to the caller, and failures
+ *	    reported later by lwIP are counted.
  *
  *	This file does not include tk/tkernel.h or any pico-sdk/cyw43 header
  *	(unlike cyw43_utk.c and sys_arch.c), so it isn't subject to either
@@ -22,28 +41,89 @@
 #include "mqtt_utk.h"
 #include <tm/tmonitor.h>
 
-#define MQTT_UTK_HEARTBEAT_MS   5000
-#define MQTT_UTK_KEEPALIVE_S    60
-#define MQTT_UTK_RETRY_MS       3000
+#define MQTT_UTK_KEEPALIVE_S		10
+#define MQTT_UTK_BACKOFF_MIN_MS		1000u
+#define MQTT_UTK_BACKOFF_MAX_MS		16000u
+#define MQTT_UTK_POLL_MS		20u
 
-/* Inbound message staging. A publish arrives as one topic callback followed by
- * one or more data callbacks, so the topic has to be kept until the fragment
- * carrying MQTT_DATA_FLAG_LAST shows up. Both buffers are sized well past the
- * heartbeat this demo publishes; anything longer is truncated and flagged
- * rather than being allowed to run off the end. */
-#define MQTT_UTK_RX_TOPIC_MAX   64
-#define MQTT_UTK_RX_DATA_MAX    128
+/* Inbound message staging. A publish arrives as one topic callback followed
+ * by one or more data callbacks, so the topic has to be kept until the
+ * fragment carrying MQTT_DATA_FLAG_LAST shows up. Commands are well under
+ * 128 bytes; anything longer is dropped whole and counted. */
+#define MQTT_UTK_RX_TOPIC_MAX		64
+#define MQTT_UTK_RX_DATA_MAX		128
 
 static mqtt_client_t	*client;
 static ip_addr_t	broker_addr;
-static u8_t		connecting;
+
+/* 1 while a connect attempt is running or a back-off retry is pending;
+ * mqtt_utk_start() does nothing then. */
+static u8_t		busy;
+static u32_t		backoff_ms = MQTT_UTK_BACKOFF_MIN_MS;
 
 static char		rx_topic[MQTT_UTK_RX_TOPIC_MAX];
-static UB		rx_data[MQTT_UTK_RX_DATA_MAX];
+static u8_t		rx_data[MQTT_UTK_RX_DATA_MAX + 1];
 static u16_t		rx_len;
-static u8_t		rx_truncated;
+static u8_t		rx_too_long;
 
-static void heartbeat_timeout(void *arg);
+static u32_t		pub_failures;
+static u32_t		rx_dropped;
+
+/* ------------------------------------------------------------------------ */
+/* Weak application hooks: a build without the PicoCar application links. */
+
+__attribute__((weak)) const T_MQTT_UTK_CFG *mqtt_utk_app_config(void)
+{
+	return NULL;
+}
+
+__attribute__((weak)) void mqtt_utk_app_connected(void)
+{
+}
+
+__attribute__((weak)) void mqtt_utk_app_disconnected(void)
+{
+}
+
+__attribute__((weak)) void mqtt_utk_app_poll(void)
+{
+}
+
+__attribute__((weak)) void mqtt_utk_app_rx(const char *topic,
+					   const uint8_t *data, uint16_t len)
+{
+	(void)topic;
+	(void)data;
+	(void)len;
+}
+
+/* ------------------------------------------------------------------------ */
+
+static void poll_timeout(void *arg)
+{
+	(void)arg;
+	mqtt_utk_app_poll();
+	sys_timeout(MQTT_UTK_POLL_MS, poll_timeout, NULL);
+}
+
+static void retry_timeout(void *arg)
+{
+	(void)arg;
+	busy = 0;	/* the poll loop calls mqtt_utk_start() while the link is up */
+}
+
+static void schedule_retry(void)
+{
+	tm_printf((UB*)"mqtt: retry in %u s\n", (unsigned int)(backoff_ms / 1000u));
+	busy = 1;
+	sys_untimeout(retry_timeout, NULL);
+	sys_timeout(backoff_ms, retry_timeout, NULL);
+
+	backoff_ms *= 2u;
+	if(backoff_ms > MQTT_UTK_BACKOFF_MAX_MS) {
+		backoff_ms = MQTT_UTK_BACKOFF_MAX_MS;
+	}
+}
 
 /* mqtt.c NUL-terminates the topic before handing it over, but it is only
  * valid for the duration of this call -- copy it out. */
@@ -52,7 +132,6 @@ static void incoming_publish_cb(void *arg, const char *topic, u32_t tot_len)
 	u32_t	i;
 
 	(void)arg;
-	(void)tot_len;
 
 	for(i = 0; i < (MQTT_UTK_RX_TOPIC_MAX - 1) && topic[i] != '\0'; i++) {
 		rx_topic[i] = topic[i];
@@ -60,7 +139,7 @@ static void incoming_publish_cb(void *arg, const char *topic, u32_t tot_len)
 	rx_topic[i] = '\0';
 
 	rx_len = 0;
-	rx_truncated = 0;
+	rx_too_long = (tot_len > MQTT_UTK_RX_DATA_MAX)? 1: 0;
 }
 
 static void incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
@@ -69,30 +148,24 @@ static void incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
 
 	(void)arg;
 
-	for(i = 0; i < len; i++) {
-		if(rx_len < (MQTT_UTK_RX_DATA_MAX - 1)) {
-			/* The console is a terminal -- keep raw bytes from a
-			 * payload this demo did not publish from scrambling it. */
-			UB c = data[i];
-			rx_data[rx_len++] = (c >= 0x20 && c < 0x7f)? c: '.';
-		} else {
-			rx_truncated = 1;
-		}
+	for(i = 0; i < len && rx_len < MQTT_UTK_RX_DATA_MAX; i++) {
+		rx_data[rx_len++] = data[i];
 	}
 
 	if((flags & MQTT_DATA_FLAG_LAST) != 0) {
-		rx_data[rx_len] = '\0';
-		tm_printf((UB*)"mqtt: RX [%s] \"%s\"%s\n", rx_topic, rx_data,
-			  rx_truncated? " (truncated)": "");
+		rx_data[rx_len] = 0;	/* convenience terminator; length is authoritative */
+		if(rx_too_long) {
+			rx_dropped++;
+		} else {
+			mqtt_utk_app_rx(rx_topic, rx_data, rx_len);
+		}
 	}
 }
 
 static void subscribe_done_cb(void *arg, err_t result)
 {
 	(void)arg;
-	if(result == ERR_OK) {
-		tm_printf((UB*)"mqtt: subscribed to " MQTT_TOPIC "\n");
-	} else {
+	if(result != ERR_OK) {
 		tm_printf((UB*)"mqtt: subscribe failed, err=%d\n", (int)result);
 	}
 }
@@ -101,95 +174,59 @@ static void publish_done_cb(void *arg, err_t result)
 {
 	(void)arg;
 	if(result != ERR_OK) {
-		tm_printf((UB*)"mqtt: publish failed, err=%d\n", (int)result);
+		pub_failures++;
 	}
-}
-
-static void heartbeat_timeout(void *arg)
-{
-	static unsigned int	count = 0;
-	UB			payload[48];
-	int			len;
-
-	(void)arg;
-
-	if(mqtt_client_is_connected(client)) {
-		len = tm_sprintf(payload, (const UB*)"hb %u", count++);
-		tm_printf((UB*)"mqtt: TX [" MQTT_TOPIC "] \"%s\"\n", payload);
-		(void)mqtt_publish(client, MQTT_TOPIC, payload, (u16_t)len,
-				   0 /* qos */, 0 /* retain */,
-				   publish_done_cb, NULL);
-	}
-
-	/* Re-arms itself every call -- mqtt.c's connection callback (below)
-	 * only starts this chain once, on the transition into MQTT_CONNECT_
-	 * ACCEPTED, so there is exactly one heartbeat chain alive at a time. */
-	sys_timeout(MQTT_UTK_HEARTBEAT_MS, heartbeat_timeout, NULL);
-}
-
-static void retry_timeout(void *arg)
-{
-	(void)arg;
-	connecting = 0;
-	mqtt_utk_start();
 }
 
 static void connection_cb(mqtt_client_t *c, void *arg, mqtt_connection_status_t status)
 {
+	const T_MQTT_UTK_CFG	*cfg = mqtt_utk_app_config();
+
 	(void)c;
 	(void)arg;
 
 	if(status == MQTT_CONNECT_ACCEPTED) {
-		err_t	err;
-
-		/* No longer *connecting* -- clear the guard so that if this
-		 * connection later drops, the poll loop's mqtt_utk_start() call
-		 * is allowed to reconnect. Leaving it set would wedge the client
-		 * permanently after the first disconnect. */
-		connecting = 0;
-
+		busy = 0;
+		backoff_ms = MQTT_UTK_BACKOFF_MIN_MS;
 		tm_printf((UB*)"mqtt: connected to " MQTT_BROKER_IP "\n");
 
-		/* Subscribe to the same topic this client publishes to, so every
-		 * heartbeat comes back from the broker and is printed by
-		 * incoming_data_cb(). A matching RX for each TX is end-to-end
-		 * proof of the round trip without needing mosquitto_sub on the
-		 * broker host. Callbacks must be registered before subscribing,
-		 * or the first delivery has nowhere to go. */
+		/* Callbacks must be registered before subscribing, or the
+		 * first delivery has nowhere to go. */
 		mqtt_set_inpub_callback(client, incoming_publish_cb,
 					incoming_data_cb, NULL);
-
-		err = mqtt_subscribe(client, MQTT_TOPIC, 0 /* qos */,
-				     subscribe_done_cb, NULL);
-		if(err != ERR_OK) {
-			tm_printf((UB*)"mqtt: mqtt_subscribe() failed, err=%d\n",
-				  (int)err);
+		if(cfg != NULL && cfg->sub_topic != NULL) {
+			err_t err = mqtt_subscribe(client, cfg->sub_topic,
+						   cfg->sub_qos,
+						   subscribe_done_cb, NULL);
+			if(err != ERR_OK) {
+				tm_printf((UB*)"mqtt: mqtt_subscribe() failed, err=%d\n",
+					  (int)err);
+			}
 		}
-
-		/* Drop any chain left over from a previous connection before
-		 * arming a new one. Each reconnect would otherwise add another
-		 * self-perpetuating heartbeat, and every one of them holds a
-		 * MEMP_SYS_TIMEOUT slot until the pool is exhausted. */
-		sys_untimeout(heartbeat_timeout, NULL);
-		sys_timeout(MQTT_UTK_HEARTBEAT_MS, heartbeat_timeout, NULL);
+		mqtt_utk_app_connected();
 	} else {
-		/* mqtt_client_connect() reconnects on its own for a dropped
-		 * keepalive; a rejected/never-established connection does not
-		 * retry itself, so do that here -- on a delay, so a broker
-		 * that keeps rejecting (e.g. bad client ID) can't turn this
-		 * into a tight reconnect loop. */
-		tm_printf((UB*)"mqtt: connection status %d, retrying in %ds\n",
-			  (int)status, MQTT_UTK_RETRY_MS / 1000);
-		sys_timeout(MQTT_UTK_RETRY_MS, retry_timeout, NULL);
+		/* Refused, timed out (keep-alive lost) or disconnected. lwIP has
+		 * already closed the client, so it can be connected again after
+		 * the back-off. */
+		tm_printf((UB*)"mqtt: connection status %d\n", (int)status);
+		mqtt_utk_app_disconnected();
+		schedule_retry();
 	}
+}
+
+void mqtt_utk_init(void)
+{
+	sys_untimeout(poll_timeout, NULL);
+	sys_timeout(MQTT_UTK_POLL_MS, poll_timeout, NULL);
 }
 
 void mqtt_utk_start(void)
 {
 	struct mqtt_connect_client_info_t	client_info = {0};
+	const T_MQTT_UTK_CFG			*cfg;
 	err_t					err;
 
-	if(connecting || (client != NULL && mqtt_client_is_connected(client))) {
+	if(busy || (client != NULL && mqtt_client_is_connected(client))) {
 		return;
 	}
 
@@ -197,12 +234,14 @@ void mqtt_utk_start(void)
 		client = mqtt_client_new();
 		if(client == NULL) {
 			tm_printf((UB*)"mqtt: mqtt_client_new() failed\n");
+			schedule_retry();
 			return;
 		}
 	}
 
 	if(!ip4addr_aton(MQTT_BROKER_IP, ip_2_ip4(&broker_addr))) {
 		tm_printf((UB*)"mqtt: bad MQTT_BROKER_IP\n");
+		schedule_retry();
 		return;
 	}
 	IP_SET_TYPE(&broker_addr, IPADDR_TYPE_V4);
@@ -210,11 +249,44 @@ void mqtt_utk_start(void)
 	client_info.client_id = MQTT_CLIENT_ID;
 	client_info.keep_alive = MQTT_UTK_KEEPALIVE_S;
 
-	connecting = 1;
+	cfg = mqtt_utk_app_config();
+	if(cfg != NULL && cfg->will_topic != NULL && cfg->will_msg != NULL) {
+		client_info.will_topic = cfg->will_topic;
+		client_info.will_msg = cfg->will_msg;
+		client_info.will_qos = cfg->will_qos;
+		client_info.will_retain = cfg->will_retain;
+	}
+
+	busy = 1;
 	err = mqtt_client_connect(client, &broker_addr, MQTT_BROKER_PORT,
 				  connection_cb, NULL, &client_info);
 	if(err != ERR_OK) {
 		tm_printf((UB*)"mqtt: mqtt_client_connect() failed, err=%d\n", (int)err);
-		connecting = 0;
+		schedule_retry();
 	}
+}
+
+uint8_t mqtt_utk_is_connected(void)
+{
+	return (client != NULL && mqtt_client_is_connected(client))? 1u: 0u;
+}
+
+int32_t mqtt_utk_publish(const char *topic, const uint8_t *data,
+			 uint16_t len, uint8_t qos, uint8_t retain)
+{
+	if(client == NULL || !mqtt_client_is_connected(client)) {
+		return MQTT_UTK_E_OFFLINE;
+	}
+	return (int32_t)mqtt_publish(client, topic, data, len, qos, retain,
+				     publish_done_cb, NULL);
+}
+
+uint32_t mqtt_utk_pub_failures(void)
+{
+	return pub_failures;
+}
+
+uint32_t mqtt_utk_rx_dropped(void)
+{
+	return rx_dropped;
 }
