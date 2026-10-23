@@ -59,8 +59,7 @@ static uint32_t     g_next_telem_ms;
 static uint32_t     g_next_status_ms;
 static bool         g_b_online;
 static bool         g_b_flag_synced;    /* WIFI_LOSS bit set once at start-up   */
-static bool         g_b_have_last_id;
-static uint32_t     g_last_id;          /* last accepted command id (dedupe)    */
+static comms_dedup_t g_dedup;           /* recently accepted commands (gap 9)   */
 static uint32_t     g_ring_lost;        /* events overwritten while offline     */
 static uint32_t     g_pub_errors;       /* mqtt_publish() refused (ERR_MEM ...) */
 static char         g_tx[COMMS_TX_BUF_SIZE];
@@ -331,28 +330,34 @@ void mqtt_utk_app_rx(const char *topic, const uint8_t *data, uint16_t len)
     }
 
     err = comms_parse_cmd(data, len, &cmd);
-    if ((err == COMMS_ERR_NONE) && g_b_have_last_id && (cmd.id == g_last_id))
+    if (err == COMMS_ERR_NONE)
     {
-        /* QoS 1 is at-least-once: a repeated id is acknowledged again but
-           never executed twice (Tribunal 1 gap 8). */
-    }
-    else if (err == COMMS_ERR_NONE)
-    {
-        mission_get_snap(&mission);
-        err = comms_check_cmd(&cmd, mission.state == (uint8_t)MISSION_ST_IDLE);
-        if (err == COMMS_ERR_NONE)
+        uint32_t             now_ms = (uint32_t)app_time_ms();
+        comms_dedup_result_t dup    = comms_cmd_repeat_safe(cmd.cmd)
+                                      ? COMMS_DEDUP_NEW
+                                      : comms_dedup_check(&g_dedup, &cmd, now_ms);
+
+        if (dup == COMMS_DEDUP_REPEAT)
         {
-            err = comms_execute(&cmd);
+            /* QoS 1 redelivery: acknowledge again, never execute twice. */
         }
-        if (err == COMMS_ERR_NONE)
+        else if (dup == COMMS_DEDUP_CONFLICT)
         {
-            g_last_id        = cmd.id;
-            g_b_have_last_id = true;
+            err = COMMS_ERR_REUSED;
         }
-    }
-    else
-    {
-        /* parse error: acknowledged below with its reason */
+        else
+        {
+            mission_get_snap(&mission);
+            err = comms_check_cmd(&cmd, mission.state == (uint8_t)MISSION_ST_IDLE);
+            if (err == COMMS_ERR_NONE)
+            {
+                err = comms_execute(&cmd);
+            }
+            if ((err == COMMS_ERR_NONE) && !comms_cmd_repeat_safe(cmd.cmd))
+            {
+                comms_dedup_add(&g_dedup, &cmd, now_ms);
+            }
+        }
     }
 
     ack_len = comms_build_ack(&cmd, err, g_tx, (uint16_t)sizeof(g_tx));

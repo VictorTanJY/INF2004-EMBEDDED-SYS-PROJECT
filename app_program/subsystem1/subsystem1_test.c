@@ -104,6 +104,21 @@ EXPORT void subsystem1_test(void)
     b_short = (hmi_btn_update(&btn, false, 20u, 2000u) == HMI_BTN_EV_SHORT);
     TEST_CHECK("S1-U06b", b_long && !b_short, "long press reported once, no short");
 
+    /* S1-U07: a delayed QoS 1 redelivery is recognised; a reused id is not. */
+    {
+        comms_dedup_t dd;
+        comms_cmd_t   again;
+
+        comms_dedup_init(&dd);
+        (void)s1_parse("{\"id\":11,\"cmd\":\"start\"}", &cmd, &err);
+        comms_dedup_add(&dd, &cmd, 100u);
+        (void)s1_parse("{\"id\":11,\"cmd\":\"reset\"}", &again, &err);
+        TEST_CHECK("S1-U07",
+                   (comms_dedup_check(&dd, &cmd, 5000u) == COMMS_DEDUP_REPEAT) &&
+                   (comms_dedup_check(&dd, &again, 5000u) == COMMS_DEDUP_CONFLICT),
+                   "duplicate command ids are suppressed within the window");
+    }
+
     TEST_SUMMARY("subsystem1");
 }
 

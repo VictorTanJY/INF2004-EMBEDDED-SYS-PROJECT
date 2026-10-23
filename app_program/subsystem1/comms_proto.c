@@ -35,7 +35,7 @@ static char const * const k_event_names[COMMS_EVENT_NAME_COUNT] =
 
 static char const * const k_err_names[COMMS_ERR_COUNT] =
 {
-    "", "bad_json", "no_id", "bad_cmd", "bad_param", "range", "busy", "full"
+    "", "bad_json", "no_id", "bad_cmd", "bad_param", "range", "busy", "full", "id_reused"
 };
 
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
@@ -751,6 +751,59 @@ comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle)
         return COMMS_ERR_BUSY;
     }
     return COMMS_ERR_NONE;
+}
+
+/* ---------------------------------------------------------------------
+ *  Duplicate suppression
+ * --------------------------------------------------------------------- */
+void comms_dedup_init(comms_dedup_t * p_dd)
+{
+    p_dd->next  = 0u;
+    p_dd->count = 0u;
+}
+
+bool comms_cmd_repeat_safe(uint8_t cmd)
+{
+    return (cmd == (uint8_t)COMMS_CMD_STOP) || (cmd == (uint8_t)COMMS_CMD_ESTOP);
+}
+
+comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
+                                       comms_cmd_t const * p_cmd, uint32_t now_ms)
+{
+    uint8_t i;
+
+    for (i = 0u; i < p_dd->count; i++)
+    {
+        comms_dedup_entry_t const * p_e = &p_dd->e[i];
+
+        /* Unsigned difference: correct across the 32-bit ms wrap. */
+        if ((p_e->id == p_cmd->id) && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
+        {
+            if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id) &&
+                (p_e->value == p_cmd->value))
+            {
+                return COMMS_DEDUP_REPEAT;
+            }
+            return COMMS_DEDUP_CONFLICT;
+        }
+    }
+    return COMMS_DEDUP_NEW;
+}
+
+void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd, uint32_t now_ms)
+{
+    comms_dedup_entry_t * p_e = &p_dd->e[p_dd->next];
+
+    p_e->id       = p_cmd->id;
+    p_e->t_ms     = now_ms;
+    p_e->cmd      = p_cmd->cmd;
+    p_e->param_id = p_cmd->param_id;
+    p_e->value    = p_cmd->value;
+    p_dd->next    = (uint8_t)((p_dd->next + 1u) % COMMS_DEDUP_LEN);
+    if (p_dd->count < COMMS_DEDUP_LEN)
+    {
+        p_dd->count++;
+    }
 }
 
 /* ---------------------------------------------------------------------

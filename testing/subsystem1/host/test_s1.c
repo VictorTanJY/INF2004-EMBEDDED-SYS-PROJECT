@@ -313,6 +313,56 @@ static void test_button(void)
     CHECK("S1-H17", strcmp(ev, "PS") == 0);
 }
 
+static void test_dedup(void)
+{
+    comms_dedup_t dd;
+    comms_cmd_t   a, b, stop;
+    unsigned      i;
+
+    comms_dedup_init(&dd);
+    (void)parse("{\"id\":7,\"cmd\":\"start\"}", &a);
+    (void)parse("{\"id\":7,\"cmd\":\"reset\"}", &b);
+    (void)parse("{\"id\":9,\"cmd\":\"stop\"}", &stop);
+
+    CHECK("S1-H18", comms_dedup_check(&dd, &a, 1000u) == COMMS_DEDUP_NEW);
+    comms_dedup_add(&dd, &a, 1000u);
+    /* delayed redelivery after other commands, inside the window */
+    for (i = 0u; i < 5u; i++)
+    {
+        comms_cmd_t other;
+        char text[64];
+
+        snprintf(text, sizeof(text), "{\"id\":%u,\"cmd\":\"start\"}", 100u + i);
+        (void)parse(text, &other);
+        comms_dedup_add(&dd, &other, 2000u + i);
+    }
+    CHECK("S1-H18", comms_dedup_check(&dd, &a, 30000u) == COMMS_DEDUP_REPEAT);
+    CHECK("S1-H18", comms_dedup_check(&dd, &b, 30000u) == COMMS_DEDUP_CONFLICT);
+    CHECK("S1-H18", comms_err_name(COMMS_ERR_REUSED)[0] == 'i');
+    /* outside the window the id may be used again */
+    CHECK("S1-H18", comms_dedup_check(&dd, &a, 1000u + COMMS_DEDUP_WINDOW_MS) == COMMS_DEDUP_NEW);
+    /* the window works across the 32-bit millisecond wrap */
+    comms_dedup_init(&dd);
+    comms_dedup_add(&dd, &a, 0xFFFFFF00u);
+    CHECK("S1-H18", comms_dedup_check(&dd, &a, 0x00000100u) == COMMS_DEDUP_REPEAT);
+    /* only the last COMMS_DEDUP_LEN commands are kept */
+    comms_dedup_init(&dd);
+    comms_dedup_add(&dd, &a, 0u);
+    for (i = 0u; i < COMMS_DEDUP_LEN; i++)
+    {
+        comms_cmd_t other;
+        char text[64];
+
+        snprintf(text, sizeof(text), "{\"id\":%u,\"cmd\":\"start\"}", 200u + i);
+        (void)parse(text, &other);
+        comms_dedup_add(&dd, &other, 10u + i);
+    }
+    CHECK("S1-H18", comms_dedup_check(&dd, &a, 100u) == COMMS_DEDUP_NEW);
+    CHECK("S1-H18", dd.count == COMMS_DEDUP_LEN);
+    /* STOP and ESTOP are always safe to repeat */
+    CHECK("S1-H18", comms_cmd_repeat_safe(stop.cmd) && !comms_cmd_repeat_safe(a.cmd));
+}
+
 int main(void)
 {
     test_writer();
@@ -321,6 +371,7 @@ int main(void)
     test_parser();
     test_ring();
     test_button();
+    test_dedup();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

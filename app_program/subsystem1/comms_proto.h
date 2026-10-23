@@ -124,7 +124,8 @@ typedef enum
     COMMS_ERR_RANGE     = 5,    /* set: "value" missing or out of range    */
     COMMS_ERR_BUSY      = 6,    /* start/set outside IDLE (FR14)           */
     COMMS_ERR_FULL      = 7,    /* mbf_mission full                        */
-    COMMS_ERR_COUNT     = 8
+    COMMS_ERR_REUSED    = 8,    /* id seen recently with a different command */
+    COMMS_ERR_COUNT     = 9
 } comms_err_t;
 
 typedef struct
@@ -159,6 +160,51 @@ typedef struct
 #define COMMS_PARAM_COUNT       5u
 comms_param_t const * comms_param_by_name(char const * p_name, uint16_t name_len);
 comms_param_t const * comms_param_by_id(uint8_t id);
+
+/* ---------------------------------------------------------------------
+ *  Duplicate suppression (Tribunal 1 Version C gap 9).
+ *
+ *  QoS 1 is at-least-once, so the broker may deliver a command again after
+ *  a reconnect, possibly after other commands.  The last COMMS_DEDUP_LEN
+ *  accepted commands are kept for COMMS_DEDUP_WINDOW_MS:
+ *    - same id, same command  -> acknowledged again, not executed again;
+ *    - same id, other command -> rejected with COMMS_ERR_REUSED;
+ *    - STOP and ESTOP are always executed (repeating them is safe).
+ *  The cache is RAM only and empty after a reboot, so the laptop must not
+ *  reuse an id within one robot session (e.g. start ids from the time).
+ * --------------------------------------------------------------------- */
+#define COMMS_DEDUP_LEN         8u
+#define COMMS_DEDUP_WINDOW_MS   60000u
+
+typedef struct
+{
+    uint32_t id;
+    uint32_t t_ms;
+    int32_t  value;
+    uint8_t  cmd;
+    uint8_t  param_id;
+} comms_dedup_entry_t;
+
+typedef struct
+{
+    comms_dedup_entry_t e[COMMS_DEDUP_LEN];
+    uint8_t             next;       /* slot to overwrite next          */
+    uint8_t             count;
+} comms_dedup_t;
+
+typedef enum
+{
+    COMMS_DEDUP_NEW      = 0,       /* not seen: execute               */
+    COMMS_DEDUP_REPEAT   = 1,       /* same command again: ack only    */
+    COMMS_DEDUP_CONFLICT = 2        /* id reused for another command   */
+} comms_dedup_result_t;
+
+void                 comms_dedup_init(comms_dedup_t * p_dd);
+bool                 comms_cmd_repeat_safe(uint8_t cmd);
+comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
+                                       comms_cmd_t const * p_cmd, uint32_t now_ms);
+void                 comms_dedup_add(comms_dedup_t * p_dd,
+                                     comms_cmd_t const * p_cmd, uint32_t now_ms);
 
 /* ---------------------------------------------------------------------
  *  Offline event ring: the last COMMS_RING_LEN events, re-published in
