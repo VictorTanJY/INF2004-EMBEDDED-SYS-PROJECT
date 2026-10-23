@@ -1,0 +1,35 @@
+
+
+microT-Kernel Version 3.00
+
+
+=== micro T-Kernel on Raspberry Pi Pico W (spec 0x6300, product 0x0003) ===
+single-core build
+all subsystems started
+
+[TEST] === test run start ===
+[TEST] S1-U01 PASS  mbf_telem accepts a record with TMO_POL
+[TEST] S1-U02 PASS  worst-case telemetry fits the 320 B TX buffer
+[TEST] S1-U03 PASS  command parser accepts valid and rejects invalid input
+[TEST] S1-U04 PASS  start accepted only in IDLE
+[TEST] S1-U05 PASS  ack JSON
+[TEST] S1-U06a PASS  single-sample glitch ignored
+[TEST] S1-U06b PASS  long press reported once, no short
+[TEST] subsystem1 SUMMARY 7 passed, 0 failed
+[TEST] S2-U01 PASS  mbf_motion exists
+[TEST] S2-U02 PASS  odometry snapshot round trip
+[TEST] subsystem2 SUMMARY 2 passed, 0 failed
+[TEST] S3-U01 PASS  line snapshot round trip
+[TEST] subsystem3 SUMMARY 1 passed, 0 failed
+[TEST] S4-U01 PASS  flg_safety exists
+[TEST] S4-U02 PASS  heartbeat counter increments
+[TEST] S4-U03 PASS  IMU snapshot round trip
+[TEST] subsystem4 SUMMARY 3 passed, 0 failed
+[TEST] S5-U01 PASS  mbf_mission exists
+[TEST] S5-U02 PASS  mbf_scan exists
+[TEST] S5-U03 PASS  flg_obst exists
+[TEST] S5-U04 PASS  mission snapshot starts in BOOT
+[TEST] subsystem5 SUMMARY 4 passed, 0 failed
+[TEST] === test run end ===
+
+

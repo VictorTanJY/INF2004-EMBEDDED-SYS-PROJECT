@@ -1,35 +1,72 @@
 /*
- *	subsystem1.c
- *	Subsystem 1 -- LED heartbeat: creates its objects and starts its task.
+ *  subsystem1.c
+ *  Subsystem 1 -- Comms and HMI: creates mbf_telem and starts HmiTask.
+ *  Owner: Buddy 1 (Victor).
  *
- *	APIs shown: tk_cre_cyc, tk_sta_cyc
+ *  CommsTask is not created here: it is the template's WiFi service task
+ *  (cyw43_utk_task), started by the kernel before usermain().  Its MQTT
+ *  client (lib/liblwip/.../mqtt_utk.c) calls the hooks in
+ *  comms_service.c.  Because that task may already be running, the
+ *  service does nothing until g_mbf_telem holds a valid ID.
  */
 
 #include "subsystem1.h"
 
-EXPORT ID	tid_led;	/* IF-05, see subsystem1.h */
-EXPORT ID	cyc_led;
+EXPORT ID g_mbf_telem;
+
+static UW g_telem_drops;
 
 EXPORT ER subsystem1_init(void)
 {
-	T_CCYC	ccyc = {0};
+    T_CMBF  cmbf = {0};
+    ID      id;
 
-	/* Cyclic handler: once started, the kernel calls led_cyclic_handler
-	   every S1_TICK_MS.  Without TA_STA it is created stopped; it is
-	   started in subsystem1_start(), once the task it wakes exists. */
-	ccyc.cycatr = TA_HLNG;
-	ccyc.cychdr = (FP)led_cyclic_handler;
-	ccyc.cyctim = S1_TICK_MS;	/* period, ms */
-	ccyc.cycphs = S1_TICK_MS;	/* delay before the first call, ms */
-	cyc_led = tk_cre_cyc(&ccyc);
-	return (cyc_led < E_OK) ? cyc_led : E_OK;
+    cmbf.mbfatr = TA_TFIFO;
+    cmbf.bufsz  = S1_MBF_TELEM_BYTES;
+    cmbf.maxmsz = sizeof(comms_rec_t);
+    id = tk_cre_mbf(&cmbf);
+    if (id < E_OK)
+    {
+        return id;
+    }
+    /* The WiFi task may already be polling (it starts before usermain).
+       comms_service.c keeps only zero-initialised static state and does
+       nothing until it sees a valid ID here, so publishing the ID is the
+       only hand-over needed: one aligned word store. */
+    g_mbf_telem = id;
+    return E_OK;
 }
 
 EXPORT ER subsystem1_start(void)
 {
-	tid_led = app_start_task(led_task, S1_PRI_LED, 0, "led_task");
-	if (tid_led < E_OK) {
-		return tid_led;
-	}
-	return tk_sta_cyc(cyc_led);	/* start the cyclic handler now */
+    ID tid = app_start_task(hmi_task, S1_PRI_HMI, S1_CORE_HMI, "hmi_task");
+
+    return (tid < E_OK) ? tid : E_OK;
+}
+
+EXPORT bool comms_telem_post(uint8_t kind, uint8_t src, uint16_t code, int32_t data)
+{
+    comms_rec_t rec;
+
+    if (g_mbf_telem <= 0)
+    {
+        app_atomic_inc(&g_telem_drops);
+        return false;
+    }
+    rec.kind = kind;
+    rec.src  = src;
+    rec.code = code;
+    rec.data = data;
+    rec.t_ms = (uint32_t)app_time_ms();
+    if (tk_snd_mbf(g_mbf_telem, &rec, sizeof(rec), TMO_POL) != E_OK)
+    {
+        app_atomic_inc(&g_telem_drops);
+        return false;
+    }
+    return true;
+}
+
+EXPORT uint32_t comms_telem_drops(void)
+{
+    return (uint32_t)g_telem_drops;
 }

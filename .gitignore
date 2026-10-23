@@ -24,3 +24,13 @@ config/wifi_secrets.h
 
 # macOS
 .DS_Store
+
+# Emulator workspace (tools/emulator/README.md)
+tools/emulator/fw.bin
+tools/emulator/bootrom.cjs
+tools/emulator/node_modules/
+tools/emulator/package*.json
+tools/emulator/rp2040js-src/
+
+# Host unit-test binary
+testing/subsystem1/host/test_s1

@@ -276,6 +276,11 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
 #if TM_NET_LWIP
     int32_t  prev_link_status = radio_status.link_status;
     uint64_t rejoin_at = 0;
+#if TM_MQTT
+    /* PicoCar: start the application poll chain now, so telemetry queues
+     * are drained even before the first association (mqtt_utk.c). */
+    mqtt_utk_init();
+#endif
 #endif
 
     for(;;) {
@@ -345,6 +350,23 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
 #endif
         (void)tk_dly_tsk(CYW43_POLL_MS);
     }
+}
+
+/* PicoCar: RSSI of the current association in dBm, or 0 when it cannot be
+ * read.  Talks to the radio, so it must only be called on this service task
+ * (e.g. from an mqtt_utk application hook). */
+int32_t cyw43_utk_get_rssi(void)
+{
+    int32_t rssi = 0;
+
+#if TM_NET_LWIP
+    if(radio_status.link_status == CYW43_LINK_UP) {
+        if(cyw43_wifi_get_rssi(&cyw43_state, &rssi) != 0) {
+            rssi = 0;
+        }
+    }
+#endif
+    return rssi;
 }
 
 void cyw43_utk_get_status(T_CYW43_UTK_STATUS *status)

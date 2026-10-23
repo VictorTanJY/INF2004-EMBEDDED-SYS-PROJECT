@@ -1,7 +1,9 @@
 /*
- *	subsystem5_test.c
- *	On-target tests for subsystem 5.  Built only with: make TEST=1
- *	Record results in testing/subsystem5/TEST_LOG.md.  IDs: S5-U01, ...
+ *  subsystem5_test.c
+ *  On-target tests for subsystem 5.  Built only with: make TEST=1
+ *  Record results in testing/subsystem5/TEST_LOG.md.
+ *
+ *  Shared-base checks only; the owner adds the mission and obstacle tests.
  */
 
 #include "subsystem5.h"
@@ -11,12 +13,24 @@
 
 EXPORT void subsystem5_test(void)
 {
-	TEST_INIT();
+    T_RMBF          rmbf;
+    T_RFLG          rflg;
+    mission_snap_t  snap;
 
-	/* Replace with real checks of this subsystem's behaviour */
-	TEST_CHECK("S5-U01", tk_get_tid() > 0, "example: running in a task context");
+    TEST_INIT();
 
-	TEST_SUMMARY("subsystem5");
+    TEST_CHECK("S5-U01", tk_ref_mbf(g_mbf_mission, &rmbf) == E_OK,
+               "mbf_mission exists");
+    TEST_CHECK("S5-U02", tk_ref_mbf(g_mbf_scan, &rmbf) == E_OK,
+               "mbf_scan exists");
+    TEST_CHECK("S5-U03", tk_ref_flg(g_flg_obst, &rflg) == E_OK,
+               "flg_obst exists");
+
+    mission_get_snap(&snap);
+    TEST_CHECK("S5-U04", snap.state == (uint8_t)MISSION_ST_BOOT,
+               "mission snapshot starts in BOOT");
+
+    TEST_SUMMARY("subsystem5");
 }
 
 #endif /* APP_TEST */
