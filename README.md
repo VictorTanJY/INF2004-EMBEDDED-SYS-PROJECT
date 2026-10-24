@@ -3,7 +3,7 @@
 A starting point for your project: micro T-Kernel 3.0 running on **both cores**
 of the Pico W's RP2040, with a USB serial console and the WiFi driver built in.
 
-> **PicoCar (team IS-23):** to bring the robot up stage by stage and test each
+> **PicoCar (team IS-23):** to set up the laptop and bring the robot up phase by phase and test each
 > subsystem, follow [`docs/SETUP_AND_TEST.md`](docs/SETUP_AND_TEST.md). Who owns
 > which pin, peripheral and interface: [`TEAM.md`](TEAM.md).
 

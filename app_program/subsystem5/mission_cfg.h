@@ -33,7 +33,7 @@
 /* Which self-tests BOOT requires: bit 0 motion (PWM + PIO), bit 1 line
    (ADC + DMA), bit 2 IMU (GY-511 answers on I2C1), bit 3 1 us timer.  Only
    the IMU needs wired hardware: until the GY-511 is connected, use 0x0B
-   (docs/SETUP_AND_TEST.md, stage 1), and put 0x0F back for every run.   */
+   (docs/SETUP_AND_TEST.md, step B2), and put 0x0F back for every run.   */
 #define MISSION_SELFTEST_MASK       0x0Fu
 
 /* ---- Supervision ----------------------------------------------------- */
