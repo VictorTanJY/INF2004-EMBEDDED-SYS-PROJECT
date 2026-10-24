@@ -1,0 +1,46 @@
+
+
+microT-Kernel Version 3.00
+
+
+=== micro T-Kernel on Raspberry Pi Pico W (spec 0x6300, product 0x0003) ===
+single-core build
+all subsystems started
+
+[TEST] === test run start ===
+[TEST] S1-U01 PASS  mbf_telem accepts a record with TMO_POL
+[TEST] S1-U02 PASS  worst-case telemetry fits the 384 B TX buffer
+[TEST] S1-U03 PASS  command parser accepts valid and rejects invalid input
+[TEST] S1-U04 PASS  start accepted only in IDLE
+[TEST] S1-U05 PASS  ack JSON
+[TEST] S1-U06a PASS  single-sample glitch ignored
+[TEST] S1-U06b PASS  long press reported once, no short
+[TEST] S1-U07 PASS  duplicate command ids are suppressed within the window
+[TEST] subsystem1 SUMMARY 8 passed, 0 failed
+[TEST] S2-U01 PASS  mbf_motion exists
+[TEST] S2-U03 PASS  MotionTask publishes odometry every cycle
+[TEST] S2-U04 PASS  PWM 20 kHz configured, PIO0 SM0/SM1 counting
+[TEST] S2-U05 PASS  boots braked (duty 0/0)
+[TEST] S2-U06 PASS  DRIVE without LINE authority rejected
+[TEST] subsystem2 SUMMARY 5 passed, 0 failed
+[TEST] S3-U02 PASS  LineBarcodeTask publishes its snapshot
+[TEST] S3-U03 PASS  ADC + DMA deliver ~10 blocks per 100 ms (1 kHz per channel)
+[TEST] S3-U04 PASS  Code 39 *F* decodes on target
+[TEST] subsystem3 SUMMARY 3 passed, 0 failed
+[TEST] S4-U01 PASS  flg_safety exists
+[TEST] S4-U02 PASS  MotionTask heartbeat advances
+[TEST] S4-U04 PASS  ImuTask publishes its snapshot
+[TEST] S4-U05 PASS  1 us timer ticks at 1 MHz (watchdog tick = 12)
+[INFO] timer: 100000 us per 100 ms of CPU clock
+[TEST] S4-U06 PASS  watchdog enabled and being fed
+[TEST] subsystem4 SUMMARY 5 passed, 0 failed
+[TEST] S5-U01 PASS  mbf_mission exists
+[TEST] S5-U02 PASS  mbf_scan exists
+[TEST] S5-U03 PASS  flg_obst exists
+[TEST] S5-U05 PASS  mission snapshot valid; no barcode map until MQTT sends one
+[TEST] S5-U06 PASS  ObstacleTask runs (range_cyc / 100 ms wait)
+[TEST] S5-U07 PASS  echo conversion and median on target
+[TEST] subsystem5 SUMMARY 6 passed, 0 failed
+[TEST] === test run end ===
+
+[emulator] finished, 0 FAIL line(s), 0.69 s simulated
