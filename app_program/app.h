@@ -27,6 +27,105 @@
  * --------------------------------------------------------------------- */
 #define TASK_STACK_SIZE		2048	/* bytes; tm_printf needs ~1 KB */
 
+/* ---------------------------------------------------------------------
+ *  PicoCar core placement (Week 6 design review, Section 3).
+ *  Control loops run on core 1; network, console and I2C-bound tasks on
+ *  core 0, with the template's USB (3) and WiFi (4) services.
+ * --------------------------------------------------------------------- */
+#define APP_CORE0		TP_PRC1		/* processor 1 = core 0 */
+#define APP_CORE1		TP_PRC2		/* processor 2 = core 1 */
+
+/* Subsystem numbers, used as the "src" of telemetry records. */
+#define APP_SRC_COMMS		1u	/* S1: CommsTask / HmiTask       */
+#define APP_SRC_MOTION		2u	/* S2: MotionTask                */
+#define APP_SRC_LINE		3u	/* S3: LineBarcodeTask           */
+#define APP_SRC_SAFETY_IMU	4u	/* S4: SafetyTask / ImuTask      */
+#define APP_SRC_OBST_MISSION	5u	/* S5: ObstacleTask / MissionTask */
+
+/* ---------------------------------------------------------------------
+ *  Snapshot lock (replaces the Week 6 mtx_snap mutex; Tribunal 1 gap 2).
+ *
+ *  Every status snapshot is read across cores (CommsTask on core 0 reads
+ *  them all), and TA_INHERIT cannot bound a wait across cores: a core-0
+ *  holder raised to the waiter's priority still runs below CommsTask (4)
+ *  and the USB console (3).  Each snapshot therefore has its own lock,
+ *  taken with interrupts masked on the holder's core, so the holder
+ *  cannot be pre-empted while copying.  Rules:
+ *    - hold it only to copy the snapshot struct in or out (a few us);
+ *    - never call a kernel service, tm_printf or another lock inside;
+ *    - one lock per snapshot, owned by the subsystem that writes it.
+ *  On the single-core build (SMP=0) masking interrupts is enough.
+ * --------------------------------------------------------------------- */
+#if TK_SUPPORT_SMP
+#include <tk/smp.h>
+typedef T_SPLOCK	app_lock_t;
+
+Inline void app_lock_init(app_lock_t *p_lock)
+{
+	(void)InitSpinLock(p_lock);
+}
+
+Inline UINT app_lock(app_lock_t *p_lock)
+{
+	UINT	intsts = 0;
+
+	(void)ISpinLock(p_lock, &intsts);
+	return intsts;
+}
+
+Inline void app_unlock(app_lock_t *p_lock, UINT intsts)
+{
+	(void)ISpinUnlock(p_lock, intsts);
+}
+
+/* Atomic increment of a shared 32-bit counter (writers on both cores). */
+Inline void app_atomic_inc(UW *p_count)
+{
+	(void)atomic_inc(p_count);
+}
+#else
+typedef UW		app_lock_t;
+
+Inline void app_lock_init(app_lock_t *p_lock)
+{
+	*p_lock = 0;
+}
+
+Inline UINT app_lock(app_lock_t *p_lock)
+{
+	UINT	intsts;
+
+	(void)p_lock;
+	DI(intsts);
+	return intsts;
+}
+
+Inline void app_unlock(app_lock_t *p_lock, UINT intsts)
+{
+	(void)p_lock;
+	EI(intsts);
+}
+
+Inline void app_atomic_inc(UW *p_count)
+{
+	UINT	intsts;
+
+	DI(intsts);
+	(*p_count)++;
+	EI(intsts);
+}
+#endif
+
+/* Milliseconds since boot (low 32 bits of the kernel clock; wraps after
+   49.7 days).  Resolution is the 10 ms kernel tick. */
+Inline UW app_time_ms(void)
+{
+	SYSTIM	tim;
+
+	(void)tk_get_tim(&tim);
+	return (UW)tim.lo;
+}
+
 /* Create and start a task.  prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or
    0 for "any core".  Defined in app_main.c. */
 IMPORT ID app_start_task(FP entry, PRI pri, UW prc, const char *name);

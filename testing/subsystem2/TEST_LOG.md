@@ -1,6 +1,6 @@
 # Subsystem 2 — test log
 
-**Subsystem:** Producer (example)  ·  **Student ID:** <student ID>  ·  **Code:** `app_program/subsystem2/`
+**Subsystem:** Motion control (MotionTask)  ·  **Student ID:** 2500917  ·  **Code:** `app_program/subsystem2/`
 
 See `testing/README.md` for how to run tests and record results.
 
@@ -10,8 +10,10 @@ Define a test here before running it. Test IDs never change.
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S2-U01 | sample values stay within 0..100 | | auto | `subsystem2_test.c` | `[TEST] S2-U01 PASS` |
-| S2-U02 | free slots and free blocks within pool size | IF-02 | auto | `subsystem2_test.c` | `[TEST] S2-U02 PASS` |
+| S2-U01 | mbf_motion exists | IF-01 | auto | `subsystem2_test.c` | PASS |
+| S2-U02 | odometry snapshot round trip under its lock | IF-02 | auto | `subsystem2_test.c` | PASS |
+
+_Shared-base checks (interface objects and snapshots). The owner adds the subsystem's own tests below them._
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **manual** = a person observes the result (LED, scope, meter, phone app…).

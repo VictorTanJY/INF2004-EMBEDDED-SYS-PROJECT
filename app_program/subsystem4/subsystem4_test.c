@@ -1,8 +1,9 @@
 /*
- *	subsystem4_test.c
- *	On-target tests for subsystem 4.  Built only with: make TEST=1
- *	Record unit results in testing/subsystem4/TEST_LOG.md and the
- *	INT- result in testing/integration/TEST_LOG.md.
+ *  subsystem4_test.c
+ *  On-target tests for subsystem 4.  Built only with: make TEST=1
+ *  Record results in testing/subsystem4/TEST_LOG.md.
+ *
+ *  Shared-base checks only; the owner adds the IMU and safety tests.
  */
 
 #include "subsystem4.h"
@@ -12,25 +13,27 @@
 
 EXPORT void subsystem4_test(void)
 {
-	T_RMBF	rmbf;
-	UW	before;
+    T_RFLG      rflg;
+    imu_snap_t  snap;
+    uint32_t    before;
 
-	TEST_INIT();
+    TEST_INIT();
 
-	/* S4-U01: the message buffer accepts the documented line length */
-	TEST_CHECK("S4-U01",
-		   tk_ref_mbf(mbf_summary, &rmbf) == E_OK &&
-		   rmbf.maxmsz == S4_SUMMARY_MAX,
-		   "message buffer max line = S4_SUMMARY_MAX");
+    TEST_CHECK("S4-U01", tk_ref_flg(g_flg_safety, &rflg) == E_OK,
+               "flg_safety exists");
 
-	/* INT-02 (integration, IF-03): summary lines from subsystem 3 reach
-	   the monitor.  One line per 5 samples = one per 1.5 s. */
-	before = s4_lines_received;
-	tk_dly_tsk(3500);
-	TEST_CHECK("INT-02", s4_lines_received >= before + 2,
-		   "summary lines flow from subsystem 3 to subsystem 4");
+    before = safety_heartbeat_count(SAFETY_HB_IMU);
+    safety_heartbeat(SAFETY_HB_IMU);
+    TEST_CHECK("S4-U02", safety_heartbeat_count(SAFETY_HB_IMU) == (before + 1u),
+               "heartbeat counter increments");
 
-	TEST_SUMMARY("subsystem4");
+    snap.pitch_cdeg = -450;
+    imu_put_snap(&snap);
+    snap.pitch_cdeg = 0;
+    imu_get_snap(&snap);
+    TEST_CHECK("S4-U03", snap.pitch_cdeg == -450, "IMU snapshot round trip");
+
+    TEST_SUMMARY("subsystem4");
 }
 
 #endif /* APP_TEST */

@@ -1,7 +1,7 @@
 # Team and subsystems
 
-The tables are pre-filled with the **example** in `app_program/` (marked
-*example*). Replace those rows with your own as you replace the example code.
+PicoCar (team IS-23). The example rows have been replaced with the Week 6
+architecture freeze; update a row whenever the design changes.
 
 Fill this in at the start of the project and keep it up to date. It is the
 single place that says **who owns what**, so that five people can work in
@@ -17,11 +17,14 @@ subsystem, ask its owner or open a pull request for them to review.
 
 | # | Subsystem (what it does) | Student ID | GitHub username | Code | Tests |
 |---|---|---|---|---|---|
-| 1 | *example:* LED heartbeat on GP19 | | | `app_program/subsystem1/` | `testing/subsystem1/` |
-| 2 | *example:* Producer: makes a sample every 300 ms | | | `app_program/subsystem2/` | `testing/subsystem2/` |
-| 3 | *example:* Consumer: collects samples into statistics | | | `app_program/subsystem3/` | `testing/subsystem3/` |
-| 4 | *example:* Monitor: prints reports, pauses the LED | | | `app_program/subsystem4/` | `testing/subsystem4/` |
-| 5 | | | | `app_program/subsystem5/` | `testing/subsystem5/` |
+| 1 | WiFi/MQTT command & telemetry (CommsTask = template WiFi service, MQTT client extension) and buttons (HmiTask) – Victor | 2503553 | VictorTanJY | `app_program/subsystem1/` | `testing/subsystem1/` |
+| 2 | Motion control: PWM motor driver, PIO quadrature encoders, PID, move/turn API (MotionTask) – Jedrek | 2500917 | | `app_program/subsystem2/` | `testing/subsystem2/` |
+| 3 | IR line following and Code 39 barcode decoding (LineBarcodeTask) – Ho Boon Hean | 2500519 | | `app_program/subsystem3/` | `testing/subsystem3/` |
+| 4 | IMU terrain monitoring (ImuTask) and fault supervision / watchdog (SafetyTask) – Purvez | 2503229 | | `app_program/subsystem4/` | `testing/subsystem4/` |
+| 5 | Obstacle scanning and avoidance (ObstacleTask) and system state machine (MissionTask) – Ryan | 2500443 | | `app_program/subsystem5/` | `testing/subsystem5/` |
+
+Source of every row below: Week 6 design review (architecture freeze), with the
+changes justified in Tribunal 1 (marked **T1-gN**).
 
 Shared files (`app_program/app_main.c`, `app_program/app.h`, this file)
 are changed only by agreement of the team. The exception is claiming an empty
@@ -48,32 +51,32 @@ fixed.
 | Pin | Owner | Used for |
 |---|---|---|
 | GP23, GP24, GP25, GP29 | *reserved* | Pico W radio |
-| GP0 | | (taken whenever the team builds with `CRASH_REPORT=1`) |
-| GP1 | | (taken whenever the team builds with `CRASH_REPORT=1`) |
-| GP2 | | |
-| GP3 | | |
-| GP4 | | |
-| GP5 | | |
-| GP6 | | |
-| GP7 | | |
-| GP8 | | |
-| GP9 | | |
-| GP10 | | |
-| GP11 | | |
-| GP12 | | |
-| GP13 | | |
-| GP14 | | |
-| GP15 | | |
-| GP16 | | |
-| GP17 | | |
-| GP18 | | |
-| GP19 | *example:* S1 | external LED (LED + 330 Ω to GND) |
-| GP20 | | |
-| GP21 | | |
-| GP22 | | |
-| GP26 | | (ADC0 capable) |
-| GP27 | | (ADC1 capable) |
-| GP28 | | (ADC2 capable) |
+| GP0 | S5 | US_TRIG, HC-SR04P trigger, Grove 1 (unplug for `CRASH_REPORT=1` / `CONSOLE=uart` builds) |
+| GP1 | S5 | US_ECHO, edge IRQ (echo_isr, IO_IRQ_BANK0 on core 1), Grove 1 (same caveat) |
+| GP2 | S4 | IMU_SDA, I2C1, Grove 2 (Maker port left empty) |
+| GP3 | S4 | IMU_SCL, I2C1, Grove 2 |
+| GP4 | S2 | ENC_L_A, PIO0 SM0, Grove 3 |
+| GP5 | S2 | ENC_L_B, PIO0 SM0 (= A + 1), Grove 3 |
+| GP6 | spare | Grove 5 second wire, not connected |
+| GP7 | spare | Grove 7 second wire, not connected |
+| GP8 | S2 | MOT_L_A, PWM4 A, 20 kHz (SafetyTask may brake it through `motor_estop()`) |
+| GP9 | S2 | MOT_L_B, PWM4 B (same) |
+| GP10 | S2 | MOT_R_A, PWM5 A (same) |
+| GP11 | S2 | MOT_R_B, PWM5 B (same) |
+| GP12 | spare | servo header S1, empty |
+| GP13 | spare | servo header S2, empty |
+| GP14 | spare | servo header S3, empty; shares PWM slice 7 with GP15, keep unused |
+| GP15 | S5 | SERVO_PWM, PWM7 B, 50 Hz, servo header S4 |
+| GP16 | S2 | ENC_R_A, PIO0 SM1, Grove 4 |
+| GP17 | S2 | ENC_R_B, PIO0 SM1 (= A + 1), Grove 4 |
+| GP18 | spare | **wired on the Robo Pico to the NeoPixel LED**: leave as input |
+| GP19 | S4 | IMU_INT1, edge IRQ (imu_int1_isr, same bank-0 handler as GP1, core 1) |
+| GP20 | S1 | BTN_START, on-board button, pull-up, pressed = LOW (check S1-M01) |
+| GP21 | S1 | BTN_MODE, on-board button; long press 2 s = fault reset |
+| GP22 | spare | **wired on the Robo Pico to the piezo buzzer**: leave as input |
+| GP26 | S3 | IR_LINE_L, ADC0, Grove 5 (GP26 wire only) |
+| GP27 | S3 | IR_LINE_R, ADC1, Grove 6 (GP27 wire only; its GP26 wire insulated) |
+| GP28 | S3 | IR_BARCODE, ADC2, Grove 7; VBAT-sense jumper must stay open |
 
 ## 3. Peripherals
 
@@ -105,14 +108,17 @@ the drivers have no locking to stop it.
 
 | Peripheral | Owner subsystem | Owning task | Pins |
 |---|---|---|---|
-| UART1 | | | |
-| I2C0 | | | |
-| I2C1 | | | |
-| SPI0 | | | |
-| SPI1 | | | |
-| ADC | | | GP26–GP28 |
-| PWM slices (list) | | | |
-| WiFi radio, TCP/IP, MQTT | *kernel* | `cyw43_utk_task` (built in) | GP23–25, GP29 |
+| UART1 | – | – | – |
+| I2C0 | – | – | – (kernel I2C driver stays off, `DEVCNF_USE_IIC = 0`) |
+| I2C1 | S4 | ImuTask | GP2, GP3 (release `RESETS_RESET_I2C1` in drv_imu: not released at boot) |
+| SPI0 / SPI1 | – | – | – |
+| ADC + 1 DMA channel | S3 | LineBarcodeTask | GP26–GP28 (kernel ADC driver off, `DEVCNF_USE_ADC = 0`; DMA channel via `dma_claim_unused_channel`) |
+| PWM slices 4, 5 | S2 | MotionTask | GP8–GP11 (PWM block is held in reset at boot: release it in drv_motor) |
+| PWM slice 7 | S5 | ObstacleTask | GP15 |
+| PIO0 SM0, SM1 | S2 | MotionTask | GP4/5, GP16/17 (program at offset 0; the radio takes PIO1 first, checked in SDK 2.2.0) |
+| IO_IRQ_BANK0 (core 1) | S5 + S4 | one shared handler: echo_isr / imu_int1_isr branches | GP1, GP19 |
+| RP2040 watchdog | S4 | SafetyTask | – (200 ms; load 2 × 200 000 because of erratum RP2040-E1) |
+| WiFi radio, TCP/IP, MQTT | *kernel* + S1 | `cyw43_utk_task` (built in) = CommsTask | GP23–25, GP29; PIO1 + 2 DMA channels |
 
 ### WiFi and MQTT are special
 
@@ -146,11 +152,17 @@ change it only by team agreement. Write down every task you create.
 
 | Subsystem | Priority band | Tasks (name – priority – core) |
 |---|---|---|
-| 1 | 12–13 | *example:* led_task – 12 – any |
-| 2 | 14–15 | *example:* producer_task – 14 – core 1 |
-| 3 | 16–17 | *example:* consumer_task – 16 – core 0 |
-| 4 | 18–19 | *example:* monitor_task – 18 – any |
-| 5 | 20–21 | |
+| 1 | 11 (+ kernel WiFi 4) | HmiTask – 11 – core 0; CommsTask = `cyw43_utk_task` – 4 – core 0 (kernel) |
+| 2 | 6 | MotionTask – 6 – core 1 |
+| 3 | 7 | LineBarcodeTask – 7 – core 1 |
+| 4 | 5, 10 | SafetyTask – 5 – core 1; ImuTask – 10 – core 0 |
+| 5 | 8, 9 | MissionTask – 8 – core 1; ObstacleTask – 9 – core 1 |
+
+**Team agreement:** application tasks use priorities 5–11 instead of the default
+bands 12–21, ordered by criticality and deadline (Week 6 Section 3). The kernel
+keeps 1–4 (USB console 3, WiFi 4, both on core 0). Every control loop runs on
+core 1. Each task's priority and core is a macro in its subsystem header
+(`S2_PRI_MOTION`, ...).
 
 Core: `TP_PRC1` = core 0, `TP_PRC2` = core 1, or "any".
 
@@ -162,12 +174,21 @@ sends to it or waits on it. Agree on the data format before coding.
 
 | ID | From → To | Mechanism | Object ID name | Data / meaning | Agreed by |
 |---|---|---|---|---|---|
-| IF-01 | S2 → S3 | mailbox (owned by S3) | `mbx_samples` | `SAMPLE_MSG` in `subsystem2.h` | *example* |
-| IF-02 | S3 → S2 | semaphore + fixed memory pool (owned by S2) | `sem_slots`, `mpf_samples` | receiver returns the block, then 1 slot | *example* |
-| IF-03 | S3 → S4 | message buffer + event flag (owned by S4) | `mbf_summary`, `flg_events` | text line ≤ `S4_SUMMARY_MAX` bytes, then `FLG_BATCH` | *example* |
-| IF-04 | S4 → S3 | shared data under a mutex (owned by S3) | `app_stats`, `mtx_stats` | `APP_STATS`, read only while locked | *example* |
-| IF-05 | S4 → S1 | task control | `tid_led` | `tk_sus_tsk` / `tk_rsm_tsk` / `tk_chg_pri` | *example* |
-| IF-06 | | | | | |
+| IF-01 | S3, S5 → S2 | message buffer (owned by S2), `TMO_POL` | `g_mbf_motion` (mbf_motion) | `motion_cmd_t` (8 B) in `subsystem2.h`; units PROPOSED | pending: S2, S3, S5 |
+| IF-02 | S2 → all | snapshot + per-snapshot spinlock (T1-g2) | `motion_get_odom()` | `motion_odom_t` | pending: S2 |
+| IF-03 | S4 → S2 | function call, core 1 only | `motor_estop()`, `motion_estop_latched()` | brake GP8–11 via SIO LOW + latch; CLEAR_ESTOP inside DI/EI (T1-g3) | pending: S2, S4 |
+| IF-04 | S3 → all | snapshot + spinlock | `line_get_snap()` | `line_snap_t` | pending: S3 |
+| IF-05 | S1, S2, S4, S5 → S4 | event flag (owned by S4) | `g_flg_safety` (flg_safety) | `SAFETY_FLT_*` bits; SafetyTask waits `TWF_ORW \| TWF_BITCLR` (T1-g1); setter clears report-only bits | pending: S4 |
+| IF-06 | all → S5 | message buffer (owned by S5), `TMO_POL` | `g_mbf_mission` (mbf_mission) | `mission_evt_t` (8 B), `mission_ev_t` codes | pending: all |
+| IF-07 | monitored tasks → S4 | one 32-bit word per task | `safety_heartbeat()` | timeouts 50/50/300/300/100 ms | pending: S2–S5 |
+| IF-08 | S4 → all | snapshot + spinlock | `imu_get_snap()` | `imu_snap_t` | pending: S4 |
+| IF-09 | S5 (Mission → Obstacle) | message buffer + event flag (owned by S5) | `g_mbf_scan`, `g_flg_obst` | `scan_req_t`, then `OBST_FLG_REQ` | pending: S5 |
+| IF-10 | S5 → all | snapshots + spinlocks | `mission_get_snap()`, `obst_get_snap()` | `mission_snap_t`, `obst_snap_t` | pending: S5 |
+| IF-11 | S1 ↔ laptop | MQTT (template client extended, A14) | topics `picocar/is23/{telemetry,event,status,cmd,ack}` | JSON, see `comms_proto.h`; `set` parameter ranges PROPOSED in `comms_proto.c` | **instructor agreement needed** (A14); ranges: S2, S3, S5 |
+| IF-12 | all → S1 | message buffer (owned by S1), `TMO_POL` | `g_mbf_telem` (mbf_telem, 1 KB) | `comms_rec_t` (12 B) via `comms_telem_post()` | pending: all |
+
+"pending" = written into the headers by the shared base; the named owners
+must confirm the format before relying on it.
 
 Each interface is tested by at least one integration test
 (`testing/integration/TEST_LOG.md`).
@@ -175,19 +196,27 @@ Each interface is tested by at least one integration test
 ## 6. Kernel object budget
 
 Limits are set in `config/config.h`. If the team needs more, raise the
-limit there. The numbers below are the example's usage.
+limit there. The numbers below are PicoCar's planned usage.
 
-| Object | Limit | S1 | S2 | S3 | S4 | S5 |
-|---|---|---|---|---|---|---|
-| Task | 32 | 1 | 1 | 1 | 1 | |
-| Semaphore | 16 | | 1 | | | |
-| Event flag | 16 | | | | 1 | |
-| Mailbox | 12 | | | 1 | | |
-| Mutex | 12 | | | 1 | | |
-| Message buffer | 12 | | | | 1 | |
-| Fixed memory pool | 12 | | 1 | | | |
-| Variable memory pool | 12 | | | | | |
-| Cyclic handler | 12 | 1 | | | | |
-| Alarm handler | 12 | | | | 1 | |
+| Object | Limit | Kernel / template | S1 Comms+HMI | S2 Motion | S3 Line | S4 IMU+Safety | S5 Obstacle+Mission | **Total** |
+|---|---|---|---|---|---|---|---|---|
+| Task | 32 | 3: initial task, USB console, WiFi (`cyw43_utk_task` = CommsTask) | 1: HmiTask | 1: MotionTask | 1: LineBarcodeTask | 2: SafetyTask, ImuTask | 2: MissionTask, ObstacleTask | **10** |
+| Message buffer | 12 | – | 1: mbf_telem | 1: mbf_motion | – | – | 2: mbf_mission, mbf_scan | **4** |
+| Event flag | 16 | 3: serial driver ×2, device-manager lock | – | – | – | 1: flg_safety | 1: flg_obst | **5** |
+| Semaphore | 16 | 1: serial driver lock | – | – | – | – | – | **1** |
+| Cyclic handler | 12 | – | – | 1: motion_cyc | – | 1: imu_cyc | 1: range_cyc | **3** |
+| Mutex | 12 | – | – | – | – | – | – | **0** (Week 6 had 1: mtx_snap, replaced by spinlocks, T1-g2) |
+| Mailbox, memory pools, alarm handler | 12 each | – | – | – | – | – | – | **0** |
 
-(The kernel's USB and WiFi service tasks also use a few of these.)
+Every total is well under its limit, so `config/config.h` is unchanged.
+
+- **Already created by the shared base:** the 4 message buffers and the 2
+  application event flags, plus HmiTask. The other 6 application tasks and
+  the 3 cyclic handlers appear when their owners write them.
+- **Kernel / template column:** counted from the source for this build
+  configuration (`DEVCNF_USE_SER = 1`, `DEVCNF_USE_ADC = 0`,
+  `DEVCNF_USE_IIC = 0`): `sysinit.c`, `usb_console.c`, `cyw43_utk_kernel.c`,
+  `ser_rp2040.c`, `msdrvif.c`, `device.c`. Confirm on the board with
+  `tk_ref_*` if a limit is ever approached.
+- **Not kernel objects:** the per-snapshot spinlocks (`app_lock_t`) and the
+  heartbeat words cost no IDs.

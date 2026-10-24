@@ -1,6 +1,6 @@
 # Subsystem 5 — test log
 
-**Subsystem:** <name>  ·  **Student ID:** <student ID>  ·  **Code:** `app_program/subsystem5/`
+**Subsystem:** Obstacle scanning (ObstacleTask) and mission state machine (MissionTask)  ·  **Student ID:** 2500443  ·  **Code:** `app_program/subsystem5/`
 
 See `testing/README.md` for how to run tests and record results.
 
@@ -10,8 +10,12 @@ Define a test here before running it. Test IDs never change.
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S5-U01 | example: runs in a task context | | auto | `subsystem5_test.c` | `[TEST] S5-U01 PASS` |
-| S5-U02 | | | manual | 1. … 2. … | |
+| S5-U01 | mbf_mission exists | IF-06 | auto | `subsystem5_test.c` | PASS |
+| S5-U02 | mbf_scan exists | IF-09 | auto | `subsystem5_test.c` | PASS |
+| S5-U03 | flg_obst exists | IF-09 | auto | `subsystem5_test.c` | PASS |
+| S5-U04 | mission snapshot starts in BOOT | IF-10 | auto | `subsystem5_test.c` | PASS |
+
+_Shared-base checks (interface objects and snapshots). The owner adds the subsystem's own tests below them._
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **manual** = a person observes the result (LED, scope, meter, phone app…).
