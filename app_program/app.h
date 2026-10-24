@@ -9,6 +9,8 @@
 #ifndef APP_H
 #define APP_H
 
+#include <stdint.h>
+#include <stdbool.h>
 #include <tk/tkernel.h>		/* micro T-Kernel API (tk_xxx_yyy) */
 #include <tm/tmonitor.h>	/* T-Monitor API: tm_printf() console output */
 #include <bsp/libbsp.h>		/* Board helpers: gpio_set_pin/val, pwm_... */
@@ -26,6 +28,9 @@
  *  has its own band (TEAM.md section 4), defined in its own header.
  * --------------------------------------------------------------------- */
 #define TASK_STACK_SIZE		2048	/* bytes; tm_printf needs ~1 KB */
+
+/* Build switches (timing pins, bench mode): app_config.h */
+#include "app_config.h"
 
 /* ---------------------------------------------------------------------
  *  PicoCar core placement (Week 6 design review, Section 3).
@@ -124,6 +129,46 @@ Inline UW app_time_ms(void)
 
 	(void)tk_get_tim(&tim);
 	return (UW)tim.lo;
+}
+
+/* RP2040 1 us system timer, low 32 bits (wraps every 71.6 min).  Correct
+   only after the watchdog tick is set to 12 cycles (drv_watchdog, S4):
+   from a cold power-on it otherwise runs 42.7 x slow (IS07 finding). */
+Inline UW app_time_us(void)
+{
+	return in_w(TIMER_TIMERAWL);
+}
+
+/* 64-bit microseconds, read without a lock (high word re-checked). */
+Inline UD app_time_us64(void)
+{
+	UW hi0;
+	UW lo;
+	UW hi1;
+
+	do {
+		hi0 = in_w(TIMER_TIMERAWH);
+		lo  = in_w(TIMER_TIMERAWL);
+		hi1 = in_w(TIMER_TIMERAWH);
+	} while (hi0 != hi1);
+	return ((UD)hi0 << 32) | lo;
+}
+
+/* Milliseconds from the 1 us timer (32 bits, wraps after 49.7 days):
+   used by the 10 ms loops, which need better than the 10 ms tick. */
+Inline UW app_time_ms_hw(void)
+{
+	return (UW)(app_time_us64() / 1000u);
+}
+
+/* Take peripheral blocks out of reset.  Never ASSERT a reset here: PWM,
+   PIO0 and DMA are shared between subsystems (and with the radio). */
+Inline void app_reset_release(UW mask)
+{
+	clr_w(RESETS_RESET, mask);
+	while ((in_w(RESETS_RESET_DONE) & mask) != mask) {
+		;
+	}
 }
 
 /* Create and start a task.  prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or

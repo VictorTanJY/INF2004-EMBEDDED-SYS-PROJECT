@@ -28,15 +28,18 @@ static char const * const k_event_names[COMMS_EVENT_NAME_COUNT] =
     "MOTION_DONE", "MOTION_FAILED", "OBSTACLE", "SLOW_DOWN",
     "PROFILE_DONE", "CONTINUE", "BYPASS_DONE", "RECOVERY_DONE",
     "RECOVERY_FAILED", "BLOCKED_TIMEOUT", "HUMP_START", "HUMP_END",
-    "MOTION_CLASS", "FAULT", "CAL_DONE"
+    "MOTION_CLASS", "FAULT", "CAL_DONE", "REMOTE_MAP", "SAFETY_OK"
 };
 
 #define COMMS_EV_BARCODE    8u      /* MISSION_EV_BARCODE */
 
 static char const * const k_err_names[COMMS_ERR_COUNT] =
 {
-    "", "bad_json", "no_id", "bad_cmd", "bad_param", "range", "busy", "full", "id_reused"
+    "", "bad_json", "no_id", "bad_cmd", "bad_param", "range", "busy", "full", "id_reused",
+    "not_calibrated", "bad_map"
 };
+
+static char const k_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
 static comms_param_t const k_params[COMMS_PARAM_COUNT] =
@@ -45,7 +48,14 @@ static comms_param_t const k_params[COMMS_PARAM_COUNT] =
     { "slow_cm",     2u,  25,  60 },  /* slow-down range, FR9, default 40 (B5) */
     { "stop_cm",     3u,  15,  40 },  /* stop range, FR9/NFR6, default 20 (B5) */
     { "lost_mm",     4u,  55, 150 },  /* line-lost length, FR2, default 80 (B3) */
-    { "junction_mm", 5u,  10,  40 }   /* junction length, FR2, default 20 (B3) */
+    { "junction_mm", 5u,  10,  40 }   /* junction length, FR2, default 12 (B3) */
+#if APP_BENCH
+    ,
+    { "bench_move",  101u, -2000, 2000 },     /* app_config.h: bring-up only */
+    { "bench_turn",  102u, -3600, 3600 },
+    { "bench_speed", 103u,    50,  450 },
+    { "bench_servo", 104u,     0,  180 }
+#endif
 };
 
 char const * comms_state_name(uint8_t state)
@@ -250,9 +260,29 @@ uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t
     jw_raw(&jw, ",\"obstacle\":{\"d_cm\":");
     jw_cm_or_null(&jw, p_t->obst_d_mm, true);
     jw_raw(&jw, ",\"w_cm\":");         jw_cm_or_null(&jw, p_t->obst_w_mm, p_t->b_obst_valid);
+    jw_raw(&jw, ",\"w_mm\":");
+    if (p_t->b_obst_valid)
+    {
+        jw_uint(&jw, p_t->obst_w_mm);   /* width to the mm: graded on accuracy */
+    }
+    else
+    {
+        jw_raw(&jw, "null");
+    }
     jw_raw(&jw, ",\"clr_l_cm\":");     jw_cm_or_null(&jw, p_t->clr_l_mm, p_t->b_obst_valid);
     jw_raw(&jw, ",\"clr_r_cm\":");     jw_cm_or_null(&jw, p_t->clr_r_mm, p_t->b_obst_valid);
-    jw_raw(&jw, "}}");
+    jw_raw(&jw, "},\"nav\":");
+    if (p_t->nav != '\0')
+    {
+        code[0] = p_t->nav;
+        code[1] = '\0';
+        jw_str(&jw, code);
+    }
+    else
+    {
+        jw_raw(&jw, "null");
+    }
+    jw_raw(&jw, "}");
     return jw_finish(&jw);
 }
 
@@ -311,7 +341,7 @@ uint16_t comms_build_event(comms_rec_t const * p_rec, uint32_t seq, char * p_buf
 }
 
 uint16_t comms_build_status(bool b_online, uint32_t uptime_s, int32_t rssi,
-                            uint32_t drops, char * p_buf, uint16_t cap)
+                            uint32_t drops, char const * p_map, char * p_buf, uint16_t cap)
 {
     jw_t jw;
 
@@ -320,6 +350,32 @@ uint16_t comms_build_status(bool b_online, uint32_t uptime_s, int32_t rssi,
     jw_raw(&jw, ",\"uptime_s\":");   jw_uint(&jw, uptime_s);
     jw_raw(&jw, ",\"rssi\":");       jw_int(&jw, rssi);
     jw_raw(&jw, ",\"drops\":");      jw_uint(&jw, drops);
+    jw_raw(&jw, ",\"map\":");
+    if ((p_map != NULL) && (p_map[0] != '\0'))
+    {
+        static char const * const k_keys[4] = { "left", "right", "straight", "uturn" };
+        char    one[2];
+        uint8_t k;
+
+        jw_raw(&jw, "{");
+        for (k = 0u; k < 4u; k++)
+        {
+            one[0] = p_map[k];
+            one[1] = '\0';
+            if (k > 0u)
+            {
+                jw_raw(&jw, ",");
+            }
+            jw_str(&jw, k_keys[k]);
+            jw_raw(&jw, ":");
+            jw_str(&jw, one);
+        }
+        jw_raw(&jw, "}");
+    }
+    else
+    {
+        jw_raw(&jw, "null");            /* no map yet: barcodes are not acted on */
+    }
     jw_raw(&jw, "}");
     return jw_finish(&jw);
 }
@@ -583,6 +639,8 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
     val_t   cmd_val   = { VAL_NONE, 0u, 0u, 0 };
     val_t   param_val = { VAL_NONE, 0u, 0u, 0 };
     val_t   value_val = { VAL_NONE, 0u, 0u, 0 };
+    val_t   map_val[4] = { { VAL_NONE, 0u, 0u, 0 }, { VAL_NONE, 0u, 0u, 0 },
+                           { VAL_NONE, 0u, 0u, 0 }, { VAL_NONE, 0u, 0u, 0 } };
     bool    b_done    = false;
 
     p_cmd->id       = 0u;
@@ -654,6 +712,22 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
         else if (str_eq(&p_data[key_start], key_n, "value"))
         {
             value_val = val;
+        }
+        else if (str_eq(&p_data[key_start], key_n, "left"))
+        {
+            map_val[0] = val;
+        }
+        else if (str_eq(&p_data[key_start], key_n, "right"))
+        {
+            map_val[1] = val;
+        }
+        else if (str_eq(&p_data[key_start], key_n, "straight"))
+        {
+            map_val[2] = val;
+        }
+        else if (str_eq(&p_data[key_start], key_n, "uturn"))
+        {
+            map_val[3] = val;
         }
         else
         {
@@ -736,6 +810,40 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
         }
         p_cmd->value = value_val.value;
     }
+    else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "map"))
+    {
+        char     ch[4];
+        uint32_t packed = 0u;
+        uint8_t  k;
+        uint8_t  j;
+
+        p_cmd->cmd = (uint8_t)COMMS_CMD_MAP;
+        for (k = 0u; k < 4u; k++)
+        {
+            if ((map_val[k].kind != VAL_STR) || (map_val[k].n != 1u))
+            {
+                return COMMS_ERR_BAD_MAP;
+            }
+            ch[k] = (char)p_data[map_val[k].start];
+            if ((ch[k] >= 'a') && (ch[k] <= 'z'))
+            {
+                ch[k] = (char)(ch[k] - 'a' + 'A');      /* "f" means F */
+            }
+            if (!comms_map_char_ok(ch[k]))
+            {
+                return COMMS_ERR_BAD_MAP;
+            }
+            for (j = 0u; j < k; j++)
+            {
+                if (ch[j] == ch[k])
+                {
+                    return COMMS_ERR_BAD_MAP;
+                }
+            }
+            packed |= ((uint32_t)(uint8_t)ch[k]) << (8u * k);
+        }
+        p_cmd->value = (int32_t)packed;
+    }
     else
     {
         return COMMS_ERR_BAD_CMD;
@@ -743,10 +851,34 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
     return COMMS_ERR_NONE;
 }
 
+bool comms_map_char_ok(char c)
+{
+    uint8_t i;
+
+    for (i = 0u; i < (uint8_t)(sizeof(k_map_chars) - 1u); i++)
+    {
+        if (k_map_chars[i] == c)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)
+{
+    if ((p_cmd->cmd == (uint8_t)COMMS_CMD_START) && !b_calibrated)
+    {
+        return COMMS_ERR_NOT_CAL;
+    }
+    return COMMS_ERR_NONE;
+}
+
 comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle)
 {
     if (((p_cmd->cmd == (uint8_t)COMMS_CMD_START) ||
-         (p_cmd->cmd == (uint8_t)COMMS_CMD_SET)) && !b_idle)
+         (p_cmd->cmd == (uint8_t)COMMS_CMD_SET) ||
+         (p_cmd->cmd == (uint8_t)COMMS_CMD_MAP)) && !b_idle)
     {
         return COMMS_ERR_BUSY;
     }

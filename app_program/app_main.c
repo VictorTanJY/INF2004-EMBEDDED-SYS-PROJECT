@@ -35,6 +35,7 @@
  */
 
 #include "app.h"
+#include "app_gpio_irq.h"
 
 /*
  * Create and start one task (declared in app.h for every subsystem).
@@ -87,6 +88,10 @@ EXPORT INT usermain(void)
 #else
 	tm_printf((UB*)"single-core build\n");
 #endif
+
+	/* Shared GPIO bank-0 interrupt (GP1 echo, GP19 IMU INT1): registered
+	   once here; each owner enables its pin on core 1 (app_gpio_irq.h). */
+	CHECK(app_gpio_irq_init(), "app_gpio_irq_init");
 
 	/* Phase 1: every subsystem creates its kernel objects */
 	CHECK(subsystem1_init(), "subsystem1_init");

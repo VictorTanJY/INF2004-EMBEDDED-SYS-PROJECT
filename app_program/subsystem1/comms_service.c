@@ -40,7 +40,7 @@ typedef char s1_check_event_names[(COMMS_EVENT_NAME_COUNT == (uint32_t)MISSION_E
 typedef char s1_check_rec_size[(sizeof(comms_rec_t) == 12u) ? 1 : -1];
 
 #define COMMS_DRAIN_MAX         8u      /* records per poll                     */
-#define COMMS_TX_BUF_SIZE       320u    /* largest payload (telemetry ~254 B)   */
+#define COMMS_TX_BUF_SIZE       384u    /* largest payload (telemetry ~330 B)   */
 
 static T_MQTT_UTK_CFG const k_mqtt_cfg =
 {
@@ -119,10 +119,14 @@ static bool comms_publish_event(comms_rec_t const * p_rec, uint32_t seq)
 
 static void comms_publish_status(uint32_t now_ms)
 {
-    uint32_t drops = comms_telem_drops() + g_ring_lost + g_pub_errors
-                   + mqtt_utk_pub_failures() + mqtt_utk_rx_dropped();
-    uint16_t len   = comms_build_status(true, now_ms / 1000u, cyw43_utk_get_rssi(),
-                                        drops, g_tx, (uint16_t)sizeof(g_tx));
+    uint32_t       drops = comms_telem_drops() + g_ring_lost + g_pub_errors
+                         + mqtt_utk_pub_failures() + mqtt_utk_rx_dropped();
+    mission_snap_t ms;
+    uint16_t       len;
+
+    mission_get_snap(&ms);
+    len = comms_build_status(true, now_ms / 1000u, cyw43_utk_get_rssi(), drops,
+                             ms.nav_map, g_tx, (uint16_t)sizeof(g_tx));
 
     (void)comms_publish(COMMS_TOPIC_STATUS, len, 1u, 1u);
 }
@@ -156,6 +160,7 @@ static void comms_publish_telemetry(uint32_t now_ms)
     t.line_err     = line.err;
     t.b_line_lost  = ((line.flags & LINE_FLAG_LOST) != 0u);
     t.barcode      = line.last_barcode;
+    t.nav          = mission.pending_char;
     t.pitch_cdeg   = imu.pitch_cdeg;
     t.hump_max_mm  = imu.hump_max_mm;
     t.obst_d_mm    = obst.d_mm;
@@ -298,6 +303,10 @@ static comms_err_t comms_execute(comms_cmd_t const * p_cmd)
             ev = MISSION_EV_REMOTE_SET;
             break;
 
+        case COMMS_CMD_MAP:
+            ev = MISSION_EV_REMOTE_MAP;     /* MissionTask stores the map */
+            break;
+
         default:
             return COMMS_ERR_BAD_CMD;
     }
@@ -349,6 +358,10 @@ void mqtt_utk_app_rx(const char *topic, const uint8_t *data, uint16_t len)
         {
             mission_get_snap(&mission);
             err = comms_check_cmd(&cmd, mission.state == (uint8_t)MISSION_ST_IDLE);
+            if (err == COMMS_ERR_NONE)
+            {
+                err = comms_check_ready(&cmd, (mission.calibrated & MISSION_CAL_ALL) == MISSION_CAL_ALL);
+            }
             if (err == COMMS_ERR_NONE)
             {
                 err = comms_execute(&cmd);
