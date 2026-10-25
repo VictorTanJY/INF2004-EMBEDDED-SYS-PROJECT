@@ -53,7 +53,8 @@ static void timing_pin_toggle(void)
 /* Barcode sensor ground speed in um per 1 ms sample (= mm/s). */
 static uint32_t bc_step_um(motion_odom_t const * p_odom)
 {
-    /* yaw [cdeg/s] x pi / 18000 x offset [mm] = mm/s; + left turn moves the right side faster */
+    /* yaw [cdeg/s] x pi / 18000 x offset [mm] = mm/s; offset + right, so a left turn
+       (yaw > 0) speeds up a right-hand sensor and slows a left-hand one */
     int32_t const side = (int32_t)(((int64_t)p_odom->yaw_rate_cdeg_s * 3141593 * LINE_BC_OFFSET_MM) /
                                    ((int64_t)18000 * 1000000));
     return (uint32_t)app_abs_i32((int32_t)p_odom->v_mm_s + side);

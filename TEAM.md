@@ -76,7 +76,7 @@ fixed.
 | GP22 | spare | **wired on the Robo Pico to the piezo buzzer**: leave as input |
 | GP26 | S3 | IR_LINE_L, ADC0, Grove 5 (GP26 wire only) |
 | GP27 | S3 | IR_LINE_R, ADC1, Grove 6 (GP27 wire only; its GP26 wire insulated) |
-| GP28 | S3 | IR_BARCODE, ADC2, Grove 7; VBAT-sense jumper must stay open |
+| GP28 | S3 | IR_BARCODE, ADC2, Grove 7; VBAT-sense jumper must stay open. Sensor mounted at the far left of the robot (barcodes are on the left of the line), `LINE_BC_OFFSET_MM` = -45 |
 
 ## 3. Peripherals
 

@@ -336,8 +336,10 @@ Grove 6 (GP27; insulate Grove 6's GP26 wire); barcode sensor → Grove 7
 (GP28). VBAT jumper **open**.
 
 **F2. Mounting:** line sensors 3–8 mm above the track, centres ~18 mm
-apart, straddling the line edges; barcode sensor ~3 mm high, ~45 mm right
-of the line centre (if different, set `LINE_BC_OFFSET_MM`).
+apart, straddling the line edges; barcode sensor ~3 mm high at the **far
+left** of the robot (barcodes are always on the left of the line in the
+direction of travel). Measure its distance from the robot centre line and
+set `LINE_BC_OFFSET_MM` to minus that (default `-45`; + is right).
 
 **F3. Calibration and raw levels (S3-M01, S3-M02, A7, FR16):** robot
 centred on a straight line, GP21 tap. It stands still 1 s (IMU level

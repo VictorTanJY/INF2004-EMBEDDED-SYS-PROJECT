@@ -15,9 +15,12 @@
 #define LINE_CH_BC                  2u          /* ADC2 = GP28 */
 #define LINE_CH_COUNT               3u
 #define LINE_SAMPLES_PER_BLOCK      10u         /* per channel, 1 kHz, 10 ms */
-/* Barcode sensor offset to the right of the robot centre (Week 6 2.2:
-   ~45 mm).  Its ground speed is v + yaw rate x offset.  MEASURE.        */
-#define LINE_BC_OFFSET_MM           45
+/* Barcode sensor lateral offset from the robot centre, + right, - left.
+   Barcodes are always on the LEFT of the line in the direction of travel
+   (team, 25 Oct), so the sensor is at the far left: -45 mm, MEASURE.
+   Its ground speed is v + yaw rate x offset (yaw + left), i.e. a left
+   sensor slows down in a left turn.                                     */
+#define LINE_BC_OFFSET_MM           (-45)
 
 /* 1 if the module's AO voltage is HIGHER over black (less reflection).
    MEASURE (A7): log raw values over black and white.                    */
