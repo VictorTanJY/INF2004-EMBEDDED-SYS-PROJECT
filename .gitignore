@@ -33,4 +33,5 @@ tools/emulator/package*.json
 tools/emulator/rp2040js-src/
 
 # Host unit-test binary
-testing/subsystem1/host/test_s1
+testing/*/host/test_s[0-9]
+testing/shared/host/test_shared
