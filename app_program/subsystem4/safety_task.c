@@ -110,23 +110,41 @@ static uint32_t live_causes(safety_hb_state_t * p_hb, uint32_t now_ms)
    timer left 42.7 x slow by the cold-boot tick bug shows ~47 us.  Kernel
    time is not used as the reference: it loses ticks whenever interrupts
    stay masked for a whole tick (e.g. long tm_printf calls on the UART
-   console).  Interrupts are masked for these 2 ms, once, at start-up. */
+   console).  Interrupts are masked for these 2 ms, once, at start-up.
+   SysTick is private to each core, and on the dual-core build the kernel
+   keeps core 1's SysTick disabled (core 0 is the only timekeeper,
+   knl_smp_core1_entry).  SafetyTask runs on core 1, so if this core's
+   SysTick is off, it is run free (no interrupt) for the check and then
+   switched off again.  Core 0's SysTick, the kernel tick, is never
+   touched: there it is already running and is only read.            */
+#define CHK_SYST_CSR        0xE000E010u
 #define CHK_SYST_RVR        0xE000E014u
 #define CHK_SYST_CVR        0xE000E018u
+#define CHK_SYST_ENABLE     0x1u
+#define CHK_SYST_CLK_CPU    0x4u        /* CLKSOURCE = processor clock */
 #define CHK_SYS_COUNTS      250000u     /* 2 ms at 125 MHz */
 
 static void check_timer_tick(void)
 {
-    UW const reload = (in_w(CHK_SYST_RVR) & 0x00FFFFFFu) + 1u;
+    UW       reload;
     UW       prev;
     UW       acc = 0u;
     UW       us0;
     UW       du;
     UW       guard = 0u;
     UINT     intsts;
+    bool     b_borrowed = false;
 
     DI(intsts);
-    prev = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
+    if ((in_w(CHK_SYST_CSR) & CHK_SYST_ENABLE) == 0u)
+    {
+        out_w(CHK_SYST_RVR, 0x00FFFFFFu);
+        out_w(CHK_SYST_CVR, 0u);                        /* any write clears it */
+        out_w(CHK_SYST_CSR, CHK_SYST_CLK_CPU | CHK_SYST_ENABLE);   /* TICKINT off */
+        b_borrowed = true;
+    }
+    reload = (in_w(CHK_SYST_RVR) & 0x00FFFFFFu) + 1u;
+    prev   = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
     us0  = app_time_us();
     while ((acc < CHK_SYS_COUNTS) && (guard < 1000000u))
     {
@@ -137,6 +155,11 @@ static void check_timer_tick(void)
         guard++;
     }
     du = app_time_us() - us0;
+    if (b_borrowed)
+    {
+        out_w(CHK_SYST_CSR, 0u);                        /* back to the kernel's state */
+        out_w(CHK_SYST_CVR, 0u);
+    }
     EI(intsts);
 
     g_safety_tick_us = (UW)(((UD)du * 100000u) / 2000u);   /* scaled to us per 100 ms */
