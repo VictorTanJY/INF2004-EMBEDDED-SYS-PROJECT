@@ -26,6 +26,23 @@
 #define MR_REG_M            0x02u
 #define OUT_X_H_M           0x03u
 #define IRA_REG_M           0x0Au
+/* LSM303AGR magnetometer (same address; sold on some GY-511 boards) */
+#define WHO_AM_I_M          0x4Fu
+#define CFG_REG_A_M         0x60u
+#define CFG_REG_C_M         0x62u
+#define OUTX_L_REG_M        0x68u
+#define ID_DLHC             0x48u
+#define ID_AGR              0x40u
+
+typedef enum
+{
+    CHIP_NONE = 0,
+    CHIP_DLHC = 1,
+    CHIP_AGR  = 2
+} chip_t;
+
+static uint8_t  g_chip = (uint8_t)CHIP_NONE;
+static uint32_t g_diag;
 
 typedef struct
 {
@@ -49,29 +66,93 @@ static reg_init_t const k_init[] =
     { MAG_ADDR, MR_REG_M,        0x00u }    /* continuous conversion               */
 };
 
+static uint32_t diag(uint8_t stage, ER er, uint8_t id_dlhc, uint8_t id_agr)
+{
+    return ((uint32_t)stage << 24) | (((uint32_t)(-er) & 0xFFu) << 16)
+         | ((uint32_t)id_dlhc << 8) | (uint32_t)id_agr;
+}
+
+EXPORT uint32_t drv_lsm303_diag(void)
+{
+    return g_diag;
+}
+
 EXPORT ER drv_lsm303_init(void)
 {
-    uint8_t  id = 0u;
+    uint8_t  id_dlhc = 0u;
+    uint8_t  id_agr  = 0u;
+    uint8_t  b;
     ER       er;
     uint32_t i;
 
-    er = drv_i2c1_read(MAG_ADDR, IRA_REG_M, &id, 1u);
+    g_chip = (uint8_t)CHIP_NONE;
+
+    /* 1. Magnetometer identity: LSM303DLHC (IRA_REG_M = 0x48), else
+          LSM303AGR (WHO_AM_I_M = 0x40), both at 0x1E. */
+    er = drv_i2c1_read(MAG_ADDR, IRA_REG_M, &id_dlhc, 1u);
     if (er != E_OK)
     {
+        g_diag = diag(1u, er, 0u, 0u);
         return er;
     }
-    if (id != 0x48u)
+    if (id_dlhc == ID_DLHC)
     {
-        return E_OBJ;
+        g_chip = (uint8_t)CHIP_DLHC;
     }
+    else
+    {
+        er = drv_i2c1_read(MAG_ADDR, WHO_AM_I_M, &id_agr, 1u);
+        if ((er == E_OK) && (id_agr == ID_AGR))
+        {
+            g_chip = (uint8_t)CHIP_AGR;
+        }
+        else
+        {
+            g_diag = diag(2u, (er != E_OK) ? er : E_OBJ, id_dlhc, id_agr);
+            return E_OBJ;
+        }
+    }
+
+    /* 2. Accelerometer answers at 0x19 (register map shared by both chips). */
+    er = drv_i2c1_read(ACC_ADDR, CTRL_REG1_A, &b, 1u);
+    if (er != E_OK)
+    {
+        g_diag = diag(3u, er, id_dlhc, id_agr);
+        g_chip = (uint8_t)CHIP_NONE;
+        return er;
+    }
+
+    /* 3. Configuration. */
     for (i = 0u; i < (uint32_t)(sizeof(k_init) / sizeof(k_init[0])); i++)
     {
+        if ((k_init[i].addr == MAG_ADDR) && (g_chip == (uint8_t)CHIP_AGR))
+        {
+            continue;                   /* DLHC magnetometer registers */
+        }
         er = drv_i2c1_write_reg(k_init[i].addr, k_init[i].reg, k_init[i].value);
         if (er != E_OK)
         {
+            g_diag = diag(4u, er, id_dlhc, id_agr);
+            g_chip = (uint8_t)CHIP_NONE;
             return er;
         }
     }
+    if (g_chip == (uint8_t)CHIP_AGR)
+    {
+        /* 100 Hz continuous, temperature compensated; block data update */
+        er = drv_i2c1_write_reg(MAG_ADDR, CFG_REG_A_M, 0x8Cu);
+        if (er == E_OK)
+        {
+            er = drv_i2c1_write_reg(MAG_ADDR, CFG_REG_C_M, 0x10u);
+        }
+        if (er != E_OK)
+        {
+            g_diag = diag(4u, er, id_dlhc, id_agr);
+            g_chip = (uint8_t)CHIP_NONE;
+            return er;
+        }
+    }
+    g_diag = diag(0u, E_OK, id_dlhc, id_agr);
     return E_OK;
 }
 
@@ -98,8 +179,24 @@ EXPORT ER drv_lsm303_read_accel(int32_t acc_mg[3])
 EXPORT ER drv_lsm303_read_mag(int16_t mag[3])
 {
     uint8_t b[6];
-    ER      er = drv_i2c1_read(MAG_ADDR, OUT_X_H_M, b, 6u);
+    ER      er;
 
+    if (g_chip == (uint8_t)CHIP_AGR)
+    {
+        /* AGR: X, Y, Z little-endian from 0x68, 1.5 mG/LSB.  Only the
+           direction is used (heading), so the scale difference to the
+           DLHC (1100 LSB/G) does not matter. */
+        er = drv_i2c1_read(MAG_ADDR, OUTX_L_REG_M, b, 6u);
+        if (er != E_OK)
+        {
+            return er;
+        }
+        mag[0] = (int16_t)(uint16_t)((uint16_t)b[0] | ((uint16_t)b[1] << 8));
+        mag[1] = (int16_t)(uint16_t)((uint16_t)b[2] | ((uint16_t)b[3] << 8));
+        mag[2] = (int16_t)(uint16_t)((uint16_t)b[4] | ((uint16_t)b[5] << 8));
+        return E_OK;
+    }
+    er = drv_i2c1_read(MAG_ADDR, OUT_X_H_M, b, 6u);
     if (er != E_OK)
     {
         return er;

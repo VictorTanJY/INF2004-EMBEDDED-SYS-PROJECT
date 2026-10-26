@@ -166,3 +166,10 @@ EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n)
     }
     return E_OK;
 }
+
+EXPORT ER drv_i2c1_probe(uint8_t addr7)
+{
+    uint8_t b;
+
+    return drv_i2c1_read(addr7, 0x00u, &b, 1u);
+}

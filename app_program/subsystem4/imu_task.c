@@ -27,12 +27,72 @@
 #define IMU_RETRY_CYCLES        10u
 #define IMU_LOG_MOTION          51u     /* comms_rec_t code: data = imu_motion_t */
 #define IMU_LOG_RAMP            52u
+#define IMU_LOG_INIT            53u     /* data = drv_lsm303_diag() (see drv_lsm303.h) */
+#define IMU_LOG_SCAN            54u     /* data = first 4 I2C1 addresses that answer, 1 per byte */
 
 static imu_core_t g_ic;
 
+/* I2C1 bus scan, once, after the first failed start: which addresses
+   answer (0x19 and 0x1E for a GY-511).  ~112 probes of ~60 us each;
+   stops at once if the bus is stuck (E_TMOUT, e.g. SDA held low). */
+static void imu_bus_scan(void)
+{
+    uint32_t found = 0u;
+    uint8_t  n = 0u;
+    uint8_t  a;
+
+    for (a = 0x08u; (a < 0x78u) && (n < 4u); a++)
+    {
+        ER const er = drv_i2c1_probe(a);
+
+        if (er == E_OK)
+        {
+            found |= (uint32_t)a << (8u * n);
+            n++;
+        }
+        else if (er == E_TMOUT)
+        {
+            found = 0xFFFFFFFFu;        /* bus stuck */
+            break;
+        }
+        else
+        {
+            /* NACK: nothing at this address */
+        }
+    }
+    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                           IMU_LOG_SCAN, (int32_t)found);
+}
+
 static bool imu_hw_init(void)
 {
-    return (drv_i2c1_init() == E_OK) && (drv_lsm303_init() == E_OK);
+    static uint32_t s_last_diag = 0xFFFFFFFFu;
+    static bool     s_b_scanned = false;
+    bool            b_ok;
+    uint32_t        d;
+
+    if (drv_i2c1_init() != E_OK)
+    {
+        d = 0xFF000000u;                /* I2C1 controller did not configure */
+        b_ok = false;
+    }
+    else
+    {
+        b_ok = (drv_lsm303_init() == E_OK);
+        d    = drv_lsm303_diag();
+    }
+    if (d != s_last_diag)               /* report each new result once */
+    {
+        s_last_diag = d;
+        (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                               IMU_LOG_INIT, (int32_t)d);
+    }
+    if (!b_ok && !s_b_scanned)
+    {
+        s_b_scanned = true;
+        imu_bus_scan();
+    }
+    return b_ok;
 }
 
 EXPORT void imu_task(INT stacd, void * p_exinf)
