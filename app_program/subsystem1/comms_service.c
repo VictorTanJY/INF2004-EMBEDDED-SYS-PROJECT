@@ -200,6 +200,7 @@ void mqtt_utk_app_connected(void)
 {
     g_b_online       = true;
     g_next_status_ms = (uint32_t)app_time_ms();    /* status "online" at once */
+    g_next_telem_ms  = g_next_status_ms;           /* never compare against 0 */
     comms_set_wifi_loss(false);
 }
 
