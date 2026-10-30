@@ -18,5 +18,7 @@
 IMPORT ER drv_i2c1_init(void);          /* also used to recover the bus */
 IMPORT ER drv_i2c1_write_reg(uint8_t addr7, uint8_t reg, uint8_t value);
 IMPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n);
+/* E_OK if a device answers (ACK) at addr7; E_IO on NACK, E_TMOUT if the bus is stuck. */
+IMPORT ER drv_i2c1_probe(uint8_t addr7);
 
 #endif /* DRV_I2C1_H */

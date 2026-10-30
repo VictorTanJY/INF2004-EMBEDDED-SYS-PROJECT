@@ -482,6 +482,8 @@ Integration tests T1–T7 are run at this phase; log them in
 | 42 | S4 | the last reset was the watchdog |
 | 51 | S4 | motion class (0 stationary, 1 accelerating, 2 turning, 3 climbing, 4 descending, 5 impact, 6 cruising, 7 braking) |
 | 52 | S4 | a climb > 600 mm was a ramp, not a hump |
+| 53 | S4 | IMU start result: stage << 24 \| error << 16 \| IRA_REG_M << 8 \| WHO_AM_I_M. Stage 0 ok (low byte 0x48xx = LSM303DLHC, xx40 = LSM303AGR), 1 magnetometer 0x1E not answering, 2 unknown chip, 3 accelerometer 0x19 not answering, 4 configuration write failed; `0xFF000000` = I2C1 did not configure |
+| 54 | S4 | after a failed IMU start: the first 4 I2C1 addresses that answer, one per byte (GY-511: `0x1E19` = 0x19 and 0x1E). 0 = nothing answers (wiring/power), `-1` = bus stuck (SDA or SCL held low) |
 | 61 | S5 | start refused: not calibrated |
 | 62 | S5 | calibration result: calibrated bits << 16 (`0x30000` = IR + IMU). Boot self-test failure: (`0x100` \| failed bits) << 16, failed bit 0 motion, 1 line, 2 IMU, 3 timer |
 | 63 | S5 | barcode latched: movement << 16 \| character |

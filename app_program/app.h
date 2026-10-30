@@ -121,13 +121,17 @@ Inline void app_atomic_inc(UW *p_count)
 }
 #endif
 
-/* Milliseconds since boot (low 32 bits of the kernel clock; wraps after
-   49.7 days).  Resolution is the 10 ms kernel tick. */
+/* Milliseconds since boot (low 32 bits of the kernel's operating time;
+   wraps after 49.7 days).  Resolution is the 10 ms kernel tick.
+   tk_get_otm, not tk_get_tim: the system clock is the operating time
+   plus a TRON-epoch offset, so its low word starts near 3.36e9 at boot
+   and a deadline initialised to 0 looks 2^31 ms in the future (first
+   hardware run: telemetry never published). */
 Inline UW app_time_ms(void)
 {
 	SYSTIM	tim;
 
-	(void)tk_get_tim(&tim);
+	(void)tk_get_otm(&tim);
 	return (UW)tim.lo;
 }
 
