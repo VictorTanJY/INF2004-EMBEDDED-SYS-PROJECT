@@ -32,7 +32,30 @@ static imu_core_t g_ic;
 
 static bool imu_hw_init(void)
 {
-    return (drv_i2c1_init() == E_OK) && (drv_lsm303_init() == E_OK);
+    static bool reported = false;
+    static ER last_bus, last_read, last_sensor;
+    static uint8_t last_id;
+    uint8_t id = 0u;
+    ER bus_er = drv_i2c1_init();
+    ER read_er = E_IO;
+    ER sensor_er = E_IO;
+    if (bus_er == E_OK)
+    {
+        read_er = drv_i2c1_read(0x1Eu, 0x0Fu, &id, 1u);
+        sensor_er = drv_lsm303_init();
+    }
+    if (!reported || bus_er != last_bus || read_er != last_read ||
+        sensor_er != last_sensor || id != last_id)
+    {
+        reported = true;
+        last_bus = bus_er; last_read = read_er;
+        last_sensor = sensor_er; last_id = id;
+        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 90u, (int32_t)bus_er);
+        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 91u, (int32_t)read_er);
+        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 92u, (int32_t)id);
+        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u, (int32_t)sensor_er);
+    }
+    return (bus_er == E_OK) && (sensor_er == E_OK);
 }
 
 EXPORT void imu_task(INT stacd, void * p_exinf)
@@ -99,6 +122,12 @@ EXPORT void imu_task(INT stacd, void * p_exinf)
             if ((errors >= IMU_I2C_FAULT_COUNT) && !b_fault)
             {
                 b_fault = true;
+                /* One error report per fault episode, not per sample. */
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 110u, (int32_t)er);
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 111u,
+                    (int32_t)(((in_w(GPIO_IN) >> S4_PIN_IMU_SDA) & 1u) |
+                              (((in_w(GPIO_IN) >> S4_PIN_IMU_SCL) & 1u) << 1)));
+
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_IMU_FAULT);
                 (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT, (uint8_t)APP_SRC_SAFETY_IMU,
                                        0u, (int32_t)SAFETY_FLT_IMU_FAULT);
@@ -121,6 +150,8 @@ EXPORT void imu_task(INT stacd, void * p_exinf)
         if (b_fault && (good >= IMU_RECOVER_SAMPLES))
         {
             b_fault = false;
+            (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 112u, 1);
+
             (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_IMU_FAULT);
         }
 
@@ -230,6 +261,20 @@ EXPORT void imu_task(INT stacd, void * p_exinf)
         snap.cal              = g_ic.cal;
         snap.ok               = b_fault ? 0u : 1u;
         snap.pitch_valid      = (!b_fault && (good >= IMU_RECOVER_SAMPLES)) ? 1u : 0u;
+        /* IMU_READINGS_V1 */
+        /* First valid sample, then once per 100 task cycles. */
+        {
+            static bool first_sample = true;
+            if (first_sample || ((cycle % 100u) == 0u))
+            {
+                first_sample = false;
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 100u, acc[0]);
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 101u, acc[1]);
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 102u, acc[2]);
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 103u, (int32_t)snap.pitch_cdeg);
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 104u, (int32_t)snap.roll_cdeg);
+            }
+        }
         imu_put_snap(&snap);
     }
 }

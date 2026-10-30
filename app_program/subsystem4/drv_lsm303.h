@@ -1,27 +1,15 @@
-/*
- *  drv_lsm303.h
- *  Subsystem 4 -- GY-511 (LSM303DLHC) accelerometer + magnetometer on
- *  I2C1.  Owner: Buddy 4.  Datasheet: lsm303dlhc.pdf (project files).
- *
- *  Accelerometer (0x19): 100 Hz, +-4 g, high resolution, INT1 = high-g on
- *  any axis, high-pass filtered (gravity removed), threshold IMU_INT1_THS.
- *  Magnetometer (0x1E): 75 Hz, +-1.3 gauss, continuous.
+/* LSM303D accelerometer + magnetometer, shared I2C address 0x1E.
+ * Acceleration: 100 Hz, +/-4 g. Magnetic: 50 Hz, +/-4 gauss.
+ * INT1: active-high, non-latched, high-pass filtered high-g event.
  */
-
 #ifndef DRV_LSM303_H
 #define DRV_LSM303_H
-
 #include <stdint.h>
 #include "../app.h"
-
-/* Configure both sensors; E_OBJ if the identity check fails (IRA_REG_M
-   must read 0x48, Week 6 Section 5). */
+/* E_OBJ for an unexpected identity; bus/configuration errors propagate. */
 IMPORT ER drv_lsm303_init(void);
-
 /* Acceleration in mg, raw sensor axes X, Y, Z. */
 IMPORT ER drv_lsm303_read_accel(int32_t acc_mg[3]);
-
-/* Magnetic field, raw counts, sensor axes X, Y, Z (the chip sends X, Z, Y). */
+/* Magnetic raw counts, raw sensor axes X, Y, Z. */
 IMPORT ER drv_lsm303_read_mag(int16_t mag[3]);
-
-#endif /* DRV_LSM303_H */
+#endif

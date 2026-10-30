@@ -198,8 +198,11 @@ const T_MQTT_UTK_CFG *mqtt_utk_app_config(void)
 
 void mqtt_utk_app_connected(void)
 {
+    uint32_t const now_ms = (uint32_t)app_time_ms();
+
     g_b_online       = true;
-    g_next_status_ms = (uint32_t)app_time_ms();    /* status "online" at once */
+    g_next_telem_ms  = now_ms;
+    g_next_status_ms = now_ms;
     comms_set_wifi_loss(false);
 }
 
