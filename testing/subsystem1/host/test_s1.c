@@ -71,7 +71,7 @@ static void test_writer(void)
 
 static void test_telemetry(void)
 {
-    char          buf[320];
+    char          buf[384];
     comms_telem_t t;
     uint16_t      len;
 
@@ -88,7 +88,8 @@ static void test_telemetry(void)
         "{\"seq\":12,\"t_ms\":3400,\"state\":\"LINE_FOLLOW\",\"v_mm_s\":[250,-10],"
         "\"enc\":[1000,990],\"dist_mm\":555,\"line\":{\"err\":-120,\"lost\":false},"
         "\"barcode\":\"A\",\"pitch_deg\":-12.3,\"hump_max_mm\":25,"
-        "\"obstacle\":{\"d_cm\":38,\"w_cm\":null,\"clr_l_cm\":null,\"clr_r_cm\":null}}") == 0);
+        "\"obstacle\":{\"d_cm\":38,\"w_cm\":null,\"w_mm\":null,\"clr_l_cm\":null,\"clr_r_cm\":null},"
+        "\"nav\":null}") == 0);
 
     /* No obstacle, no barcode. */
     t.obst_d_mm = COMMS_D_NONE;  t.barcode = '\0';  t.pitch_cdeg = 5;
@@ -96,18 +97,24 @@ static void test_telemetry(void)
     CHECK("S1-H04", strstr(buf, "\"barcode\":null") != NULL);
     CHECK("S1-H04", strstr(buf, "\"d_cm\":null") != NULL);
     CHECK("S1-H04", strstr(buf, "\"pitch_deg\":0.1") != NULL);
+    t.b_obst_valid = true;  t.obst_d_mm = 190u;  t.obst_w_mm = 147u;  t.nav = 'F';
+    (void)comms_build_telemetry(&t, buf, sizeof(buf));
+    CHECK("S1-H04", strstr(buf, "\"w_cm\":15,\"w_mm\":147") != NULL);
+    CHECK("S1-H04", strstr(buf, "\"nav\":\"F\"") != NULL);
+    t.b_obst_valid = false;  t.nav = '\0';
 
-    /* Worst case stays below the 320 B buffer and the 1 KB MQTT ring. */
+    /* Worst case stays below the 384 B buffer and the 1 KB MQTT ring. */
     t.seq = 4294967295u;  t.t_ms = 4294967295u;  t.state = 5u;
     t.v_l_mm_s = -32768;  t.v_r_mm_s = -32768;
     t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
     t.line_err = -32768;  t.b_line_lost = true;  t.barcode = 'Z';
     t.pitch_cdeg = -32768;  t.hump_max_mm = 65535u;  t.obst_d_mm = 65534u;
     t.b_obst_valid = true;  t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
+    t.nav = '%';
     len = comms_build_telemetry(&t, buf, sizeof(buf));
     printf("info: worst-case telemetry payload = %u B (+%u B topic)\n",
            (unsigned)len, (unsigned)strlen("picocar/is23/telemetry"));
-    CHECK("S1-H05", (len > 0u) && (len < 320u));   /* COMMS_TX_BUF_SIZE */
+    CHECK("S1-H05", (len > 0u) && (len < 384u));   /* COMMS_TX_BUF_SIZE */
 }
 
 static void test_event_status_ack(void)
@@ -132,8 +139,14 @@ static void test_event_status_ack(void)
     (void)comms_build_event(&rec, 8u, buf, sizeof(buf));
     CHECK("S1-H06", strstr(buf, "\"UNKNOWN\"") != NULL);
 
-    (void)comms_build_status(true, 61u, -58, 3u, buf, sizeof(buf));
-    CHECK("S1-H07", strcmp(buf, "{\"online\":true,\"uptime_s\":61,\"rssi\":-58,\"drops\":3}") == 0);
+    (void)comms_build_status(true, 61u, -58, 3u, NULL, buf, sizeof(buf));
+    CHECK("S1-H07", strcmp(buf, "{\"online\":true,\"uptime_s\":61,\"rssi\":-58,\"drops\":3,\"map\":null}") == 0);
+    {
+        char const map[4] = { 'Q', 'F', 'Z', 'W' };
+
+        (void)comms_build_status(true, 1u, -60, 0u, map, buf, sizeof(buf));
+        CHECK("S1-H07", strstr(buf, "\"map\":{\"left\":\"Q\",\"right\":\"F\",\"straight\":\"Z\",\"uturn\":\"W\"}}") != NULL);
+    }
 
     (void)parse("{\"id\":42,\"cmd\":\"stop\"}", &cmd);
     (void)comms_build_ack(&cmd, COMMS_ERR_NONE, buf, sizeof(buf));
@@ -363,6 +376,49 @@ static void test_dedup(void)
     CHECK("S1-H18", comms_cmd_repeat_safe(stop.cmd) && !comms_cmd_repeat_safe(a.cmd));
 }
 
+static void test_map(void)
+{
+    comms_cmd_t cmd;
+
+    /* S1-H19: the barcode map arrives over MQTT (not hard-coded) */
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"left\":\"A\",\"right\":\"F\","
+                          "\"straight\":\"Z\",\"uturn\":\"W\"}", &cmd) == COMMS_ERR_NONE);
+    CHECK("S1-H19", cmd.cmd == COMMS_CMD_MAP &&
+                    (uint32_t)cmd.value == ((uint32_t)'A' | ((uint32_t)'F' << 8) | ((uint32_t)'Z' << 16) | ((uint32_t)'W' << 24)));
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"uturn\":\"w\",\"straight\":\"z\","
+                          "\"right\":\"f\",\"left\":\"a\"}", &cmd) == COMMS_ERR_NONE &&
+                    (uint32_t)cmd.value == ((uint32_t)'A' | ((uint32_t)'F' << 8) | ((uint32_t)'Z' << 16) | ((uint32_t)'W' << 24)));
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"left\":\"A\",\"right\":\"F\",\"straight\":\"Z\"}", &cmd)
+                    == COMMS_ERR_BAD_MAP);                          /* U-turn missing */
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"left\":\"A\",\"right\":\"A\",\"straight\":\"Z\",\"uturn\":\"W\"}", &cmd)
+                    == COMMS_ERR_BAD_MAP);                          /* used twice */
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"left\":\"*\",\"right\":\"F\",\"straight\":\"Z\",\"uturn\":\"W\"}", &cmd)
+                    == COMMS_ERR_BAD_MAP);                          /* start/stop char */
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"left\":\"AB\",\"right\":\"F\",\"straight\":\"Z\",\"uturn\":\"W\"}", &cmd)
+                    == COMMS_ERR_BAD_MAP);
+    CHECK("S1-H19", parse("{\"id\":5,\"cmd\":\"map\",\"left\":1,\"right\":\"F\",\"straight\":\"Z\",\"uturn\":\"W\"}", &cmd)
+                    == COMMS_ERR_BAD_MAP);
+    (void)parse("{\"id\":5,\"cmd\":\"map\",\"left\":\"A\",\"right\":\"F\",\"straight\":\"Z\",\"uturn\":\"W\"}", &cmd);
+    CHECK("S1-H19", comms_check_cmd(&cmd, false) == COMMS_ERR_BUSY && comms_check_cmd(&cmd, true) == COMMS_ERR_NONE);
+    CHECK("S1-H19", strcmp(comms_err_name(COMMS_ERR_BAD_MAP), "bad_map") == 0);
+    CHECK("S1-H19", comms_map_char_ok('Z') && comms_map_char_ok('7') && !comms_map_char_ok('*') && !comms_map_char_ok('a'));
+
+#if APP_BENCH
+    CHECK("S1-H20", parse("{\"id\":7,\"cmd\":\"set\",\"param\":\"bench_turn\",\"value\":-900}", &cmd) == COMMS_ERR_NONE &&
+                    cmd.param_id == 102u && cmd.value == -900);
+    CHECK("S1-H20", parse("{\"id\":7,\"cmd\":\"set\",\"param\":\"bench_servo\",\"value\":181}", &cmd) == COMMS_ERR_RANGE);
+#else
+    CHECK("S1-H20", parse("{\"id\":7,\"cmd\":\"set\",\"param\":\"bench_turn\",\"value\":-900}", &cmd) == COMMS_ERR_BAD_PARAM);
+#endif
+    /* S1-H20: START needs a calibration; event names include the new events */
+    (void)parse("{\"id\":6,\"cmd\":\"start\"}", &cmd);
+    CHECK("S1-H20", comms_check_ready(&cmd, false) == COMMS_ERR_NOT_CAL);
+    CHECK("S1-H20", comms_check_ready(&cmd, true) == COMMS_ERR_NONE);
+    CHECK("S1-H20", strcmp(comms_err_name(COMMS_ERR_NOT_CAL), "not_calibrated") == 0);
+    CHECK("S1-H20", strcmp(comms_event_name(27u), "REMOTE_MAP") == 0 && strcmp(comms_event_name(28u), "SAFETY_OK") == 0);
+    CHECK("S1-H20", strcmp(comms_event_name(29u), "UNKNOWN") == 0);
+}
+
 int main(void)
 {
     test_writer();
@@ -372,6 +428,7 @@ int main(void)
     test_ring();
     test_button();
     test_dedup();
+    test_map();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

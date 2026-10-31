@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PicoCar · Control room</title>
+<meta name="description" content="Live telemetry, mission controls, barcode map, obstacle and terrain results for the IS23 PicoCar.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside>
+  <a class="brand" href="./"><span class="brand-icon">P</span>PicoCar<span class="brand-dot">•</span></a>
+  <div class="workspace-label">IS23 / WORKSPACE</div>
+  <button class="nav selected" data-jump="top"><span>◉</span> Overview</button>
+  <button class="nav" data-jump="missionSection"><span>⌖</span> Mission</button>
+  <button class="nav" data-jump="obstacleSection"><span>▣</span> Obstacle</button>
+  <button class="nav" data-jump="scanSection"><span>▤</span> Barcodes &amp; humps</button>
+  <button class="nav" data-jump="eventsPanel"><span>≡</span> Event history <b id="eventCount">0</b></button>
+  <button class="nav" id="setupNav"><span>⚙</span> Connection</button>
+  <div class="sidebar-bottom"><span class="avatar">IS</span><div>Team IS23<small>Embedded systems lab</small></div><span class="tiny-dot"></span></div>
+</aside>
+
+<main id="top">
+<header>
+  <div class="breadcrumb">WORKSPACE <span>/</span> ROBOT OVERVIEW</div>
+  <div class="header-right"><span id="modePill" class="pill">OFFLINE</span><span id="clock">—</span></div>
+</header>
+
+<section class="page-title">
+  <div><div class="eyebrow">YOUR ROBOT, AT A GLANCE</div><h1>Control room<span>.</span></h1><p>Live readings, mission controls and test results in one window.</p></div>
+  <div class="title-actions"><button class="button secondary" id="demoBtn">Try demo</button><button class="button primary" id="connectBtn">↗ Connect robot</button></div>
+</section>
+
+<div class="notice" id="notice"><span class="notice-icon">i</span><div><b>Ready when your robot is.</b><span>Start the local dashboard with Start-Dashboard.cmd, or try the demo.</span></div><button class="text-button" id="getStarted">Get started ↗</button></div>
+
+<!-- Status and safety controls -->
+<section class="top-grid">
+  <article class="robot-panel card">
+    <div class="card-top"><h2>Robot status</h2><span class="small-label">PICOCAR / IS23</span></div>
+    <div class="robot-body">
+      <div class="robot-info">
+        <span class="state" id="state">NO DATA</span>
+        <h3 id="stateTitle">Waiting for connection</h3>
+        <p id="stateDetail">Live state will appear here once telemetry arrives.</p>
+        <div class="connection-line"><span id="connectionDot" class="dot"></span><span id="connectionText">No live telemetry</span></div>
+      </div>
+      <div class="robot-illustration">
+        <svg viewBox="0 0 260 190" role="img" aria-label="Top view of the PicoCar"><defs><pattern id="grid" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r=".7" fill="#d1ddd4"/></pattern></defs><rect width="260" height="190" fill="url(#grid)"/><ellipse cx="131" cy="166" rx="65" ry="9" fill="#dae4dc"/><path d="M130 11l-5 8h10z" fill="#6b8474"/><text x="141" y="21" font-size="8" fill="#6b8474">FRONT</text><rect x="67" y="43" width="126" height="116" rx="33" fill="#e0e9df" stroke="#8da58e" stroke-width="1.5"/><rect x="53" y="83" width="25" height="57" rx="7" fill="#293e35" id="wheelL"/><rect x="182" y="83" width="25" height="57" rx="7" fill="#293e35" id="wheelR"/><rect x="101" y="70" width="59" height="73" rx="8" fill="#528368"/><rect x="115" y="85" width="31" height="33" rx="4" fill="#2d4c3c"/><circle cx="130" cy="132" r="3" id="robotLed" fill="#aab9ad"/><rect x="102" y="38" width="57" height="24" rx="6" fill="#c5d1c2" stroke="#849580"/><circle cx="116" cy="50" r="8" fill="#f1f3e9" stroke="#839881"/><circle cx="145" cy="50" r="8" fill="#f1f3e9" stroke="#839881"/></svg>
+        <div class="mode-tag" id="activity">—</div>
+      </div>
+    </div>
+    <div class="robot-footer"><span>Last telemetry <b id="lastSeen">—</b></span><span>Wi-Fi <b id="rssi">—</b></span><span>Uptime <b id="uptime">—</b></span><span>Reported drops <b id="drops">—</b></span></div>
+  </article>
+
+  <article class="controls card">
+    <div class="card-top"><h2>Controls</h2><span class="small-label">MQTT</span></div>
+    <button id="estop" class="estop" disabled><span>■</span> Emergency stop <span class="key">E</span></button>
+    <div class="control-row">
+      <button class="button primary" id="start" disabled>▶ Start run</button>
+      <button class="button secondary" id="stop" disabled>Stop <span class="key soft">Space</span></button>
+    </div>
+    <div class="control-row"><button class="button secondary" id="reset" disabled>↻ Reset fault</button></div>
+    <div id="commandStatus" class="command-status">Controls unlock in the connected local dashboard.</div>
+    <small>Start needs IDLE, a calibration (tap GP21 on the robot) and normally a barcode map. E-stop requests braking over MQTT; if the link fails, switch off motor power.</small>
+  </article>
+</section>
+
+<!-- Mission: barcode map and bench moves -->
+<section class="mission-grid" id="missionSection">
+  <article class="card pad">
+    <div class="card-top"><h2>Barcode map</h2><span class="small-label">SENT BEFORE THE RUN</span></div>
+    <p class="card-note">Type the four characters the instructor gives, then send. The robot only accepts a map in IDLE and forgets it on reboot.</p>
+    <form id="mapForm" class="map-form" autocomplete="off">
+      <label>↰ Left<input maxlength="1" name="left" required></label>
+      <label>↱ Right<input maxlength="1" name="right" required></label>
+      <label>↑ Straight<input maxlength="1" name="straight" required></label>
+      <label>↶ U-turn<input maxlength="1" name="uturn" required></label>
+      <button class="button primary" id="mapSend" disabled>Send map</button>
+    </form>
+    <dl class="kv">
+      <div><dt>Map on the robot</dt><dd id="mapNow">—</dd></div>
+      <div><dt>Last barcode read</dt><dd id="lastBarcode">—</dd></div>
+      <div><dt>Waiting for next junction</dt><dd id="navNow">—</dd></div>
+    </dl>
+  </article>
+
+  <article class="card pad">
+    <div class="card-top"><h2>Manual moves</h2><span class="small-label">BENCH · APP_BENCH=1 ONLY</span></div>
+    <p class="card-note">One move per press, closed-loop on the encoders. Only firmware built with <code>APP_BENCH 1</code> accepts these, and only in IDLE: otherwise the ack says <code>bad_param</code>. Keep the wheels clear.</p>
+    <div class="bench-grid">
+      <span></span><button class="button secondary" data-bench="bench_move" data-value="200">↑ Forward 200 mm</button><span></span>
+      <button class="button secondary" data-bench="bench_turn" data-value="900">↰ Left 90°</button>
+      <button class="button secondary" data-bench="bench_turn" data-value="1800">↶ U-turn 180°</button>
+      <button class="button secondary" data-bench="bench_turn" data-value="-900">↱ Right 90°</button>
+      <span></span><button class="button secondary" data-bench="bench_move" data-value="-200">↓ Back 200 mm</button><span></span>
+    </div>
+    <div class="servo-row"><span>Scan servo</span>
+      <button class="button secondary" data-bench="bench_servo" data-value="180">Left</button>
+      <button class="button secondary" data-bench="bench_servo" data-value="90">Centre</button>
+      <button class="button secondary" data-bench="bench_servo" data-value="0">Right</button>
+    </div>
+  </article>
+</section>
+
+<!-- Live graphs -->
+<section class="metric-grid">
+  <article class="card metric"><div class="metric-head">WHEEL SPEED <span>mm/s · 60 s</span></div><div class="wheel-values"><div><small>LEFT</small><strong id="speedL">—</strong></div><div><small>RIGHT</small><strong id="speedR">—</strong></div></div><svg class="chart" id="speedChart" viewBox="0 0 300 80" preserveAspectRatio="none" aria-label="Wheel speed, last 60 seconds"></svg><div class="metric-foot"><span class="legend green"></span>Left <span class="legend gold"></span>Right <span class="axis" id="speedAxis"></span></div></article>
+  <article class="card metric"><div class="metric-head">ULTRASONIC RANGE <span>cm · 60 s</span></div><div class="big-number"><strong id="obstacle">—</strong><span>cm</span></div><svg class="chart" id="rangeChart" viewBox="0 0 300 80" preserveAspectRatio="none" aria-label="Ultrasonic range, last 60 seconds"></svg><div class="metric-foot"><span class="legend red"></span>Stop 20 cm <span class="legend gold"></span>Slow 40 cm <span class="axis" id="rangeAxis"></span></div></article>
+  <article class="card metric"><div class="metric-head">PITCH <span>degrees · 60 s</span></div><div class="big-number"><strong id="pitch">—</strong><span>°</span></div><svg class="chart" id="pitchChart" viewBox="0 0 300 80" preserveAspectRatio="none" aria-label="Pitch, last 60 seconds"></svg><div class="metric-foot" id="pitchHint">Waiting for an angle reading</div></article>
+  <article class="card metric"><div class="metric-head">WHEEL DISTANCE <span>mm</span></div><div class="big-number"><strong id="distance">—</strong></div><dl class="kv tight"><div><dt>Left encoder</dt><dd id="encL">—</dd></div><div><dt>Right encoder</dt><dd id="encR">—</dd></div><div><dt>Line error</dt><dd id="lineError">—</dd></div><div><dt>Line</dt><dd id="lineLost">—</dd></div></dl></article>
+</section>
+
+<!-- Obstacle and bypass -->
+<section class="obstacle-grid" id="obstacleSection">
+  <article class="card pad">
+    <div class="card-top"><h2>Obstacle profile</h2><span class="small-label" id="obsAge">NO SCAN YET</span></div>
+    <div class="obstacle-numbers">
+      <div><small>WIDTH</small><strong id="width">—</strong><span>mm</span></div>
+      <div><small>CLEAR LEFT</small><strong id="clrL">—</strong><span>cm</span></div>
+      <div><small>CLEAR RIGHT</small><strong id="clrR">—</strong><span>cm</span></div>
+    </div>
+    <div class="accuracy">
+      <label>Actual width (ruler) <input id="trueWidth" type="number" min="1" max="1000" placeholder="mm"></label>
+      <div id="widthGrade" class="grade">Enter the box width to see the error</div>
+    </div>
+    <dl class="kv">
+      <div><dt>Last bypass time (OBSTACLE → back on line)</dt><dd id="bypassTime">—</dd></div>
+      <div><dt>Bypass result</dt><dd id="bypassResult">—</dd></div>
+    </dl>
+    <p class="card-note">Grade bands from the brief: width error A ≤ 10 %, B ≤ 20 %, C ≤ 30 %; bypass time A &lt; 3 s, B &lt; 5 s, C &lt; 7 s.</p>
+  </article>
+
+  <article class="card pad">
+    <div class="card-top"><h2>Bypass path</h2><span class="small-label" id="pathLabel">LAST BYPASS</span></div>
+    <svg id="pathView" class="path-view" viewBox="0 0 400 260" aria-label="Driven path during the last bypass"></svg>
+    <p class="card-note">Driven path rebuilt from the encoder counts (track width and mm per count as in <code>motion_cfg.h</code>: copy your measured values into <code>app.js</code>), starting where the robot stopped for the obstacle. The box is drawn at the measured distance and width; its sideways position is not reported, so it is centred on the line.</p>
+  </article>
+</section>
+
+<!-- Barcode scans and humps -->
+<section class="tables-grid" id="scanSection">
+  <article class="card pad">
+    <div class="card-top"><h2>Barcode scans</h2><span class="small-label" id="scanCount">0 SCANS</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Read</th><th>Result</th></tr></thead><tbody id="scanRows"><tr><td colspan="3" class="muted">No barcodes yet.</td></tr></tbody></table></div>
+  </article>
+  <article class="card pad">
+    <div class="card-top"><h2>Humps</h2><span class="small-label" id="humpMax">HIGHEST —</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Peak height</th><th>Max pitch</th><th>Duration</th></tr></thead><tbody id="humpRows"><tr><td colspan="4" class="muted">No humps yet.</td></tr></tbody></table></div>
+  </article>
+</section>
+
+<!-- Events and details -->
+<section class="bottom-grid">
+  <article class="card events-panel" id="eventsPanel">
+    <div class="card-top"><div><h2>Event history</h2><p>Everything the robot reports, newest first.</p></div></div>
+    <div class="event-toolbar">
+      <div class="tabs"><button class="active" data-filter="all">All</button><button data-filter="faults">Faults</button><button data-filter="state">State</button><button data-filter="mission">Mission</button><button data-filter="commands">Commands</button><button data-filter="diagnostic">Diagnostics</button></div>
+      <span class="small-label" id="eventTotal">0 EVENTS</span>
+    </div>
+    <div id="eventList" class="event-list"><div class="empty"><span>≋</span><b>Nothing yet.</b><p>State changes, faults, barcodes and acknowledgements will appear here.</p></div></div>
+  </article>
+  <article class="card details">
+    <div class="card-top"><h2>Command log</h2><span class="small-label">LAST 8</span></div>
+    <div id="commandList" class="command-list"><p class="muted">No commands sent.</p></div>
+    <div class="detail-note"><span>↗</span><p><b>Read the event, not just FAULT.</b><br>Fault history explains why the robot stopped. An old fault entry is not a current fault.</p></div>
+  </article>
+</section>
+
+<footer><span><span class="footer-dot"></span> PicoCar IS23 · Team control room</span><span id="footerMode">No robot connected</span></footer>
+</main>
+
+<dialog id="setup">
+  <form method="dialog"><button class="close" aria-label="Close">×</button></form>
+  <div class="eyebrow">CONNECT YOUR ROBOT</div>
+  <h2>One window. All the readings.</h2>
+  <p>The robot's MQTT broker runs on this laptop. Use the local launcher for live readings and controls.</p>
+  <div class="setup-step"><b>01</b><div><h3>Extract and start</h3><p>Needs Python 3 and Mosquitto. Double-click <code>Start-Dashboard.cmd</code> and leave its window open. It opens <code>http://127.0.0.1:8765</code>.</p></div></div>
+  <div class="setup-step"><b>02</b><div><h3>Same hotspot</h3><p>Laptop and Pico on the same 2.4 GHz hotspot. The firmware's <code>MQTT_BROKER_IP</code> must be this laptop's Wi-Fi IPv4 address.</p></div></div>
+  <div id="localConnection" hidden>
+    <label for="brokerHost">Broker hostname or IP</label>
+    <div class="connect-row"><input id="brokerHost" value="127.0.0.1" autocomplete="off"><button id="applyConnect" class="button primary">Connect</button><button id="disconnect" class="button secondary">Disconnect</button></div>
+    <small>Default: the broker on this laptop, TCP port 1883.</small>
+  </div>
+  <p id="setupError" class="error"></p>
+</dialog>
+
+<dialog id="resetDialog">
+  <h2>Reset the fault?</h2>
+  <p>Keep the robot level and the wheels clear. Reset clears the fault and re-runs the start-up checks; calibrate again before the next run.</p>
+  <div class="control-row"><button class="button secondary" id="cancelReset">Cancel</button><button class="button primary" id="confirmReset">Send reset</button></div>
+</dialog>
+
+<dialog id="startDialog">
+  <h2>Start a run?</h2>
+  <p id="startCheck">The robot will drive off along the line.</p>
+  <div class="control-row"><button class="button secondary" id="cancelStart">Cancel</button><button class="button primary" id="confirmStart">Start</button></div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

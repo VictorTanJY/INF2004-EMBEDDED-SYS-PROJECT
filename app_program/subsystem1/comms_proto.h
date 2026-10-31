@@ -10,10 +10,13 @@
  *  Payloads (base topic COMMS_TOPIC_BASE, e.g. "picocar/is23"):
  *    telemetry  {seq,t_ms,state,v_mm_s:[l,r],enc:[l,r],dist_mm,
  *                line:{err,lost},barcode,pitch_deg,hump_max_mm,
- *                obstacle:{d_cm,w_cm,clr_l_cm,clr_r_cm}}       QoS 0, 5 Hz
+ *                obstacle:{d_cm,w_cm,w_mm,clr_l_cm,clr_r_cm},nav}  QoS 0, 5 Hz
  *    event      {seq,t_ms,type,data,src}                      QoS 1
- *    status     {online,uptime_s,rssi,drops}           QoS 1, retained, 1 Hz
+ *    status     {online,uptime_s,rssi,drops,map}       QoS 1, retained, 1 Hz
  *    cmd (in)   {id,cmd:"start"|"stop"|"estop"|"reset"|"set",param,value}
+ *               {id,cmd:"map",left:"A",right:"F",straight:"Z",uturn:"W"}
+ *               (barcode character -> movement, sent by the laptop just
+ *               before the demo; instructor, course forum 24 Oct)
  *    ack        {id,ok,err}                                   QoS 1
  */
 
@@ -22,6 +25,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../app_config.h"
 
 /* ---------------------------------------------------------------------
  *  Telemetry record posted by any task to mbf_telem (IF-12).  12 bytes.
@@ -75,6 +79,7 @@ typedef struct
     uint8_t  state;             /* mission_state_t                        */
     bool     b_line_lost;
     char     barcode;           /* 0 = none yet                           */
+    char     nav;               /* latched barcode command char, 0 = none */
     bool     b_obst_valid;      /* profile fields valid                   */
     int16_t  v_l_mm_s;
     int16_t  v_r_mm_s;
@@ -92,12 +97,13 @@ typedef struct
 
 uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t cap);
 uint16_t comms_build_event(comms_rec_t const * p_rec, uint32_t seq, char * p_buf, uint16_t cap);
+/* p_map: the 4 mapped characters (left, right, straight, U-turn) or NULL. */
 uint16_t comms_build_status(bool b_online, uint32_t uptime_s, int32_t rssi,
-                            uint32_t drops, char * p_buf, uint16_t cap);
+                            uint32_t drops, char const * p_map, char * p_buf, uint16_t cap);
 
 /* Names used in the JSON.  Index = mission_state_t / mission_ev_t. */
 #define COMMS_STATE_NAME_COUNT  11u
-#define COMMS_EVENT_NAME_COUNT  27u
+#define COMMS_EVENT_NAME_COUNT  29u
 char const * comms_state_name(uint8_t state);
 char const * comms_event_name(uint16_t event);
 
@@ -111,7 +117,8 @@ typedef enum
     COMMS_CMD_STOP  = 2,
     COMMS_CMD_ESTOP = 3,
     COMMS_CMD_RESET = 4,
-    COMMS_CMD_SET   = 5
+    COMMS_CMD_SET   = 5,
+    COMMS_CMD_MAP   = 6         /* value = 4 packed chars: left, right, straight, U-turn */
 } comms_cmd_code_t;
 
 typedef enum
@@ -125,7 +132,10 @@ typedef enum
     COMMS_ERR_BUSY      = 6,    /* start/set outside IDLE (FR14)           */
     COMMS_ERR_FULL      = 7,    /* mbf_mission full                        */
     COMMS_ERR_REUSED    = 8,    /* id seen recently with a different command */
-    COMMS_ERR_COUNT     = 9
+    COMMS_ERR_NOT_CAL   = 9,    /* start before a valid calibration        */
+    COMMS_ERR_BAD_MAP   = 10,   /* map: a movement missing, not one Code 39
+                                   character, '*', or a character used twice */
+    COMMS_ERR_COUNT     = 11
 } comms_err_t;
 
 typedef struct
@@ -140,8 +150,14 @@ typedef struct
 /* Parse one command payload (not NUL-terminated; len is authoritative). */
 comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd);
 
-/* State rule (FR14): START and SET only in IDLE.  b_idle = mission IDLE. */
+/* State rule (FR14): START, SET and MAP only in IDLE.  b_idle = mission IDLE. */
 comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle);
+
+/* START also needs a valid calibration (Week 6 Section 5). */
+comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated);
+
+/* A character the map may use: any Code 39 data character (not '*'). */
+bool        comms_map_char_ok(char c);
 
 uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
                          char * p_buf, uint16_t cap);
@@ -157,7 +173,11 @@ typedef struct
     int32_t      max;
 } comms_param_t;
 
+#if APP_BENCH
+#define COMMS_PARAM_COUNT       9u      /* + bench_move/turn/speed/servo (ids 101-104) */
+#else
 #define COMMS_PARAM_COUNT       5u
+#endif
 comms_param_t const * comms_param_by_name(char const * p_name, uint16_t name_len);
 comms_param_t const * comms_param_by_id(uint8_t id);
 

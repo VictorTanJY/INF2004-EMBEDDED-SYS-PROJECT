@@ -57,8 +57,8 @@ fixed.
 | GP3 | S4 | IMU_SCL, I2C1, Grove 2 |
 | GP4 | S2 | ENC_L_A, PIO0 SM0, Grove 3 |
 | GP5 | S2 | ENC_L_B, PIO0 SM0 (= A + 1), Grove 3 |
-| GP6 | spare | Grove 5 second wire, not connected |
-| GP7 | spare | Grove 7 second wire, not connected |
+| GP6 | spare (S2 timing) | Grove 5 second wire, not connected. With `APP_TIMING_PINS=1` (app.h) MotionTask toggles it every 10 ms cycle, for NFR1 jitter captures |
+| GP7 | spare (S3 timing) | Grove 7 second wire, not connected. With `APP_TIMING_PINS=1` LineBarcodeTask toggles it every ADC block (NFR2) |
 | GP8 | S2 | MOT_L_A, PWM4 A, 20 kHz (SafetyTask may brake it through `motor_estop()`) |
 | GP9 | S2 | MOT_L_B, PWM4 B (same) |
 | GP10 | S2 | MOT_R_A, PWM5 A (same) |
@@ -76,7 +76,7 @@ fixed.
 | GP22 | spare | **wired on the Robo Pico to the piezo buzzer**: leave as input |
 | GP26 | S3 | IR_LINE_L, ADC0, Grove 5 (GP26 wire only) |
 | GP27 | S3 | IR_LINE_R, ADC1, Grove 6 (GP27 wire only; its GP26 wire insulated) |
-| GP28 | S3 | IR_BARCODE, ADC2, Grove 7; VBAT-sense jumper must stay open |
+| GP28 | S3 | IR_BARCODE, ADC2, Grove 7; VBAT-sense jumper must stay open. Sensor mounted at the far left of the robot (barcodes are on the left of the line), `LINE_BC_OFFSET_MM` = -45 |
 
 ## 3. Peripherals
 
@@ -110,14 +110,15 @@ the drivers have no locking to stop it.
 |---|---|---|---|
 | UART1 | – | – | – |
 | I2C0 | – | – | – (kernel I2C driver stays off, `DEVCNF_USE_IIC = 0`) |
-| I2C1 | S4 | ImuTask | GP2, GP3 (release `RESETS_RESET_I2C1` in drv_imu: not released at boot) |
+| I2C1 | S4 | ImuTask | GP2, GP3; `drv_i2c1.c`, polled, 400 kHz, reset pulse at init (also used to recover the bus) |
 | SPI0 / SPI1 | – | – | – |
-| ADC + 1 DMA channel | S3 | LineBarcodeTask | GP26–GP28 (kernel ADC driver off, `DEVCNF_USE_ADC = 0`; DMA channel via `dma_claim_unused_channel`) |
-| PWM slices 4, 5 | S2 | MotionTask | GP8–GP11 (PWM block is held in reset at boot: release it in drv_motor) |
-| PWM slice 7 | S5 | ObstacleTask | GP15 |
-| PIO0 SM0, SM1 | S2 | MotionTask | GP4/5, GP16/17 (program at offset 0; the radio takes PIO1 first, checked in SDK 2.2.0) |
-| IO_IRQ_BANK0 (core 1) | S5 + S4 | one shared handler: echo_isr / imu_int1_isr branches | GP1, GP19 |
-| RP2040 watchdog | S4 | SafetyTask | – (200 ms; load 2 × 200 000 because of erratum RP2040-E1) |
+| ADC + DMA channels 10, 11 + DMA_IRQ_1 (core 1) | S3 | LineBarcodeTask | GP26–GP28; `drv_adc.c`: round robin 3 kHz, two chained 30-sample buffers (ping-pong, 10 ms each). Kernel ADC driver off (`DEVCNF_USE_ADC = 0`). Channels 10/11 are fixed: the radio's SDK driver claims its two from the bottom (0, 1) |
+| PWM slices 4, 5 | S2 | MotionTask | GP8–GP11; `drv_motor.c`, 20 kHz (TOP 6249). The PWM block is held in reset at boot: `app_reset_release()` releases it and never re-asserts it (S5 shares the block) |
+| PWM slice 7 | S5 | ObstacleTask | GP15; `drv_servo.c`, 50 Hz, 1 us resolution |
+| PIO0 SM0, SM1 | S2 | MotionTask | GP4/5, GP16/17; `drv_encoder.c`: pico-examples quadrature program (24 instr.) at offset 0; refuses to start if SM0/SM1 already run. The radio takes PIO1 first (SDK 2.2.0) |
+| IO_IRQ_BANK0 (core 1) | shared base | `app_gpio_irq.c`: one handler, per-pin callbacks (echo_isr S5, imu_int1_isr S4), registered in usermain, enabled by each owner on core 1 | GP1, GP19 |
+| RP2040 watchdog + timer tick | S4 | SafetyTask | – `drv_watchdog.c`: tick = 12 cycles first thing in `subsystem4_init()` (else the 1 us timer runs 42.7 × slow after a cold power-on); 200 ms timeout, load 2 × 200 000 (erratum RP2040-E1); boot self-test S4-U04 compares the timer with clk_sys |
+| TIMER (read only) | – | any | – the 1 us counter is read by every subsystem (`app_time_us()`); nobody writes it |
 | WiFi radio, TCP/IP, MQTT | *kernel* + S1 | `cyw43_utk_task` (built in) = CommsTask | GP23–25, GP29; PIO1 + 2 DMA channels |
 
 ### WiFi and MQTT are special
@@ -174,17 +175,17 @@ sends to it or waits on it. Agree on the data format before coding.
 
 | ID | From → To | Mechanism | Object ID name | Data / meaning | Agreed by |
 |---|---|---|---|---|---|
-| IF-01 | S3, S5 → S2 | message buffer (owned by S2), `TMO_POL` | `g_mbf_motion` (mbf_motion) | `motion_cmd_t` (8 B) in `subsystem2.h`; units PROPOSED | pending: S2, S3, S5 |
-| IF-02 | S2 → all | snapshot + per-snapshot spinlock (T1-g2) | `motion_get_odom()` | `motion_odom_t` | pending: S2 |
-| IF-03 | S4 → S2 | function call, core 1 only | `motor_estop()`, `motion_estop_latched()` | brake GP8–11 via SIO LOW + latch; CLEAR_ESTOP inside DI/EI (T1-g3) | pending: S2, S4 |
-| IF-04 | S3 → all | snapshot + spinlock | `line_get_snap()` | `line_snap_t` | pending: S3 |
-| IF-05 | S1, S2, S4, S5 → S4 | event flag (owned by S4) | `g_flg_safety` (flg_safety) | `SAFETY_FLT_*` bits; SafetyTask waits `TWF_ORW \| TWF_BITCLR` (T1-g1); setter clears report-only bits | pending: S4 |
-| IF-06 | all → S5 | message buffer (owned by S5), `TMO_POL` | `g_mbf_mission` (mbf_mission) | `mission_evt_t` (8 B), `mission_ev_t` codes | pending: all |
-| IF-07 | monitored tasks → S4 | one 32-bit word per task | `safety_heartbeat()` | timeouts 50/50/300/300/100 ms | pending: S2–S5 |
-| IF-08 | S4 → all | snapshot + spinlock | `imu_get_snap()` | `imu_snap_t` | pending: S4 |
-| IF-09 | S5 (Mission → Obstacle) | message buffer + event flag (owned by S5) | `g_mbf_scan`, `g_flg_obst` | `scan_req_t`, then `OBST_FLG_REQ` | pending: S5 |
-| IF-10 | S5 → all | snapshots + spinlocks | `mission_get_snap()`, `obst_get_snap()` | `mission_snap_t`, `obst_snap_t` | pending: S5 |
-| IF-11 | S1 ↔ laptop | MQTT (template client extended, A14) | topics `picocar/is23/{telemetry,event,status,cmd,ack}` | JSON, see `comms_proto.h`; `set` parameter ranges PROPOSED in `comms_proto.c` | **instructor agreement needed** (A14); ranges: S2, S3, S5 |
+| IF-01 | S3, S5 → S2 | message buffer (owned by S2), `TMO_POL` | `g_mbf_motion` (mbf_motion) | `motion_cmd_t` (8 B) in `motion_types.h`: DRIVE v mm/s + ω mrad/s, MOVE mm, TURN 0.1 deg, STOP, SET_AUTH, CLEAR_ESTOP; authority rules there | implemented; owners S2, S3, S5 to review |
+| IF-02 | S2 → all | snapshot + per-snapshot spinlock (T1-g2) | `motion_get_odom()` | `motion_odom_t`: counts, distance, pose (x, y, heading), speeds, state, `last_done_seq` / `last_fail_seq` (ObstacleTask reads its step completions here) | implemented; S2 to review |
+| IF-03 | S4 → S2 | function call, core 1 only | `motor_estop()`, `motion_estop_latched()` | brake GP8–11 via SIO LOW + latch; CLEAR_ESTOP inside DI/EI only while the latched-fault word is 0 (T1-g3) | implemented; S2, S4 to review |
+| IF-04 | S3 → all | snapshot + spinlock | `line_get_snap()` | `line_snap_t` (`line_types.h`): error, normalised levels, flags (ON_LINE, LOST, JUNCTION, ...), barcode counters, block counter for NFR2 | implemented; S3 to review |
+| IF-05 | S1, S2, S4, S5 → S4 | event flag (owned by S4) | `g_flg_safety` (flg_safety) | `SAFETY_FLT_*` bits (`imu_types.h`); SafetyTask waits `TWF_ORW \| TWF_BITCLR` on brake bits + `SAFETY_REQ_RESET` (T1-g1); setter clears report-only bits | implemented; S4 to review |
+| IF-06 | all → S5 | message buffer (owned by S5), `TMO_POL` | `g_mbf_mission` (mbf_mission) | `mission_evt_t` (8 B), 29 `mission_ev_t` codes (`mission_types.h`; new: REMOTE_MAP, SAFETY_OK). A dropped post is counted; while running it is a fault | implemented; all to review |
+| IF-07 | monitored tasks → S4 | one 32-bit word per task | `safety_heartbeat()` | timeouts 50/50/300/300/100 ms (`safety_core.c`) | implemented |
+| IF-08 | S4 → all | snapshot + spinlock | `imu_get_snap()` | `imu_snap_t`: pitch/roll, hump state and maxima, motion class, `ok`, `pitch_valid` (obstacle hump mask) | implemented; S4 to review |
+| IF-09 | S5 (Mission → Obstacle) | message buffer + event flag (owned by S5) | `g_mbf_scan`, `g_flg_obst` | `scan_req_t` via `scan_request()` (sets `OBST_FLG_REQ`) | implemented |
+| IF-10 | S5 → all | snapshots + spinlocks | `mission_get_snap()`, `obst_get_snap()` | `mission_snap_t` (state, calibration phase, run parameters, speed cap, barcode map, latched command), `obst_snap_t` (range, width, edges, clearances, plan) | implemented; S5 to review |
+| IF-11 | S1 ↔ laptop | MQTT (template client extended, A14) | topics `picocar/is23/{telemetry,event,status,cmd,ack}` | JSON, see `comms_proto.h`. Commands: start, stop, estop, reset, set, **map** (barcode character → left / right / straight / U-turn, sent before the demo: instructor, 24 Oct). Status shows the map | **instructor agreement needed** (A14); ranges: S2, S3, S5 |
 | IF-12 | all → S1 | message buffer (owned by S1), `TMO_POL` | `g_mbf_telem` (mbf_telem, 1 KB) | `comms_rec_t` (12 B) via `comms_telem_post()` | pending: all |
 
 "pending" = written into the headers by the shared base; the named owners
@@ -210,9 +211,8 @@ limit there. The numbers below are PicoCar's planned usage.
 
 Every total is well under its limit, so `config/config.h` is unchanged.
 
-- **Already created by the shared base:** the 4 message buffers and the 2
-  application event flags, plus HmiTask. The other 6 application tasks and
-  the 3 cyclic handlers appear when their owners write them.
+- **All created:** 7 application tasks, 4 message buffers, 2 application
+  event flags and 3 cyclic handlers (feature/subsystems-2-5).
 - **Kernel / template column:** counted from the source for this build
   configuration (`DEVCNF_USE_SER = 1`, `DEVCNF_USE_ADC = 0`,
   `DEVCNF_USE_IIC = 0`): `sysinit.c`, `usb_console.c`, `cyw43_utk_kernel.c`,

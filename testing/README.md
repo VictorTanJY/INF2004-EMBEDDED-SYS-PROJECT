@@ -72,3 +72,23 @@ the test's result row. `videos/README.md` explains how.
 - **A FAIL needs a note** saying what went wrong and, later, which commit fixed it.
 - Before merging a change into `main`, re-run your subsystem's unit tests.
   Before a demo or hand-in, run every test and record the full set.
+
+## PicoCar: host tests and the emulator
+
+Each subsystem's pure logic (no kernel, no registers) has host tests that run
+on a PC with gcc, AddressSanitizer and UBSan:
+
+```sh
+for d in shared subsystem1 subsystem2 subsystem3 subsystem4 subsystem5; do make -C testing/$d/host; done
+```
+
+Subsystems 1 and 5 also build and run their tests a second time with
+`APP_BENCH=1` (bench mode, `app_program/app_config.h`).
+
+The single-core UART test image runs in the rp2040js emulator
+(`tools/emulator/README.md`). The runner was fixed on 25 Oct 2026 to advance
+the simulated clock; before that a test that slept (`tk_dly_tsk`) never woke,
+so the 22 and 23 Oct emulator runs only covered checks that do not sleep.
+The emulator has no sensors and runs core 0 only: it never replaces the
+hardware tests in `docs/SETUP_AND_TEST.md`.
+
