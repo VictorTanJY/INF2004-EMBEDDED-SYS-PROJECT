@@ -353,7 +353,11 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
             (!b_fault && (good >= IMU_RECOVER_SAMPLES))
             ? 1u : 0u;
 
-        /* First successful sample, then every 100 task cycles. */
+        /* Bring-up only (IMU_DEBUG_LOGS in imu_cfg.h): raw acceleration,
+           pitch and roll as LOG 100..104 on the first good sample, then
+           every 100 cycles.  Off by default: five QoS 1 events per second
+           exceed lwIP's MQTT in-flight limit and fill the laptop's log. */
+#if IMU_DEBUG_LOGS
         {
             static bool first_sample = true;
 
@@ -382,6 +386,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
                     104u, (int32_t)snap.roll_cdeg);
             }
         }
+#endif
 
         imu_put_snap(&snap);
     }

@@ -57,4 +57,10 @@
 #define IMU_LEVEL_MAX_SPREAD_MG     60          /* robot must stand still      */
 #define IMU_MAG_MIN_SPAN            100         /* raw counts, per axis, in the spin */
 
+/* 1: send raw acceleration, pitch and roll as LOG 100..104 once a second
+   (IMU bring-up and axis checks).  0 for normal runs and the demo.      */
+#ifndef IMU_DEBUG_LOGS
+#define IMU_DEBUG_LOGS              0
+#endif
+
 #endif /* IMU_CFG_H */

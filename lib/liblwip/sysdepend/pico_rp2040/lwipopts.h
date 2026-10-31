@@ -61,6 +61,11 @@
  * fail with ERR_MEM on every such record. 1 KB holds about three telemetry
  * publishes plus events. It is allocated with the client from MEM_SIZE. */
 #define MQTT_OUTPUT_RINGBUF_SIZE    1024
+/* PicoCar: QoS 1 publishes (events, status, acks) each hold a request slot
+ * until the broker's PUBACK; lwIP's default of 4 is exceeded by a burst of
+ * events plus the 1 Hz status, so mqtt_publish() returns ERR_MEM and the
+ * status "drops" counter climbs.  8 slots cost a few bytes each. */
+#define MQTT_REQ_MAX_IN_FLIGHT      8
 
 #define LWIP_ARP                    1
 #define LWIP_ETHERNET               1
