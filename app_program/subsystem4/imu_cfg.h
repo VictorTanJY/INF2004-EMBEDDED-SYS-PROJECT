@@ -16,7 +16,7 @@
 #define IMU_AXIS_LEFT               1
 #define IMU_SIGN_LEFT               (1)
 #define IMU_AXIS_UP                 2
-#define IMU_SIGN_UP                 (1)
+#define IMU_SIGN_UP                 (-1)
 
 /* LSM303DLHC accelerometer at +-4 g, high resolution: 2 mg per LSB of the
    12-bit left-justified value (datasheet table 3).                      */

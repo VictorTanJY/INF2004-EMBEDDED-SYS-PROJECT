@@ -1,75 +1,51 @@
-/*
- *  drv_lsm303.c
- *  Subsystem 4 -- LSM303DLHC driver.  See drv_lsm303.h.
+/* LSM303D driver for the robot identified by WHO_AM_I 0x49 at 0x1E.
+ * Datasheet: https://www.st.com/resource/en/datasheet/lsm303d.pdf
+ * API units and sensor-axis order match the existing imu_core interface.
  */
-
 #include "drv_lsm303.h"
 #include "drv_i2c1.h"
 #include "imu_cfg.h"
 
-#define ACC_ADDR            0x19u
-#define MAG_ADDR            0x1Eu
-
-#define CTRL_REG1_A         0x20u
-#define CTRL_REG2_A         0x21u
-#define CTRL_REG3_A         0x22u
-#define CTRL_REG4_A         0x23u
-#define CTRL_REG5_A         0x24u
-#define OUT_X_L_A           0x28u
-#define INT1_CFG_A          0x30u
-#define INT1_THS_A          0x32u
-#define INT1_DURATION_A     0x33u
-#define AUTO_INC            0x80u
-
-#define CRA_REG_M           0x00u
-#define CRB_REG_M           0x01u
-#define MR_REG_M            0x02u
-#define OUT_X_H_M           0x03u
-#define IRA_REG_M           0x0Au
-/* LSM303AGR magnetometer (same address; sold on some GY-511 boards) */
-#define WHO_AM_I_M          0x4Fu
-#define CFG_REG_A_M         0x60u
-#define CFG_REG_C_M         0x62u
-#define OUTX_L_REG_M        0x68u
-#define ID_DLHC             0x48u
-#define ID_AGR              0x40u
-
-typedef enum
-{
-    CHIP_NONE = 0,
-    CHIP_DLHC = 1,
-    CHIP_AGR  = 2
-} chip_t;
-
-static uint8_t  g_chip = (uint8_t)CHIP_NONE;
-static uint32_t g_diag;
+#define SENSOR_ADDR 0x1Eu
+#define AUTO_INC    0x80u
 
 typedef struct
 {
-    uint8_t addr;
     uint8_t reg;
     uint8_t value;
 } reg_init_t;
 
 static reg_init_t const k_init[] =
 {
-    { ACC_ADDR, CTRL_REG1_A,     0x57u },   /* 100 Hz, normal power, X Y Z on      */
-    { ACC_ADDR, CTRL_REG2_A,     0x04u },   /* high-pass filter on INT1 (HPIS1)    */
-    { ACC_ADDR, CTRL_REG4_A,     0x18u },   /* +-4 g (FS = 01), high resolution    */
-    { ACC_ADDR, CTRL_REG5_A,     0x00u },   /* INT1 not latched                    */
-    { ACC_ADDR, INT1_THS_A,      (uint8_t)IMU_INT1_THS },
-    { ACC_ADDR, INT1_DURATION_A, 0x00u },
-    { ACC_ADDR, INT1_CFG_A,      0x2Au },   /* OR of X, Y, Z high events           */
-    { ACC_ADDR, CTRL_REG3_A,     0x40u },   /* I1_AOI1: event 1 on the INT1 pin    */
-    { MAG_ADDR, CRA_REG_M,       0x18u },   /* 75 Hz                               */
-    { MAG_ADDR, CRB_REG_M,       0x20u },   /* +-1.3 gauss                         */
-    { MAG_ADDR, MR_REG_M,        0x00u }    /* continuous conversion               */
+    {0x22u, 0x00u}, /* Disconnect INT1 while configuring. */
+    {0x30u, 0x00u}, /* Disable interrupt generator during setup. */
+    {0x1Fu, 0x02u}, /* High-pass filter for interrupt generator 1 only. */
+    {0x21u, 0x08u}, /* Acceleration +/-4 g, 16-bit, self-test off. */
+    {0x23u, 0x00u}, /* No routes to INT2. */
+    {0x24u, 0x70u}, /* Magnetic high resolution, 50 Hz; IRQ not latched. */
+    {0x25u, 0x20u}, /* Magnetic +/-4 gauss. */
+    {0x26u, 0x00u}, /* Continuous magnetic conversion; unfiltered accel output. */
+    {0x12u, 0x08u}, /* Push-pull, active-high interrupt pins. */
+    {0x32u, (uint8_t)IMU_INT1_THS},
+    {0x33u, 0x00u}, /* No minimum interrupt duration. */
+    {0x20u, 0x6Fu}  /* Acceleration 100 Hz, XYZ on, block data update. */
 };
 
-static uint32_t diag(uint8_t stage, ER er, uint8_t id_dlhc, uint8_t id_agr)
+static uint32_t g_diag;
+
+/* Diagnostic layout:
+ * bits 31..24: stage (0 = success, 1 = identity read,
+ *                    2 = unexpected identity, 4 = configuration)
+ * bits 23..16: negated error code, low byte
+ * bits 15..8:  observed WHO_AM_I value
+ * bits 7..0:   reserved
+ */
+static ER init_result(uint8_t stage, ER er, uint8_t id)
 {
-    return ((uint32_t)stage << 24) | (((uint32_t)(-er) & 0xFFu) << 16)
-         | ((uint32_t)id_dlhc << 8) | (uint32_t)id_agr;
+    g_diag = ((uint32_t)stage << 24)
+           | (((uint32_t)(-er) & 0xFFu) << 16)
+           | ((uint32_t)id << 8);
+    return er;
 }
 
 EXPORT uint32_t drv_lsm303_diag(void)
@@ -79,131 +55,103 @@ EXPORT uint32_t drv_lsm303_diag(void)
 
 EXPORT ER drv_lsm303_init(void)
 {
-    uint8_t  id_dlhc = 0u;
-    uint8_t  id_agr  = 0u;
-    uint8_t  b;
-    ER       er;
+    uint8_t id = 0u;
+    uint8_t reference[3];
     uint32_t i;
+    ER er;
 
-    g_chip = (uint8_t)CHIP_NONE;
+    g_diag = 0u;
 
-    /* 1. Magnetometer identity: LSM303DLHC (IRA_REG_M = 0x48), else
-          LSM303AGR (WHO_AM_I_M = 0x40), both at 0x1E. */
-    er = drv_i2c1_read(MAG_ADDR, IRA_REG_M, &id_dlhc, 1u);
+    er = drv_i2c1_read(SENSOR_ADDR, 0x0Fu, &id, 1u);
     if (er != E_OK)
+        return init_result(1u, er, id);
+
+    if (id != 0x49u)
+        return init_result(2u, E_OBJ, id);
+
+    for (i = 0u; i < sizeof(k_init) / sizeof(k_init[0]); ++i)
     {
-        g_diag = diag(1u, er, 0u, 0u);
-        return er;
-    }
-    if (id_dlhc == ID_DLHC)
-    {
-        g_chip = (uint8_t)CHIP_DLHC;
-    }
-    else
-    {
-        er = drv_i2c1_read(MAG_ADDR, WHO_AM_I_M, &id_agr, 1u);
-        if ((er == E_OK) && (id_agr == ID_AGR))
-        {
-            g_chip = (uint8_t)CHIP_AGR;
-        }
-        else
-        {
-            g_diag = diag(2u, (er != E_OK) ? er : E_OBJ, id_dlhc, id_agr);
-            return E_OBJ;
-        }
+        uint8_t check = 0u;
+
+        er = drv_i2c1_write_reg(
+            SENSOR_ADDR, k_init[i].reg, k_init[i].value);
+        if (er != E_OK)
+            return init_result(4u, er, id);
+
+        er = drv_i2c1_read(
+            SENSOR_ADDR, k_init[i].reg, &check, 1u);
+        if (er != E_OK)
+            return init_result(4u, er, id);
+
+        if (check != k_init[i].value)
+            return init_result(4u, E_IO, id);
     }
 
-    /* 2. Accelerometer answers at 0x19 (register map shared by both chips). */
-    er = drv_i2c1_read(ACC_ADDR, CTRL_REG1_A, &b, 1u);
+    /* Reset high-pass references before enabling INT1. */
+    er = drv_i2c1_read(
+        SENSOR_ADDR, (uint8_t)(0x1Cu | AUTO_INC), reference, 3u);
     if (er != E_OK)
-    {
-        g_diag = diag(3u, er, id_dlhc, id_agr);
-        g_chip = (uint8_t)CHIP_NONE;
-        return er;
-    }
+        return init_result(4u, er, id);
 
-    /* 3. Configuration. */
-    for (i = 0u; i < (uint32_t)(sizeof(k_init) / sizeof(k_init[0])); i++)
-    {
-        if ((k_init[i].addr == MAG_ADDR) && (g_chip == (uint8_t)CHIP_AGR))
-        {
-            continue;                   /* DLHC magnetometer registers */
-        }
-        er = drv_i2c1_write_reg(k_init[i].addr, k_init[i].reg, k_init[i].value);
-        if (er != E_OK)
-        {
-            g_diag = diag(4u, er, id_dlhc, id_agr);
-            g_chip = (uint8_t)CHIP_NONE;
-            return er;
-        }
-    }
-    if (g_chip == (uint8_t)CHIP_AGR)
-    {
-        /* 100 Hz continuous, temperature compensated; block data update */
-        er = drv_i2c1_write_reg(MAG_ADDR, CFG_REG_A_M, 0x8Cu);
-        if (er == E_OK)
-        {
-            er = drv_i2c1_write_reg(MAG_ADDR, CFG_REG_C_M, 0x10u);
-        }
-        if (er != E_OK)
-        {
-            g_diag = diag(4u, er, id_dlhc, id_agr);
-            g_chip = (uint8_t)CHIP_NONE;
-            return er;
-        }
-    }
-    g_diag = diag(0u, E_OK, id_dlhc, id_agr);
-    return E_OK;
+    /* OR-of-positive-axis high-g interrupt. */
+    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x30u, 0x2Au);
+    if (er != E_OK)
+        return init_result(4u, er, id);
+
+    /* Route interrupt generator 1 to INT1. */
+    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x22u, 0x20u);
+    if (er != E_OK)
+        return init_result(4u, er, id);
+
+    return init_result(0u, E_OK, id);
+}
+
+static int16_t le16(uint8_t lo, uint8_t hi)
+{
+    uint16_t const word =
+        (uint16_t)((uint16_t)lo | ((uint16_t)hi << 8));
+
+    /* Avoid implementation-defined unsigned-to-signed overflow. */
+    return (int16_t)((word & 0x8000u)
+        ? (int32_t)word - 65536
+        : (int32_t)word);
 }
 
 EXPORT ER drv_lsm303_read_accel(int32_t acc_mg[3])
 {
     uint8_t b[6];
-    ER      er = drv_i2c1_read(ACC_ADDR, (uint8_t)(OUT_X_L_A | AUTO_INC), b, 6u);
     uint8_t k;
+    ER er;
 
+    er = drv_i2c1_read(
+        SENSOR_ADDR, (uint8_t)(0x28u | AUTO_INC), b, 6u);
     if (er != E_OK)
-    {
         return er;
-    }
-    for (k = 0u; k < 3u; k++)
-    {
-        /* 12-bit value, left-justified in a little-endian 16-bit word */
-        int16_t const raw = (int16_t)(uint16_t)((uint16_t)b[2u * k] | ((uint16_t)b[(2u * k) + 1u] << 8));
 
-        acc_mg[k] = ((int32_t)raw / 16) * IMU_ACC_MG_PER_LSB;
+    for (k = 0u; k < 3u; ++k)
+    {
+        /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
+        acc_mg[k] =
+            ((int32_t)le16(b[2u * k], b[2u * k + 1u]) * 122)
+            / 1000;
     }
+
     return E_OK;
 }
 
 EXPORT ER drv_lsm303_read_mag(int16_t mag[3])
 {
     uint8_t b[6];
-    ER      er;
+    uint8_t k;
+    ER er;
 
-    if (g_chip == (uint8_t)CHIP_AGR)
-    {
-        /* AGR: X, Y, Z little-endian from 0x68, 1.5 mG/LSB.  Only the
-           direction is used (heading), so the scale difference to the
-           DLHC (1100 LSB/G) does not matter. */
-        er = drv_i2c1_read(MAG_ADDR, OUTX_L_REG_M, b, 6u);
-        if (er != E_OK)
-        {
-            return er;
-        }
-        mag[0] = (int16_t)(uint16_t)((uint16_t)b[0] | ((uint16_t)b[1] << 8));
-        mag[1] = (int16_t)(uint16_t)((uint16_t)b[2] | ((uint16_t)b[3] << 8));
-        mag[2] = (int16_t)(uint16_t)((uint16_t)b[4] | ((uint16_t)b[5] << 8));
-        return E_OK;
-    }
-    er = drv_i2c1_read(MAG_ADDR, OUT_X_H_M, b, 6u);
+    er = drv_i2c1_read(
+        SENSOR_ADDR, (uint8_t)(0x08u | AUTO_INC), b, 6u);
     if (er != E_OK)
-    {
         return er;
-    }
-    /* order on the wire: X (H, L), Z (H, L), Y (H, L) */
-    mag[0] = (int16_t)(uint16_t)(((uint16_t)b[0] << 8) | b[1]);
-    mag[2] = (int16_t)(uint16_t)(((uint16_t)b[2] << 8) | b[3]);
-    mag[1] = (int16_t)(uint16_t)(((uint16_t)b[4] << 8) | b[5]);
+
+    for (k = 0u; k < 3u; ++k)
+        mag[k] = le16(b[2u * k], b[2u * k + 1u]);
+
     return E_OK;
 }

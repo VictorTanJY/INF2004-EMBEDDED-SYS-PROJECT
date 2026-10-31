@@ -1,8 +1,8 @@
 /*
  *  drv_i2c1.c
  *  Subsystem 4 -- polled I2C1 master.  See drv_i2c1.h.
- *  Timing values as in the template's kernel driver
- *  (device/i2c/sysdepend/rp2040/i2c_rp2040.c): 125 MHz / (126 + 187) ~ 400 kHz.
+ *  Preserves the robot's 100 kHz timing. Recovery releases a stuck SDA
+ *  with up to nine open-drain SCL pulses, followed by a STOP.
  */
 
 #include "drv_i2c1.h"
@@ -56,8 +56,8 @@ static ER set_target(uint8_t addr7)
         }
     }
     out_w(IC_TAR, addr7);
-    out_w(IC_ENABLE, 1u);
     (void)in_w(IC_CLR_INTR);
+    out_w(IC_ENABLE, 1u);
     return E_OK;
 }
 
@@ -81,11 +81,75 @@ static ER finish(uint32_t t0)
     return E_OK;
 }
 
+/* Open-drain recovery: drive LOW or release; never drive either line HIGH.
+ * NXP UM10204 section 3.1.16: up to nine clocks if SDA is stuck LOW.
+ * All waits are bounded. A shorted/unpowered device remains an error.
+ */
+static void recovery_delay(void)
+{
+    uint32_t const t0 = (uint32_t)app_time_us();
+    while ((uint32_t)((uint32_t)app_time_us() - t0) < 5u) { }
+}
+
+static ER scl_release(void)
+{
+    uint32_t const t0 = (uint32_t)app_time_us();
+    out_w(GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
+    while ((in_w(GPIO_IN) & (1uL << S4_PIN_IMU_SCL)) == 0u)
+    {
+        if ((uint32_t)((uint32_t)app_time_us() - t0) >= 100u)
+            return E_TMOUT;
+    }
+    recovery_delay();
+    return E_OK;
+}
+
+static ER clear_bus(void)
+{
+    uint32_t const sda = 1uL << S4_PIN_IMU_SDA;
+    uint32_t const scl = 1uL << S4_PIN_IMU_SCL;
+    uint8_t i;
+    ER er;
+    out_w(GPIO_OE_CLR, sda | scl);
+    out_w(GPIO_OUT_CLR, sda | scl);
+    out_w(GPIO_CTRL(S4_PIN_IMU_SDA), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(GPIO_CTRL(S4_PIN_IMU_SCL), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(GPIO(S4_PIN_IMU_SDA), GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
+    out_w(GPIO(S4_PIN_IMU_SCL), GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
+    er = scl_release();
+    if (er == E_OK && ((in_w(GPIO_IN) & sda) == 0u))
+    {
+        for (i = 0u; i < 9u && ((in_w(GPIO_IN) & sda) == 0u); i++)
+        {
+            out_w(GPIO_OE_SET, scl);
+            recovery_delay();
+            er = scl_release();
+            if (er != E_OK) break;
+        }
+        if (er == E_OK)
+        {
+            /* STOP: SDA rises while SCL is HIGH. */
+            out_w(GPIO_OE_SET, scl);
+            out_w(GPIO_OE_SET, sda);
+            recovery_delay();
+            er = scl_release();
+            out_w(GPIO_OE_CLR, sda);
+            recovery_delay();
+        }
+    }
+    out_w(GPIO_OE_CLR, sda | scl);
+    if (er == E_OK && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
+        er = E_IO;
+    return er;
+}
+
 EXPORT ER drv_i2c1_init(void)
 {
     /* I2C1 is not released at boot and has one owner: a full reset pulse
        also recovers a wedged controller. */
+    ER bus_er;
     set_w(RESETS_RESET, RESETS_RESET_I2C1);
+    bus_er = clear_bus();
     app_reset_release(RESETS_RESET_I2C1);
 
     out_w(GPIO_CTRL(S4_PIN_IMU_SDA), GPIO_CTRL_FUNCSEL_I2C);
@@ -97,22 +161,24 @@ EXPORT ER drv_i2c1_init(void)
     out_w(IC_CON, CON_MASTER);
     out_w(IC_RX_TL, 0u);
     out_w(IC_TX_TL, 0u);
-    out_w(IC_FS_SCL_HCNT, 126u);
-    out_w(IC_FS_SCL_LCNT, 187u);
-    out_w(IC_FS_SPKLEN, 187u / 16u);
+    out_w(IC_FS_SCL_HCNT, 500u);
+    out_w(IC_FS_SCL_LCNT, 750u);
+    out_w(IC_FS_SPKLEN, 11u);
     out_w(IC_SDA_HOLD, 38u);
-    return (in_w(IC_FS_SCL_LCNT) == 187u) ? E_OK : E_IO;
+    if (bus_er != E_OK) return bus_er;
+    return (in_w(IC_FS_SCL_LCNT) == 750u) ? E_OK : E_IO;
 }
 
 EXPORT ER drv_i2c1_write_reg(uint8_t addr7, uint8_t reg, uint8_t value)
 {
-    uint32_t const t0 = (uint32_t)app_time_us();
+    uint32_t t0;
     ER             er = set_target(addr7);
 
     if (er != E_OK)
     {
         return er;
     }
+    t0 = (uint32_t)app_time_us();
     out_w(IC_DATA_CMD, reg);
     out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
     return finish(t0);
@@ -120,11 +186,11 @@ EXPORT ER drv_i2c1_write_reg(uint8_t addr7, uint8_t reg, uint8_t value)
 
 EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n)
 {
-    uint32_t const t0 = (uint32_t)app_time_us();
+    uint32_t t0;
     ER             er;
     uint8_t        i;
 
-    if ((n == 0u) || (n > 16u))
+    if ((p_buf == 0) || (addr7 > 0x7Fu) || (n == 0u) || (n > 16u))
     {
         return E_PAR;
     }
@@ -133,6 +199,7 @@ EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n)
     {
         return er;
     }
+    t0 = (uint32_t)app_time_us();
     out_w(IC_DATA_CMD, reg);                            /* register address */
     for (i = 0u; i < n; i++)
     {
