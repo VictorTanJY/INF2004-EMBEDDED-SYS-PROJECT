@@ -38,6 +38,16 @@
 /* ---- Safety ---------------------------------------------------------- */
 #define IMU_TILT_ON_CDEG            3000        /* > 30 deg: TILT (FR15)     */
 #define IMU_TILT_OFF_CDEG           2500
+/* The angle must stay beyond IMU_TILT_ON_CDEG this long before TILT is
+   raised: a real tip-over lasts, while a start or stop of the wheels (the
+   encoder acceleration in the pitch estimate, below) only lasts a moment.
+   NFR8's 20 ms covers impact, proximity and E-stop, not tilt.            */
+#define IMU_TILT_HOLD_MS            200
+/* The forward acceleration measured by the encoders is subtracted from the
+   accelerometer before pitch is taken (so braking is not seen as a hill).
+   Clamp it: with uncalibrated encoder counts, or wheels spinning in the
+   air on the bench, it can be far larger than anything the chassis does. */
+#define IMU_ACC_COMP_MAX_MM_S2      3000        /* ~0.3 g */
 #define IMU_IMPACT_MG               1500        /* |delta a| > 1.5 g         */
 #define IMU_IMPACT_HOLD_MS          300
 #define IMU_I2C_FAULT_COUNT         3           /* consecutive errors        */

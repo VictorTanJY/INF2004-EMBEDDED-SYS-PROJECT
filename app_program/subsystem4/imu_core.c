@@ -357,7 +357,9 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
 
     /* Attitude.  The forward axis also sees the robot's own acceleration,
        so subtract the encoder estimate before taking the angle. */
-    fwd  = axis(a, IMU_AXIS_FWD, IMU_SIGN_FWD) - ((p_ic->accel_mm_s2 * 1000) / MG_PER_G_MM_S2);
+    fwd  = axis(a, IMU_AXIS_FWD, IMU_SIGN_FWD) -
+           ((app_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2, IMU_ACC_COMP_MAX_MM_S2) * 1000) /
+            MG_PER_G_MM_S2);
     left = axis(a, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
     up   = axis(a, IMU_AXIS_UP, IMU_SIGN_UP);
     p_ic->pitch_cdeg = app_wrap_cdeg(app_atan2_cdeg(fwd, (int32_t)app_isqrt64((uint64_t)((int64_t)left * left +
@@ -374,22 +376,42 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
         p_ic->heading_cdeg = (h < 0) ? (h + 36000) : h;         /* clockwise from north */
     }
 
-    /* Tilt (FR15): either axis beyond 30 deg. */
-    if (!p_ic->b_tilt && ((app_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG) ||
-                          (app_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG)))
+    /* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off
+       again below 25 deg on both axes. */
     {
-        p_ic->b_tilt = true;
-        ev |= IMU_EV_TILT_ON;
-    }
-    else if (p_ic->b_tilt && (app_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG) &&
-             (app_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
-    {
-        p_ic->b_tilt = false;
-        ev |= IMU_EV_TILT_OFF;
-    }
-    else
-    {
-        /* no change */
+        bool const b_over = (app_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG) ||
+                            (app_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
+
+        if (!b_over)
+        {
+            p_ic->b_tilt_over = false;
+        }
+        else if (!p_ic->b_tilt_over)
+        {
+            p_ic->b_tilt_over   = true;
+            p_ic->tilt_since_ms = now_ms;
+        }
+        else
+        {
+            /* still beyond the limit */
+        }
+
+        if (!p_ic->b_tilt && p_ic->b_tilt_over &&
+            (app_elapsed_ms(now_ms, p_ic->tilt_since_ms) >= IMU_TILT_HOLD_MS))
+        {
+            p_ic->b_tilt = true;
+            ev |= IMU_EV_TILT_ON;
+        }
+        else if (p_ic->b_tilt && (app_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG) &&
+                 (app_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
+        {
+            p_ic->b_tilt = false;
+            ev |= IMU_EV_TILT_OFF;
+        }
+        else
+        {
+            /* no change */
+        }
     }
 
     /* Hump detection runs on forward travel only. */

@@ -144,22 +144,33 @@ int main(void)
         CHECK("S4-H03", (g_ev & IMU_EV_RAMP) != 0u && (g_ev & IMU_EV_HUMP_END) == 0u);
     }
 
-    /* S4-H04: tilt on above 30 deg, off below 25 deg; roll too */
+    /* S4-H04: tilt on above 30 deg held for IMU_TILT_HOLD_MS, off below
+       25 deg; roll too */
     imu_core_init(&g_ic);
     g_now = 0u;
     g_ev = 0u;
-    step(35.0, 0.0, 0.0, 0, 0, 0);
-    step(35.0, 0.0, 0.0, 0, 0, 0);
-    step(35.0, 0.0, 0.0, 0, 0, 0);
-    step(35.0, 0.0, 0.0, 0, 0, 0);
-    step(35.0, 0.0, 0.0, 0, 0, 0);
+    { int k; for (k = 0; k < 10; k++) { step(35.0, 0.0, 0.0, 0, 0, 0); } }
+    CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) == 0u && !g_ic.b_tilt);     /* 100 ms: not yet */
+    { int k; for (k = 0; k < 20; k++) { step(35.0, 0.0, 0.0, 0, 0, 0); } }
     CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) != 0u && g_ic.b_tilt);
     g_ev = 0u;
     { int k; for (k = 0; k < 10; k++) { step(20.0, 0.0, 0.0, 0, 0, 0); } }
     CHECK("S4-H04", (g_ev & IMU_EV_TILT_OFF) != 0u && !g_ic.b_tilt);
     g_ev = 0u;
-    { int k; for (k = 0; k < 10; k++) { step(0.0, -40.0, 0.0, 0, 0, 0); } }
+    { int k; for (k = 0; k < 30; k++) { step(0.0, -40.0, 0.0, 0, 0, 0); } }
     CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) != 0u && g_ic.roll_cdeg < -3000);
+
+    /* S4-H04b: a wheel start on the bench (encoders report 0 -> 400 mm/s
+       in 20 ms while the chassis stays level) and a 150 ms 40-deg spike
+       must not raise TILT. */
+    imu_core_init(&g_ic);
+    g_now = 0u;
+    g_ev = 0u;
+    { int k; for (k = 0; k < 20; k++) { step(0.0, 0.0, 0.0, 0, 0, 0); } }
+    { int k; for (k = 0; k < 30; k++) { step(0.0, 0.0, 0.0, (k < 2) ? 200 * (k + 1) : 400, 4000, 0); } }
+    { int k; for (k = 0; k < 15; k++) { step(40.0, 0.0, 0.0, 400, 4000, 0); } }
+    { int k; for (k = 0; k < 30; k++) { step(0.0, 0.0, 0.0, 400, 4000, 0); } }
+    CHECK("S4-H04b", (g_ev & IMU_EV_TILT_ON) == 0u && !g_ic.b_tilt);
 
     /* S4-H05: impact = a jump of more than 1.5 g between samples */
     imu_core_init(&g_ic);

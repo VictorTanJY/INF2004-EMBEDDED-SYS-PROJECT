@@ -63,6 +63,8 @@ typedef struct
 
     /* safety / classification */
     bool     b_tilt;
+    bool     b_tilt_over;       /* beyond the limit, waiting for IMU_TILT_HOLD_MS */
+    uint32_t tilt_since_ms;
     uint32_t impact_ms;
     bool     b_impact;
     uint8_t  motion;            /* imu_motion_t */
