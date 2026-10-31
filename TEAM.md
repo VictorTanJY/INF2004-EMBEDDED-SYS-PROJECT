@@ -175,7 +175,7 @@ sends to it or waits on it. Agree on the data format before coding.
 
 | ID | From → To | Mechanism | Object ID name | Data / meaning | Agreed by |
 |---|---|---|---|---|---|
-| IF-01 | S3, S5 → S2 | message buffer (owned by S2), `TMO_POL` | `g_mbf_motion` (mbf_motion) | `motion_cmd_t` (8 B) in `motion_types.h`: DRIVE v mm/s + ω mrad/s, MOVE mm, TURN 0.1 deg, STOP, SET_AUTH, CLEAR_ESTOP; authority rules there | implemented; owners S2, S3, S5 to review |
+| IF-01 | S3, S5 → S2 | message buffer (owned by S2), `TMO_POL` | `g_mbf_motion` (mbf_motion); named API in `subsystem2/motion_api.h` (FR5): `motion_move_forward/_backward`, `motion_turn_left/_right`, `motion_stop`, `motion_drive` | `motion_cmd_t` (8 B) in `motion_types.h`: DRIVE v mm/s + ω mrad/s, MOVE mm, TURN 0.1 deg, STOP, SET_AUTH, CLEAR_ESTOP; authority rules there | implemented; owners S2, S3, S5 to review |
 | IF-02 | S2 → all | snapshot + per-snapshot spinlock (T1-g2) | `motion_get_odom()` | `motion_odom_t`: counts, distance, pose (x, y, heading), speeds, state, `last_done_seq` / `last_fail_seq` (ObstacleTask reads its step completions here) | implemented; S2 to review |
 | IF-03 | S4 → S2 | function call, core 1 only | `motor_estop()`, `motion_estop_latched()` | brake GP8–11 via SIO LOW + latch; CLEAR_ESTOP inside DI/EI only while the latched-fault word is 0 (T1-g3) | implemented; S2, S4 to review |
 | IF-04 | S3 → all | snapshot + spinlock | `line_get_snap()` | `line_snap_t` (`line_types.h`): error, normalised levels, flags (ON_LINE, LOST, JUNCTION, ...), barcode counters, block counter for NFR2 | implemented; S3 to review |

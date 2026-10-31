@@ -46,6 +46,11 @@ IMPORT ER motion_send(motion_cmd_t const * p_cmd);
 /* Helper for senders: fills and posts one command. */
 IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1);
 
+/* The named API (FR5): motion_move_forward / _backward, motion_turn_left /
+   _right, motion_stop, motion_drive.  Use these; motion_post stays for
+   SET_AUTH and CLEAR_ESTOP. */
+#include "motion_api.h"
+
 /* ---------------------------------------------------------------------
  *  IF-02  Odometry snapshot (written by MotionTask, read by everyone).
  * --------------------------------------------------------------------- */

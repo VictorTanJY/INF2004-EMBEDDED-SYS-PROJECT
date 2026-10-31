@@ -240,8 +240,8 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             (ms.state == (uint8_t)MISSION_ST_LINE_FOLLOW) && g_cal.b_valid)
         {
             drive_seq++;
-            (void)motion_post((uint8_t)MOTION_SRC_LINE, drive_seq, (uint8_t)MOTION_CMD_DRIVE,
-                              (int16_t)g_trk.v, (int16_t)g_trk.omega);
+            (void)motion_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
+                               (int16_t)g_trk.v, (int16_t)g_trk.omega);
         }
 
         /* ---- 6. snapshot -------------------------------------------- */

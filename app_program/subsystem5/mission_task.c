@@ -13,6 +13,7 @@
 
 #include "subsystem5.h"
 #include "mission_core.h"
+#include "../app_types.h"
 #include "../subsystem1/subsystem1.h"
 #include "../subsystem2/subsystem2.h"
 #include "../subsystem3/subsystem3.h"
@@ -25,6 +26,41 @@ typedef char s5_check_src_imu[(APP_SRC_SAFETY_IMU == 4u) ? 1 : -1];
 static mission_core_t g_mc;
 static uint8_t        g_scan_seq;
 
+/* One motion action through the named API (FR5); SET_AUTH and
+   CLEAR_ESTOP have no named form and use motion_post. */
+static ER mission_motion(mission_act_t const * p_a)
+{
+    uint8_t const  src    = (uint8_t)MOTION_SRC_MISSION;
+    uint16_t const amount = (uint16_t)app_abs_i32(p_a->p0);
+    ER             er;
+
+    switch (p_a->cmd)
+    {
+        case MOTION_CMD_MOVE:
+            er = (p_a->p0 >= 0) ? motion_move_forward(src, p_a->seq, amount, (uint16_t)p_a->p1)
+                                : motion_move_backward(src, p_a->seq, amount, (uint16_t)p_a->p1);
+            break;
+
+        case MOTION_CMD_TURN:
+            er = (p_a->p0 >= 0) ? motion_turn_left(src, p_a->seq, amount, (uint16_t)p_a->p1)
+                                : motion_turn_right(src, p_a->seq, amount, (uint16_t)p_a->p1);
+            break;
+
+        case MOTION_CMD_STOP:
+            er = motion_stop(src, p_a->seq);
+            break;
+
+        case MOTION_CMD_DRIVE:
+            er = motion_drive(src, p_a->seq, p_a->p0, p_a->p1);
+            break;
+
+        default:
+            er = motion_post(src, p_a->seq, p_a->cmd, p_a->p0, p_a->p1);
+            break;
+    }
+    return er;
+}
+
 static void run_actions(mission_out_t const * p_out)
 {
     uint8_t i;
@@ -36,7 +72,7 @@ static void run_actions(mission_out_t const * p_out)
         switch (p_a->kind)
         {
             case MISSION_ACT_MOTION:
-                if (motion_post((uint8_t)MOTION_SRC_MISSION, p_a->seq, p_a->cmd, p_a->p0, p_a->p1) != E_OK)
+                if (mission_motion(p_a) != E_OK)
                 {
                     /* mbf_motion full: MotionTask stalled; its heartbeat catches it */
                     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,

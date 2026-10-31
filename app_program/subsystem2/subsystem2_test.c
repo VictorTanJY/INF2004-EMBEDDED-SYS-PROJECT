@@ -35,7 +35,7 @@ EXPORT void subsystem2_test(void)
                "boots braked (duty 0/0)");
 
     /* An unauthorised DRIVE is rejected and counted (authority, Section 6.1). */
-    (void)motion_post((uint8_t)MOTION_SRC_LINE, 1u, (uint8_t)MOTION_CMD_DRIVE, 100, 0);
+    (void)motion_drive((uint8_t)MOTION_SRC_LINE, 1u, 100, 0);
     (void)tk_dly_tsk(30);
     motion_get_odom(&a);
     TEST_CHECK("S2-U06", (a.rejected > b.rejected) && (a.state == (uint8_t)MOTION_ST_IDLE_BRAKED),

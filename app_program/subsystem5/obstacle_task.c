@@ -137,29 +137,42 @@ static void drive(int32_t v, int32_t target_h, motion_odom_t const * p_odom)
     int32_t const w   = app_clamp_i32(err * OBST_HOLD_K, -OBST_HOLD_MAX, OBST_HOLD_MAX);
 
     g_o.drive_seq++;
-    (void)motion_post((uint8_t)MOTION_SRC_AVOID, g_o.drive_seq, (uint8_t)MOTION_CMD_DRIVE,
-                      (int16_t)v, (int16_t)w);
+    (void)motion_drive((uint8_t)MOTION_SRC_AVOID, g_o.drive_seq, (int16_t)v, (int16_t)w);
 }
 
 static void stop_motion(void)
 {
-    (void)motion_post((uint8_t)MOTION_SRC_AVOID, 0u, (uint8_t)MOTION_CMD_STOP, 0, 0);
+    (void)motion_stop((uint8_t)MOTION_SRC_AVOID, 0u);
 }
 
 static void send_step(uint8_t kind, int16_t value, motion_odom_t const * p_odom)
 {
+    uint16_t const amount = (uint16_t)app_abs_i32(value);
+
     g_o.seq++;
     g_o.wait_fail_count = p_odom->fail_count;
     g_o.b_wait_motion   = true;
     if (kind == (uint8_t)OBST_STEP_TURN)
     {
-        (void)motion_post((uint8_t)MOTION_SRC_AVOID, g_o.seq, (uint8_t)MOTION_CMD_TURN,
-                          value, OBST_BYPASS_TURN_DEG_S);
+        if (value >= 0)
+        {
+            (void)motion_turn_left((uint8_t)MOTION_SRC_AVOID, g_o.seq, amount, OBST_BYPASS_TURN_DEG_S);
+        }
+        else
+        {
+            (void)motion_turn_right((uint8_t)MOTION_SRC_AVOID, g_o.seq, amount, OBST_BYPASS_TURN_DEG_S);
+        }
     }
     else
     {
-        (void)motion_post((uint8_t)MOTION_SRC_AVOID, g_o.seq, (uint8_t)MOTION_CMD_MOVE,
-                          value, OBST_BYPASS_SPEED_MM_S);
+        if (value >= 0)
+        {
+            (void)motion_move_forward((uint8_t)MOTION_SRC_AVOID, g_o.seq, amount, OBST_BYPASS_SPEED_MM_S);
+        }
+        else
+        {
+            (void)motion_move_backward((uint8_t)MOTION_SRC_AVOID, g_o.seq, amount, OBST_BYPASS_SPEED_MM_S);
+        }
     }
 }
 

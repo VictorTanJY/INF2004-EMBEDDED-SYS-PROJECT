@@ -14,6 +14,7 @@
 #include <string.h>
 #include "motion_core.h"
 #include "motion_cfg.h"
+#include "motion_api.h"
 
 static int g_pass;
 static int g_fail;
@@ -36,6 +37,19 @@ static plant_t       g_pl;
 static uint32_t      g_now;
 static int           g_ev[8];       /* counts per motion_ev_code_t */
 static uint8_t       g_last_seq;
+
+/* Stand-in for subsystem2.c's motion_post (the real one posts to
+   mbf_motion): records the last command for the motion_api tests. */
+static struct { int n; uint8_t src; uint8_t seq; uint8_t cmd; int16_t p0; int16_t p1; } g_post;
+
+int motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1)
+{
+    g_post.n++;
+    g_post.src = src; g_post.seq = seq; g_post.cmd = cmd; g_post.p0 = p0; g_post.p1 = p1;
+    return 0;
+}
+
+#define POSTED(c, a, b) ((g_post.cmd == (uint8_t)(c)) && (g_post.p0 == (a)) && (g_post.p1 == (b)))
 
 static void plant_init(double gain)
 {
@@ -273,6 +287,32 @@ int main(void)
     CHECK("S2-H13", g_ev[MOTION_EV_FAILED] == 1 && g_mc.last_fail_seq == 80u);
     (void)run_until_event(MOTION_EV_DONE, 5000u);
     CHECK("S2-H13", g_mc.last_done_seq == 81u);
+
+    /* S2-H14: the named API (FR5) posts the right command and signs */
+    memset(&g_post, 0, sizeof(g_post));
+    CHECK("S2-H14", motion_move_forward(MOTION_SRC_MISSION, 7u, 500u, 250u) == 0 &&
+                    POSTED(MOTION_CMD_MOVE, 500, 250) && g_post.src == MOTION_SRC_MISSION && g_post.seq == 7u);
+    CHECK("S2-H14", motion_move_backward(MOTION_SRC_AVOID, 8u, 100u, 250u) == 0 &&
+                    POSTED(MOTION_CMD_MOVE, -100, 250) && g_post.src == MOTION_SRC_AVOID);
+    CHECK("S2-H14", motion_turn_left(MOTION_SRC_MISSION, 9u, 900u, 120u) == 0 && POSTED(MOTION_CMD_TURN, 900, 120));
+    CHECK("S2-H14", motion_turn_right(MOTION_SRC_MISSION, 10u, 1800u, 90u) == 0 && POSTED(MOTION_CMD_TURN, -1800, 90));
+    CHECK("S2-H14", motion_stop(MOTION_SRC_MISSION, 11u) == 0 && POSTED(MOTION_CMD_STOP, 0, 0));
+    CHECK("S2-H14", motion_drive(MOTION_SRC_LINE, 12u, 250, -400) == 0 && POSTED(MOTION_CMD_DRIVE, 250, -400) &&
+                    g_post.src == MOTION_SRC_LINE);
+    /* out of range: refused, nothing posted */
+    {
+        int const n = g_post.n;
+
+        CHECK("S2-H14", motion_move_forward(MOTION_SRC_MISSION, 1u, 40000u, 250u) == MOTION_API_E_PAR);
+        CHECK("S2-H14", motion_turn_left(MOTION_SRC_MISSION, 1u, 900u, 0u) == MOTION_API_E_PAR);
+        CHECK("S2-H14", g_post.n == n);
+    }
+    /* end to end: what the API posts, MotionTask executes (turn left 90) */
+    reset_all(0.5);
+    (void)motion_turn_left(MOTION_SRC_MISSION, 90u, 900u, 120u);
+    (void)cmd(g_post.src, g_post.seq, g_post.cmd, g_post.p0, g_post.p1);
+    (void)run_until_event(MOTION_EV_DONE, 5000u);
+    CHECK("S2-H14", g_mc.last_done_seq == 90u);
 
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
