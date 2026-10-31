@@ -8,8 +8,8 @@ const FRESH_S = 3;
 const WINDOW_S = 60;
 /* Robot geometry for the bypass path: copy from subsystem2/motion_cfg.h
    once measured (phase D of docs/SETUP_AND_TEST.md). */
-const TRACK_MM = 130;                      /* MOTION_TRACK_MM */
-const MM_PER_COUNT = 204.204 / 1400;       /* MOTION_WHEEL_CIRC_UM / 1000 / MOTION_COUNTS_PER_REV */
+const TRACK_MM = 106;                      /* MOTION_TRACK_MM */
+const MM_PER_COUNT = 209.309 / 2536;       /* MOTION_WHEEL_CIRC_UM / 1000 / MOTION_COUNTS_PER_REV */
 const BYPASS_STATES = ['OBSTACLE_HANDLING', 'AVOIDING', 'LINE_RECOVERY'];
 const MOVES = ['Left', 'Right', 'Straight', 'U-turn'];
 const REJECT = {2: 'wrong element count', 3: 'bad wide/narrow ratio', 4: 'unknown pattern', 5: 'no start/stop *', 6: 'wrong length', 7: 'too long'};

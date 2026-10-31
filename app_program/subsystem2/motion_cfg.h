@@ -14,13 +14,13 @@
 /* Encoder counts per WHEEL revolution, x4 quadrature.  MEASURE (A4):
    turn each wheel 10 revolutions by hand and read enc_l / enc_r.
    Measured 2026-11-01: about 2530 per wheel turn, both wheels.         */
-#define MOTION_COUNTS_PER_REV       2530
+#define MOTION_COUNTS_PER_REV       2536
 /* Wheel circumference in micrometres (pi x diameter).  MEASURE: drive
    1 m five times against a tape measure and correct this value.        */
-#define MOTION_WHEEL_CIRC_UM        204204      /* 65 mm wheel */
+#define MOTION_WHEEL_CIRC_UM        209309      /* measured 2026-11-01 */
 /* Effective track width (wheel contact centre to centre).  MEASURE (A5):
    10 x 360 deg turns, scale by commanded / actual angle.                */
-#define MOTION_TRACK_MM             130
+#define MOTION_TRACK_MM             106
 /* Encoder direction: +1 if the count rises when the wheel drives the robot
    forward, otherwise -1.  MEASURE (A4).                                 */
 #define MOTION_ENC_SIGN_L           (-1)
