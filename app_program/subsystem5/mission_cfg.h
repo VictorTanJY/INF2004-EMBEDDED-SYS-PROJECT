@@ -9,7 +9,7 @@
 #define MISSION_CFG_H
 
 /* ---- Run parameters (defaults; MQTT "set" changes them in IDLE) ------- */
-#define MISSION_CRUISE_MM_S         250     /* param 1, 150..350 (NFR11)        */
+#define MISSION_CRUISE_MM_S         150     /* param 1, 150..350 (NFR11)        */
 #define MISSION_SLOW_MM             400     /* param 2: slow-down below 40 cm   */
 #define MISSION_STOP_MM             200     /* param 3: stop below 20 cm (FR9)  */
 #define MISSION_LOST_MM             80      /* param 4: line lost (FR2)         */
