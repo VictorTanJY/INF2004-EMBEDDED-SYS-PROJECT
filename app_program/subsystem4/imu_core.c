@@ -35,6 +35,9 @@ void imu_core_new_run(imu_core_t * p_ic)
     p_ic->hump_max_mm  = 0u;
     p_ic->last_hump_mm = 0u;
     p_ic->humps        = 0u;
+    p_ic->side_state   = 0u;
+    p_ic->side_um      = 0u;
+    p_ic->side_peak_cdeg = 0;
 }
 
 /* ---- calibration ------------------------------------------------------ */
@@ -266,6 +269,78 @@ static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um)
     return ev;
 }
 
+/* ---- one-wheel hump (roll) ------------------------------------------------ */
+static void side_reset(imu_core_t * p_ic)
+{
+    p_ic->side_state     = 0u;
+    p_ic->side_um        = 0u;
+    p_ic->side_peak_cdeg = 0;
+}
+
+static void side_record(imu_core_t * p_ic, uint16_t mm)
+{
+    p_ic->last_hump_mm = mm;
+    if (mm > p_ic->hump_max_mm)
+    {
+        p_ic->hump_max_mm = mm;
+    }
+    p_ic->humps++;
+}
+
+/* Runs on forward travel only, and only while no pitch hump is in
+   progress.  Returns IMU_EV_* bits. */
+static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um)
+{
+    int32_t const r  = app_abs_i32(p_ic->roll_cdeg);
+    uint8_t       ev = 0u;
+
+    if (p_ic->side_state == 0u)
+    {
+        if ((r > IMU_SIDE_ON_CDEG) && (app_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
+        {
+            p_ic->side_um        += ds_um;
+            p_ic->side_peak_cdeg  = app_max_i32(p_ic->side_peak_cdeg, r);
+            if (p_ic->side_um >= IMU_SIDE_DWELL_UM)
+            {
+                p_ic->side_state = 1u;
+                ev |= IMU_EV_HUMP_START;
+            }
+        }
+        else
+        {
+            side_reset(p_ic);
+        }
+    }
+    else
+    {
+        p_ic->side_um        += ds_um;
+        p_ic->side_peak_cdeg  = app_max_i32(p_ic->side_peak_cdeg, r);
+        if (r < (p_ic->side_peak_cdeg - IMU_SIDE_DESC_CDEG))
+        {
+            p_ic->side_state = 2u;          /* coming down */
+        }
+        if (p_ic->side_um > IMU_SIDE_MAX_UM)
+        {
+            side_reset(p_ic);               /* a long side slope, not a hump */
+            ev |= IMU_EV_RAMP;
+        }
+        else if (r < IMU_SIDE_OFF_CDEG)
+        {
+            int64_t const h_um = ((int64_t)IMU_SIDE_LEVER_MM * 1000 *
+                                  app_sin_q15(p_ic->side_peak_cdeg)) / 32768;
+
+            side_record(p_ic, (uint16_t)app_clamp_i32((int32_t)((h_um + 500) / 1000), 0, 65535));
+            side_reset(p_ic);
+            ev |= IMU_EV_HUMP_END;
+        }
+        else
+        {
+            /* still on the hump */
+        }
+    }
+    return ev;
+}
+
 /* ---- classification ------------------------------------------------------ */
 static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cdeg_s)
 {
@@ -276,6 +351,14 @@ static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cde
     if (p_ic->b_impact)
     {
         return (uint8_t)IMU_MOTION_IMPACT;
+    }
+    if (p_ic->side_state == 1u)
+    {
+        return (uint8_t)IMU_MOTION_CLIMBING;
+    }
+    if (p_ic->side_state == 2u)
+    {
+        return (uint8_t)IMU_MOTION_DESCENDING;
     }
     if (p_ic->hump_state == (uint8_t)IMU_HUMP_CLIMBING)
     {
@@ -423,10 +506,21 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
         }
     }
 
-    /* Hump detection runs on forward travel only. */
+    /* Hump detection runs on forward travel only (lifting the robot by
+       hand with the wheels still is never a hump).  A pitch hump (both
+       wheels) takes precedence; otherwise the roll detector looks for a
+       hump under one wheel. */
     if (ds_um > 0)
     {
         ev |= hump_step(p_ic, (uint32_t)ds_um);
+        if ((p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && ((ev & IMU_EV_HUMP_START) == 0u))
+        {
+            ev |= side_step(p_ic, (uint32_t)ds_um);
+        }
+        else
+        {
+            side_reset(p_ic);
+        }
     }
 
     cls = classify(p_ic, v_mm_s, yaw_cdeg_s);

@@ -84,6 +84,34 @@ static int run_hump(double h_mm, double len_mm, int * p_starts, int * p_ends)
     return (int)g_ic.last_hump_mm;
 }
 
+/* Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
+   h_mm (side = +1 right wheel, -1 left).  The raised wheel rolls the
+   chassis by asin(z / track) and tips the nose down by atan(z / 2 / L)
+   (drive axle behind the caster).  Returns the reported peak. */
+static int run_side_hump(double h_mm, double len_mm, int side, int * p_starts, int * p_ends)
+{
+    double const T = IMU_SIDE_LEVER_MM;
+    double const L = IMU_WHEELBASE_MM;
+    double x;
+
+    imu_core_init(&g_ic);
+    g_now = 0u;
+    *p_starts = 0;
+    *p_ends = 0;
+    for (x = 0.0; x < 1200.0; x += 1.0)
+    {
+        double z    = z_of(x, 300.0, len_mm, h_mm);
+        double roll = side * asin(z / T) * 180.0 / M_PI;
+        double th   = -atan((0.5 * z) / L) * 180.0 / M_PI;
+
+        g_ev = 0u;
+        step(th, roll, 0.0, 100, 1000, 0);
+        if (g_ev & IMU_EV_HUMP_START) { (*p_starts)++; }
+        if (g_ev & IMU_EV_HUMP_END) { (*p_ends)++; }
+    }
+    return (int)g_ic.last_hump_mm;
+}
+
 int main(void)
 {
     /* S4-H01: humps of known height, 300 mm long: NFR7 (+-20 % or +-5 mm) */
@@ -112,6 +140,47 @@ int main(void)
         (void)run_hump(10.0, 300.0, &s, &e);
         CHECK("S4-H01b", s == 0 && e == 0);
         printf("hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - known limit\n");
+    }
+
+    /* S4-H10: humps under ONE wheel (roll): 10 / 20 / 30 mm x 300 mm, both
+       sides, reported within NFR7 (+-20 % or +-5 mm) */
+    {
+        double const heights[3] = { 10.0, 20.0, 30.0 };
+        int i, side;
+
+        for (side = -1; side <= 1; side += 2)
+        {
+            for (i = 0; i < 3; i++)
+            {
+                int s, e;
+                int peak = run_side_hump(heights[i], 300.0, side, &s, &e);
+                double tol = fmax(5.0, 0.2 * heights[i]);
+
+                if (side > 0) { printf("one-wheel hump %.0f mm x 300 mm: reported %d mm\n", heights[i], peak); }
+                CHECK("S4-H10", s == 1 && e == 1 && g_ic.humps == 1u);
+                CHECK("S4-H10", fabs(peak - heights[i]) <= tol);
+            }
+        }
+    }
+    /* S4-H10b: robot lifted on one side by hand, wheels still: no hump */
+    {
+        int k;
+        imu_core_init(&g_ic);
+        g_now = 0u;
+        g_ev = 0u;
+        for (k = 0; k < 200; k++) { step(0.0, 10.0, 0.0, 0, 0, 0); }
+        CHECK("S4-H10b", (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) == 0u && g_ic.humps == 0u);
+    }
+    /* S4-H10c: a short sideways jolt while driving (6 deg for 10 mm): no hump */
+    {
+        int k;
+        imu_core_init(&g_ic);
+        g_now = 0u;
+        g_ev = 0u;
+        for (k = 0; k < 100; k++) { step(0.0, 0.0, 0.0, 100, 1000, 0); }
+        for (k = 0; k < 10; k++)  { step(0.0, 6.0, 0.0, 100, 1000, 0); }
+        for (k = 0; k < 100; k++) { step(0.0, 0.0, 0.0, 100, 1000, 0); }
+        CHECK("S4-H10c", (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) == 0u && g_ic.humps == 0u);
     }
 
     /* S4-H02: hard acceleration and braking on flat ground: no hump */

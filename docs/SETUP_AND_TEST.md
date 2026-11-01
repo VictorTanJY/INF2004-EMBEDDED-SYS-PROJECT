@@ -386,6 +386,13 @@ U-turn), then line following resumes.
 **F8. Timing (S3-M06):** `APP_TIMING_PINS 1`, GP7 toggles every 10 ms
 block; snapshot `missed_blocks` stays 0 (NFR2).
 
+**F9b. One-wheel humps (S4-M04b):** the course humps lie under one wheel
+(beside the barcodes), so the robot rolls instead of pitching. A roll above
+3° for 20 mm of driving starts a hump; it ends below 1.5°; the peak is
+`IMU_SIDE_LEVER_MM` × sin(peak roll). Drive over a 1 cm and a 2 cm hump
+under the right wheel, 5 passes each: if every reading is off by the same
+factor, scale `IMU_SIDE_LEVER_MM` (imu_cfg.h) by real ÷ reported height.
+
 **F9. Humps (S4-M04, NFR7):** 10 passes over humps of known height. Each
 gives `HUMP_START`, then `HUMP_END` with the peak in mm; telemetry
 `hump_max_mm`; and the run summary (`LOG 67`, data = highest peak) when

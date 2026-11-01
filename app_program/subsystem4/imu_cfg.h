@@ -38,6 +38,21 @@
    distance from the drive axle to the front caster.  MEASURE.           */
 #define IMU_WHEELBASE_MM            110
 
+/* ---- One-wheel humps (roll) -------------------------------------------
+   On the course a hump lies under one wheel only (beside the barcodes),
+   so the robot rolls instead of pitching.  A one-wheel hump is |roll|
+   above IMU_SIDE_ON_CDEG for IMU_SIDE_DWELL_UM of forward travel (a hand
+   jolt is shorter); it ends below IMU_SIDE_OFF_CDEG.  Height of the
+   raised wheel = IMU_SIDE_LEVER_MM x sin(peak |roll|).  MEASURE the lever
+   with 1 cm and 2 cm test humps under one wheel: scale it by
+   measured / reported height.                                          */
+#define IMU_SIDE_ON_CDEG            300         /* 3.0 deg                   */
+#define IMU_SIDE_OFF_CDEG           150         /* 1.5 deg                   */
+#define IMU_SIDE_DWELL_UM           20000       /* 20 mm                     */
+#define IMU_SIDE_DESC_CDEG          100         /* 1 deg below the peak: descending */
+#define IMU_SIDE_MAX_UM             600000      /* longer = a side slope, not a hump */
+#define IMU_SIDE_LEVER_MM           117         /* track width; MEASURE      */
+
 /* ---- Safety ---------------------------------------------------------- */
 #define IMU_TILT_ON_CDEG            3000        /* > 30 deg: tilt warning    */
 #define IMU_TILT_OFF_CDEG           2500

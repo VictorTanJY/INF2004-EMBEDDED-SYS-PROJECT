@@ -63,6 +63,11 @@ typedef struct
     uint16_t hump_max_mm;
     uint16_t humps;
 
+    /* one-wheel hump (roll), see side_step() */
+    uint8_t  side_state;        /* 0 idle, 1 on the hump, 2 coming down */
+    uint32_t side_um;           /* distance with |roll| above IMU_SIDE_ON_CDEG */
+    int32_t  side_peak_cdeg;    /* largest |roll| of this hump */
+
     /* safety / classification */
     bool     b_tilt;
     bool     b_tilt_over;       /* beyond the limit, waiting for IMU_TILT_HOLD_MS */
