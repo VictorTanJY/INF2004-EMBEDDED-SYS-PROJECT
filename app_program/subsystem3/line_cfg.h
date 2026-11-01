@@ -75,8 +75,8 @@
 #define LINE_V_MIN_PCT              50          /* never below 50 % of cruise */
 /* Both sensors went white: if the error just before was beyond this, the
    line left past one sensor (a drift, not a gap): keep turning toward it. */
-#define LINE_EXIT_ERR               150         /* difference error: any clear side */
-#define LINE_RECOVER_OMEGA          2000        /* mrad/s, at minimum speed */
+#define LINE_EXIT_ERR               400         /* line clearly on one side (difference error) */
+#define LINE_RECOVER_OMEGA          900         /* mrad/s: firm, never reverses a wheel */
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */
 #define LINE_STRAIGHT_OMEGA         500         /* |omega| < 0.5 rad/s ...   */
