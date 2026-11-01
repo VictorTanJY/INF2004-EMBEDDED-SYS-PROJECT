@@ -46,8 +46,8 @@
    white reads 0-2 %; 350 / 220 keeps a margin for white-paper
    noise (host model: white 8 % +- 12 %).  If narrow bars are missed on
    the robot, lower them toward 150 / 80.                               */
-#define LINE_BC_WHITE_RAW           200         /* MEASURE: over white      */
-#define LINE_BC_BLACK_RAW           2400        /* MEASURE: over solid black */
+#define LINE_BC_WHITE_RAW           117         /* measured 1 Nov, LOG 34    */
+#define LINE_BC_BLACK_RAW           3345        /* measured 1 Nov, LOG 34    */
 #define BC_BLACK_ON                 350
 #define BC_BLACK_OFF                220
 
