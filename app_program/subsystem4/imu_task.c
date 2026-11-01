@@ -23,7 +23,10 @@
 #define IMU_LOG_RAMP        52u
 #define IMU_LOG_INIT        53u
 #define IMU_LOG_TILT_ON     55u     /* tilt warning: data = larger of |pitch|, |roll|, 0.01 deg */
-#define IMU_LOG_TILT_OFF    56u     /* back below IMU_TILT_OFF_CDEG                          */
+#define IMU_LOG_TILT_OFF    56u
+#define IMU_LOG_LVL_N       57u     /* level calibration: samples (needs >= 50)          */
+#define IMU_LOG_LVL_SPREAD  58u     /* level calibration: largest axis spread, mg (<= 60) */
+#define IMU_LOG_LVL_UP      59u     /* level calibration: up-axis mean, mg (>= 500)       */     /* back below IMU_TILT_OFF_CDEG                          */
 
 static imu_core_t g_ic;
 
@@ -263,6 +266,13 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
 
                 b_level =
                     ((g_ic.cal & IMU_CAL_LEVEL) != 0u);
+
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_LVL_N, (int32_t)g_ic.lvl_n);
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_LVL_SPREAD, g_ic.lvl_spread_mg);
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_LVL_UP, g_ic.lvl_up_mg);
 
                 (void)mission_post(
                     (uint8_t)MISSION_EV_CAL_DONE,

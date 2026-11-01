@@ -35,6 +35,8 @@ typedef struct
     int32_t  lvl_min[3];
     int32_t  lvl_max[3];
     uint16_t lvl_n;
+    int32_t  lvl_spread_mg;     /* last finish: largest axis min..max  */
+    int32_t  lvl_up_mg;         /* last finish: mean on the up axis    */
 
     /* hard-iron calibration */
     int16_t  mag_min[3];

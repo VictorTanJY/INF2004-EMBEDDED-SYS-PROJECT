@@ -208,6 +208,7 @@ int main(void)
             imu_cal_level_sample(&g_ic, a);
         }
         CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
+        CHECK("S4-H06", g_ic.lvl_n == 100u && g_ic.lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG);   /* LOG 57/58 */
     }
 
     /* S4-H07: hard-iron offsets and heading after a 360 deg spin */

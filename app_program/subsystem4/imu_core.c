@@ -76,21 +76,26 @@ bool imu_cal_level_finish(imu_core_t * p_ic)
     int32_t up;
     uint8_t k;
 
+    /* Diagnostics for LOG 57-59 (why a calibration failed). */
+    p_ic->lvl_spread_mg = 0;
+    p_ic->lvl_up_mg     = 0;
     if (p_ic->lvl_n < 50u)
     {
         return false;
     }
     for (k = 0u; k < 3u; k++)
     {
-        if ((p_ic->lvl_max[k] - p_ic->lvl_min[k]) > IMU_LEVEL_MAX_SPREAD_MG)
-        {
-            return false;               /* the robot was moving */
-        }
+        p_ic->lvl_spread_mg = app_max_i32(p_ic->lvl_spread_mg, p_ic->lvl_max[k] - p_ic->lvl_min[k]);
         mean[k] = (int32_t)(p_ic->lvl_sum[k] / p_ic->lvl_n);
     }
     fwd  = axis(mean, IMU_AXIS_FWD, IMU_SIGN_FWD);
     left = axis(mean, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
     up   = axis(mean, IMU_AXIS_UP, IMU_SIGN_UP);
+    p_ic->lvl_up_mg = up;
+    if (p_ic->lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG)
+    {
+        return false;                   /* the robot was moving */
+    }
     if (up < 500)
     {
         return false;                   /* not right way up (or axes mis-set) */
