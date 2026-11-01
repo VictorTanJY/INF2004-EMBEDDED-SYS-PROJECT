@@ -47,7 +47,7 @@ static bool imu_hw_init(void)
 
     if (bus_er == E_OK)
     {
-        read_er = drv_i2c1_read(0x1Eu, 0x0Fu, &id, 1u);
+        read_er = drv_i2c1_read(DRV_LSM303_ADDR, 0x0Fu, &id, 1u);
         sensor_er = drv_lsm303_init();
         diagnostic = drv_lsm303_diag();
     }

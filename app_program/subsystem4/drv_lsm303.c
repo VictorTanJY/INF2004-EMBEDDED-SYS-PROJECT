@@ -1,4 +1,4 @@
-/* LSM303D driver for the robot identified by WHO_AM_I 0x49 at 0x1E.
+/* LSM303D driver for the robot identified by WHO_AM_I 0x49 at 0x1D.
  * Datasheet: https://www.st.com/resource/en/datasheet/lsm303d.pdf
  * API units and sensor-axis order match the existing imu_core interface.
  */
@@ -6,7 +6,7 @@
 #include "drv_i2c1.h"
 #include "imu_cfg.h"
 
-#define SENSOR_ADDR 0x1Eu
+#define SENSOR_ADDR DRV_LSM303_ADDR
 #define AUTO_INC    0x80u
 
 typedef struct

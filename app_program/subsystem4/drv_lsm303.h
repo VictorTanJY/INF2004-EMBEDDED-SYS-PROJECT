@@ -1,4 +1,7 @@
-/* LSM303D accelerometer + magnetometer, shared I2C address 0x1E.
+/* LSM303D accelerometer + magnetometer, shared I2C address 0x1D.
+ * GY-511 boards with the LSM303D: the pin printed "DRDY" is the chip's
+ * SA0 input, pulled high on the board, so the default address is 0x1D.
+ * Leave that pin unconnected (wired to GND the chip moves to 0x1E).
  * Acceleration: 100 Hz, +/-4 g. Magnetic: 50 Hz, +/-4 gauss.
  * INT1: active-high, non-latched, high-pass filtered high-g event.
  */
@@ -7,6 +10,8 @@
 
 #include <stdint.h>
 #include "../app.h"
+
+#define DRV_LSM303_ADDR     0x1Du   /* SA0 ("DRDY" pin) high: board default */
 
 /* E_OBJ for an unexpected identity; bus/configuration errors propagate. */
 IMPORT ER drv_lsm303_init(void);
