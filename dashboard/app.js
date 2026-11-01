@@ -379,7 +379,7 @@ function demoTick() {
     let acc = 0; [vl, vr] = [250, 250]; for (const [len, l, r] of legs) { if (u < acc + len - 1e-6) { [vl, vr] = [l, r]; break; } acc += len; } }
   else if (T < 22.6) { st = 'LINE_RECOVERY'; w = 148; [vl, vr] = T < 21.99 ? [-170, 170] : [150, 150]; once('e9', () => demoEvent('STATE', 'LINE_RECOVERY')); if (T > 22.3) once('e10', () => { demoEvent('RECOVERY_DONE', 0); demoEvent('STATE', 'LINE_FOLLOW'); }); }
   else if (T < 24) { w = 148; }
-  else if (T < 30) { w = 148; if (T > 26 && T < 28) { pitch = 5 * Math.sin((T - 26) / 2 * Math.PI); roll = -11 * Math.sin((T - 26) / 2 * Math.PI); once('e11', () => demoEvent('HUMP_START', 0)); } if (T > 28.2) once('e12', () => demoEvent('HUMP_END', 23)); }
+  else if (T < 30) { w = 148; if (T > 26 && T < 28) { pitch = 5 * Math.sin((T - 26) / 2 * Math.PI); roll = 11 * Math.sin((T - 26) / 2 * Math.PI);  /* right wheel on the hump: right side up = + */ once('e11', () => demoEvent('HUMP_START', 0)); } if (T > 28.2) once('e12', () => demoEvent('HUMP_END', 23)); }
   else if (T < 34) { w = 148; if (T > 31) once('e13', () => { demoEvent('BARCODE', 'Q'); demoEvent('LOG', 81, {code: 64}); }); }
   else { st = 'MISSION_COMPLETE'; vl = vr = 0; w = 148; once('e14', () => { demoEvent('STATE', 'MISSION_COMPLETE'); demoEvent('LOG', 23, {code: 67}); }); }
   demo.seq++; demo.tms += 200; demo.dist += (vl + vr) / 2 * 0.2; demo.el += vl * 0.2 / MM_PER_COUNT; demo.er += vr * 0.2 / MM_PER_COUNT;
