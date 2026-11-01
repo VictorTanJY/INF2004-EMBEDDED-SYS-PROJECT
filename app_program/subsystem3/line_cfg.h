@@ -71,8 +71,8 @@
 #define LINE_KD                     0           /* mrad/s per (err per 10 ms) */
 #define LINE_STEER_SIGN             (1)         /* -1 if the robot steers away */
 #define LINE_OMEGA_MAX              2000        /* mrad/s: inner wheel ~0 at 100 mm/s */
-#define LINE_SLOW_K                 500         /* v x (1 - 0.5 |err|/1000) */
-#define LINE_V_MIN_PCT              50          /* never below 50 % of cruise */
+#define LINE_SLOW_K                 600         /* v x (1 - 0.6 |err|/1000) */
+#define LINE_V_MIN_PCT              40          /* never below 40 % of cruise */
 /* Both sensors went white: if the error just before was beyond this, the
    line left past one sensor (a drift, not a gap): keep turning toward it. */
 #define LINE_EXIT_ERR               400         /* line clearly on one side (difference error) */
