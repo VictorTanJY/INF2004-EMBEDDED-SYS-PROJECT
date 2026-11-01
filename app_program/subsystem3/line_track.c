@@ -49,6 +49,14 @@ bool line_cal_finish(line_cal_t * p_cal)
         uint32_t hi = p_cal->max[ch];
         uint32_t contrast;
 
+        if (ch == LINE_CH_BC)
+        {
+            /* Barcode sensor: fixed levels (line_cfg.h), never judged by
+               the spin.  min/max are still kept for LOG 34.            */
+            white[ch] = (uint16_t)LINE_BC_WHITE_RAW;
+            black[ch] = (uint16_t)LINE_BC_BLACK_RAW;
+            continue;
+        }
         if ((lo > hi) || ((hi - lo) < LINE_CAL_MIN_SPAN))
         {
             b_ok = false;               /* never saw both black and white */
@@ -66,10 +74,7 @@ bool line_cal_finish(line_cal_t * p_cal)
         white[ch] = (uint16_t)hi;
         black[ch] = (uint16_t)lo;
 #endif
-        /* Only the two line sensors must reach 3:1 here: the barcode
-           sensor crosses the line only briefly during the spin and its
-           black level is refined on every barcode read. */
-        if ((ch != LINE_CH_BC) && (contrast < worst))
+        if (contrast < worst)
         {
             worst = (uint16_t)contrast;
         }
@@ -103,19 +108,6 @@ uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t ch, uint16_t raw)
     }
     n = (((int32_t)raw - w) * 1000) / (b - w);
     return (uint16_t)app_clamp_i32(n, 0, 1000);
-}
-
-void line_cal_learn_bc_black(line_cal_t * p_cal, uint16_t peak_raw)
-{
-    int32_t const w = (int32_t)p_cal->white[LINE_CH_BC];
-    int32_t const b = (int32_t)p_cal->black[LINE_CH_BC];
-    int32_t const p = (int32_t)peak_raw;
-
-    /* Accept only a peak clearly on the black side; move 1/4 of the way. */
-    if (p_cal->b_valid && (app_abs_i32(p - w) >= LINE_CAL_MIN_SPAN))
-    {
-        p_cal->black[LINE_CH_BC] = (uint16_t)(b + ((p - b) / 4));
-    }
 }
 
 /* ------------------------------------------------------------------ */

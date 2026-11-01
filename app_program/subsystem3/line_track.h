@@ -35,7 +35,6 @@ bool     line_cal_finish(line_cal_t * p_cal);
 uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t ch, uint16_t raw);
 /* After each barcode read: move the barcode channel's black level toward
    the darkest bar seen (its spin calibration only sees the line). */
-void     line_cal_learn_bc_black(line_cal_t * p_cal, uint16_t peak_raw);
 
 /* ---- Tracking -------------------------------------------------------- */
 typedef enum

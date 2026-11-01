@@ -353,8 +353,12 @@ offsets), spins 360° at 90°/s (IR black / white, magnetometer), then logs:
 - `LOG 62`: `data` = calibrated bits << 16 — `0x30000` = IR and IMU both
   good (bit 0 IR, bit 1 IMU).
 
-The barcode sensor only crosses the line briefly in the spin; its black
-level is refined on every barcode read.
+The barcode sensor is **not** calibrated by the spin and never blocks
+START: it uses fixed levels, `LINE_BC_WHITE_RAW` / `LINE_BC_BLACK_RAW` in
+`subsystem3/line_cfg.h`. Measure them once at
+the mounted height: `LOG 34` after a spin over the track gives
+max << 16 | min of the barcode sensor (min = white floor, max = black
+line). If narrow bars are missed, lower `BC_BLACK_ON` / `BC_BLACK_OFF`.
 
 **F4. Line following (S3-M03):** `start`. If the robot steers away from the
 line, flip `LINE_STEER_SIGN`; if it seems to see the line where there is

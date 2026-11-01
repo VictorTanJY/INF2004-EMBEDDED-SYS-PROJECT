@@ -417,6 +417,20 @@ static void test_track(void)
             line_cal_sample(&cal, raw);
         }
         CHECK("S3-H12", !line_cal_finish(&cal) && cal.b_valid && line_cal_norm(&cal, 0, 3000) == 1000);
+        /* the barcode sensor does not take part: fixed levels from
+           line_cfg.h, even when it saw no contrast during the spin */
+        line_cal_start(&cal);
+        for (i = 0; i < 100; i++)
+        {
+            raw[0] = (uint16_t)((i < 50) ? 300 : 3000);
+            raw[1] = (uint16_t)((i < 50) ? 350 : 2900);
+            raw[2] = 3700;                                  /* stuck */
+            line_cal_sample(&cal, raw);
+        }
+        CHECK("S3-H12", line_cal_finish(&cal));
+        CHECK("S3-H12", cal.white[2] == LINE_BC_WHITE_RAW && cal.black[2] == LINE_BC_BLACK_RAW);
+        CHECK("S3-H12", line_cal_norm(&cal, 2, LINE_BC_WHITE_RAW) == 0 &&
+                        line_cal_norm(&cal, 2, LINE_BC_BLACK_RAW) == 1000);
     }
 }
 

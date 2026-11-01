@@ -68,7 +68,6 @@ EXPORT void line_task(INT stacd, void * p_exinf)
     mission_snap_t ms;
     uint32_t       seq;
     uint32_t       last_seq = 0u;
-    uint32_t       bc_raw_peak = 0u;
     bool           b_hw_ok;
     bool           b_cal_active = false;
     uint8_t        drive_seq = 0u;
@@ -169,14 +168,6 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             {
                 continue;
             }
-            if (g_bc.state == (uint8_t)LINE_BC_CAPTURING)
-            {
-#if LINE_BLACK_IS_HIGH
-                bc_raw_peak = (p_s[LINE_CH_BC] > bc_raw_peak) ? p_s[LINE_CH_BC] : bc_raw_peak;
-#else
-                bc_raw_peak = ((bc_raw_peak == 0u) || (p_s[LINE_CH_BC] < bc_raw_peak)) ? p_s[LINE_CH_BC] : bc_raw_peak;
-#endif
-            }
             r = bc_sample(&g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]), step_um, &out);
             if (r == BC_VALID)
             {
@@ -184,7 +175,6 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 snap.last_barcode = out.ch;
                 (void)mission_post((uint8_t)MISSION_EV_BARCODE, (uint8_t)APP_SRC_LINE,
                                    out.b_reversed ? 1u : 0u, (int32_t)out.ch);
-                line_cal_learn_bc_black(&g_cal, (uint16_t)bc_raw_peak);
             }
             else if (r == BC_REJECT)
             {
@@ -197,10 +187,6 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             else
             {
                 /* nothing yet */
-            }
-            if (g_bc.state != (uint8_t)LINE_BC_CAPTURING)
-            {
-                bc_raw_peak = 0u;
             }
         }
 

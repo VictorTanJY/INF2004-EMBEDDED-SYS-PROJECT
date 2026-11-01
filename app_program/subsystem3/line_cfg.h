@@ -36,8 +36,20 @@
 #define LINE_BLACK_OFF              600
 #define LINE_WHITE_ON               150
 #define LINE_WHITE_OFF              250
-#define BC_BLACK_ON                 600
-#define BC_BLACK_OFF                400
+/* Barcode sensor: FIXED levels, not calibrated by the GP21 spin.  The
+   spin sees the solid 18 mm line, which reads darker than a 3 mm bar under the
+   sensor's spot, so spin levels made narrow bars too weak to detect.
+   MEASURE (A7) on the robot: raw ADC over white paper and over a solid
+   black bar, at the mounted height (LOG 34 after a GP21 spin over the
+   track shows max << 16 | min of the barcode sensor).  Bar thresholds
+   are per mille of (black - white).  150 / 80 suits a sensor whose
+   white reads 0-2 %; 350 / 220 keeps a margin for white-paper
+   noise (host model: white 8 % +- 12 %).  If narrow bars are missed on
+   the robot, lower them toward 150 / 80.                               */
+#define LINE_BC_WHITE_RAW           200         /* MEASURE: over white      */
+#define LINE_BC_BLACK_RAW           2400        /* MEASURE: over solid black */
+#define BC_BLACK_ON                 350
+#define BC_BLACK_OFF                220
 
 /* ---- Steering (DRIVE every 10 ms) ----------------------------------- */
 /* omega [mrad/s] = KP x err / 1000 + KD x d(err)/dt.  err = +1000 when
