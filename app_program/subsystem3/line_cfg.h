@@ -52,8 +52,12 @@
 #define BC_BLACK_OFF                220
 
 /* ---- Steering (DRIVE every 10 ms) ----------------------------------- */
-/* omega [mrad/s] = KP x err / 1000 + KD x d(err)/dt.  err = +1000 when
-   the line is fully under the left sensor.  MEASURE: tune on the track. */
+/* omega [mrad/s] = KP x err / 1000 + KD x d(err)/dt.
+   err = norm_l - norm_r (-1000..+1000, + = line towards the left sensor):
+   a plain difference changes gradually as the robot drifts, unlike the
+   earlier (L - R) / (L + R), which jumped to +-1000 as soon as one sensor
+   neared white and made the steering act nearly on/off.  MEASURE: tune
+   on the track. */
 /* 1 Nov (video, 150 mm/s): with KP 2600 / KD 60 the robot twitched left-
    right at the line edge and crawled at ~20 mm/s.  The D term acted on
    sensor noise (a 20-count jump in err gave 1.2 rad/s) and the output hit
@@ -61,15 +65,17 @@
 /* Second video (19:10): smooth but still weaving +-10 deg at ~1.5 Hz.
    The two-sensor error saturates within a few mm of the edges, so the
    loop acts nearly on/off: lower P, a little more D to damp the swing. */
-#define LINE_KP                     800
-#define LINE_KD                     25          /* mrad/s per (err per 10 ms) */
+/* Third setting (1 Nov evening): cruise 50 mm/s, difference error, P only.
+   KP 850 = 0.85 rad/s at full error (+-45 mm/s between the wheels). */
+#define LINE_KP                     850
+#define LINE_KD                     0           /* mrad/s per (err per 10 ms) */
 #define LINE_STEER_SIGN             (1)         /* -1 if the robot steers away */
 #define LINE_OMEGA_MAX              2000        /* mrad/s: inner wheel ~0 at 100 mm/s */
-#define LINE_SLOW_K                 600         /* v x (1 - 0.6 |err|/1000) */
-#define LINE_V_MIN_PCT              40          /* never below 40 % of cruise */
+#define LINE_SLOW_K                 500         /* v x (1 - 0.5 |err|/1000) */
+#define LINE_V_MIN_PCT              50          /* never below 50 % of cruise */
 /* Both sensors went white: if the error just before was beyond this, the
    line left past one sensor (a drift, not a gap): keep turning toward it. */
-#define LINE_EXIT_ERR               600
+#define LINE_EXIT_ERR               150         /* difference error: any clear side */
 #define LINE_RECOVER_OMEGA          2000        /* mrad/s, at minimum speed */
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */

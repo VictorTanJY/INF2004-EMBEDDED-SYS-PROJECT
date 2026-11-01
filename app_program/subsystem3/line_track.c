@@ -158,11 +158,12 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     }
 
     /* Steering error: the sensors straddle the line edges, so on the line
-       both read ~50 %; e > 0 means the line is under the left sensor. */
+       both read ~50 %; e > 0 means the line is under the left sensor.
+       Plain difference (-1000..+1000), see LINE_KP in line_cfg.h. */
     p_t->prev_err = p_t->err;
     if (sum >= LINE_ERR_VALID_SUM)
     {
-        p_t->err        = (((int32_t)norm_l - (int32_t)norm_r) * 1000) / sum;
+        p_t->err        = (int32_t)norm_l - (int32_t)norm_r;
         p_t->b_have_err = true;
     }
 

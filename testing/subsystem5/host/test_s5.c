@@ -200,7 +200,8 @@ static void test_mission(void)
 
     /* S5-H05: obstacle -> profile -> bypass -> recovery -> line follow */
     ev(MISSION_EV_SLOW_DOWN, 0u, 380);
-    CHECK("S5-H05", g_mc.snap.speed_cap_mm_s == MISSION_SLOW_SPEED_MM_S);
+    CHECK("S5-H05", g_mc.snap.speed_cap_mm_s ==      /* the cap only ever lowers the speed */
+                    ((MISSION_CRUISE_MM_S < MISSION_SLOW_SPEED_MM_S) ? MISSION_CRUISE_MM_S : MISSION_SLOW_SPEED_MM_S));
     ev(MISSION_EV_OBSTACLE, 0u, 190);
     CHECK("S5-H05", g_mc.snap.state == MISSION_ST_OBSTACLE_HANDLING && g_mc.snap.auth == MOTION_SRC_AVOID);
     CHECK("S5-H05", find(MISSION_ACT_MOTION, MOTION_CMD_STOP) >= 0 && find(MISSION_ACT_SCAN, SCAN_REQ_PROFILE) >= 0);
