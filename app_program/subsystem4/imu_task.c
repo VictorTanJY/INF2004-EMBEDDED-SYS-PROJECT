@@ -103,6 +103,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
     uint8_t errors = 0u;
     uint8_t good = 0u;
     uint8_t prev_phase = (uint8_t)MISSION_CAL_PH_NONE;
+    uint32_t still_ms = 0u;            /* start of the stand-still phase */
     uint16_t prev_runs = 0u;
     uint32_t cycle = 0u;
     uint32_t prev_ms;
@@ -242,6 +243,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
                 (uint8_t)MISSION_CAL_PH_STILL)
             {
                 imu_cal_level_start(&g_ic);
+                still_ms = now_ms;
             }
             else if (ms.cal_phase ==
                      (uint8_t)MISSION_CAL_PH_SPIN)
@@ -284,10 +286,18 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
             prev_phase = ms.cal_phase;
         }
 
-        if (ms.cal_phase ==
-            (uint8_t)MISSION_CAL_PH_STILL)
+        if ((ms.cal_phase == (uint8_t)MISSION_CAL_PH_STILL) &&
+            (app_elapsed_ms(now_ms, still_ms) >= IMU_LEVEL_SETTLE_MS))
         {
-            imu_cal_level_sample(&g_ic, acc);
+            /* low-pass filtered (IMU_ACC_LPF_SHIFT), not single samples */
+            int32_t f[3];
+            uint8_t k;
+
+            for (k = 0u; k < 3u; k++)
+            {
+                f[k] = g_ic.b_have_acc ? (g_ic.acc_f[k] / 16) : acc[k];
+            }
+            imu_cal_level_sample(&g_ic, f);
         }
         else if ((ms.cal_phase ==
                   (uint8_t)MISSION_CAL_PH_SPIN) && b_mag)

@@ -91,7 +91,7 @@ static void calibrate(void)
     uint8_t seq;
 
     ev(MISSION_EV_BTN_CALIBRATE, 0u, 0);
-    tick(1100u);                                    /* STILL -> SPIN */
+    tick(MISSION_CAL_STILL_MS + 100u);              /* STILL -> SPIN */
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
     ev(MISSION_EV_CAL_DONE, 3u, 1);
@@ -121,7 +121,7 @@ static void test_mission(void)
     CHECK("S5-H02", g_mc.snap.state == MISSION_ST_IDLE && find(MISSION_ACT_LOG, MISSION_LOG_NOT_CALIBRATED) >= 0);
     ev(MISSION_EV_BTN_CALIBRATE, 0u, 0);
     CHECK("S5-H02", g_mc.snap.state == MISSION_ST_CALIBRATING && g_mc.snap.cal_phase == MISSION_CAL_PH_STILL);
-    tick(1100u);
+    tick(MISSION_CAL_STILL_MS + 100u);
     CHECK("S5-H02", g_mc.snap.cal_phase == MISSION_CAL_PH_SPIN && find(MISSION_ACT_MOTION, MOTION_CMD_TURN) >= 0);
     CHECK("S5-H02", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == 3600);
     seq = last_seq();

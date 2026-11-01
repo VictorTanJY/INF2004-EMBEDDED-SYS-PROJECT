@@ -345,7 +345,7 @@ direction of travel). Measure its distance from the robot centre line and
 set `LINE_BC_OFFSET_MM` to minus that (default `-45`; + is right).
 
 **F3. Calibration and raw levels (S3-M01, S3-M02, A7, FR16):** robot
-centred on a straight line, GP21 tap. It stands still 1 s (IMU level
+centred on a straight line, GP21 tap. It stands still 1.5 s (IMU level
 offsets), spins 360° at 90°/s (IR black / white, magnetometer), then logs:
 - `LOG 32 / 33 / 34` (left, right, barcode sensor): `data` = highest raw
   ADC value << 16 | lowest. Black / white must differ by ≥ 3:1 on the two

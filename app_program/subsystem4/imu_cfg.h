@@ -68,6 +68,11 @@
 
 /* ---- Calibration ----------------------------------------------------- */
 #define IMU_LEVEL_MAX_SPREAD_MG     60          /* robot must stand still      */
+/* Ignore the first part of the stand-still: the GP21 press and the hand
+   leaving the robot shook it by ~180 mg (LOG 58, 1 Nov).  The level is
+   then taken from the low-pass filtered acceleration over the rest of
+   MISSION_CAL_STILL_MS (1.5 s - 0.5 s = ~100 samples).               */
+#define IMU_LEVEL_SETTLE_MS         500
 #define IMU_MAG_MIN_SPAN            100         /* raw counts, per axis, in the spin */
 
 /* 1: send raw acceleration, pitch and roll as LOG 100..104 once a second

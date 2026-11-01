@@ -38,7 +38,7 @@
 
 /* ---- Supervision ----------------------------------------------------- */
 #define MISSION_BOOT_TIMEOUT_MS     3000    /* self-test                       */
-#define MISSION_CAL_STILL_MS        1000    /* IMU level offsets               */
+#define MISSION_CAL_STILL_MS        1500    /* IMU level: 0.5 s hands-off + 1 s */
 #define MISSION_CAL_SPIN_RATE       90      /* deg/s, 360 deg spin             */
 #define MISSION_CAL_DONE_TIMEOUT_MS 2000
 #define MISSION_NAV_TIMEOUT_MS      10000
