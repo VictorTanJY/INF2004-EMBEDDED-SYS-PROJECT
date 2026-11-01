@@ -54,10 +54,14 @@
 /* ---- Steering (DRIVE every 10 ms) ----------------------------------- */
 /* omega [mrad/s] = KP x err / 1000 + KD x d(err)/dt.  err = +1000 when
    the line is fully under the left sensor.  MEASURE: tune on the track. */
-#define LINE_KP                     2600
-#define LINE_KD                     60          /* mrad/s per (err per 10 ms) */
+/* 1 Nov (video, 150 mm/s): with KP 2600 / KD 60 the robot twitched left-
+   right at the line edge and crawled at ~20 mm/s.  The D term acted on
+   sensor noise (a 20-count jump in err gave 1.2 rad/s) and the output hit
+   the +-3.5 rad/s clamp, so the wheels reversed in turn.  Gentler gains: */
+#define LINE_KP                     1300
+#define LINE_KD                     10          /* mrad/s per (err per 10 ms) */
 #define LINE_STEER_SIGN             (1)         /* -1 if the robot steers away */
-#define LINE_OMEGA_MAX              3500        /* mrad/s */
+#define LINE_OMEGA_MAX              2000        /* mrad/s: inner wheel ~0 at 100 mm/s */
 #define LINE_SLOW_K                 600         /* v x (1 - 0.6 |err|/1000) */
 #define LINE_V_MIN_PCT              40          /* never below 40 % of cruise */
 /* Both sensors went white: if the error just before was beyond this, the
