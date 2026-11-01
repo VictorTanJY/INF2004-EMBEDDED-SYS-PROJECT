@@ -58,8 +58,11 @@
    right at the line edge and crawled at ~20 mm/s.  The D term acted on
    sensor noise (a 20-count jump in err gave 1.2 rad/s) and the output hit
    the +-3.5 rad/s clamp, so the wheels reversed in turn.  Gentler gains: */
-#define LINE_KP                     1300
-#define LINE_KD                     10          /* mrad/s per (err per 10 ms) */
+/* Second video (19:10): smooth but still weaving +-10 deg at ~1.5 Hz.
+   The two-sensor error saturates within a few mm of the edges, so the
+   loop acts nearly on/off: lower P, a little more D to damp the swing. */
+#define LINE_KP                     800
+#define LINE_KD                     25          /* mrad/s per (err per 10 ms) */
 #define LINE_STEER_SIGN             (1)         /* -1 if the robot steers away */
 #define LINE_OMEGA_MAX              2000        /* mrad/s: inner wheel ~0 at 100 mm/s */
 #define LINE_SLOW_K                 600         /* v x (1 - 0.6 |err|/1000) */
