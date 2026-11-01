@@ -316,11 +316,13 @@ fix `IMU_AXIS_*` / `IMU_SIGN_*` in `subsystem4/imu_cfg.h`.
 **E5. Pitch noise (S4-M03):** with `bench_move` over the flat track, pitch
 stays within ±1°.
 
-**E6. Safety (S4-M05 to S4-M08):** tilt > 30° → FAULT, and a reset is
-refused while still tilted. A firm tap on the chassis (INT1) brakes the
+**E6. Safety (S4-M05 to S4-M08):** tilt > 30° for 200 ms → **warning only**
+(LOG 55 "Tilt warning", LOG 56 when back below 25°); the motors keep
+running and there is no FAULT. A firm tap on the chassis (INT1) brakes the
 motors. An MQTT `estop` brakes them. With the analyser, time detection →
 GP8–GP11 LOW: **≤ 20 ms** (NFR8). A `FAULT` event's data is the fault bit
-mask (1 impact, 2 too close, 4 stall, 8 tilt, 16 E-stop, 32 heartbeat).
+mask (1 impact, 2 too close, 4 stall, 16 E-stop, 32 heartbeat; 8 tilt is no
+longer raised).
 
 **E7. Power (S4-M09, A10):** scope V+ and 3V3 while starting the motors
 with the servo sweeping (`bench_servo`): no resets.

@@ -13,7 +13,7 @@
  *      HEARTBEAT_TIMEOUT, handled like a brake cause;
  *    - feed the watchdog (the only feeder; 200 ms).
  *  REQ_RESET (operator reset via MissionTask): the latch is cleared only
- *  if no cause is still present (tilt, obstacle < 8 cm, missed heartbeat).
+ *  if no cause is still present (obstacle < 8 cm, missed heartbeat).
  *
  *  imu_int1_isr (GP19 rising edge, core 1) sets IMPACT.
  */
@@ -29,7 +29,6 @@
 
 #define SAFETY_WD_TIMEOUT_MS    200u
 #define SAFETY_TOO_CLOSE_MM     80u
-#define SAFETY_TILT_CDEG        3000
 #define SAFETY_LOG_HB_MISSED    41u     /* comms_rec_t code: data = missed-task mask */
 
 IMPORT volatile uint32_t g_safety_latched;   /* subsystem4.c */
@@ -88,11 +87,6 @@ static uint32_t live_causes(safety_hb_state_t * p_hb, uint32_t now_ms)
     imu_get_snap(&imu);
     obst_get_snap(&obst);
     read_heartbeats(counts);
-    if ((imu.ok != 0u) && ((app_abs_i32(imu.pitch_cdeg) > SAFETY_TILT_CDEG) ||
-                           (app_abs_i32(imu.roll_cdeg) > SAFETY_TILT_CDEG)))
-    {
-        live |= SAFETY_FLT_TILT;
-    }
     if ((obst.d_mm != OBST_RANGE_NONE) && (obst.d_mm < SAFETY_TOO_CLOSE_MM))
     {
         live |= SAFETY_FLT_TOO_CLOSE;

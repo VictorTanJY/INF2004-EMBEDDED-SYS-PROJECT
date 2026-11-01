@@ -15,12 +15,15 @@
 #include "../subsystem1/subsystem1.h"
 #include "../subsystem2/subsystem2.h"
 #include "../subsystem5/subsystem5.h"
+#include "../app_types.h"
 
 #define IMU_WAKE_TIMEOUT_MS 40
 #define IMU_RETRY_CYCLES    10u
 #define IMU_LOG_MOTION      51u
 #define IMU_LOG_RAMP        52u
 #define IMU_LOG_INIT        53u
+#define IMU_LOG_TILT_ON     55u     /* tilt warning: data = larger of |pitch|, |roll|, 0.01 deg */
+#define IMU_LOG_TILT_OFF    56u     /* back below IMU_TILT_OFF_CDEG                          */
 
 static imu_core_t g_ic;
 
@@ -311,10 +314,22 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
                 0u, (int32_t)g_ic.last_hump_mm);
         }
 
+        /* Tilt is report-only: a warning to telemetry, no brake, no FAULT. */
         if ((ev & IMU_EV_TILT_ON) != 0u)
         {
-            (void)tk_set_flg(
-                g_flg_safety, SAFETY_FLT_TILT);
+            (void)comms_telem_post(
+                (uint8_t)COMMS_KIND_LOG,
+                (uint8_t)APP_SRC_SAFETY_IMU,
+                IMU_LOG_TILT_ON,
+                app_max_i32(app_abs_i32(g_ic.pitch_cdeg), app_abs_i32(g_ic.roll_cdeg)));
+        }
+
+        if ((ev & IMU_EV_TILT_OFF) != 0u)
+        {
+            (void)comms_telem_post(
+                (uint8_t)COMMS_KIND_LOG,
+                (uint8_t)APP_SRC_SAFETY_IMU,
+                IMU_LOG_TILT_OFF, 0);
         }
 
         if ((ev & IMU_EV_MOTION) != 0u)

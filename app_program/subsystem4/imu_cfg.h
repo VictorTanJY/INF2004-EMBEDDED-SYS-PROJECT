@@ -36,12 +36,12 @@
 #define IMU_WHEELBASE_MM            110
 
 /* ---- Safety ---------------------------------------------------------- */
-#define IMU_TILT_ON_CDEG            3000        /* > 30 deg: TILT (FR15)     */
+#define IMU_TILT_ON_CDEG            3000        /* > 30 deg: tilt warning    */
 #define IMU_TILT_OFF_CDEG           2500
-/* The angle must stay beyond IMU_TILT_ON_CDEG this long before TILT is
-   raised: a real tip-over lasts, while a start or stop of the wheels (the
-   encoder acceleration in the pitch estimate, below) only lasts a moment.
-   NFR8's 20 ms covers impact, proximity and E-stop, not tilt.            */
+/* Tilt is REPORT-ONLY (LOG 55 on, LOG 56 off): no brake, no FAULT.
+   The angle must stay beyond IMU_TILT_ON_CDEG this long before the
+   warning is sent, so a start or stop of the wheels (the encoder
+   acceleration in the pitch estimate, below) does not raise it.         */
 #define IMU_TILT_HOLD_MS            200
 /* The forward acceleration measured by the encoders is subtracted from the
    accelerometer before pitch is taken (so braking is not seen as a hill).

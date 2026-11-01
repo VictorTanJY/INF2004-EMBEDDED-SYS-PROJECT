@@ -15,14 +15,14 @@ const MOVES = ['Left', 'Right', 'Straight', 'U-turn'];
 const REJECT = {2: 'wrong element count', 3: 'bad wide/narrow ratio', 4: 'unknown pattern', 5: 'no start/stop *', 6: 'wrong length', 7: 'too long'};
 const MOTION = ['stationary', 'accelerating', 'turning', 'climbing', 'descending', 'impact', 'cruising', 'decelerating'];
 const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2, 'Obstacle too close', 'Obstacle closer than 8 cm.'],
-  [4, 'Motor stall', 'High motor effort with no wheel movement.'], [8, 'Excessive tilt', 'Pitch or roll beyond 30°.'],
+  [4, 'Motor stall', 'High motor effort with no wheel movement.'], [8, 'Excessive tilt', 'Not used: tilt is now a warning (LOG 55), not a fault.'],
   [16, 'Emergency stop', 'An E-stop was requested.'], [32, 'Heartbeat timeout', 'A monitored task stopped responding.'],
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
 const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
-  54: 'I²C scan', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
+  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
   64: 'Barcode not in the map', 65: 'Map stored', 66: 'Map refused', 67: 'Run summary', 68: 'Parameter set',
   69: 'Mission queue full', 70: 'Motion queue full', 90: 'IMU bus start', 91: 'IMU identity read', 92: 'IMU identity value',
   93: 'IMU configuration', 100: 'IMU accel X', 101: 'IMU accel Y', 102: 'IMU accel Z', 103: 'IMU pitch', 104: 'IMU roll',
@@ -241,7 +241,7 @@ function render() {
   $('rangeAxis').textContent = `${fmt(rg[0])}…${fmt(rg[1])} cm`;
   $('pitch').textContent = fmt(t.pitch_deg, 1);
   chart('pitchChart', ['p'], ['#81a273'], [], null);
-  $('pitchHint').textContent = !isNum(t.pitch_deg) ? 'Waiting for an angle reading' : Math.abs(t.pitch_deg) > 30 ? 'Beyond 30°: tilt fault' : 'Hump starts above +5°';
+  $('pitchHint').textContent = !isNum(t.pitch_deg) ? 'Waiting for an angle reading' : Math.abs(t.pitch_deg) > 30 ? 'Beyond 30°: tilt warning' : 'Hump starts above +5°';
   $('distance').textContent = fmt(t.dist_mm);
   $('encL').textContent = fmt(t.enc?.[0]); $('encR').textContent = fmt(t.enc?.[1]);
   $('lineError').textContent = fmt(t.line?.err);

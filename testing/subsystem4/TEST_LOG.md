@@ -22,7 +22,7 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S4-M02 | axis orientation and signs | A8 | manual | tilt nose up, then left side up, by hand | pitch and roll go positive; else fix `IMU_AXIS_*` / `IMU_SIGN_*` |
 | S4-M03 | pitch noise while driving on flat ground | A8 | manual | log pitch at 0.3 m/s | within +-1 deg; else re-check mounting, consider lowering `IMU_HUMP_ON_CDEG` only after this |
 | S4-M04 | hump height, 10 passes each on 10 / 20 / 30 mm humps | FR7, NFR7, A9 | manual | `HUMP_END` data vs measured height | within +-20 % or +-5 mm |
-| S4-M05 | tilt > 30 deg -> FAULT; reset refused while still tilted | FR15 | manual | tilt the robot by hand | FAULT; GP21 long press answered with FAULT until level |
+| S4-M05 | tilt > 30 deg -> warning only | FR15 (revised) | manual | tilt the robot by hand past 30 deg for > 0.2 s, then level | LOG 55 "Tilt warning", no FAULT, motors not braked; LOG 56 when back below 25 deg |
 | S4-M06 | impact -> both motors braked <= 20 ms | NFR8 | manual | logic analyser GP19 (INT1) -> GP8–GP11 | <= 20 ms |
 | S4-M07 | remote E-stop -> brake <= 20 ms with WiFi publishing | NFR8, FR14 | manual | publish estop; analyser on GP8–GP11 + a GPIO toggled on receipt | <= 20 ms |
 | S4-M08 | missed heartbeat -> FAULT | FR15 | manual | debug build that suspends one task | HEARTBEAT fault, log code 41 names the task |
