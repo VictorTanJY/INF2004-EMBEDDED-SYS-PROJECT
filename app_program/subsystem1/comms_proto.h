@@ -9,7 +9,7 @@
  *
  *  Payloads (base topic COMMS_TOPIC_BASE, e.g. "picocar/is23"):
  *    telemetry  {seq,t_ms,state,v_mm_s:[l,r],enc:[l,r],dist_mm,
- *                line:{err,lost},barcode,pitch_deg,hump_max_mm,
+ *                line:{err,lost},barcode,pitch_deg,roll_deg,hump_max_mm,
  *                obstacle:{d_cm,w_cm,w_mm,clr_l_cm,clr_r_cm},nav}  QoS 0, 5 Hz
  *    event      {seq,t_ms,type,data,src}                      QoS 1
  *    status     {online,uptime_s,rssi,drops,map}       QoS 1, retained, 1 Hz
@@ -88,6 +88,7 @@ typedef struct
     int32_t  dist_mm;
     int16_t  line_err;
     int16_t  pitch_cdeg;
+    int16_t  roll_cdeg;         /* + = left side up (one-wheel humps)     */
     uint16_t hump_max_mm;
     uint16_t obst_d_mm;         /* COMMS_D_NONE = nothing in range        */
     uint16_t obst_w_mm;

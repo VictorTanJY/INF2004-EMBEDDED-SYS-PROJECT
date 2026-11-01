@@ -80,23 +80,24 @@ static void test_telemetry(void)
     t.v_l_mm_s = 250;  t.v_r_mm_s = -10;
     t.enc_l = 1000;  t.enc_r = 990;  t.dist_mm = 555;
     t.line_err = -120;  t.b_line_lost = false;  t.barcode = 'A';
-    t.pitch_cdeg = -1234;  t.hump_max_mm = 25u;
+    t.pitch_cdeg = -1234;  t.roll_cdeg = 875;  t.hump_max_mm = 25u;
     t.obst_d_mm = 384u;  t.b_obst_valid = false;
     len = comms_build_telemetry(&t, buf, sizeof(buf));
     CHECK("S1-H03", len == strlen(buf));
     CHECK("S1-H03", strcmp(buf,
         "{\"seq\":12,\"t_ms\":3400,\"state\":\"LINE_FOLLOW\",\"v_mm_s\":[250,-10],"
         "\"enc\":[1000,990],\"dist_mm\":555,\"line\":{\"err\":-120,\"lost\":false},"
-        "\"barcode\":\"A\",\"pitch_deg\":-12.3,\"hump_max_mm\":25,"
+        "\"barcode\":\"A\",\"pitch_deg\":-12.3,\"roll_deg\":8.8,\"hump_max_mm\":25,"
         "\"obstacle\":{\"d_cm\":38,\"w_cm\":null,\"w_mm\":null,\"clr_l_cm\":null,\"clr_r_cm\":null},"
         "\"nav\":null}") == 0);
 
     /* No obstacle, no barcode. */
-    t.obst_d_mm = COMMS_D_NONE;  t.barcode = '\0';  t.pitch_cdeg = 5;
+    t.obst_d_mm = COMMS_D_NONE;  t.barcode = '\0';  t.pitch_cdeg = 5;  t.roll_cdeg = -1049;
     (void)comms_build_telemetry(&t, buf, sizeof(buf));
     CHECK("S1-H04", strstr(buf, "\"barcode\":null") != NULL);
     CHECK("S1-H04", strstr(buf, "\"d_cm\":null") != NULL);
     CHECK("S1-H04", strstr(buf, "\"pitch_deg\":0.1") != NULL);
+    CHECK("S1-H04", strstr(buf, "\"roll_deg\":-10.5") != NULL);
     t.b_obst_valid = true;  t.obst_d_mm = 190u;  t.obst_w_mm = 147u;  t.nav = 'F';
     (void)comms_build_telemetry(&t, buf, sizeof(buf));
     CHECK("S1-H04", strstr(buf, "\"w_cm\":15,\"w_mm\":147") != NULL);
@@ -108,7 +109,7 @@ static void test_telemetry(void)
     t.v_l_mm_s = -32768;  t.v_r_mm_s = -32768;
     t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
     t.line_err = -32768;  t.b_line_lost = true;  t.barcode = 'Z';
-    t.pitch_cdeg = -32768;  t.hump_max_mm = 65535u;  t.obst_d_mm = 65534u;
+    t.pitch_cdeg = -32768;  t.roll_cdeg = -32768;  t.hump_max_mm = 65535u;  t.obst_d_mm = 65534u;
     t.b_obst_valid = true;  t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
     t.nav = '%';
     len = comms_build_telemetry(&t, buf, sizeof(buf));

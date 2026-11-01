@@ -61,7 +61,7 @@ EXPORT void subsystem1_test(void)
     t.v_l_mm_s = -32768;  t.v_r_mm_s = -32768;
     t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
     t.line_err = -1000;  t.b_line_lost = true;  t.barcode = 'Z';
-    t.pitch_cdeg = -32768;  t.hump_max_mm = 65535u;
+    t.pitch_cdeg = -32768;  t.roll_cdeg = -32768;  t.hump_max_mm = 65535u;
     t.obst_d_mm = 65534u;  t.b_obst_valid = true;
     t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
     len = comms_build_telemetry(&t, buf, (uint16_t)sizeof(buf));

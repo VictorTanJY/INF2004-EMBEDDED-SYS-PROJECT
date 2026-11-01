@@ -94,7 +94,8 @@ def ingest(line):
             v = p.get('v_mm_s') if isinstance(p.get('v_mm_s'), list) and len(p['v_mm_s']) == 2 else [None, None]
             ob = p.get('obstacle') if isinstance(p.get('obstacle'), dict) else {}
             DATA['history'].append({'t': now, 'vl': num(v[0]), 'vr': num(v[1]), 'd': num(ob.get('d_cm')),
-                                    'p': num(p.get('pitch_deg')), 'st': p.get('state')})
+                                    'p': num(p.get('pitch_deg')), 'r': num(p.get('roll_deg')),
+                                    'st': p.get('state')})
             while DATA['history'] and now - DATA['history'][0]['t'] > HISTORY_S:
                 DATA['history'].pop(0)
             track_bypass(p, now)

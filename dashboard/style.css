@@ -24,6 +24,7 @@
 .axis{margin-left:auto;color:#a6ae9f}
 .red{background:var(--red);margin-left:0}
 .legend.gold{margin-left:9px}
+.legend.blue{background:#5b8fc7;margin-left:9px}
 .legend.red+*{margin-right:4px}
 .mode-tag{text-align:center;font-size:9px;font-weight:700;letter-spacing:1px;color:#6f8573;margin-top:4px}
 .obstacle-numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0 10px}

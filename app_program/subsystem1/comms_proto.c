@@ -256,6 +256,7 @@ uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t
         jw_raw(&jw, "null");
     }
     jw_raw(&jw, ",\"pitch_deg\":");    jw_fixed1(&jw, cdeg_to_tenths(p_t->pitch_cdeg));
+    jw_raw(&jw, ",\"roll_deg\":");     jw_fixed1(&jw, cdeg_to_tenths(p_t->roll_cdeg));
     jw_raw(&jw, ",\"hump_max_mm\":");  jw_uint(&jw, p_t->hump_max_mm);
     jw_raw(&jw, ",\"obstacle\":{\"d_cm\":");
     jw_cm_or_null(&jw, p_t->obst_d_mm, true);

@@ -36,7 +36,7 @@ let mode = 'offline', token = '', snap = {}, filter = 'all', pollBusy = false, d
 /* ---------- helpers ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const isNum = x => typeof x === 'number' && Number.isFinite(x);
-const fmt = (x, d = 0) => isNum(x) ? x.toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d}) : '—';
+const fmt = (x, d = 0) => isNum(x) ? (Math.abs(x) < 0.5 * 10 ** -d ? 0 : x).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d}) : '—';  /* no "-0.0" */
 const clock = t => new Date(t * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'});
 const nowS = () => mode === 'local' && isNum(snap.now) ? snap.now + (Date.now() / 1000 - snap.fetched) : Date.now() / 1000;
 function toast(text) { $('toast').textContent = text; $('toast').style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => $('toast').style.display = 'none', 4500); }
@@ -147,8 +147,10 @@ function humps() {
     else if (isType(e, 'HUMP_END')) {
       const p = ev(e), s = start ? ev(start) : null;
       const t0 = start ? start.time : e.time - 2;
-      const pitch = (snap.history || []).filter(x => x.t >= t0 && x.t <= e.time && isNum(x.p)).map(x => x.p);
-      rows.push({t: e.time, peak: p.data, pitch: pitch.length ? Math.max(...pitch) : null,
+      const win = (snap.history || []).filter(x => x.t >= t0 && x.t <= e.time);
+      const pitch = win.filter(x => isNum(x.p)).map(x => x.p), roll = win.filter(x => isNum(x.r)).map(x => x.r);
+      const rollPeak = roll.length ? roll.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a) : null;
+      rows.push({t: e.time, peak: p.data, pitch: pitch.length ? Math.max(...pitch) : null, roll: rollPeak,
         dur: s && isNum(s.t_ms) && isNum(p.t_ms) ? (p.t_ms - s.t_ms) / 1000 : null});
       start = null;
     }
@@ -239,9 +241,10 @@ function render() {
   $('obstacle').textContent = fmt(t.obstacle?.d_cm, 1);
   const rg = chart('rangeChart', ['d'], ['#5f8fa0'], [20, 40], 0);
   $('rangeAxis').textContent = `${fmt(rg[0])}…${fmt(rg[1])} cm`;
-  $('pitch').textContent = fmt(t.pitch_deg, 1);
-  chart('pitchChart', ['p'], ['#81a273'], [], null);
-  $('pitchHint').textContent = !isNum(t.pitch_deg) ? 'Waiting for an angle reading' : Math.abs(t.pitch_deg) > 30 ? 'Beyond 30°: tilt warning' : 'Hump starts above +5°';
+  $('pitch').textContent = fmt(t.pitch_deg, 1); $('roll').textContent = fmt(t.roll_deg, 1);
+  const pr = chart('pitchChart', ['p', 'r'], ['#699878', '#5b8fc7'], [], null);
+  const tilt = Math.max(Math.abs(isNum(t.pitch_deg) ? t.pitch_deg : 0), Math.abs(isNum(t.roll_deg) ? t.roll_deg : 0));
+  $('pitchHint').textContent = !isNum(t.pitch_deg) ? 'Waiting for an angle reading' : tilt > 30 ? 'Beyond 30°: tilt warning' : `${fmt(pr[0])}…${fmt(pr[1])}°`;
   $('distance').textContent = fmt(t.dist_mm);
   $('encL').textContent = fmt(t.enc?.[0]); $('encR').textContent = fmt(t.enc?.[1]);
   $('lineError').textContent = fmt(t.line?.err);
@@ -273,8 +276,8 @@ function render() {
     : '<tr><td colspan="3" class="muted">No barcodes yet.</td></tr>';
   const hu = humps();
   $('humpMax').textContent = 'HIGHEST ' + (isNum(t.hump_max_mm) && t.hump_max_mm > 0 ? t.hump_max_mm + ' MM' : hu.length ? Math.max(...hu.map(h => h.peak)) + ' MM' : '—');
-  $('humpRows').innerHTML = hu.length ? hu.slice(-40).reverse().map(h => `<tr><td>${esc(clock(h.t))}</td><td>${esc(fmt(h.peak))} mm</td><td>${isNum(h.pitch) ? esc(fmt(h.pitch, 1)) + '°' : '—'}</td><td>${isNum(h.dur) ? esc(fmt(h.dur, 2)) + ' s' : '—'}</td></tr>`).join('')
-    : '<tr><td colspan="4" class="muted">No humps yet.</td></tr>';
+  $('humpRows').innerHTML = hu.length ? hu.slice(-40).reverse().map(h => `<tr><td>${esc(clock(h.t))}</td><td>${esc(fmt(h.peak))} mm</td><td>${isNum(h.pitch) ? esc(fmt(h.pitch, 1)) + '°' : '—'}</td><td>${isNum(h.roll) ? esc(fmt(h.roll, 1)) + '°' : '—'}</td><td>${isNum(h.dur) ? esc(fmt(h.dur, 2)) + ' s' : '—'}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="muted">No humps yet.</td></tr>';
 
   $('footerMode').textContent = mode === 'demo' ? 'Demo mode · no commands sent' : mode === 'local' ? `Broker ${snap.host || '127.0.0.1'}:1883` : 'No robot connected';
   renderEvents();
@@ -362,7 +365,7 @@ function demoStart() {
 function demoEvent(type, data, extra = {}) { snap.events.push({key: ++demo.k, time: Date.now() / 1000, topic: 'picocar/is23/event', payload: Object.assign({seq: demo.k, t_ms: demo.tms, type, data, src: 5}, extra)}); }
 function demoTick() {
   const T = demo.seq * 0.2 % 40, now = Date.now() / 1000;
-  let st = 'LINE_FOLLOW', vl = 250, vr = 250, d = 120, pitch = 0.3 * Math.sin(demo.seq / 4), w = null, nav = null;
+  let st = 'LINE_FOLLOW', vl = 250, vr = 250, d = 120, pitch = 0.3 * Math.sin(demo.seq / 4), roll = 0.2 * Math.cos(demo.seq / 5), w = null, nav = null;
   const once = (key, fn) => { if (demo[key] !== Math.floor(demo.seq * 0.2 / 40)) { demo[key] = Math.floor(demo.seq * 0.2 / 40); fn(); } };
   if (T < 2) { st = 'IDLE'; vl = vr = 0; once('e0', () => demoEvent('STATE', 'IDLE')); }
   else if (T < 6) { once('e1', () => { demoEvent('STATE', 'LINE_FOLLOW'); }); vl = 250 + 25 * Math.sin(T * 3); vr = 250 - 25 * Math.sin(T * 3); }
@@ -376,16 +379,16 @@ function demoTick() {
     let acc = 0; [vl, vr] = [250, 250]; for (const [len, l, r] of legs) { if (u < acc + len - 1e-6) { [vl, vr] = [l, r]; break; } acc += len; } }
   else if (T < 22.6) { st = 'LINE_RECOVERY'; w = 148; [vl, vr] = T < 21.99 ? [-170, 170] : [150, 150]; once('e9', () => demoEvent('STATE', 'LINE_RECOVERY')); if (T > 22.3) once('e10', () => { demoEvent('RECOVERY_DONE', 0); demoEvent('STATE', 'LINE_FOLLOW'); }); }
   else if (T < 24) { w = 148; }
-  else if (T < 30) { w = 148; if (T > 26 && T < 28) { pitch = 9 * Math.sin((T - 26) / 2 * Math.PI); once('e11', () => demoEvent('HUMP_START', 0)); } if (T > 28.2) once('e12', () => demoEvent('HUMP_END', 23)); }
+  else if (T < 30) { w = 148; if (T > 26 && T < 28) { pitch = 5 * Math.sin((T - 26) / 2 * Math.PI); roll = -11 * Math.sin((T - 26) / 2 * Math.PI); once('e11', () => demoEvent('HUMP_START', 0)); } if (T > 28.2) once('e12', () => demoEvent('HUMP_END', 23)); }
   else if (T < 34) { w = 148; if (T > 31) once('e13', () => { demoEvent('BARCODE', 'Q'); demoEvent('LOG', 81, {code: 64}); }); }
   else { st = 'MISSION_COMPLETE'; vl = vr = 0; w = 148; once('e14', () => { demoEvent('STATE', 'MISSION_COMPLETE'); demoEvent('LOG', 23, {code: 67}); }); }
   demo.seq++; demo.tms += 200; demo.dist += (vl + vr) / 2 * 0.2; demo.el += vl * 0.2 / MM_PER_COUNT; demo.er += vr * 0.2 / MM_PER_COUNT;
   const t = {seq: demo.seq, t_ms: demo.tms, state: st, v_mm_s: [Math.round(vl), Math.round(vr)], enc: [Math.round(demo.el), Math.round(demo.er)],
     dist_mm: Math.round(demo.dist), line: {err: Math.round((vl - vr) * 4), lost: false}, barcode: T > 6 ? (T > 31 ? 'Q' : 'A') : null,
-    pitch_deg: Math.round(pitch * 10) / 10, hump_max_mm: T > 28.2 ? 23 : 0,
+    pitch_deg: Math.round(pitch * 10) / 10, roll_deg: Math.round(roll * 10) / 10, hump_max_mm: T > 28.2 ? 23 : 0,
     obstacle: {d_cm: d === null ? null : Math.round(d * 10) / 10, w_cm: w && Math.round(w / 10), w_mm: w, clr_l_cm: w && 32, clr_r_cm: w && 28}, nav};
   snap.telemetry = t; snap.received = now; snap.status.uptime_s = Math.floor(demo.seq / 5);
-  snap.history.push({t: now, vl: t.v_mm_s[0], vr: t.v_mm_s[1], d: t.obstacle.d_cm, p: t.pitch_deg, st});
+  snap.history.push({t: now, vl: t.v_mm_s[0], vr: t.v_mm_s[1], d: t.obstacle.d_cm, p: t.pitch_deg, r: t.roll_deg, st});
   snap.history = snap.history.filter(x => now - x.t <= 120);
   if (BYPASS_STATES.includes(st)) {
     if (!snap.bypass || snap.bypass.done) snap.bypass = {start: now, done: false, d_cm: 19, w_mm: 148, samples: []};

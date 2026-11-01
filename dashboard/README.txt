@@ -31,7 +31,9 @@ Controls (all over MQTT, each command waits for the robot's ack):
 Readings:
 - Robot state, connection, Wi-Fi, uptime, drops; what the wheels are doing.
 - Map on the robot, last barcode, the character waiting for the next junction.
-- 60 s graphs of wheel speed, ultrasonic range (20/40 cm lines) and pitch.
+- 60 s graphs of wheel speed, ultrasonic range (20/40 cm lines), and pitch
+  with roll (roll = side lean, + = left side up; a hump under one wheel
+  shows mostly as roll).
 - Obstacle width, left/right clearance. Type the real box width to see the
   error and its grade band (A <= 10 %, B <= 20 %, C <= 30 %).
 - Last bypass time, OBSTACLE event -> back on the line, with its band
@@ -41,7 +43,8 @@ Readings:
   app.js so the drawing is to scale. The box's sideways position is not
   sent by the robot, so it is drawn centred on the line.
 - Barcode scans (read, latched -> movement, not in map, rejected + reason).
-- Humps (peak height, max pitch seen, duration) and the run's highest hump.
+- Humps (peak height, max pitch and max roll seen, duration) and the run's
+  highest hump.
 - Event history (filters: faults, state, mission, commands, diagnostics)
   and the command log. Fault codes: 1 impact, 2 too close, 4 stall,
   8 tilt, 16 E-stop, 32 heartbeat, 64 encoder, 128 IMU, 256 no echo,

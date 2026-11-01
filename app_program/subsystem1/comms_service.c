@@ -162,6 +162,7 @@ static void comms_publish_telemetry(uint32_t now_ms)
     t.barcode      = line.last_barcode;
     t.nav          = mission.pending_char;
     t.pitch_cdeg   = imu.pitch_cdeg;
+    t.roll_cdeg    = imu.roll_cdeg;
     t.hump_max_mm  = imu.hump_max_mm;
     t.obst_d_mm    = obst.d_mm;
     t.b_obst_valid = (obst.valid != 0u);
