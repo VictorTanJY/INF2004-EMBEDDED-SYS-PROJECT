@@ -4,6 +4,11 @@ SRC_DIR := ../../../app_program
 CC      ?= cc
 CFLAGS  := -std=c11 -Wall -Wextra -Werror -O1 -g -D_DEFAULT_SOURCE -I$(SRC_DIR)/subsystem4 -I$(SRC_DIR)
 SAN     := -fsanitize=address,undefined -fno-omit-frame-pointer
+
+# Rebuild whenever any app_program header changes: the tuning values
+# (motion_cfg.h, line_cfg.h, ...) are #defines compiled into the tests.
+HDRS    := $(wildcard ../../../app_program/*.h ../../../app_program/*/*.h)
+test_s4: $(HDRS)
 SRCS    := $(SRC_DIR)/subsystem4/imu_core.c $(SRC_DIR)/subsystem4/safety_core.c $(SRC_DIR)/app_math.c
 
 test_s4: test_s4.c $(SRCS)

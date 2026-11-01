@@ -6,6 +6,11 @@ SRC_DIR := ../../../app_program
 CC      ?= cc
 CFLAGS  := -std=c11 -Wall -Wextra -Werror -O1 -g -I$(SRC_DIR)/subsystem3 -I$(SRC_DIR)
 SAN     := -fsanitize=address,undefined -fno-omit-frame-pointer
+
+# Rebuild whenever any app_program header changes: the tuning values
+# (motion_cfg.h, line_cfg.h, ...) are #defines compiled into the tests.
+HDRS    := $(wildcard ../../../app_program/*.h ../../../app_program/*/*.h)
+test_s3: $(HDRS)
 SRCS    := $(SRC_DIR)/subsystem3/code39.c $(SRC_DIR)/subsystem3/line_barcode.c \
            $(SRC_DIR)/subsystem3/line_track.c
 

@@ -7,12 +7,17 @@ CC      ?= cc
 CFLAGS  := -std=c11 -Wall -Wextra -Werror -O1 -g -I$(SRC_DIR)
 SAN     := -fsanitize=address,undefined -fno-omit-frame-pointer
 
+# Rebuild whenever any app_program header changes: the tuning values
+# (motion_cfg.h, line_cfg.h, ...) are #defines compiled into the tests.
+HDRS    := $(wildcard ../../../app_program/*.h ../../../app_program/*/*.h)
+test_s1 test_s1_bench: $(HDRS)
+
 test_s1: test_s1.c $(SRC_DIR)/comms_proto.c $(SRC_DIR)/hmi_button.c
-	$(CC) $(CFLAGS) $(SAN) -o $@ $^
+	$(CC) $(CFLAGS) $(SAN) -o $@ $(filter %.c,$^)
 
 # Same tests with bench mode on (app_config.h APP_BENCH=1)
 test_s1_bench: test_s1.c $(SRC_DIR)/comms_proto.c $(SRC_DIR)/hmi_button.c
-	$(CC) $(CFLAGS) -DAPP_BENCH=1 $(SAN) -o $@ $^
+	$(CC) $(CFLAGS) -DAPP_BENCH=1 $(SAN) -o $@ $(filter %.c,$^)
 
 run: test_s1 test_s1_bench
 	./test_s1
