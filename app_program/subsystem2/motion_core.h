@@ -95,6 +95,8 @@ typedef struct
     /* wheel PID */
     int32_t  integ_l_um;
     int32_t  integ_r_um;
+    int8_t   dir_l;             /* last driven direction (+1/-1, 0 = off) */
+    int8_t   dir_r;
     int16_t  duty_l;
     int16_t  duty_r;
 

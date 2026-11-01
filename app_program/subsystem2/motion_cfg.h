@@ -40,11 +40,15 @@
    step response settles within 300 ms with < 10 % steady error.  The
    controller: duty = ff * sp + kp * e + ki * sum(e) * dt, with the
    integrator clamped and frozen while the output saturates.            */
-#define MOTION_KFF_MILLI            2000        /* 2.0 per mille per mm/s   */
-#define MOTION_KP_MILLI             1500        /* 1.5 per mille per mm/s   */
-#define MOTION_KI_MILLI             8000        /* 8.0 per mille per mm     */
+/* 1 Nov: with KFF 2.0 / MIN_DUTY 120 a 50 mm/s target drove the wheels to
+   ~100 mm/s and back to 0 (dashboard wheel-speed graph): too much open-loop
+   power.  Lower feed-forward and offset.                                 */
+#define MOTION_KFF_MILLI            1200        /* 1.2 per mille per mm/s   */
+#define MOTION_KP_MILLI             1040        /* 1.04 per mille per mm/s  */
+#define MOTION_KI_MILLI             6000        /* 6.0 per mille per mm     */
 #define MOTION_I_MAX                400         /* per mille                */
-#define MOTION_MIN_DUTY             120         /* static friction offset; MEASURE */
+#define MOTION_MIN_DUTY             23          /* static friction offset; MEASURE */
+#define MOTION_MIN_TARGET_MM_S      10          /* below this: wheel braked, PID reset */
 
 /* ---- Manoeuvres ----------------------------------------------------- */
 #define MOTION_POS_TOL_UM           2000        /* MOVE done within 2 mm    */

@@ -30,6 +30,8 @@ static void reset_pid(motion_core_t * p_mc)
 {
     p_mc->integ_l_um = 0;
     p_mc->integ_r_um = 0;
+    p_mc->dir_l      = 0;
+    p_mc->dir_r      = 0;
 }
 
 static void brake(motion_core_t * p_mc)
@@ -271,17 +273,30 @@ static int32_t ramp(int32_t value, int32_t target, int32_t step)
     return app_max_i32(value - step, target);
 }
 
-static int16_t pid_wheel(int32_t sp, int32_t v, int32_t * p_integ_um, uint32_t dt_ms)
+static int16_t pid_wheel(int32_t sp, int32_t v, int32_t * p_integ_um, int8_t * p_dir,
+                         uint32_t dt_ms)
 {
     int32_t const integ_max = (int32_t)(((int64_t)MOTION_I_MAX * 1000000) / MOTION_KI_MILLI);
+    int8_t const  dir       = (sp > 0) ? (int8_t)1 : (int8_t)-1;
     int32_t       e;
     int32_t       ff;
     int32_t       u;
 
-    if (sp == 0)
+    /* Below a minimum target the wheel is simply braked: otherwise the
+       static-friction offset flips between + and - MOTION_MIN_DUTY while
+       the steering asks the inner wheel for about 0 mm/s (a jolt each
+       time). */
+    if (app_abs_i32(sp) < MOTION_MIN_TARGET_MM_S)
     {
         *p_integ_um = 0;
+        *p_dir      = 0;
         return 0;                       /* wheel braked */
+    }
+    /* A change of direction starts the controller clean. */
+    if (dir != *p_dir)
+    {
+        *p_integ_um = 0;
+        *p_dir      = dir;
     }
     e  = sp - v;
     ff = ((MOTION_KFF_MILLI * sp) / 1000) + ((sp > 0) ? MOTION_MIN_DUTY : -MOTION_MIN_DUTY);
@@ -541,8 +556,8 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
         int32_t const sp_l   = app_clamp_i32(p_mc->sp_v - half_w, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
         int32_t const sp_r   = app_clamp_i32(p_mc->sp_v + half_w, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
 
-        p_mc->duty_l = pid_wheel(sp_l, p_mc->v_l, &p_mc->integ_l_um, dt_ms);
-        p_mc->duty_r = pid_wheel(sp_r, p_mc->v_r, &p_mc->integ_r_um, dt_ms);
+        p_mc->duty_l = pid_wheel(sp_l, p_mc->v_l, &p_mc->integ_l_um, &p_mc->dir_l, dt_ms);
+        p_mc->duty_r = pid_wheel(sp_r, p_mc->v_r, &p_mc->integ_r_um, &p_mc->dir_r, dt_ms);
     }
     check_stall(p_mc, now_ms);
 }
