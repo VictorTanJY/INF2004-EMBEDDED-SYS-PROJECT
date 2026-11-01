@@ -264,6 +264,10 @@ static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um)
 /* ---- classification ------------------------------------------------------ */
 static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cdeg_s)
 {
+    /* Change of SPEED, not of signed velocity: reversing away from a stop
+       is accelerating, slowing down while reversing is decelerating. */
+    int32_t const a_speed = (v_mm_s < 0) ? -p_ic->accel_mm_s2 : p_ic->accel_mm_s2;
+
     if (p_ic->b_impact)
     {
         return (uint8_t)IMU_MOTION_IMPACT;
@@ -284,13 +288,13 @@ static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cde
     {
         return (uint8_t)IMU_MOTION_TURNING;
     }
-    if (p_ic->accel_mm_s2 > IMU_ACCEL_MM_S2)
+    if (a_speed > IMU_ACCEL_MM_S2)
     {
         return (uint8_t)IMU_MOTION_ACCELERATING;
     }
-    if (p_ic->accel_mm_s2 < -IMU_ACCEL_MM_S2)
+    if (a_speed < -IMU_ACCEL_MM_S2)
     {
-        return (uint8_t)IMU_MOTION_BRAKING;
+        return (uint8_t)IMU_MOTION_DECELERATING;
     }
     return (uint8_t)IMU_MOTION_CRUISING;
 }

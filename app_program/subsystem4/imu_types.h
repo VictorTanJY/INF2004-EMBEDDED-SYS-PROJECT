@@ -67,7 +67,7 @@ typedef enum
     IMU_MOTION_DESCENDING   = 4,
     IMU_MOTION_IMPACT       = 5,
     IMU_MOTION_CRUISING     = 6,
-    IMU_MOTION_BRAKING      = 7
+    IMU_MOTION_DECELERATING = 7         /* speed falling (forward or reverse) */
 } imu_motion_t;
 
 /* imu_snap_t.cal */

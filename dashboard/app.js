@@ -13,7 +13,7 @@ const MM_PER_COUNT = 209.309 / 2536;       /* MOTION_WHEEL_CIRC_UM / 1000 / MOTI
 const BYPASS_STATES = ['OBSTACLE_HANDLING', 'AVOIDING', 'LINE_RECOVERY'];
 const MOVES = ['Left', 'Right', 'Straight', 'U-turn'];
 const REJECT = {2: 'wrong element count', 3: 'bad wide/narrow ratio', 4: 'unknown pattern', 5: 'no start/stop *', 6: 'wrong length', 7: 'too long'};
-const MOTION = ['stationary', 'accelerating', 'turning', 'climbing', 'descending', 'impact', 'cruising', 'braking'];
+const MOTION = ['stationary', 'accelerating', 'turning', 'climbing', 'descending', 'impact', 'cruising', 'decelerating'];
 const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2, 'Obstacle too close', 'Obstacle closer than 8 cm.'],
   [4, 'Motor stall', 'High motor effort with no wheel movement.'], [8, 'Excessive tilt', 'Pitch or roll beyond 30°.'],
   [16, 'Emergency stop', 'An E-stop was requested.'], [32, 'Heartbeat timeout', 'A monitored task stopped responding.'],

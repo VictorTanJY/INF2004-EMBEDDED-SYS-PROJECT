@@ -248,6 +248,18 @@ int main(void)
     CHECK("S4-H08", g_ic.motion == IMU_MOTION_TURNING);
     { int k; for (k = 0; k < 30; k++) { step(0.0, 0.0, 0.0, 250, 2500, 0); } }
     CHECK("S4-H08", g_ic.motion == IMU_MOTION_CRUISING);
+    /* speed up then slow down, forward: 1000 mm/s^2 each way */
+    { int k; for (k = 0; k < 20; k++) { step(0.0, 0.0, 0.0, 250 + (10 * k), 2600, 0); } }
+    CHECK("S4-H08", g_ic.motion == IMU_MOTION_ACCELERATING);
+    { int k; for (k = 0; k < 20; k++) { step(0.0, 0.0, 0.0, 440 - (10 * k), 2600, 0); } }
+    CHECK("S4-H08", g_ic.motion == IMU_MOTION_DECELERATING);
+    /* the same in reverse: speeding up backwards is accelerating (the
+       class may change at most every IMU_CLASS_HOLD_MS, so run > 200 ms) */
+    imu_core_init(&g_ic);
+    { int k; for (k = 0; k < 40; k++) { step(0.0, 0.0, 0.0, -20 - (10 * k), -1000, 0); } }
+    CHECK("S4-H08", g_ic.motion == IMU_MOTION_ACCELERATING);
+    { int k; for (k = 0; k < 30; k++) { step(0.0, 0.0, 0.0, -410 + (10 * k), -1000, 0); } }
+    CHECK("S4-H08", g_ic.motion == IMU_MOTION_DECELERATING);
 
     /* S4-H09: heartbeats: each task times out after its own limit */
     {
