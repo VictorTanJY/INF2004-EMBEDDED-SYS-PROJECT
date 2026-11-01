@@ -9,8 +9,11 @@
 #define IMU_CFG_H
 
 /* ---- Mounting: which accelerometer axis points forward / left / up,
-   and its sign.  MEASURE (A8): tilt the robot nose-up and left-side-up by
-   hand and check that pitch and roll go positive.                       */
+   and its sign.  MEASURE (A8): tilt the robot nose-up and right-side-up by
+   hand and check that pitch and roll go positive.  Team convention
+   (checked on the robot 2026-11-01): roll + = RIGHT side up.  The left
+   axis is kept as it is for that; it also mirrors the magnetometer
+   heading, which no other task uses.                                    */
 #define IMU_AXIS_FWD                0           /* 0 = X, 1 = Y, 2 = Z */
 #define IMU_SIGN_FWD                (1)
 #define IMU_AXIS_LEFT               1

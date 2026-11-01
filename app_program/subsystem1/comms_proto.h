@@ -88,7 +88,7 @@ typedef struct
     int32_t  dist_mm;
     int16_t  line_err;
     int16_t  pitch_cdeg;
-    int16_t  roll_cdeg;         /* + = left side up (one-wheel humps)     */
+    int16_t  roll_cdeg;         /* + = right side up (one-wheel humps)    */
     uint16_t hump_max_mm;
     uint16_t obst_d_mm;         /* COMMS_D_NONE = nothing in range        */
     uint16_t obst_w_mm;

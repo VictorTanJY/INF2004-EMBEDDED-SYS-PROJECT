@@ -310,8 +310,8 @@ mount it ≥ 5 cm from the motors.
 wiring and pull-ups.
 
 **E4. Axes (S4-M02):** nose up by hand → `pitch_deg` in telemetry goes
-positive. Lift the left side → `roll_deg` in telemetry (dashboard: ROLL,
-blue line on the pitch/roll graph) goes positive. Otherwise
+positive. Lift the right side → `roll_deg` in telemetry (dashboard: ROLL,
+blue line on the pitch/roll graph) goes positive (right side up = +). Otherwise
 fix `IMU_AXIS_*` / `IMU_SIGN_*` in `subsystem4/imu_cfg.h`.
 
 **E5. Pitch noise (S4-M03):** with `bench_move` over the flat track, pitch

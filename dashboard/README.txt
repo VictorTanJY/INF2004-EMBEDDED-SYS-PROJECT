@@ -32,7 +32,7 @@ Readings:
 - Robot state, connection, Wi-Fi, uptime, drops; what the wheels are doing.
 - Map on the robot, last barcode, the character waiting for the next junction.
 - 60 s graphs of wheel speed, ultrasonic range (20/40 cm lines), and pitch
-  with roll (roll = side lean, + = left side up; a hump under one wheel
+  with roll (roll = side lean, + = right side up; a hump under one wheel
   shows mostly as roll).
 - Obstacle width, left/right clearance. Type the real box width to see the
   error and its grade band (A <= 10 %, B <= 20 %, C <= 30 %).

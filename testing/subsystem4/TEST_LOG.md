@@ -19,7 +19,7 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S4-U06 | watchdog enabled and fed | NFR8 | auto | `subsystem4_test.c` | PASS |
 | S4-H01–H09 | humps 15/20/30 mm x 300 mm on a chassis model within NFR7; 10 mm x 300 mm below the 5 deg threshold (known limit, S4-H01b); no hump under +-1.5 m/s^2 accelerate/brake; long ramp is a ramp; tilt on/off with hysteresis, roll too; impact > 1.5 g; level calibration removes a mounting offset and refuses a moving robot; hard-iron offsets and heading; motion classes; heartbeat timeouts per task and across the ms wrap | FR6–FR8, FR15, NFR7, A9 | host | `make -C testing/subsystem4/host` | `host tests: N passed, 0 failed` |
 | S4-M01 | IMU found (IRA_REG_M = 0x48), snapshot `ok` = 1 | A3 | manual | boot, telemetry / snapshot | `ok` 1, i2c_errors not rising |
-| S4-M02 | axis orientation and signs | A8 | manual | tilt nose up, then left side up, by hand | pitch and roll go positive; else fix `IMU_AXIS_*` / `IMU_SIGN_*` |
+| S4-M02 | axis orientation and signs | A8 | manual | tilt nose up, then right side up, by hand | pitch and roll go positive (roll + = right side up); else fix `IMU_AXIS_*` / `IMU_SIGN_*` |
 | S4-M03 | pitch noise while driving on flat ground | A8 | manual | log pitch at 0.3 m/s | within +-1 deg; else re-check mounting, consider lowering `IMU_HUMP_ON_CDEG` only after this |
 | S4-M04 | hump height, 10 passes each on 10 / 20 / 30 mm humps | FR7, NFR7, A9 | manual | `HUMP_END` data vs measured height | within +-20 % or +-5 mm |
 | S4-M05 | tilt > 30 deg -> warning only | FR15 (revised) | manual | tilt the robot by hand past 30 deg for > 0.2 s, then level | LOG 55 "Tilt warning", no FAULT, motors not braked; LOG 56 when back below 25 deg |
