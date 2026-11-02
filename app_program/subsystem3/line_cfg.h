@@ -67,7 +67,7 @@
    loop acts nearly on/off: lower P, a little more D to damp the swing. */
 /* Third setting (1 Nov evening): cruise 50 mm/s, difference error, P only.
    KP 850 = 0.85 rad/s at full error (+-45 mm/s between the wheels). */
-#define LINE_KP                     850
+#define LINE_KP                     770
 #define LINE_KD                     0           /* mrad/s per (err per 10 ms) */
 #define LINE_STEER_SIGN             (1)         /* -1 if the robot steers away */
 #define LINE_OMEGA_MAX              2000        /* mrad/s: inner wheel ~0 at 100 mm/s */
