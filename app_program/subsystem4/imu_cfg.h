@@ -77,6 +77,13 @@
    it must last IMU_INT1_DUR samples (10 ms each at 100 Hz).            */
 #define IMU_INT1_THS                78          /* 2500 / 32 */
 #define IMU_INT1_DUR                2           /* 20 ms */
+/* 2 Nov: INT1 still fired with no jolt in the readings (search-sweep wheel
+   reversals ring the chassis for a few ms).  SafetyTask now brakes only if
+   the software check (IMU_IMPACT_MG between 10 ms samples) also saw an
+   impact within IMU_IMPACT_AGREE_MS of the INT1 edge; it waits at most that
+   long after the edge.  Otherwise it logs LOG 43 with the peak jolt.     */
+#define IMU_IMPACT_AGREE_MS         50
+#define IMU_JOLT_WINDOW_MS          100         /* peak-jolt window for LOG 43 */
 
 /* ---- Motion classification (FR8) -------------------------------------- */
 #define IMU_STATIONARY_MM_S         10

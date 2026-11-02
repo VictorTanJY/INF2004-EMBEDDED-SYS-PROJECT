@@ -420,10 +420,23 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
     mag_mg = (int32_t)app_isqrt64((uint64_t)((int64_t)acc_mg[0] * acc_mg[0] +
                                              (int64_t)acc_mg[1] * acc_mg[1] +
                                              (int64_t)acc_mg[2] * acc_mg[2]));
+    if (p_ic->b_have_acc)
+    {
+        uint32_t const jolt = (uint32_t)app_abs_i32(mag_mg - p_ic->prev_mag_mg);
+
+        /* largest jump in the last IMU_JOLT_WINDOW_MS (impact diagnosis) */
+        if ((jolt >= p_ic->jolt_peak_mg) ||
+            (app_elapsed_ms(now_ms, p_ic->jolt_peak_ms) > IMU_JOLT_WINDOW_MS))
+        {
+            p_ic->jolt_peak_mg = jolt;
+            p_ic->jolt_peak_ms = now_ms;
+        }
+    }
     if (p_ic->b_have_acc && (app_abs_i32(mag_mg - p_ic->prev_mag_mg) > IMU_IMPACT_MG))
     {
         p_ic->b_impact  = true;
         p_ic->impact_ms = now_ms;
+        p_ic->impacts++;
         ev |= IMU_EV_IMPACT;
     }
     else if (p_ic->b_impact && (app_elapsed_ms(now_ms, p_ic->impact_ms) >= IMU_IMPACT_HOLD_MS))

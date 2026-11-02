@@ -74,6 +74,9 @@ typedef struct
     uint32_t tilt_since_ms;
     uint32_t impact_ms;
     bool     b_impact;
+    uint16_t impacts;           /* software impacts since boot (wraps) */
+    uint32_t jolt_peak_mg;      /* largest |a| jump in the last IMU_JOLT_WINDOW_MS */
+    uint32_t jolt_peak_ms;
     uint8_t  motion;            /* imu_motion_t */
     uint32_t motion_ms;
 } imu_core_t;

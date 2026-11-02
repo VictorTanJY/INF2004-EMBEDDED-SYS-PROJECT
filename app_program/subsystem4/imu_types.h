@@ -28,6 +28,7 @@
 #define SAFETY_FLT_NO_ECHO      0x0100u     /* report-only: ObstacleTask      */
 #define SAFETY_FLT_WIFI_LOSS    0x0200u     /* report-only: CommsTask         */
 #define SAFETY_FLT_SELFTEST     0x0400u     /* MissionTask BOOT (latched only) */
+#define SAFETY_REQ_IMPACT_CHK   0x4000u     /* imu_int1_isr -> SafetyTask: confirm, then IMPACT */
 #define SAFETY_REQ_RESET        0x8000u     /* MissionTask -> SafetyTask      */
 
 #define SAFETY_BRAKE_MASK       (SAFETY_FLT_IMPACT | SAFETY_FLT_TOO_CLOSE | \
@@ -85,6 +86,9 @@ typedef struct
     uint16_t last_hump_mm;      /* peak of the last completed hump        */
     uint16_t humps;             /* completed humps this run               */
     uint16_t i2c_errors;        /* since boot                             */
+    uint16_t impacts;           /* software impacts since boot (wraps)    */
+    uint16_t jolt_peak_mg;      /* largest |a| jump, last 100 ms          */
+    uint32_t impact_ms;         /* app_time_ms_hw() of the last impact    */
     uint8_t  hump_state;        /* imu_hump_state_t                       */
     uint8_t  motion;            /* imu_motion_t                           */
     uint8_t  ok;                /* 1 = readings valid (no IMU_FAULT)      */

@@ -377,6 +377,9 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
         snap.turn_rate_cdeg_s = odom.yaw_rate_cdeg_s;
         snap.accel_mg =
             (int16_t)(g_ic.prev_mag_mg - 1000);
+        snap.impacts = g_ic.impacts;
+        snap.jolt_peak_mg = (uint16_t)app_min_i32((int32_t)g_ic.jolt_peak_mg, 65535);
+        snap.impact_ms = g_ic.impact_ms;
         snap.hump_max_mm = g_ic.hump_max_mm;
         snap.last_hump_mm = g_ic.last_hump_mm;
         snap.humps = g_ic.humps;
