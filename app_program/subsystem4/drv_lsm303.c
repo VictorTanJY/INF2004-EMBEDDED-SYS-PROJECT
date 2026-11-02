@@ -27,7 +27,7 @@ static reg_init_t const k_init[] =
     {0x26u, 0x00u}, /* Continuous magnetic conversion; unfiltered accel output. */
     {0x12u, 0x08u}, /* Push-pull, active-high interrupt pins. */
     {0x32u, (uint8_t)IMU_INT1_THS},
-    {0x33u, 0x00u}, /* No minimum interrupt duration. */
+    {0x33u, (uint8_t)IMU_INT1_DUR}, /* Minimum duration, samples at 100 Hz. */
     {0x20u, 0x6Fu}  /* Acceleration 100 Hz, XYZ on, block data update. */
 };
 

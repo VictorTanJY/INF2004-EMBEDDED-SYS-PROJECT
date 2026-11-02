@@ -71,9 +71,12 @@
 #define IMU_I2C_FAULT_COUNT         3           /* consecutive errors        */
 #define IMU_RECOVER_SAMPLES         10          /* good samples before pitch_valid */
 
-/* INT1 high-g interrupt threshold, high-pass filtered: 1.5 g at +-4 g
-   full scale is 1500 / 32 mg per LSB = 47 (datasheet INT1_THS_A).       */
-#define IMU_INT1_THS                47
+/* INT1 high-g interrupt threshold, high-pass filtered, 32 mg per LSB at
+   +-4 g full scale.  2 Nov: 1.5 g (47) faulted on flat ground from the
+   car's own jolts (wheel stick-slip on curves, starts): now 2.5 g, and
+   it must last IMU_INT1_DUR samples (10 ms each at 100 Hz).            */
+#define IMU_INT1_THS                78          /* 2500 / 32 */
+#define IMU_INT1_DUR                2           /* 20 ms */
 
 /* ---- Motion classification (FR8) -------------------------------------- */
 #define IMU_STATIONARY_MM_S         10
