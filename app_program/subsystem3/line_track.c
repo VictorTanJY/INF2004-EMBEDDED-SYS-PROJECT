@@ -132,6 +132,13 @@ void line_track_init(line_track_t * p_t)
     p_t->since_junction_um = LINE_JUNCTION_REFRACT_UM;
 }
 
+/* Steering ramp: move the turn command at most LINE_OMEGA_STEP per block
+   (10 ms), so a flip of the line error does not jump the wheel speeds. */
+static int32_t steer_toward(int32_t now, int32_t target)
+{
+    return app_clamp_i32(target, now - LINE_OMEGA_STEP, now + LINE_OMEGA_STEP);
+}
+
 static bool is_black(bool b_black, uint16_t norm)
 {
     return b_black ? (norm >= LINE_BLACK_OFF) : (norm > LINE_BLACK_ON);
@@ -223,8 +230,9 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     {
         /* drifted off one side: turn back toward it, slowly */
         p_t->v     = (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100;
-        p_t->omega = (p_t->exit_err > 0) ? (LINE_STEER_SIGN * LINE_RECOVER_OMEGA)
-                                         : (-LINE_STEER_SIGN * LINE_RECOVER_OMEGA);
+        p_t->omega = steer_toward(p_t->omega,
+                                  (p_t->exit_err > 0) ? (LINE_STEER_SIGN * LINE_RECOVER_OMEGA)
+                                                      : (-LINE_STEER_SIGN * LINE_RECOVER_OMEGA));
     }
     else if (p_t->b_junction || (p_t->both_white_um > 0u) || !p_t->b_have_err)
     {
@@ -240,7 +248,8 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         int32_t       v     = (p_cfg->cruise_mm_s * (1000 - slow)) / 1000;
 
         v = app_max_i32(v, (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
-        p_t->omega = app_clamp_i32(omega, -LINE_OMEGA_MAX, LINE_OMEGA_MAX);
+        p_t->omega = steer_toward(p_t->omega,
+                                  app_clamp_i32(omega, -LINE_OMEGA_MAX, LINE_OMEGA_MAX));
         p_t->v     = v;
     }
 

@@ -77,6 +77,10 @@
    line left past one sensor (a drift, not a gap): keep turning toward it. */
 #define LINE_EXIT_ERR               400         /* line clearly on one side (difference error) */
 #define LINE_RECOVER_OMEGA          900         /* mrad/s: firm, never reverses a wheel */
+/* Steering ramp (2 Nov): the turn command changes by at most this much per
+   10 ms block, so straight -> full steering (850) takes ~0.17 s instead of
+   one step.  Lower = smoother but slower to react; 2000 = off (instant). */
+#define LINE_OMEGA_STEP             50          /* mrad/s per 10 ms */
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */
 #define LINE_STRAIGHT_OMEGA         500         /* |omega| < 0.5 rad/s ...   */

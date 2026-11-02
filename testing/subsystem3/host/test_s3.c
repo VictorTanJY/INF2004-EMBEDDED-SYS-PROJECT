@@ -14,6 +14,7 @@
 #include "code39.h"
 #include "line_barcode.h"
 #include "line_track.h"
+#include "app_types.h"
 #include "vectors_slides.h"
 
 static int g_pass;
@@ -390,6 +391,35 @@ static void test_track(void)
     (void)feed(&t, 950u, 80u, 6000u);          /* line under the left sensor only */
     (void)feed(&t, 60u, 60u, 9000u);           /* ... then past it */
     CHECK("S3-H11", t.omega > 0 && t.v < 300);
+
+    /* S3-H13: steering ramp: the error flips full left / full right every
+       10 ms (the weaving seen on 2 Nov); the turn command never moves more
+       than LINE_OMEGA_STEP per block; a steady error still reaches the full
+       command within 850 / 50 = 17 blocks */
+    {
+        int32_t prev;
+        int32_t i;
+        int32_t max_jump = 0;
+
+        line_track_init(&t);
+        (void)feed(&t, 500u, 500u, 30000u);
+        prev = t.omega;
+        for (i = 0; i < 40; i++)
+        {
+            if ((i & 1) == 0) { (void)line_track_step(&t, &k_cfg, 1000u, 0u, 3000u); }
+            else              { (void)line_track_step(&t, &k_cfg, 0u, 1000u, 3000u); }
+            max_jump = (app_abs_i32(t.omega - prev) > max_jump) ? app_abs_i32(t.omega - prev) : max_jump;
+            prev = t.omega;
+        }
+        CHECK("S3-H13", max_jump <= LINE_OMEGA_STEP);
+
+        line_track_init(&t);
+        (void)feed(&t, 500u, 500u, 30000u);
+        for (i = 0; i < 17; i++) { (void)line_track_step(&t, &k_cfg, 1000u, 0u, 3000u); }
+        CHECK("S3-H13", t.omega == LINE_STEER_SIGN * LINE_KP);
+        (void)line_track_step(&t, &k_cfg, 500u, 500u, 3000u);   /* back on centre */
+        CHECK("S3-H13", t.omega == LINE_STEER_SIGN * (LINE_KP - LINE_OMEGA_STEP));
+    }
 
     /* S3-H12: calibration: contrast check and normalisation */
     {
