@@ -29,10 +29,42 @@
 #define LINE_WAKE_TIMEOUT_MS    30      /* still heartbeats if the DMA stops */
 #define LINE_LOG_BC_REJECT      31u     /* comms_rec_t code for a rejected read */
 #define LINE_LOG_CAL_LEVELS     32u     /* 32/33/34 = L/R/barcode: max << 16 | min raw */
+/* Diagnosis of a rejected barcode (2 Nov), right after LOG 31:
+   35 = elements << 24 | length mm << 8 | darkest reading / 4 (0..250),
+   36 = narrowest element << 16 | widest element, both in 0.1 mm.        */
+#define LINE_LOG_BC_SHAPE       35u
+#define LINE_LOG_BC_WIDTHS      36u
 
 static line_cal_t   g_cal;
 static line_track_t g_trk;
 static bc_capture_t g_bc;
+
+/* LOG 35 / 36 for the capture that was just rejected (still in g_bc). */
+static void bc_reject_detail(bc_capture_t const * p_bc)
+{
+    uint32_t const len_mm = app_min_i32((int32_t)(p_bc->total_um / 1000u), 0xFFFF);
+    uint32_t       w_min  = 0xFFFFu;
+    uint32_t       w_max  = 0u;
+    uint16_t       k;
+
+    for (k = 0u; (k < p_bc->n) && (k <= BC_MAX_ELEMENTS); k++)
+    {
+        uint32_t const w = app_min_i32((int32_t)(p_bc->widths[k] / 100u), 0xFFFF);
+
+        w_min = (w < w_min) ? w : w_min;
+        w_max = (w > w_max) ? w : w_max;
+    }
+    if (p_bc->n == 0u)
+    {
+        w_min = 0u;
+    }
+    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHAPE,
+                           (int32_t)(((uint32_t)app_min_i32(p_bc->n, 255) << 24) |
+                                     (len_mm << 8) |
+                                     ((uint32_t)p_bc->peak / 4u)));
+    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_WIDTHS,
+                           (int32_t)((w_min << 16) | w_max));
+}
 
 static void timing_pin_init(void)
 {
@@ -183,6 +215,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 snap.last_reject = out.reason;
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                        LINE_LOG_BC_REJECT, (int32_t)out.reason);
+                bc_reject_detail(&g_bc);
             }
             else
             {
