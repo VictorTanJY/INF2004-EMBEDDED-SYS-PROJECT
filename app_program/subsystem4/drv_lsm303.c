@@ -93,8 +93,10 @@ EXPORT ER drv_lsm303_init(void)
     if (er != E_OK)
         return init_result(4u, er, id);
 
-    /* OR-of-positive-axis high-g interrupt. */
-    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x30u, 0x2Au);
+    /* OR of the X and Y high-g events (XHIE | YHIE).  Z (vertical, the up
+       axis) is left out: a wheel hitting a hump jolts the car up and down
+       past 1.5 g and was taken as a crash (2 Nov); a crash is horizontal. */
+    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x30u, 0x0Au);
     if (er != E_OK)
         return init_result(4u, er, id);
 
