@@ -93,6 +93,9 @@
 
 /* ---- Calibration ----------------------------------------------------- */
 #define IMU_LEVEL_MAX_SPREAD_MG     60          /* robot must stand still      */
+/* Gravity is ~1000 mg: more than this on the up axis is a stuck or
+   saturated accelerometer (2 Nov: 3996 mg, shake 0), not a level.      */
+#define IMU_LEVEL_UP_MAX_MG         1500
 /* Ignore the first part of the stand-still: the GP21 press and the hand
    leaving the robot shook it by ~180 mg (LOG 58, 1 Nov).  The level is
    then taken from the low-pass filtered acceleration over the rest of

@@ -278,6 +278,12 @@ int main(void)
         }
         CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
         CHECK("S4-H06", g_ic.lvl_n == 100u && g_ic.lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG);   /* LOG 57/58 */
+        /* stuck accelerometer (2 Nov: full scale, no noise): refused */
+        imu_cal_level_start(&g_ic);
+        a[0] = -3997;  a[1] = 0;  a[2] = -3997;
+        for (k = 0; k < 100; k++) { imu_cal_level_sample(&g_ic, a); }
+        CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
+        CHECK("S4-H06", g_ic.lvl_spread_mg == 0 && g_ic.lvl_up_mg > IMU_LEVEL_UP_MAX_MG);   /* LOG 58/59 */
     }
 
     /* S4-H07: hard-iron offsets and heading after a 360 deg spin */

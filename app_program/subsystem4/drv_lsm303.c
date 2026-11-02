@@ -5,6 +5,7 @@
 #include "drv_lsm303.h"
 #include "drv_i2c1.h"
 #include "imu_cfg.h"
+#include "subsystem4.h"
 
 #define SENSOR_ADDR DRV_LSM303_ADDR
 #define AUTO_INC    0x80u
@@ -35,7 +36,8 @@ static uint32_t g_diag;
 
 /* Diagnostic layout:
  * bits 31..24: stage (0 = success, 1 = identity read,
- *                    2 = unexpected identity, 4 = configuration)
+ *                    2 = unexpected identity, 4 = configuration,
+ *                    5 = acceleration stuck at full scale after 2 tries)
  * bits 23..16: negated error code, low byte
  * bits 15..8:  observed WHO_AM_I value
  * bits 7..0:   reserved
@@ -53,10 +55,33 @@ EXPORT uint32_t drv_lsm303_diag(void)
     return g_diag;
 }
 
-EXPORT ER drv_lsm303_init(void)
+/* 2 Nov: twice after a Pico reset (the chip keeps power) the accelerometer
+   read full scale on two axes with no noise (level calibration: up axis
+   3996 mg, shake 0; 45 deg tilt at boot).  The chip is now rebooted
+   (CTRL0 BOOT) before it is configured, and the first readings are
+   checked: full scale on any axis = stuck, so reboot and configure again. */
+#define BOOT_WAIT_MS        20      /* CTRL0 BOOT: reload trimming, ~5 ms */
+#define FIRST_DATA_WAIT_MS  50      /* 5 samples at 100 Hz                 */
+#define STUCK_MG            3900    /* +/-4 g full scale is 3997 mg        */
+
+/* Sleep in 10 ms steps and keep ImuTask's heartbeat (100 ms timeout)
+   alive: a reboot and retry take up to ~150 ms. */
+static void wait_ms(uint32_t ms)
+{
+    uint32_t t;
+
+    for (t = 0u; t < ms; t += 10u)
+    {
+        (void)tk_dly_tsk(10);
+        safety_heartbeat(SAFETY_HB_IMU);
+    }
+}
+
+static ER init_once(void)
 {
     uint8_t id = 0u;
     uint8_t reference[3];
+    int32_t acc[3];
     uint32_t i;
     ER er;
 
@@ -68,6 +93,12 @@ EXPORT ER drv_lsm303_init(void)
 
     if (id != 0x49u)
         return init_result(2u, E_OBJ, id);
+
+    /* Reboot the chip's memory content first (CTRL0 BOOT). */
+    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x1Fu, 0x80u);
+    if (er != E_OK)
+        return init_result(4u, er, id);
+    wait_ms(BOOT_WAIT_MS);
 
     for (i = 0u; i < sizeof(k_init) / sizeof(k_init[0]); ++i)
     {
@@ -103,7 +134,29 @@ EXPORT ER drv_lsm303_init(void)
     if (er != E_OK)
         return init_result(4u, er, id);
 
+    /* First readings: an axis at full scale means the output is stuck. */
+    wait_ms(FIRST_DATA_WAIT_MS);
+    er = drv_lsm303_read_accel(acc);
+    if (er != E_OK)
+        return init_result(4u, er, id);
+    for (i = 0u; i < 3u; ++i)
+    {
+        if ((acc[i] >= STUCK_MG) || (acc[i] <= -STUCK_MG))
+            return init_result(5u, E_IO, id);
+    }
+
     return init_result(0u, E_OK, id);
+}
+
+EXPORT ER drv_lsm303_init(void)
+{
+    ER er = init_once();
+
+    if ((er != E_OK) && ((g_diag >> 24) == 5u))
+    {
+        er = init_once();               /* stuck: reboot and try once more */
+    }
+    return er;
 }
 
 static int16_t le16(uint8_t lo, uint8_t hi)

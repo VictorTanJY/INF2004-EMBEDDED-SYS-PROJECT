@@ -23,7 +23,7 @@ const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2
 const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 43: 'Impact not confirmed (peak jolt, mg)', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
   54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared',
-  57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need ≥ 500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
+  57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
   64: 'Barcode not in the map', 65: 'Map stored', 66: 'Map refused', 67: 'Run summary', 68: 'Parameter set',
   69: 'Mission queue full', 70: 'Motion queue full', 90: 'IMU bus start', 91: 'IMU identity read', 92: 'IMU identity value',
   93: 'IMU configuration', 100: 'IMU accel X', 101: 'IMU accel Y', 102: 'IMU accel Z', 103: 'IMU pitch', 104: 'IMU roll',

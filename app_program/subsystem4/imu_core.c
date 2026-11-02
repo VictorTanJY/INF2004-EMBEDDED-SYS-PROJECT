@@ -103,6 +103,10 @@ bool imu_cal_level_finish(imu_core_t * p_ic)
     {
         return false;                   /* not right way up (or axes mis-set) */
     }
+    if (up > IMU_LEVEL_UP_MAX_MG)
+    {
+        return false;                   /* stuck / saturated output (2 Nov) */
+    }
     p_ic->pitch0_cdeg = app_atan2_cdeg(fwd, (int32_t)app_isqrt64((uint64_t)((int64_t)left * left +
                                                                          (int64_t)up * up)));
     p_ic->roll0_cdeg  = app_atan2_cdeg(left, up);

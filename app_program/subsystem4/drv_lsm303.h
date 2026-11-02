@@ -1,7 +1,8 @@
 /* LSM303D accelerometer + magnetometer, shared I2C address 0x1D.
  * GY-511 boards with the LSM303D: the pin printed "DRDY" is the chip's
- * SA0 input, pulled high on the board, so the default address is 0x1D.
- * Leave that pin unconnected (wired to GND the chip moves to 0x1E).
+ * SA0 input.  It is NOT pulled on this board: wire it to 3V3 (address
+ * 0x1D, used here); left floating the address drifts and the IMU drops
+ * out (2 Nov).  Wired to GND the chip moves to 0x1E.
  * Acceleration: 100 Hz, +/-4 g. Magnetic: 50 Hz, +/-4 gauss.
  * INT1: active-high, non-latched, high-pass filtered high-g event.
  */
@@ -28,6 +29,7 @@ IMPORT ER drv_lsm303_read_mag(int16_t mag[3]);
  *             1 = identity read failed
  *             2 = unexpected identity
  *             4 = configuration failed
+ *             5 = acceleration stuck at full scale (after a reboot and retry)
  * bits 23..16: negated error code, low byte
  * bits 15..8:  observed WHO_AM_I value (expected 0x49)
  * bits 7..0:   reserved
