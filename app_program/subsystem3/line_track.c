@@ -5,16 +5,6 @@
 
 #include "line_track.h"
 #include "../app_types.h"
-#include "../subsystem2/motion_cfg.h"   /* MOTION_TRACK_MM */
-
-/* Largest |omega| (mrad/s) that keeps the inner wheel at or above
-   LINE_INNER_MIN_MM_S at body speed v: inner = v - omega x track / 2. */
-static int32_t omega_cap(int32_t v)
-{
-    int32_t const spare = v - LINE_INNER_MIN_MM_S;
-
-    return (spare > 0) ? ((spare * 2000) / MOTION_TRACK_MM) : 0;
-}
 
 /* ------------------------------------------------------------------ */
 void line_cal_start(line_cal_t * p_cal)
@@ -232,12 +222,9 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     else if ((p_t->both_white_um > 0u) && (app_abs_i32(p_t->exit_err) > LINE_EXIT_ERR))
     {
         /* drifted off one side: turn back toward it, slowly */
-        int32_t const cap = app_min_i32(LINE_RECOVER_OMEGA,
-                                        omega_cap((p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100));
-
         p_t->v     = (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100;
-        p_t->omega = (p_t->exit_err > 0) ? (LINE_STEER_SIGN * cap)
-                                         : (-LINE_STEER_SIGN * cap);
+        p_t->omega = (p_t->exit_err > 0) ? (LINE_STEER_SIGN * LINE_RECOVER_OMEGA)
+                                         : (-LINE_STEER_SIGN * LINE_RECOVER_OMEGA);
     }
     else if (p_t->b_junction || (p_t->both_white_um > 0u) || !p_t->b_have_err)
     {
@@ -251,11 +238,9 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         int32_t const omega = LINE_STEER_SIGN * (((LINE_KP * p_t->err) / 1000) + (LINE_KD * derr));
         int32_t const slow  = (LINE_SLOW_K * app_abs_i32(p_t->err)) / 1000;
         int32_t       v     = (p_cfg->cruise_mm_s * (1000 - slow)) / 1000;
-        int32_t       cap;
 
-        v   = app_max_i32(v, (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
-        cap = app_min_i32(LINE_OMEGA_MAX, omega_cap(v));
-        p_t->omega = app_clamp_i32(omega, -cap, cap);
+        v = app_max_i32(v, (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
+        p_t->omega = app_clamp_i32(omega, -LINE_OMEGA_MAX, LINE_OMEGA_MAX);
         p_t->v     = v;
     }
 
