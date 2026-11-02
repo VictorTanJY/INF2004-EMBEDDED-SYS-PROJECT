@@ -86,7 +86,7 @@ static void test_telemetry(void)
     CHECK("S1-H03", len == strlen(buf));
     CHECK("S1-H03", strcmp(buf,
         "{\"seq\":12,\"t_ms\":3400,\"state\":\"LINE_FOLLOW\",\"v_mm_s\":[250,-10],"
-        "\"enc\":[1000,990],\"dist_mm\":555,\"line\":{\"err\":-120,\"lost\":false},"
+        "\"enc\":[1000,990],\"dist_mm\":555,\"line\":{\"err\":-120,\"lost\":false,\"bc\":0},"
         "\"barcode\":\"A\",\"pitch_deg\":-12.3,\"roll_deg\":8.8,\"hump_max_mm\":25,"
         "\"obstacle\":{\"d_cm\":38,\"w_cm\":null,\"w_mm\":null,\"clr_l_cm\":null,\"clr_r_cm\":null},"
         "\"nav\":null}") == 0);
@@ -108,7 +108,7 @@ static void test_telemetry(void)
     t.seq = 4294967295u;  t.t_ms = 4294967295u;  t.state = 5u;
     t.v_l_mm_s = -32768;  t.v_r_mm_s = -32768;
     t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
-    t.line_err = -32768;  t.b_line_lost = true;  t.barcode = 'Z';
+    t.line_err = -32768;  t.b_line_lost = true;  t.barcode = 'Z';  t.line_bc = 65535u;
     t.pitch_cdeg = -32768;  t.roll_cdeg = -32768;  t.hump_max_mm = 65535u;  t.obst_d_mm = 65534u;
     t.b_obst_valid = true;  t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
     t.nav = '%';

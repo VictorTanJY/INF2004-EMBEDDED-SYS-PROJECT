@@ -158,6 +158,7 @@ static void comms_publish_telemetry(uint32_t now_ms)
     t.enc_r        = odom.enc_r;
     t.dist_mm      = odom.dist_mm;
     t.line_err     = line.err;
+    t.line_bc      = line.raw_bc;
     t.b_line_lost  = ((line.flags & LINE_FLAG_LOST) != 0u);
     t.barcode      = line.last_barcode;
     t.nav          = mission.pending_char;

@@ -20,7 +20,7 @@ const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
-const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths',
+const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 43: 'Impact not confirmed (peak jolt, mg)', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
   54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need ≥ 500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
@@ -69,6 +69,7 @@ function describe(e) {
     if (p.code === 31) detail = REJECT[p.data] || detail;
     if (p.code === 51) detail = MOTION[p.data] || detail;
     if (p.code === 67) detail = `Highest hump ${p.data} mm`;
+    if (p.code === 37) detail = `${p.data} elements (a letter has 29)`;
     if (p.code === 35) { const d = p.data >>> 0; detail = `${d >>> 24} elements (a letter has 29), ${(d >>> 8) & 0xFFFF} mm long, darkest ${(d & 0xFF) * 4} / 1000`; }
     if (p.code === 36) { const d = p.data >>> 0; detail = `narrowest ${((d >>> 16) / 10).toFixed(1)} mm, widest ${((d & 0xFFFF) / 10).toFixed(1)} mm`; }
     if (p.code === 53 || p.code === 62) detail = `0x${(p.data >>> 0).toString(16).padStart(8, '0')}`;
@@ -251,6 +252,7 @@ function render() {
   $('distance').textContent = fmt(t.dist_mm);
   $('encL').textContent = fmt(t.enc?.[0]); $('encR').textContent = fmt(t.enc?.[1]);
   $('lineError').textContent = fmt(t.line?.err);
+  $('bcRaw').textContent = isNum(t.line?.bc) ? `${t.line.bc} / 1000` : '—';
   $('lineLost').textContent = t.line?.lost === undefined ? '—' : t.line.lost ? 'Lost' : 'On line';
 
   /* obstacle */

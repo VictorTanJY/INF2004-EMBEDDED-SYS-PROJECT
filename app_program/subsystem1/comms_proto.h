@@ -87,6 +87,7 @@ typedef struct
     int32_t  enc_r;
     int32_t  dist_mm;
     int16_t  line_err;
+    uint16_t line_bc;           /* barcode sensor, 0..1000 (1000 = black) */
     int16_t  pitch_cdeg;
     int16_t  roll_cdeg;         /* + = right side up (one-wheel humps)    */
     uint16_t hump_max_mm;

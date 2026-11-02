@@ -34,6 +34,9 @@
    36 = narrowest element << 16 | widest element, both in 0.1 mm.        */
 #define LINE_LOG_BC_SHAPE       35u
 #define LINE_LOG_BC_WIDTHS      36u
+/* 37 = a dark pattern of 2..8 elements, dropped as "not a barcode" (a
+   crossing line is 1): data = elements; LOG 35 / 36 follow.            */
+#define LINE_LOG_BC_SHORT       37u
 
 static line_cal_t   g_cal;
 static line_track_t g_trk;
@@ -192,6 +195,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             uint16_t const * p_s = &block[i * LINE_CH_COUNT];
             bc_out_t         out;
             bc_result_t      r;
+            bool             bc_was_capturing;
 
             sum[LINE_CH_L]  += p_s[LINE_CH_L];
             sum[LINE_CH_R]  += p_s[LINE_CH_R];
@@ -200,6 +204,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             {
                 continue;
             }
+            bc_was_capturing = (g_bc.state == (uint8_t)LINE_BC_CAPTURING);
             r = bc_sample(&g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]), step_um, &out);
             if (r == BC_VALID)
             {
@@ -215,6 +220,13 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 snap.last_reject = out.reason;
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                        LINE_LOG_BC_REJECT, (int32_t)out.reason);
+                bc_reject_detail(&g_bc);
+            }
+            else if (bc_was_capturing && (g_bc.state == (uint8_t)LINE_BC_ARMED) && (g_bc.n >= 2u))
+            {
+                /* dropped silently by the decoder (< 9 elements): say so */
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                                       LINE_LOG_BC_SHORT, (int32_t)g_bc.n);
                 bc_reject_detail(&g_bc);
             }
             else

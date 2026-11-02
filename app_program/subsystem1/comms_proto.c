@@ -244,6 +244,7 @@ uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t
     jw_raw(&jw, "],\"dist_mm\":");     jw_int(&jw, p_t->dist_mm);
     jw_raw(&jw, ",\"line\":{\"err\":"); jw_int(&jw, p_t->line_err);
     jw_raw(&jw, ",\"lost\":");         jw_bool(&jw, p_t->b_line_lost);
+    jw_raw(&jw, ",\"bc\":");           jw_uint(&jw, p_t->line_bc);
     jw_raw(&jw, "},\"barcode\":");
     if (p_t->barcode != '\0')
     {
