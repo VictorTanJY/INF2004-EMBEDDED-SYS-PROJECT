@@ -77,6 +77,10 @@
    line left past one sensor (a drift, not a gap): keep turning toward it. */
 #define LINE_EXIT_ERR               400         /* line clearly on one side (difference error) */
 #define LINE_RECOVER_OMEGA          900         /* mrad/s: firm, never reverses a wheel */
+/* Edge hold (2 Nov, curves): once |err| reaches this, the line is under
+   one sensor; while the other sensor reads white the error is held at
+   +-1000 so the turn does not ease off as the line slides past it. */
+#define LINE_EDGE_ERR               800
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */
 #define LINE_STRAIGHT_OMEGA         500         /* |omega| < 0.5 rad/s ...   */

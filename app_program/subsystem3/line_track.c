@@ -120,6 +120,7 @@ void line_track_init(line_track_t * p_t)
     p_t->b_lost            = false;
     p_t->b_junction        = false;
     p_t->b_have_err        = false;
+    p_t->edge              = 0;
     p_t->err               = 0;
     p_t->prev_err          = 0;
     p_t->line_err          = 0;
@@ -165,6 +166,36 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     {
         p_t->err        = (int32_t)norm_l - (int32_t)norm_r;
         p_t->b_have_err = true;
+    }
+
+    /* Edge hold (curves): once the line has reached one sensor, the far
+       sensor reads white while the line slides further out.  The plain
+       difference would then fall back toward 0 (straighten, speed up)
+       just when the turn must be hardest, so keep it at full scale until
+       the far sensor sees the line again. */
+    if (p_t->err >= LINE_EDGE_ERR)
+    {
+        p_t->edge = 1;
+    }
+    else if (p_t->err <= -LINE_EDGE_ERR)
+    {
+        p_t->edge = -1;
+    }
+    else
+    {
+        /* keep the side */
+    }
+    if ((p_t->edge > 0) && p_t->b_white_r)
+    {
+        p_t->err = 1000;
+    }
+    else if ((p_t->edge < 0) && p_t->b_white_l)
+    {
+        p_t->err = -1000;
+    }
+    else
+    {
+        p_t->edge = 0;
     }
 
     if (p_t->b_black_l && p_t->b_black_r)
