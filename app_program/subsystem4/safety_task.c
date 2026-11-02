@@ -170,9 +170,11 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
     (void)stacd;
     (void)p_exinf;
 
-    /* GP19: input, no pull (INT1 is push-pull), rising edge on core 1. */
+    /* GP19: input, rising edge on core 1.  Pull-down (2 Nov): with no pull
+       a loose INT1 wire floated and motor noise gave false impacts; INT1
+       is push-pull, so a real high still overrides the ~50 k pull-down. */
     out_w(GPIO_OE_CLR, 1uL << S4_PIN_IMU_INT1);
-    out_w(GPIO(S4_PIN_IMU_INT1), GPIO_IE | GPIO_SHEMITT);
+    out_w(GPIO(S4_PIN_IMU_INT1), GPIO_IE | GPIO_SHEMITT | GPIO_PDE);
     out_w(GPIO_CTRL(S4_PIN_IMU_INT1), GPIO_CTRL_FUNCSEL_SIO);
     (void)app_gpio_irq_attach(S4_PIN_IMU_INT1, APP_GPIO_EDGE_RISE, imu_int1_isr);
 
