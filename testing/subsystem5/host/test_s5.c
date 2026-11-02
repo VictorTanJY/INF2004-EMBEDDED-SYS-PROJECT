@@ -133,6 +133,9 @@ static void test_mission(void)
     ev(MISSION_EV_CAL_DONE, 4u, 0);                                          /* IMU failed */
     tick(100u);
     CHECK("S5-H02", g_mc.snap.state == MISSION_ST_IDLE && g_mc.snap.calibrated == MISSION_CAL_IR);
+    /* 3 Nov: the background scan is asked for after IDLE's STOP */
+    CHECK("S5-H02", find(MISSION_ACT_SCAN, SCAN_REQ_BACKGROUND) > find(MISSION_ACT_SCAN, SCAN_REQ_STOP) &&
+                    find(MISSION_ACT_SCAN, SCAN_REQ_STOP) >= 0);
     calibrate();
     CHECK("S5-H02", g_mc.snap.calibrated == MISSION_CAL_ALL);
 
@@ -360,9 +363,18 @@ static void test_obstacle(void)
         CHECK("S5-H11", prof.plan == OBST_PLAN_BLOCKED);
     }
     {
-        box_t b = { 200.0, 100.0, 260.0 };      /* beside the path */
+        box_t b = { 200.0, 100.0, 340.0 };      /* clearly beside the path */
         scan_box(&b, 1, &prof);
         CHECK("S5-H11", prof.plan == OBST_PLAN_CONTINUE);
+    }
+    {
+        /* 3 Nov: a box 260 mm off the line is only partly seen (unsure),
+           but even a 200 mm object centred on what was seen stays out of
+           the car's corridor: continue */
+        box_t b = { 200.0, 100.0, 260.0 };
+        scan_box(&b, 1, &prof);
+        CHECK("S5-H11", !prof.b_sure && (prof.plan == OBST_PLAN_CONTINUE) &&
+                        (prof.plan_r_mm > (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM));
     }
     {
         obst_point_t none[3] = { { 80, OBST_RANGE_NONE }, { 90, OBST_RANGE_NONE }, { 100, OBST_RANGE_NONE } };
@@ -392,6 +404,68 @@ static void test_obstacle(void)
         /* FR11: max deviation <= w/2 + robot/2 + 100 mm; clearance >= 50 mm */
         CHECK("S5-H12", max_lat <= 150.0 / 2 + OBST_ROBOT_WIDTH_MM / 2 + 100.0);
         CHECK("S5-H12", max_lat - OBST_ROBOT_WIDTH_MM / 2.0 - 75.0 >= OBST_MARGIN_MM);
+    }
+
+    /* S5-H15 (3 Nov, instructor's guidance; the robot read a bottle as 2 mm
+       and as 586 mm): */
+    {
+        /* (a) a 60 mm bottle: reported small, but planned as OBST_WIDTH_MAX
+           around its nearest point, so the pass clears a 20 cm object */
+        box_t b = { 200.0, 60.0, 0.0 };
+        int32_t const need = (OBST_WIDTH_MAX_MM / 2) + (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
+
+        scan_box(&b, 1, &prof);
+        CHECK("S5-H15", prof.b_valid && !prof.b_sure && prof.w_mm < OBST_WIDTH_MIN_MM);
+        CHECK("S5-H15", ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
+                        (abs(prof.deviation_mm) >= need));
+    }
+    {
+        /* (b) plan edges are never inside the estimated edges */
+        box_t b = { 200.0, 150.0, 20.0 };
+
+        scan_box(&b, 1, &prof);
+        CHECK("S5-H15", prof.b_sure && (prof.plan_l_mm >= prof.left_lat_mm) &&
+                        (prof.plan_r_mm <= prof.right_lat_mm));
+    }
+    {
+        /* (c) background: low walls 250 mm ahead on both sides (as the floor
+           or the mat edge read on the robot) merge with a 150 mm box at
+           200 mm into one wide object; with the background scanned first
+           (scene without the box) they drop out and the width is right */
+        box_t const walls[2] = { { 230.0, 300.0, 250.0 }, { 230.0, 300.0, -250.0 } };
+        box_t const scene[3] = { { 200.0, 150.0, 0.0 }, { 230.0, 300.0, 250.0 }, { 230.0, 300.0, -250.0 } };
+        int a;
+        uint16_t w_no_bg;
+
+        obst_bg_clear();
+        scan_box(scene, 3, &prof);
+        w_no_bg = prof.w_mm;
+        for (a = OBST_SCAN_MIN_DEG; a <= OBST_SCAN_MAX_DEG; a += OBST_BG_STEP_DEG)
+        {
+            uint16_t const r = ping(walls, 2, a);
+            obst_bg_set((int16_t)a, obst_median3(r, r, r));
+        }
+        scan_box(scene, 3, &prof);
+        printf("background: width without %u mm, with %u mm (box 150)\n", (unsigned)w_no_bg, (unsigned)prof.w_mm);
+        CHECK("S5-H15", w_no_bg > 200u);
+        CHECK("S5-H15", prof.w_mm >= 125u && prof.w_mm <= 175u);
+        CHECK("S5-H15", obst_bg_at(90) == OBST_RANGE_NONE || obst_bg_at(90) > 300u);
+        obst_bg_clear();
+        CHECK("S5-H15", obst_bg_at(90) == 0u);
+    }
+    {
+        /* (d) one dropout inside a face does not split it (2-miss edges) */
+        obst_point_t pts[13];
+        uint8_t k;
+
+        for (k = 0u; k < 13u; k++)
+        {
+            pts[k].angle_deg = (int16_t)(60 + (5 * k));
+            pts[k].r_mm      = ((k == 0u) || (k == 12u)) ? OBST_RANGE_NONE : 200u;
+        }
+        pts[6].r_mm = OBST_RANGE_NONE;          /* the dropout, straight ahead */
+        obst_profile(pts, 13u, pts, 0u, &prof);
+        CHECK("S5-H15", prof.b_valid && (prof.left_lat_mm > 50) && (prof.right_lat_mm < -50));
     }
 
     /* S5-H13: seek-line acceptance window and the hump mask */

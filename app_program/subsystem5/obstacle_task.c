@@ -20,7 +20,12 @@
  *            completion is read from last_done_seq in the odometry snapshot.
  *  RECOVER   creep forward (<= 0.5 m) until a line sensor sees black within
  *            +-60 mm of the original path and +-20 deg of its heading, align
- *            -> RECOVERY_DONE, or RECOVERY_FAILED.
+ *            -> RECOVERY_DONE; else sweep +-45 deg on the spot and take any
+ *            line -> RECOVERY_DONE, or RECOVERY_FAILED.
+ *  3 Nov (instructor's guidance): every scan angle is the median of
+ *  OBST_SCAN_PINGS pings after the servo settles; an unsure profile (see
+ *  mission_cfg.h) backs off OBST_SECOND_LOOK_MM and scans once more; after
+ *  a calibration (SCAN_REQ_BACKGROUND) the background is scanned.
  */
 
 #include "subsystem5.h"
@@ -91,6 +96,12 @@ typedef struct
     int16_t  pass_limit_mm;
     uint8_t  drive_seq;
     uint32_t pings;
+    /* 3 Nov */
+    uint16_t sw[OBST_SCAN_PINGS];   /* pings at the current scan angle */
+    uint8_t  sw_n;
+    bool     b_second_look;     /* this obstacle was already scanned twice */
+    int16_t  bg_angle;          /* background scan: current angle */
+    uint8_t  sweep_i;           /* SEEK_SWEEP step */
 } obst_ctx_t;
 
 static obst_ctx_t g_o;
@@ -176,6 +187,59 @@ static void send_step(uint8_t kind, int16_t value, motion_odom_t const * p_odom)
     }
 }
 
+/* Median of the pings at one scan angle (OBST_RANGE_NONE counts as far). */
+static uint16_t scan_median(void)
+{
+    uint16_t s[OBST_SCAN_PINGS];
+    uint8_t  i;
+    uint8_t  j;
+
+    for (i = 0u; i < g_o.sw_n; i++)
+    {
+        s[i] = g_o.sw[i];
+        for (j = i; (j > 0u) && (s[j - 1u] > s[j]); j--)
+        {
+            uint16_t const t = s[j - 1u];
+
+            s[j - 1u] = s[j];
+            s[j]      = t;
+        }
+    }
+    return s[g_o.sw_n / 2u];
+}
+
+/* One ping result at a scan angle: true once OBST_SCAN_PINGS are in
+   (*p_r = their median). */
+static bool scan_sample(uint16_t r, uint16_t * p_r)
+{
+    g_o.sw[g_o.sw_n] = r;
+    g_o.sw_n++;
+    if (g_o.sw_n < OBST_SCAN_PINGS)
+    {
+        return false;
+    }
+    *p_r     = scan_median();
+    g_o.sw_n = 0u;
+    return true;
+}
+
+static void send_turn(int16_t ddeg, uint16_t rate_deg_s, motion_odom_t const * p_odom)
+{
+    uint16_t const amount = (uint16_t)app_abs_i32(ddeg);
+
+    g_o.seq++;
+    g_o.wait_fail_count = p_odom->fail_count;
+    g_o.b_wait_motion   = true;
+    if (ddeg >= 0)
+    {
+        (void)motion_turn_left((uint8_t)MOTION_SRC_AVOID, g_o.seq, amount, rate_deg_s);
+    }
+    else
+    {
+        (void)motion_turn_right((uint8_t)MOTION_SRC_AVOID, g_o.seq, amount, rate_deg_s);
+    }
+}
+
 /* 1 = done, -1 = failed, 0 = still running */
 static int motion_result(motion_odom_t const * p_odom)
 {
@@ -202,6 +266,7 @@ static void store_pose(motion_odom_t const * p_odom)
 
 static void start_scan(uint32_t now_ms)
 {
+    g_o.sw_n = 0u;
     obst_scan_start(&g_scan);
     goto_state((uint8_t)OBST_ST_COARSE_SCAN);
     servo_to(obst_scan_angle(&g_scan), now_ms);
@@ -230,7 +295,15 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
     publish_profile();
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
 
-    if (g_prof.plan != (uint8_t)OBST_PLAN_BLOCKED)
+    if (g_prof.b_valid && !g_prof.b_sure && !g_o.b_second_look)
+    {
+        /* unsure estimate: look again from a little further back once;
+           the second profile plans with OBST_WIDTH_MAX if still unsure */
+        g_o.b_second_look = true;
+        goto_state((uint8_t)OBST_ST_REVERSE);
+        send_step((uint8_t)OBST_STEP_MOVE, -OBST_SECOND_LOOK_MM, p_odom);
+    }
+    else if (g_prof.plan != (uint8_t)OBST_PLAN_BLOCKED)
     {
         g_o.b_blocked = false;
         if (g_prof.plan == (uint8_t)OBST_PLAN_CONTINUE)
@@ -277,9 +350,18 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             {
                 store_pose(p_odom);
             }
-            g_o.retries   = 0u;
-            g_o.b_blocked = false;
+            g_o.retries       = 0u;
+            g_o.b_blocked     = false;
+            g_o.b_second_look = false;
             start_scan(now_ms);
+            break;
+
+        case SCAN_REQ_BACKGROUND:
+            obst_bg_clear();
+            g_o.sw_n     = 0u;
+            g_o.bg_angle = OBST_SCAN_MIN_DEG;
+            goto_state((uint8_t)OBST_ST_BG_SCAN);
+            servo_to(g_o.bg_angle, now_ms);
             break;
 
         case SCAN_REQ_BYPASS_LEFT:
@@ -314,7 +396,8 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             break;
 
         default:                        /* STOP */
-            if ((g_o.state == (uint8_t)OBST_ST_BYPASS) || (g_o.state == (uint8_t)OBST_ST_SEEK_LINE))
+            if ((g_o.state == (uint8_t)OBST_ST_BYPASS) || (g_o.state == (uint8_t)OBST_ST_SEEK_LINE) ||
+                (g_o.state == (uint8_t)OBST_ST_SEEK_SWEEP))
             {
                 stop_motion();
             }
@@ -394,9 +477,37 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
             break;
         }
 
+        case OBST_ST_BG_SCAN:
+        {
+            uint16_t rm;
+
+            if (scan_sample(r, &rm))
+            {
+                obst_bg_set(g_o.bg_angle, rm);
+                g_o.bg_angle = (int16_t)(g_o.bg_angle + OBST_BG_STEP_DEG);
+                if (g_o.bg_angle > OBST_SCAN_MAX_DEG)
+                {
+                    goto_state((uint8_t)OBST_ST_IDLE);
+                    servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
+                }
+                else
+                {
+                    servo_to(g_o.bg_angle, now_ms);
+                }
+            }
+            break;
+        }
+
         case OBST_ST_COARSE_SCAN:
         case OBST_ST_FINE_SCAN:
-            obst_scan_feed(&g_scan, r);
+        {
+            uint16_t rm;
+
+            if (!scan_sample(r, &rm))
+            {
+                break;                      /* more pings at this angle */
+            }
+            obst_scan_feed(&g_scan, rm);
             g_o.state = (g_scan.phase == (uint8_t)OBST_SCAN_COARSE) ? (uint8_t)OBST_ST_COARSE_SCAN
                                                                      : (uint8_t)OBST_ST_FINE_SCAN;
             if (obst_scan_done(&g_scan))
@@ -408,6 +519,7 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                 servo_to(obst_scan_angle(&g_scan), now_ms);
             }
             break;
+        }
 
         case OBST_ST_BYPASS:
             if ((g_o.step_i < g_o.n_steps) && (g_steps[g_o.step_i].kind == (uint8_t)OBST_STEP_PASS) &&
@@ -432,6 +544,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
         case OBST_ST_MONITOR:
         case OBST_ST_COARSE_SCAN:
         case OBST_ST_FINE_SCAN:
+        case OBST_ST_BG_SCAN:
             if (servo_settled(now_ms))
             {
                 ping();
@@ -459,6 +572,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             else if (((int32_t)(now_ms - g_o.next_rescan_ms) >= 0) && (g_o.rescans < OBST_BLOCKED_RESCANS))
             {
                 g_o.rescans++;
+                g_o.sw_n = 0u;
                 obst_scan_start(&g_scan);
                 g_o.state = (uint8_t)OBST_ST_COARSE_SCAN;   /* stays "blocked" on return */
                 servo_to(obst_scan_angle(&g_scan), now_ms);
@@ -552,13 +666,53 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             else if ((p_odom->dist_mm - g_o.phase_start_mm) > OBST_SEEK_MAX_MM)
             {
                 stop_motion();
-                post((uint8_t)MISSION_EV_RECOVERY_FAILED, 0u, 0);
-                goto_state((uint8_t)OBST_ST_IDLE);
-                g_o.b_have_pose = false;
+                g_o.sweep_i = 0u;
+                goto_state((uint8_t)OBST_ST_SEEK_SWEEP);     /* not straight ahead: look around */
             }
             else
             {
                 drive(OBST_SEEK_SPEED_MM_S, g_o.b_have_pose ? g_o.h0 : p_odom->heading_cdeg, p_odom);
+            }
+            break;
+        }
+
+        case OBST_ST_SEEK_SWEEP:
+        {
+            static int16_t const k_sweep[3] = { OBST_SWEEP_DDEG, -(2 * OBST_SWEEP_DDEG), OBST_SWEEP_DDEG };
+            line_snap_t line;
+
+            line_get_snap(&line);
+            if ((line.flags & LINE_FLAG_ON_LINE) != 0u)
+            {
+                /* any line: line following takes over from here */
+                stop_motion();
+                g_o.b_have_pose = false;
+                post((uint8_t)MISSION_EV_RECOVERY_DONE, 0u, 0);
+                goto_state((uint8_t)OBST_ST_IDLE);
+            }
+            else if (!g_o.b_wait_motion)
+            {
+                if (g_o.sweep_i < 3u)
+                {
+                    if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                    {
+                        send_turn(k_sweep[g_o.sweep_i], OBST_SWEEP_TURN_DEG_S, p_odom);
+                    }
+                }
+                else
+                {
+                    post((uint8_t)MISSION_EV_RECOVERY_FAILED, 0u, 0);
+                    goto_state((uint8_t)OBST_ST_IDLE);
+                    g_o.b_have_pose = false;
+                }
+            }
+            else if (motion_result(p_odom) != 0)
+            {
+                g_o.sweep_i++;              /* done or failed: next leg */
+            }
+            else
+            {
+                /* turning */
             }
             break;
         }

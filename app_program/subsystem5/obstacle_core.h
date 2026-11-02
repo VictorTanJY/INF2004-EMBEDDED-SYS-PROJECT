@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "mission_types.h"
+#include "mission_cfg.h"
 
 #define OBST_SCAN_MAX_POINTS    32u
 
@@ -34,8 +35,19 @@ typedef struct
     uint16_t clr_l_mm;          /* free lateral space beyond each edge     */
     uint16_t clr_r_mm;
     uint8_t  plan;              /* obst_plan_t                             */
+    bool     b_sure;            /* width plausible and both edges inside the window */
+    int16_t  plan_l_mm;         /* edges the plan used (+ left)            */
+    int16_t  plan_r_mm;
     int16_t  deviation_mm;      /* lateral offset for the chosen bypass    */
 } obst_profile_t;
+
+/* Background ranges by angle (OBST_SCAN_MIN_DEG..MAX in OBST_BG_STEP_DEG
+   steps).  obst_bg_clear() forgets them (0 = not scanned: no subtraction
+   at that angle), obst_bg_set() stores one angle's median range. */
+#define OBST_BG_COUNT   ((uint8_t)(((OBST_SCAN_MAX_DEG - OBST_SCAN_MIN_DEG) / OBST_BG_STEP_DEG) + 1))
+void     obst_bg_clear(void);
+void     obst_bg_set(int16_t angle_deg, uint16_t r_mm);
+uint16_t obst_bg_at(int16_t angle_deg);
 
 /* Median of three ranges (OBST_RANGE_NONE counts as far away). */
 uint16_t obst_median3(uint16_t a, uint16_t b, uint16_t c);

@@ -158,7 +158,8 @@ typedef enum
     SCAN_REQ_BYPASS_RIGHT = 4,
     SCAN_REQ_RECOVER      = 5,  /* seek and align with the original line   */
     SCAN_REQ_STOP         = 6,  /* stop everything, servo to 90 deg        */
-    SCAN_REQ_BENCH_SERVO  = 7   /* APP_BENCH: servo to param deg, keep ranging */
+    SCAN_REQ_BENCH_SERVO  = 7,  /* APP_BENCH: servo to param deg, keep ranging */
+    SCAN_REQ_BACKGROUND   = 8   /* after a calibration: background ranges by angle */
 } scan_req_code_t;
 
 typedef struct
@@ -192,7 +193,9 @@ typedef enum
     OBST_ST_BLOCKED     = 6,
     OBST_ST_BYPASS      = 7,
     OBST_ST_SEEK_LINE   = 8,
-    OBST_ST_ALIGN       = 9
+    OBST_ST_ALIGN       = 9,
+    OBST_ST_BG_SCAN     = 10,   /* background scan after a calibration */
+    OBST_ST_SEEK_SWEEP  = 11    /* no line straight ahead: sweep +-45 deg */
 } obst_state_t;
 
 #define OBST_RANGE_NONE         0xFFFFu

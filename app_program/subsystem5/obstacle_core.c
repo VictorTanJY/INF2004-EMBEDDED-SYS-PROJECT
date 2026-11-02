@@ -46,9 +46,94 @@ static int32_t lateral_mm(int32_t angle_cdeg, uint16_t r_mm)
     return -(int32_t)(((int64_t)r_mm * app_cos_q15(angle_cdeg)) / 32768);
 }
 
+/* ---- background (3 Nov) ------------------------------------------------ */
+/* 0 = not scanned (zero-initialised at boot), OBST_RANGE_NONE = no echo. */
+static uint16_t g_bg[OBST_BG_COUNT];
+
+void obst_bg_clear(void)
+{
+    uint8_t i;
+
+    for (i = 0u; i < OBST_BG_COUNT; i++)
+    {
+        g_bg[i] = 0u;
+    }
+}
+
+static uint8_t bg_index(int16_t angle_deg)
+{
+    int32_t const k = ((app_clamp_i32(angle_deg, OBST_SCAN_MIN_DEG, OBST_SCAN_MAX_DEG) - OBST_SCAN_MIN_DEG)
+                       + (OBST_BG_STEP_DEG / 2)) / OBST_BG_STEP_DEG;
+
+    return (uint8_t)app_min_i32(k, (int32_t)OBST_BG_COUNT - 1);
+}
+
+void obst_bg_set(int16_t angle_deg, uint16_t r_mm)
+{
+    g_bg[bg_index(angle_deg)] = r_mm;
+}
+
+uint16_t obst_bg_at(int16_t angle_deg)
+{
+    return g_bg[bg_index(angle_deg)];
+}
+
+/* An echo that can be part of an obstacle: in range and clearly closer
+   than the background at that angle (OBST_RANGE_NONE = no background). */
 static bool usable(obst_point_t const * p)
 {
-    return (p->r_mm != OBST_RANGE_NONE) && (p->r_mm <= OBST_MAX_RANGE_MM);
+    uint16_t const bg = obst_bg_at(p->angle_deg);
+
+    return (p->r_mm != OBST_RANGE_NONE) && (p->r_mm <= OBST_MAX_RANGE_MM) &&
+           ((bg == 0u) || (bg == OBST_RANGE_NONE) || (((uint32_t)p->r_mm + OBST_BG_MARGIN_MM) < bg));
+}
+
+static bool same_object(obst_point_t const * p, uint16_t r_min)
+{
+    return usable(p) && (p->r_mm <= ((uint32_t)r_min + OBST_DEPTH_TOL_MM));
+}
+
+/* The obstacle = the run of points around the nearest one at its range.
+   Consecutive-angle rule (hysteresis): a single point that misses between
+   two that hit is a dropout, not an edge; an edge needs 2 misses. */
+static void grow(obst_point_t const * p_pts, uint8_t n, uint8_t nearest, uint16_t r_min,
+                 uint8_t * p_lo, uint8_t * p_hi)
+{
+    uint8_t lo = nearest;
+    uint8_t hi = nearest;
+
+    for (;;)
+    {
+        if ((lo > 0u) && same_object(&p_pts[lo - 1u], r_min))
+        {
+            lo--;
+        }
+        else if ((lo > 1u) && same_object(&p_pts[lo - 2u], r_min))
+        {
+            lo = (uint8_t)(lo - 2u);
+        }
+        else
+        {
+            break;
+        }
+    }
+    for (;;)
+    {
+        if (((hi + 1u) < n) && same_object(&p_pts[hi + 1u], r_min))
+        {
+            hi++;
+        }
+        else if (((hi + 2u) < n) && same_object(&p_pts[hi + 2u], r_min))
+        {
+            hi = (uint8_t)(hi + 2u);
+        }
+        else
+        {
+            break;
+        }
+    }
+    *p_lo = lo;
+    *p_hi = hi;
 }
 
 void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
@@ -68,6 +153,8 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
     int32_t       lat_r;
     int32_t       clr_l = OBST_CLEAR_MAX_MM;
     int32_t       clr_r = OBST_CLEAR_MAX_MM;
+    int32_t       pl_l;
+    int32_t       pl_r;
 
     p_out->b_valid      = false;
     p_out->plan         = (uint8_t)OBST_PLAN_CONTINUE;
@@ -79,6 +166,9 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
     p_out->clr_r_mm     = OBST_CLEAR_MAX_MM;
     p_out->deviation_mm = 0;
     p_out->nearest_angle = OBST_SERVO_CENTRE_DEG;
+    p_out->b_sure       = false;
+    p_out->plan_l_mm    = 0;
+    p_out->plan_r_mm    = 0;
 
     for (i = 0u; i < n_fine; i++)
     {
@@ -93,20 +183,7 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
         return;                         /* nothing in front: CONTINUE */
     }
 
-    /* The obstacle = the contiguous run of points around the nearest one
-       that are not much further away than it (same object). */
-    lo = nearest;
-    hi = nearest;
-    while ((lo > 0u) && usable(&p_fine[lo - 1u]) &&
-           (p_fine[lo - 1u].r_mm <= (uint32_t)r_min + OBST_DEPTH_TOL_MM))
-    {
-        lo--;
-    }
-    while (((hi + 1u) < n_fine) && usable(&p_fine[hi + 1u]) &&
-           (p_fine[hi + 1u].r_mm <= (uint32_t)r_min + OBST_DEPTH_TOL_MM))
-    {
-        hi++;
-    }
+    grow(p_fine, n_fine, nearest, r_min, &lo, &hi);
 
     /* The fine scan runs from low to high angle (right to left).  The beam
        sees an edge up to half a beam early: move each edge inward. */
@@ -121,6 +198,36 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
     }
     lat_l = lateral_mm(a_left, p_fine[hi].r_mm);
     lat_r = lateral_mm(a_right, p_fine[lo].r_mm);
+
+    /* Edges for the PLAN (3 Nov): uncorrected, so never narrower than seen.
+       Too narrow to be plausible: at least OBST_WIDTH_MAX wide around the
+       middle of what was seen.  An edge that ran out of the scan window: the object
+       may reach OBST_WIDTH_MAX from the edge that was seen. */
+    {
+        int32_t const raw_l   = lateral_mm((int32_t)p_fine[hi].angle_deg * 100, p_fine[hi].r_mm);
+        int32_t const raw_r   = lateral_mm((int32_t)p_fine[lo].angle_deg * 100, p_fine[lo].r_mm);
+        int32_t const centre  = (raw_l + raw_r) / 2;
+        int32_t const w_est   = lat_l - lat_r;
+        bool const    b_r_end = (lo > 0u);              /* a miss right of the right edge */
+        bool const    b_l_end = ((hi + 1u) < n_fine);   /* a miss left of the left edge   */
+
+        p_out->b_sure = (w_est >= OBST_WIDTH_MIN_MM) && (w_est <= OBST_WIDTH_MAX_MM) && b_r_end && b_l_end;
+        pl_l = raw_l;
+        pl_r = raw_r;
+        if (w_est < OBST_WIDTH_MIN_MM)
+        {
+            pl_l = app_max_i32(pl_l, centre + (OBST_WIDTH_MAX_MM / 2));
+            pl_r = app_min_i32(pl_r, centre - (OBST_WIDTH_MAX_MM / 2));
+        }
+        if (!b_l_end)
+        {
+            pl_l = app_max_i32(pl_l, raw_r + OBST_WIDTH_MAX_MM);
+        }
+        if (!b_r_end)
+        {
+            pl_r = app_min_i32(pl_r, raw_l - OBST_WIDTH_MAX_MM);
+        }
+    }
 
     /* Clearance: nearby points outside the obstacle, from both scans. */
     for (i = 0u; i < (uint8_t)(n_fine + n_coarse); i++)
@@ -140,13 +247,13 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
             continue;
         }
         lat = lateral_mm((int32_t)p->angle_deg * 100, p->r_mm);
-        if (lat > lat_l)
+        if (lat > pl_l)
         {
-            clr_l = app_min_i32(clr_l, lat - lat_l);
+            clr_l = app_min_i32(clr_l, lat - pl_l);
         }
-        else if (lat < lat_r)
+        else if (lat < pl_r)
         {
-            clr_r = app_min_i32(clr_r, lat_r - lat);
+            clr_r = app_min_i32(clr_r, pl_r - lat);
         }
         else
         {
@@ -162,16 +269,18 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
     p_out->w_mm          = (uint16_t)app_max_i32(lat_l - lat_r, 0);
     p_out->clr_l_mm      = (uint16_t)clr_l;
     p_out->clr_r_mm      = (uint16_t)clr_r;
+    p_out->plan_l_mm     = (int16_t)pl_l;
+    p_out->plan_r_mm     = (int16_t)pl_r;
 
     /* PLAN (FR11). */
-    if ((lat_r > corridor) || (lat_l < -corridor))
+    if ((pl_r > corridor) || (pl_l < -corridor))
     {
         p_out->plan = (uint8_t)OBST_PLAN_CONTINUE;      /* beside the path */
     }
     else
     {
-        int32_t const dev_l  = lat_l + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
-        int32_t const dev_r  = -lat_r + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+        int32_t const dev_l  = pl_l + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+        int32_t const dev_r  = -pl_r + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
         bool const    b_left = (clr_l >= need);
         bool const    b_right = (clr_r >= need);
 
@@ -195,7 +304,7 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
 /* ---- scan sequencer ---------------------------------------------------- */
 static bool is_hit(obst_point_t const * p, uint16_t r_min)
 {
-    return usable(p) && (p->r_mm <= ((uint32_t)r_min + OBST_DEPTH_TOL_MM));
+    return same_object(p, r_min);
 }
 
 /* Insert keeping fine[] sorted by angle (refine points land between). */
@@ -242,16 +351,7 @@ static void start_refine(obst_scan_t * p_s, bool b_right)
         p_s->phase = (uint8_t)OBST_SCAN_DONE;
         return;
     }
-    lo = nearest;
-    hi = nearest;
-    while ((lo > 0u) && is_hit(&p_s->fine[lo - 1u], r_min))
-    {
-        lo--;
-    }
-    while (((hi + 1u) < p_s->n_fine) && is_hit(&p_s->fine[hi + 1u], r_min))
-    {
-        hi++;
-    }
+    grow(p_s->fine, p_s->n_fine, nearest, r_min, &lo, &hi);
     if (b_right && (lo > 0u))
     {
         p_s->phase = (uint8_t)OBST_SCAN_REFINE_R;

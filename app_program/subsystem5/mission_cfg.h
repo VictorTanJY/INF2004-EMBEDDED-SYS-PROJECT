@@ -57,6 +57,32 @@
                                                face 20 cm wide at 15-20 cm spans < 30 mm.
                                                MEASURE with angled boxes (A11)        */
 #define OBST_HALF_BEAM_CDEG         750     /* HC-SR04 ~15 deg beam: MEASURE (A11) */
+/* 3 Nov, after the instructor's guidance (25 Oct forum: estimate, not
+   measure; median-filtered pings, background subtraction, consecutive-
+   angle edges, conservative margins, more than one scan position, plan
+   with the maximum expected width) and two runs that read a bottle as
+   2 mm and as 586 mm wide:
+   - the reported width keeps the beam correction (best estimate, graded),
+     but the PLAN uses the uncorrected edges (the beam can only make an
+     object look wider, so this side is safe);
+   - a reported width outside OBST_WIDTH_MIN..MAX, or an edge at the end
+     of the scan window, is "unsure": the car backs off and scans again
+     once, and if still unsure plans as if the object were OBST_WIDTH_MAX
+     wide around its nearest point (instructor: obstacles 10-20 cm).     */
+#define OBST_WIDTH_MIN_MM           80
+#define OBST_WIDTH_MAX_MM           200
+#define OBST_SECOND_LOOK_MM         60      /* back-off before the second scan */
+#define OBST_SCAN_PINGS             3       /* median of this many pings per angle */
+/* Background: after a calibration the car scans 20..160 deg (median of 3,
+   nothing in front) and keeps each angle's range (floor, walls).  In a
+   profile, an echo counts only if it is this much closer than the
+   background at that angle; the stop check while driving does not use it. */
+#define OBST_BG_MARGIN_MM           25      /* HC-SR04 repeatability ~5 mm after the median */
+#define OBST_BG_STEP_DEG            5
+/* After the bypass: if the straight seek finds no line, sweep +-45 deg on
+   the spot, accepting any line the sensors see. */
+#define OBST_SWEEP_DDEG             450
+#define OBST_SWEEP_TURN_DEG_S       90
 #define OBST_CLEAR_MAX_MM           500     /* nothing seen: this much free    */
 #define OBST_TOO_CLOSE_MM           80      /* < 8 cm: TOO_CLOSE (FR15)        */
 #define OBST_TURN_OUT_DDEG          600     /* bypass turn-out 60.0 deg        */

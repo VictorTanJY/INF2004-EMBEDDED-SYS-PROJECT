@@ -731,6 +731,8 @@ void mission_core_tick(mission_core_t * p_mc, mission_inputs_t const * p_in, uin
                 p_mc->snap.calibrated = p_mc->cal_ok;
                 log_act(p_out, MISSION_LOG_CAL_RESULT, (int16_t)p_mc->cal_ok, 0);
                 enter(p_mc, (uint8_t)MISSION_ST_IDLE, now_ms, p_out);
+                /* after IDLE's STOP: the car stands still, nothing in front */
+                scan(p_out, (uint8_t)SCAN_REQ_BACKGROUND, 0);
             }
             else
             {
