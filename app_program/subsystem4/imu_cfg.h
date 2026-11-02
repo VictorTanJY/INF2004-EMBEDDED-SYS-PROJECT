@@ -51,7 +51,7 @@
 #define IMU_SIDE_DWELL_UM           20000       /* 20 mm                     */
 #define IMU_SIDE_DESC_CDEG          100         /* 1 deg below the peak: descending */
 #define IMU_SIDE_MAX_UM             600000      /* longer = a side slope, not a hump */
-#define IMU_SIDE_LEVER_MM           117         /* track width; MEASURE      */
+#define IMU_SIDE_LEVER_MM           76          /* 2 Nov: 117 read a 10 mm hump as 14-16 mm (5 passes, mean 15.4): 117 x 10 / 15.4 */
 
 /* ---- Safety ---------------------------------------------------------- */
 #define IMU_TILT_ON_CDEG            3000        /* > 30 deg: tilt warning    */
