@@ -46,6 +46,7 @@ typedef struct
     uint32_t cooldown_um;
     uint16_t n;
     uint16_t peak;
+    uint16_t ext;               /* extreme of the current element (BC_DELTA) */
     uint32_t widths[BC_MAX_ELEMENTS + 1u];
 } bc_capture_t;
 

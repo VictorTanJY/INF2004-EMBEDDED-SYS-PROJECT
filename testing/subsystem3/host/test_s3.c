@@ -74,15 +74,22 @@ static void reverse(uint32_t * p_w, uint16_t n)
 #define TRACK_LEN_UM    1200000u        /* 1.2 m of track per pass */
 
 /* Reflectance (0..1000, 1000 = black) at position x along a track with
-   60 mm of white, then the code, then white.  Sensor spot: 1.5 mm box. */
+   60 mm of white, then the code, then white.  Sensor spot: a box of
+   g_spot_um (1.5 mm; S3-H15 widens it to blur the 3 mm elements). */
+static uint32_t g_spot_um = 1500u;
+static uint32_t g_white   = 80u;
+static uint32_t g_black   = 920u;
+
 static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
 {
     uint32_t const lead = 60000u;
     uint32_t       spot;
     uint32_t       black = 0u;
+    uint32_t       taps  = 0u;
 
-    for (spot = 0u; spot < 1500u; spot += 100u)
+    for (spot = 0u; spot < g_spot_um; spot += 100u)
     {
+        taps++;
         uint32_t x = x_um + spot;
         uint32_t pos = lead;
         uint16_t e;
@@ -97,7 +104,7 @@ static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
             pos += p_w[e];
         }
     }
-    return (uint16_t)(80u + (840u * black) / 15u);     /* white 80, black 920 */
+    return (uint16_t)(g_white + ((g_black - g_white) * black) / taps);
 }
 
 /* Run one pass at v_mm_s; returns the result and fills *p_out. */
@@ -315,6 +322,67 @@ static void test_capture(void)
     }
     printf("noisy passes: %d / %d decoded, %d wrong\n", good, total, wrong);
     CHECK("S3-H05", wrong == 0 && (good * 100) >= (total * 95));
+
+    /* S3-H15: blurred sensor spot (2 Nov, the robot saw 3 elements: thin
+       bars and thin gaps never crossed the old fixed 350 / 220 levels).  A
+       3.5 / 4 mm spot over 3 mm elements (thin bars peak ~670, thin gaps
+       ~330 inside wide bars): every slide decodes, both speeds and
+       directions, clean and noisy (old levels: 32 / 48 and 0 / 48).  A weak
+       sensor (white 250, black 800, 4 mm spot): at least 2 of 3 slides
+       decode, never a wrong character (old levels: none, all too long). */
+    {
+        uint32_t const spots[2] = { 3500u, 4000u };
+        int sp;
+        int blur_good = 0, blur_total = 0, blur_wrong = 0;
+        int weak_good = 0, weak_total = 0, weak_wrong = 0;
+
+        for (sp = 0; sp < 2; sp++)
+        {
+            g_spot_um = spots[sp];
+            for (s = 0; s < N_SLIDES; s++)
+            {
+                for (v = 0; v < 2; v++)
+                {
+                    for (d = 0; d < 2; d++)
+                    {
+                        uint32_t w[29];
+                        bc_out_t out;
+                        bc_result_t r;
+                        int k;
+
+                        for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
+                        if (d) { reverse(w, 29); }
+                        memset(&out, 0, sizeof(out));
+                        r = run_pass(w, 29, speeds[v], (d ? 60 : 0), &out);
+                        blur_total++;
+                        if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { blur_good++; }
+                        else if (r == BC_VALID) { blur_wrong++; }
+                    }
+                }
+            }
+        }
+        g_spot_um = 4000u;  g_white = 250u;  g_black = 800u;
+        for (s = 0; s < N_SLIDES; s++)
+        {
+            uint32_t w[29];
+            bc_out_t out;
+            int k;
+
+            for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
+            bc_result_t r;
+
+            memset(&out, 0, sizeof(out));
+            r = run_pass(w, 29, 150u, 0, &out);
+            weak_total++;
+            if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { weak_good++; }
+            else if (r == BC_VALID) { weak_wrong++; }
+        }
+        g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;
+        printf("blurred passes: %d / %d decoded, %d wrong; weak sensor %d / %d, %d wrong\n",
+               blur_good, blur_total, blur_wrong, weak_good, weak_total, weak_wrong);
+        CHECK("S3-H15", blur_wrong == 0 && blur_good == blur_total);
+        CHECK("S3-H15", weak_wrong == 0 && (weak_good * 3) >= (weak_total * 2));
+    }
 
     /* S3-H06: a crossing line (18 mm black) is not a barcode and not an error */
     {

@@ -358,7 +358,10 @@ START: it uses fixed levels, `LINE_BC_WHITE_RAW` / `LINE_BC_BLACK_RAW` in
 `subsystem3/line_cfg.h`. Measure them once at
 the mounted height: `LOG 34` after a spin over the track gives
 max << 16 | min of the barcode sensor (min = white floor, max = black
-line). If narrow bars are missed, lower `BC_BLACK_ON` / `BC_BLACK_OFF`.
+line). Bars are found by a swing of `BC_DELTA` (250 of 1000) against their
+neighbours, not by fixed levels. If narrow bars are still missed (LOG 35/37:
+fewer than 29 elements), lower the sensor towards 2-3 mm; with a quiet
+sensor `BC_DELTA` can go down to 200.
 
 **F4. Line following (S3-M03):** `start`. If the robot steers away from the
 line, flip `LINE_STEER_SIGN`; if it seems to see the line where there is

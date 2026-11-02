@@ -16,6 +16,7 @@ void bc_init(bc_capture_t * p_bc)
     p_bc->cooldown_um = 0u;
     p_bc->n           = 0u;
     p_bc->peak        = 0u;
+    p_bc->ext         = 0u;
 }
 
 static void start_cooldown(bc_capture_t * p_bc)
@@ -53,18 +54,32 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um, bc_o
 {
     bool const b_was_black = p_bc->b_black;
 
-    /* Hysteresis: a level change needs a clear crossing. */
-    if (p_bc->b_black && (norm < BC_BLACK_OFF))
+    /* Bars and gaps by SWING (2 Nov): a level change needs the reading to
+       move BC_DELTA from the extreme of the current element.  Fixed levels
+       (350 / 220 before) missed every 3 mm element on the robot: under a
+       sensor spot wider than 3 mm a narrow bar never got dark enough and a
+       narrow gap between wide bars never got light enough, but both still
+       swing clearly against their neighbours.  BC_DELTA is above the
+       peak-to-peak sample noise, so noise alone cannot toggle the level.
+       Rising and falling edges are both detected one BC_DELTA after the
+       extreme, so for a full swing bar and gap widths stay unbiased. */
+    if (p_bc->b_black)
     {
-        p_bc->b_black = false;
-    }
-    else if (!p_bc->b_black && (norm > BC_BLACK_ON))
-    {
-        p_bc->b_black = true;
+        p_bc->ext = (norm > p_bc->ext) ? norm : p_bc->ext;          /* darkest so far */
+        if (((uint32_t)norm + BC_DELTA) < p_bc->ext)
+        {
+            p_bc->b_black = false;
+            p_bc->ext     = norm;
+        }
     }
     else
     {
-        /* level unchanged */
+        p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext;          /* lightest so far */
+        if ((norm >= BC_DELTA_MIN) && ((uint32_t)norm > ((uint32_t)p_bc->ext + BC_DELTA)))
+        {
+            p_bc->b_black = true;
+            p_bc->ext     = norm;
+        }
     }
 
     switch (p_bc->state)

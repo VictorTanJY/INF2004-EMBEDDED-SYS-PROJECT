@@ -41,15 +41,19 @@
    sensor's spot, so spin levels made narrow bars too weak to detect.
    MEASURE (A7) on the robot: raw ADC over white paper and over a solid
    black bar, at the mounted height (LOG 34 after a GP21 spin over the
-   track shows max << 16 | min of the barcode sensor).  Bar thresholds
-   are per mille of (black - white).  150 / 80 suits a sensor whose
-   white reads 0-2 %; 350 / 220 keeps a margin for white-paper
-   noise (host model: white 8 % +- 12 %).  If narrow bars are missed on
-   the robot, lower them toward 150 / 80.                               */
+   track shows max << 16 | min of the barcode sensor).  These only scale
+   the reading to 0..1000; bars are found by swing (BC_DELTA below), so
+   an exact level matters much less than a sharp, low-mounted sensor.   */
 #define LINE_BC_WHITE_RAW           117         /* measured 1 Nov, LOG 34    */
 #define LINE_BC_BLACK_RAW           3345        /* measured 1 Nov, LOG 34    */
-#define BC_BLACK_ON                 350
-#define BC_BLACK_OFF                220
+/* Bars and gaps by swing (2 Nov; replaces the fixed 350 / 220 levels,
+   which missed every 3 mm element on the robot: darkest ~900 on wide
+   bars, 3 elements instead of 29).  A bar starts when the reading rises
+   BC_DELTA above the lightest point of the gap before it, and ends when
+   it falls BC_DELTA below the darkest point of the bar.  Must stay above
+   the peak-to-peak sample noise (host model +-120).                    */
+#define BC_DELTA                    250
+#define BC_DELTA_MIN                200         /* a bar is at least this dark */
 
 /* ---- Steering (DRIVE every 10 ms) ----------------------------------- */
 /* omega [mrad/s] = KP x err / 1000 + KD x d(err)/dt.
