@@ -392,6 +392,24 @@ static void test_track(void)
     (void)feed(&t, 60u, 60u, 9000u);           /* ... then past it */
     CHECK("S3-H11", t.omega > 0 && t.v < 300);
 
+    /* S3-H14: right curve, the line slides out past the right sensor and
+       the error FADES (-1000 -> -300) before both read white: still a turn
+       back right (was: taken for a gap, straight on); an old strong error
+       (more than LINE_EXIT_PEAK_UM ago) does not count, a gap stays a gap */
+    line_track_init(&t);
+    (void)feed(&t, 500u, 500u, 60000u);
+    (void)feed(&t, 0u, 1000u, 6000u);          /* line under the right sensor */
+    (void)feed(&t, 0u, 300u, 6000u);           /* sliding out: error fades */
+    CHECK("S3-H14", t.err == -300);
+    (void)line_track_step(&t, &k_cfg, 60u, 60u, 3000u);   /* both white */
+    CHECK("S3-H14", t.exit_err == -1000 && t.omega < 0 && t.v < 300);
+    line_track_init(&t);
+    (void)feed(&t, 500u, 500u, 60000u);
+    (void)feed(&t, 0u, 1000u, 6000u);
+    (void)feed(&t, 500u, 500u, 45000u);        /* centred again for 45 mm */
+    (void)feed(&t, 60u, 60u, 9000u);           /* a gap */
+    CHECK("S3-H14", t.omega == 0 && t.v == 300);
+
     /* S3-H13: steering ramp: the error flips full left / full right every
        10 ms (the weaving seen on 2 Nov); the turn command never moves more
        than LINE_OMEGA_STEP per block; a steady error still reaches the full

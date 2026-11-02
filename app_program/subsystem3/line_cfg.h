@@ -76,6 +76,11 @@
 /* Both sensors went white: if the error just before was beyond this, the
    line left past one sensor (a drift, not a gap): keep turning toward it. */
 #define LINE_EXIT_ERR               400         /* line clearly on one side (difference error) */
+/* 2 Nov: the side is judged from the strongest error over this distance
+   before both went white, not the last one: on a curve the error fades as
+   the line slides out past the outer sensor, and the car took the curve
+   for a gap and drove straight off it. */
+#define LINE_EXIT_PEAK_UM           40000       /* 40 mm */
 #define LINE_RECOVER_OMEGA          900         /* mrad/s: firm, never reverses a wheel */
 /* Steering ramp (2 Nov): the turn command changes by at most this much per
    10 ms block, so straight -> full steering (850) takes ~0.09 s instead of

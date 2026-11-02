@@ -57,7 +57,9 @@ typedef struct
     int32_t  err;               /* -1000..1000 */
     int32_t  prev_err;
     int32_t  line_err;          /* last error while on the line       */
-    int32_t  exit_err;          /* line_err when both went white      */
+    int32_t  exit_err;          /* peak_err when both went white      */
+    int32_t  peak_err;          /* strongest err of the last LINE_EXIT_PEAK_UM */
+    uint32_t peak_um;           /* distance since peak_err was set    */
     int32_t  omega;             /* mrad/s */
     int32_t  v;                 /* mm/s   */
     uint32_t both_black_um;

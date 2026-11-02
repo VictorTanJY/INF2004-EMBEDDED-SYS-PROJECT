@@ -124,6 +124,8 @@ void line_track_init(line_track_t * p_t)
     p_t->prev_err          = 0;
     p_t->line_err          = 0;
     p_t->exit_err          = 0;
+    p_t->peak_err          = 0;
+    p_t->peak_um           = 0u;
     p_t->omega             = 0;
     p_t->v                 = 0;
     p_t->both_black_um     = 0u;
@@ -193,7 +195,10 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         p_t->b_junction    = false;
         if (p_t->both_white_um == 0u)
         {
-            p_t->exit_err = p_t->line_err;      /* how the line was left */
+            /* how the line was left: the strongest error of the last
+               LINE_EXIT_PEAK_UM, not the last one, which fades as the line
+               slides out past the outer sensor on a curve (2 Nov) */
+            p_t->exit_err = p_t->peak_err;
         }
         p_t->both_white_um += step_um;
         if (!p_t->b_lost && (p_t->both_white_um >= p_cfg->lost_um))
@@ -211,6 +216,13 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     if (p_t->both_white_um == 0u)
     {
         p_t->line_err = p_t->err;
+        p_t->peak_um += step_um;
+        if ((app_abs_i32(p_t->err) >= app_abs_i32(p_t->peak_err)) ||
+            (p_t->peak_um > LINE_EXIT_PEAK_UM))
+        {
+            p_t->peak_err = p_t->err;
+            p_t->peak_um  = 0u;
+        }
     }
 
     if (p_t->b_lost && (!p_t->b_white_l || !p_t->b_white_r))
