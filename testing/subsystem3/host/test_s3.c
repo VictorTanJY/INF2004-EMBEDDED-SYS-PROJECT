@@ -418,7 +418,7 @@ static void test_track(void)
         for (i = 0; i < 17; i++) { (void)line_track_step(&t, &k_cfg, 1000u, 0u, 3000u); }
         CHECK("S3-H13", t.omega == LINE_STEER_SIGN * LINE_KP);
         (void)line_track_step(&t, &k_cfg, 500u, 500u, 3000u);   /* back on centre */
-        CHECK("S3-H13", t.omega == LINE_STEER_SIGN * (LINE_KP - LINE_OMEGA_STEP));
+        CHECK("S3-H13", t.omega == LINE_STEER_SIGN * app_max_i32(LINE_KP - LINE_OMEGA_STEP, 0));
     }
 
     /* S3-H12: calibration: contrast check and normalisation */
