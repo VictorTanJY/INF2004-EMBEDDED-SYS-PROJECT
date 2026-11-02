@@ -54,8 +54,6 @@ typedef struct
     bool     b_lost;
     bool     b_junction;        /* inside a junction (both black, latched) */
     bool     b_have_err;
-    int8_t   edge;              /* +1 / -1: line reached the left / right
-                                   sensor (edge hold, see LINE_EDGE_ERR) */
     int32_t  err;               /* -1000..1000 */
     int32_t  prev_err;
     int32_t  line_err;          /* last error while on the line       */

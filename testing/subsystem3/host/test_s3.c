@@ -391,40 +391,6 @@ static void test_track(void)
     (void)feed(&t, 60u, 60u, 9000u);           /* ... then past it */
     CHECK("S3-H11", t.omega > 0 && t.v < 300);
 
-    /* S3-H13: edge hold on a curve: the line reaches the left sensor, then
-       slides past it (left fades, right stays white): the error stays at
-       full scale (no straighten / speed-up) until the right sensor sees
-       the line again; the same on the right side */
-    {
-        int32_t om_full;
-        int32_t v_full;
-
-        line_track_init(&t);
-        (void)feed(&t, 500u, 500u, 60000u);
-        (void)feed(&t, 1000u, 0u, 3000u);
-        om_full = t.omega;
-        v_full  = t.v;
-        CHECK("S3-H13", t.err == 1000 && t.edge == 1);
-        (void)feed(&t, 600u, 0u, 3000u);
-        CHECK("S3-H13", t.err == 1000 && t.omega == om_full && t.v == v_full);
-        (void)feed(&t, 300u, 0u, 3000u);
-        CHECK("S3-H13", t.err == 1000 && t.omega == om_full && t.v == v_full);
-        (void)feed(&t, 600u, 400u, 3000u);       /* back between the sensors */
-        CHECK("S3-H13", t.err == 200 && t.edge == 0);
-
-        line_track_init(&t);
-        (void)feed(&t, 500u, 500u, 60000u);
-        (void)feed(&t, 0u, 1000u, 3000u);
-        (void)feed(&t, 0u, 400u, 3000u);
-        CHECK("S3-H13", t.err == -1000 && t.omega == -om_full && t.v == v_full);
-
-        /* no hold below LINE_EDGE_ERR: a moderate error is used as is */
-        line_track_init(&t);
-        (void)feed(&t, 500u, 500u, 60000u);
-        (void)feed(&t, 600u, 0u, 3000u);
-        CHECK("S3-H13", t.err == 600 && t.edge == 0);
-    }
-
     /* S3-H12: calibration: contrast check and normalisation */
     {
         line_cal_t cal;
