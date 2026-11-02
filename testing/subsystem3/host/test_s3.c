@@ -14,6 +14,8 @@
 #include "code39.h"
 #include "line_barcode.h"
 #include "line_track.h"
+#include "app_types.h"
+#include "subsystem2/motion_cfg.h"
 #include "vectors_slides.h"
 
 static int g_pass;
@@ -390,6 +392,42 @@ static void test_track(void)
     (void)feed(&t, 950u, 80u, 6000u);          /* line under the left sensor only */
     (void)feed(&t, 60u, 60u, 9000u);           /* ... then past it */
     CHECK("S3-H11", t.omega > 0 && t.v < 300);
+
+    /* S3-H13: at the real cruise speed (90 mm/s) the inner wheel never falls
+       below LINE_INNER_MIN_MM_S (no brake / restart / reverse jerks) for any
+       error, nor in the recovery turn; the speed stays the slow curve speed */
+    {
+        static line_trk_cfg_t const k_slow = { 20000u, 80000u, 90 };
+        int32_t e;
+        int32_t worst = 1000;
+        bool    b_turns = true;
+
+        for (e = -1000; e <= 1000; e += 25)
+        {
+            uint16_t const l = (uint16_t)((1000 + e) / 2);
+            uint16_t const r = (uint16_t)((1000 - e) / 2);
+            int32_t inner;
+
+            line_track_init(&t);
+            (void)line_track_step(&t, &k_slow, 500u, 500u, 3000u);
+            (void)line_track_step(&t, &k_slow, l, r, 3000u);
+            inner = t.v - (int32_t)(((int64_t)app_abs_i32(t.omega) * MOTION_TRACK_MM) / 2000);
+            worst = app_min_i32(worst, inner);
+            if ((e >= 400) && (t.omega <= 0)) { b_turns = false; }
+        }
+        CHECK("S3-H13", worst >= LINE_INNER_MIN_MM_S);
+        CHECK("S3-H13", b_turns);
+        line_track_init(&t);
+        (void)line_track_step(&t, &k_slow, 1000u, 0u, 3000u);
+        CHECK("S3-H13", t.v == 36);             /* still slow: 40 % of 90 */
+
+        line_track_init(&t);
+        (void)feed(&t, 500u, 500u, 30000u);
+        (void)feed(&t, 950u, 80u, 6000u);
+        (void)line_track_step(&t, &k_slow, 60u, 60u, 3000u);   /* recovery */
+        CHECK("S3-H13", t.omega > 0 &&
+              (t.v - (int32_t)(((int64_t)t.omega * MOTION_TRACK_MM) / 2000)) >= LINE_INNER_MIN_MM_S);
+    }
 
     /* S3-H12: calibration: contrast check and normalisation */
     {

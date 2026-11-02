@@ -76,7 +76,14 @@
 /* Both sensors went white: if the error just before was beyond this, the
    line left past one sensor (a drift, not a gap): keep turning toward it. */
 #define LINE_EXIT_ERR               400         /* line clearly on one side (difference error) */
-#define LINE_RECOVER_OMEGA          900         /* mrad/s: firm, never reverses a wheel */
+#define LINE_RECOVER_OMEGA          900         /* mrad/s: upper limit, see below */
+/* 2 Nov: at the slow curve speed (36 mm/s at full error) the turn asked
+   for more than the speed allows: the inner wheel target fell below the
+   10 mm/s brake point or reversed, so it braked and restarted (jerks).
+   The turn rate is now capped so the inner wheel keeps rolling forward at
+   least this fast: tightest turn ~9 cm radius at 36 mm/s.  0 = the inner
+   wheel may stop but never reverses (tighter turns). */
+#define LINE_INNER_MIN_MM_S         12
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */
 #define LINE_STRAIGHT_OMEGA         500         /* |omega| < 0.5 rad/s ...   */
