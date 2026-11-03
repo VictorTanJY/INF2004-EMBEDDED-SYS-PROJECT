@@ -454,6 +454,50 @@ static void test_obstacle(void)
         CHECK("S5-H15", obst_bg_at(90) == 0u);
     }
     {
+        /* (e) 3 Nov, the robot drove into a box twice: the box was on the
+           track during calibration, so the background scan stored it and
+           the profile then found nothing (width 0 -> CONTINUE).  A near
+           echo ahead is never background, and an echo straight ahead
+           closer than the guard distance forbids CONTINUE. */
+        box_t const box = { 160.0, 150.0, 0.0 };
+        int a;
+
+        obst_bg_clear();
+        for (a = OBST_SCAN_MIN_DEG; a <= OBST_SCAN_MAX_DEG; a += OBST_BG_STEP_DEG)
+        {
+            obst_bg_set((int16_t)a, ping(&box, 1, a));      /* box there at calibration */
+        }
+        CHECK("S5-H15", obst_bg_at(90) == 0u);              /* not stored as background */
+        scan_box(&box, 1, &prof);
+        printf("box at calibration: width %u mm, plan edges %+d/%+d, plan %u\n", (unsigned)prof.w_mm,
+               prof.plan_l_mm, prof.plan_r_mm, (unsigned)prof.plan);
+        /* its sides beyond +-25 deg may still be masked, so the width can
+           read short, but the plan covers the whole 150 mm box */
+        CHECK("S5-H15", prof.b_valid && (prof.plan == OBST_PLAN_LEFT || prof.plan == OBST_PLAN_RIGHT) &&
+                        (prof.plan_l_mm >= 75) && (prof.plan_r_mm <= -75));
+        obst_bg_clear();
+    }
+    {
+        /* (f) guard: the profile itself sees nothing usable (every echo
+           beyond range or masked), yet the raw reading straight ahead is
+           150 mm: plan a bypass for a 20 cm object, never CONTINUE */
+        obst_point_t pts[5];
+        uint8_t k;
+
+        for (k = 0u; k < 5u; k++)
+        {
+            pts[k].angle_deg = (int16_t)(30 + (30 * k));
+            pts[k].r_mm      = OBST_RANGE_NONE;
+        }
+        pts[2].r_mm = 150u;                     /* 90 deg */
+        obst_bg_clear();
+        obst_bg_set(90, 900u);                  /* pretend: nothing usable... */
+        obst_bg_set(90, 0u);
+        obst_profile(pts, 0u, pts, 5u, &prof);  /* no fine scan at all */
+        CHECK("S5-H15", prof.plan != OBST_PLAN_CONTINUE && prof.closest_mm == 150u);
+        CHECK("S5-H15", (prof.plan_l_mm >= (OBST_WIDTH_MAX_MM / 2)) && (prof.plan_r_mm <= -(OBST_WIDTH_MAX_MM / 2)));
+    }
+    {
         /* (d) one dropout inside a face does not split it (2-miss edges) */
         obst_point_t pts[13];
         uint8_t k;

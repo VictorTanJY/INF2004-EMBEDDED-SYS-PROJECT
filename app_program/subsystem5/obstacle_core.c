@@ -70,7 +70,12 @@ static uint8_t bg_index(int16_t angle_deg)
 
 void obst_bg_set(int16_t angle_deg, uint16_t r_mm)
 {
-    g_bg[bg_index(angle_deg)] = r_mm;
+    /* 3 Nov: anything this close AHEAD during the background scan is an
+       object on the track (e.g. the obstacle already placed), never
+       background; further to the sides near echoes (floor, mat edge) are. */
+    bool const b_ahead = (app_abs_i32((int32_t)angle_deg - OBST_SERVO_CENTRE_DEG) <= OBST_BG_AHEAD_DEG);
+
+    g_bg[bg_index(angle_deg)] = (b_ahead && (r_mm < OBST_BG_MIN_MM)) ? 0u : r_mm;
 }
 
 uint16_t obst_bg_at(int16_t angle_deg)
@@ -136,12 +141,15 @@ static void grow(obst_point_t const * p_pts, uint8_t n, uint8_t nearest, uint16_
     *p_hi = hi;
 }
 
-void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
-                  obst_point_t const * p_coarse, uint8_t n_coarse,
-                  obst_profile_t * p_out)
+static void decide(obst_point_t const * p_fine, uint8_t n_fine,
+                   obst_point_t const * p_coarse, uint8_t n_coarse,
+                   uint8_t lo, uint8_t hi, uint16_t r_min, int32_t pl_l, int32_t pl_r,
+                   obst_profile_t * p_out);
+
+static void profile_core(obst_point_t const * p_fine, uint8_t n_fine,
+                         obst_point_t const * p_coarse, uint8_t n_coarse,
+                         obst_profile_t * p_out)
 {
-    int32_t const corridor = (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
-    int32_t const need     = OBST_ROBOT_WIDTH_MM + (2 * OBST_MARGIN_MM);
     uint8_t       i;
     uint8_t       nearest = 0u;
     uint8_t       lo;
@@ -151,8 +159,6 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
     int32_t       a_right;
     int32_t       lat_l;
     int32_t       lat_r;
-    int32_t       clr_l = OBST_CLEAR_MAX_MM;
-    int32_t       clr_r = OBST_CLEAR_MAX_MM;
     int32_t       pl_l;
     int32_t       pl_r;
 
@@ -229,13 +235,35 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
         }
     }
 
+    p_out->b_valid       = true;
+    p_out->closest_mm    = r_min;
+    p_out->nearest_angle = p_fine[nearest].angle_deg;
+    p_out->left_lat_mm   = (int16_t)lat_l;
+    p_out->right_lat_mm  = (int16_t)lat_r;
+    p_out->w_mm          = (uint16_t)app_max_i32(lat_l - lat_r, 0);
+    decide(p_fine, n_fine, p_coarse, n_coarse, lo, hi, r_min, pl_l, pl_r, p_out);
+}
+
+/* Clearances beside the planned edges and the PLAN (FR11).  Points lo..hi
+   of the fine scan are the obstacle itself (lo > hi: none). */
+static void decide(obst_point_t const * p_fine, uint8_t n_fine,
+                   obst_point_t const * p_coarse, uint8_t n_coarse,
+                   uint8_t lo, uint8_t hi, uint16_t r_min, int32_t pl_l, int32_t pl_r,
+                   obst_profile_t * p_out)
+{
+    int32_t const corridor = (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
+    int32_t const need     = OBST_ROBOT_WIDTH_MM + (2 * OBST_MARGIN_MM);
+    int32_t       clr_l    = OBST_CLEAR_MAX_MM;
+    int32_t       clr_r    = OBST_CLEAR_MAX_MM;
+    uint8_t       i;
+
     /* Clearance: nearby points outside the obstacle, from both scans. */
     for (i = 0u; i < (uint8_t)(n_fine + n_coarse); i++)
     {
         obst_point_t const * p = (i < n_fine) ? &p_fine[i] : &p_coarse[i - n_fine];
         int32_t              lat;
 
-        if (((i >= lo) && (i <= hi)) || !usable(p) ||
+        if (((i < n_fine) && (i >= lo) && (i <= hi)) || !usable(p) ||
             (p->r_mm > ((uint32_t)r_min + OBST_DEPTH_TOL_MM + OBST_NEAR_EXTRA_MM)))
         {
             continue;
@@ -261,18 +289,12 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
         }
     }
 
-    p_out->b_valid       = true;
-    p_out->closest_mm    = r_min;
-    p_out->nearest_angle = p_fine[nearest].angle_deg;
-    p_out->left_lat_mm   = (int16_t)lat_l;
-    p_out->right_lat_mm  = (int16_t)lat_r;
-    p_out->w_mm          = (uint16_t)app_max_i32(lat_l - lat_r, 0);
     p_out->clr_l_mm      = (uint16_t)clr_l;
     p_out->clr_r_mm      = (uint16_t)clr_r;
     p_out->plan_l_mm     = (int16_t)pl_l;
     p_out->plan_r_mm     = (int16_t)pl_r;
+    p_out->deviation_mm  = 0;
 
-    /* PLAN (FR11). */
     if ((pl_r > corridor) || (pl_l < -corridor))
     {
         p_out->plan = (uint8_t)OBST_PLAN_CONTINUE;      /* beside the path */
@@ -298,6 +320,47 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
         {
             p_out->plan = (uint8_t)OBST_PLAN_BLOCKED;
         }
+    }
+}
+
+void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
+                  obst_point_t const * p_coarse, uint8_t n_coarse,
+                  obst_profile_t * p_out)
+{
+    uint16_t r_ahead = OBST_RANGE_NONE;
+    uint8_t  i;
+
+    profile_core(p_fine, n_fine, p_coarse, n_coarse, p_out);
+
+    /* Guard (3 Nov: twice the profile said CONTINUE, or found nothing at
+       all, with the box 15-18 cm straight ahead, and the car drove into
+       it): if any echo within OBST_GUARD_HALF_DEG of straight ahead is
+       closer than OBST_GUARD_MM, raw (no background, no range filter),
+       the plan is never CONTINUE: plan as for an OBST_WIDTH_MAX object
+       centred straight ahead at that range. */
+    for (i = 0u; i < (uint8_t)(n_fine + n_coarse); i++)
+    {
+        obst_point_t const * p = (i < n_fine) ? &p_fine[i] : &p_coarse[i - n_fine];
+
+        if ((app_abs_i32((int32_t)p->angle_deg - OBST_SERVO_CENTRE_DEG) <= OBST_GUARD_HALF_DEG) &&
+            (p->r_mm < r_ahead))
+        {
+            r_ahead = p->r_mm;
+        }
+    }
+    if ((r_ahead < OBST_GUARD_MM) && (p_out->plan == (uint8_t)OBST_PLAN_CONTINUE))
+    {
+        p_out->b_valid       = true;
+        p_out->b_sure        = false;
+        p_out->closest_mm    = r_ahead;
+        p_out->nearest_angle = OBST_SERVO_CENTRE_DEG;
+        if (p_out->w_mm == 0u)
+        {
+            p_out->left_lat_mm  = 0;
+            p_out->right_lat_mm = 0;
+        }
+        decide(p_fine, n_fine, p_coarse, n_coarse, 1u, 0u, r_ahead,
+               OBST_WIDTH_MAX_MM / 2, -(OBST_WIDTH_MAX_MM / 2), p_out);
     }
 }
 

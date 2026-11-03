@@ -79,6 +79,15 @@
    background at that angle; the stop check while driving does not use it. */
 #define OBST_BG_MARGIN_MM           25      /* HC-SR04 repeatability ~5 mm after the median */
 #define OBST_BG_STEP_DEG            5
+/* 3 Nov: within +-OBST_BG_AHEAD_DEG of straight ahead, nearer than
+   OBST_BG_MIN_MM in the background scan is an object (e.g. the obstacle
+   already on the track at calibration), never background.              */
+#define OBST_BG_AHEAD_DEG           25
+#define OBST_BG_MIN_MM              350
+/* 3 Nov guard: an echo within +-10 deg of straight ahead nearer than
+   this (stop distance + 5 cm) forbids CONTINUE (see obst_profile).    */
+#define OBST_GUARD_HALF_DEG         10
+#define OBST_GUARD_MM               (MISSION_STOP_MM + 50)
 /* After the bypass: if the straight seek finds no line, sweep +-45 deg on
    the spot, accepting any line the sensors see. */
 #define OBST_SWEEP_DDEG             450
