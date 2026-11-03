@@ -39,6 +39,8 @@
 #define LINE_LOG_BC_SHORT       37u
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
 #define LINE_LOG_TURN_GAIN      38u
+/* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
+#define LINE_LOG_SLIP_DIAG      45u
 
 static line_cal_t   g_cal;
 static line_track_t g_trk;
@@ -184,9 +186,15 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                                        (int32_t)(((uint32_t)g_cal.max[ch] << 16) | g_cal.min[ch]));
             }
             /* turn slip for the bypass turns (3 Nov) */
-            snap.turn_gain_pm = b_ok ? line_slip_gain(&g_slip, &g_cal) : 0u;
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_TURN_GAIN,
-                                   (int32_t)snap.turn_gain_pm);
+            {
+                uint32_t diag = 0u;
+
+                snap.turn_gain_pm = line_slip_gain(&g_slip, &g_cal, &diag);
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_TURN_GAIN,
+                                       (int32_t)snap.turn_gain_pm);
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_SLIP_DIAG,
+                                       (int32_t)diag);
+            }
             b_cal_active      = false;
             snap.contrast_x10 = g_cal.contrast_x10;
             line_track_init(&g_trk);

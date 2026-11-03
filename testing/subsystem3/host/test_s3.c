@@ -560,6 +560,8 @@ static void test_track(void)
    line sensors are OBST_IR_AHEAD 120 mm ahead, 9 mm either side (both
    half on the line at the start); the encoders count `gain` x the real
    rotation; a sensor reads the fraction of its 8 mm spot on black. */
+static double g_slip_half = 9.0;    /* sensor offset from the centreline, mm */
+
 static uint16_t slip_raw(double x, double y)
 {
     double const half = 9.0;
@@ -585,8 +587,8 @@ static uint16_t slip_run(int gain_pm, bool b_line, int start_cdeg)
         double const enc  = 360.0 * k / 400.0;
         double const real = enc * 1000.0 / gain_pm * M_PI / 180.0;
         double const xs   = 120.0 * cos(real);
-        double const yl   = (120.0 * sin(real)) + (9.0 * cos(real));
-        double const yr   = (120.0 * sin(real)) - (9.0 * cos(real));
+        double const yl   = (120.0 * sin(real)) + (g_slip_half * cos(real));
+        double const yr   = (120.0 * sin(real)) - (g_slip_half * cos(real));
         uint16_t     raw[3];
         int          h    = start_cdeg + (int)(enc * 100.0);
 
@@ -599,7 +601,10 @@ static uint16_t slip_run(int gain_pm, bool b_line, int start_cdeg)
         line_slip_sample(&slip, h, raw[0], raw[1]);
     }
     (void)line_cal_finish(&cal);
-    return line_slip_gain(&slip, &cal);     /* no line: both dark for one block only */
+    {
+        uint32_t diag;
+        return line_slip_gain(&slip, &cal, &diag);  /* no line: both dark for one block only */
+    }
 }
 
 static void test_slip(void)
@@ -615,6 +620,16 @@ static void test_slip(void)
         CHECK("S3-H16", abs((int)g - gains[i]) <= 25);
     }
     CHECK("S3-H16", slip_run(1500, true, -9000) != 0u);
+    /* sensors 25 mm either side: they cross the line one after the other */
+    g_slip_half = 25.0;
+    for (i = 0; i < 4; i++)
+    {
+        uint16_t const g = slip_run(gains[i], true, 0);
+
+        printf("turn slip, wide sensors: real gain %d -> measured %u\n", gains[i], (unsigned)g);
+        CHECK("S3-H16", abs((int)g - gains[i]) <= 25);
+    }
+    g_slip_half = 9.0;
     /* no line under the car: not measured */
     CHECK("S3-H16", slip_run(1500, false, 0) == 0u);
 }

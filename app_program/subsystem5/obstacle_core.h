@@ -62,6 +62,13 @@ void     obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
                       obst_point_t const * p_coarse, uint8_t n_coarse,
                       obst_profile_t * p_out);
 
+/* As obst_profile(), for an obstacle the monitor already saw at r_det_mm
+   straight ahead: if the scan saw nothing, plan for an OBST_WIDTH_MAX
+   object there (never CONTINUE into a detected obstacle). */
+void     obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
+                               obst_point_t const * p_coarse, uint8_t n_coarse,
+                               uint16_t r_det_mm, obst_profile_t * p_out);
+
 /* ---- Scan sequencer: COARSE (30..150 by 30) -> FINE (nearest +-40 by 5)
    -> REFINE each edge by bisection.  The task pings obst_scan_angle(),
    feeds the range with obst_scan_feed() until obst_scan_done(). */
@@ -94,6 +101,7 @@ int16_t obst_scan_angle(obst_scan_t const * p_s);
 void    obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm);
 bool    obst_scan_done(obst_scan_t const * p_s);
 void    obst_scan_profile(obst_scan_t const * p_s, obst_profile_t * p_out);
+void    obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, obst_profile_t * p_out);
 
 /* Bypass path: up to OBST_BYPASS_MAX_STEPS steps.  TURN values are real
    degrees; the task scales them by the measured turn slip. */

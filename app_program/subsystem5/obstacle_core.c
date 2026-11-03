@@ -323,6 +323,24 @@ static void decide(obst_point_t const * p_fine, uint8_t n_fine,
     }
 }
 
+/* Plan as for an OBST_WIDTH_MAX object centred straight ahead at r. */
+static void force_ahead(obst_point_t const * p_fine, uint8_t n_fine,
+                        obst_point_t const * p_coarse, uint8_t n_coarse,
+                        uint16_t r, obst_profile_t * p_out)
+{
+    p_out->b_valid       = true;
+    p_out->b_sure        = false;
+    p_out->closest_mm    = r;
+    p_out->nearest_angle = OBST_SERVO_CENTRE_DEG;
+    if (p_out->w_mm == 0u)
+    {
+        p_out->left_lat_mm  = 0;
+        p_out->right_lat_mm = 0;
+    }
+    decide(p_fine, n_fine, p_coarse, n_coarse, 1u, 0u, r,
+           OBST_WIDTH_MAX_MM / 2, -(OBST_WIDTH_MAX_MM / 2), p_out);
+}
+
 void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
                   obst_point_t const * p_coarse, uint8_t n_coarse,
                   obst_profile_t * p_out)
@@ -350,17 +368,23 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
     }
     if ((r_ahead < OBST_GUARD_MM) && (p_out->plan == (uint8_t)OBST_PLAN_CONTINUE))
     {
-        p_out->b_valid       = true;
-        p_out->b_sure        = false;
-        p_out->closest_mm    = r_ahead;
-        p_out->nearest_angle = OBST_SERVO_CENTRE_DEG;
-        if (p_out->w_mm == 0u)
-        {
-            p_out->left_lat_mm  = 0;
-            p_out->right_lat_mm = 0;
-        }
-        decide(p_fine, n_fine, p_coarse, n_coarse, 1u, 0u, r_ahead,
-               OBST_WIDTH_MAX_MM / 2, -(OBST_WIDTH_MAX_MM / 2), p_out);
+        force_ahead(p_fine, n_fine, p_coarse, n_coarse, r_ahead, p_out);
+    }
+}
+
+void obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
+                           obst_point_t const * p_coarse, uint8_t n_coarse,
+                           uint16_t r_det_mm, obst_profile_t * p_out)
+{
+    obst_profile(p_fine, n_fine, p_coarse, n_coarse, p_out);
+
+    /* 3 Nov: a round water bottle was seen while driving (16 cm, median
+       of 3) but not in the scan (curved glass returns few echoes), the
+       profile was empty, the plan CONTINUE, and the car drove into it.
+       Nothing seen in the scan after a detection = trust the detection. */
+    if (!p_out->b_valid && (r_det_mm < OBST_GUARD_MM))
+    {
+        force_ahead(p_fine, n_fine, p_coarse, n_coarse, r_det_mm, p_out);
     }
 }
 
@@ -556,6 +580,11 @@ void obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm)
 void obst_scan_profile(obst_scan_t const * p_s, obst_profile_t * p_out)
 {
     obst_profile(p_s->fine, p_s->n_fine, p_s->coarse, p_s->n_coarse, p_out);
+}
+
+void obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, obst_profile_t * p_out)
+{
+    obst_profile_detected(p_s->fine, p_s->n_fine, p_s->coarse, p_s->n_coarse, r_det_mm, p_out);
 }
 
 /* ---- bypass ----------------------------------------------------------- */

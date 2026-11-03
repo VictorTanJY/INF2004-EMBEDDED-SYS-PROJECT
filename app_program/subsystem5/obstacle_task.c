@@ -111,6 +111,8 @@ typedef struct
     uint8_t  sweep_i;           /* SEEK_SWEEP step */
     int32_t  join_h;            /* JOIN: heading held while driving back in */
     bool     b_joined;          /* JOIN touched the line: accept it in SEEK */
+    uint16_t det_mm;            /* range when the monitor saw the obstacle  */
+    int32_t  back_mm;           /* backed off since then (second look, reverse) */
 } obst_ctx_t;
 
 static obst_ctx_t g_o;
@@ -213,25 +215,32 @@ static void send_step(uint8_t kind, int16_t value, motion_odom_t const * p_odom)
     }
 }
 
-/* Median of the pings at one scan angle (OBST_RANGE_NONE counts as far). */
+/* Median of the echoes that came back at one scan angle (OBST_RANGE_NONE
+   only if none did).  3 Nov: a round bottle answered 1 ping in 3, and a
+   median that counted misses as "far" threw that echo away. */
 static uint16_t scan_median(void)
 {
     uint16_t s[OBST_SCAN_PINGS];
+    uint8_t  n = 0u;
     uint8_t  i;
     uint8_t  j;
 
     for (i = 0u; i < g_o.sw_n; i++)
     {
-        s[i] = g_o.sw[i];
-        for (j = i; (j > 0u) && (s[j - 1u] > s[j]); j--)
+        if (g_o.sw[i] != OBST_RANGE_NONE)
         {
-            uint16_t const t = s[j - 1u];
+            s[n] = g_o.sw[i];
+            for (j = n; (j > 0u) && (s[j - 1u] > s[j]); j--)
+            {
+                uint16_t const t = s[j - 1u];
 
-            s[j - 1u] = s[j];
-            s[j]      = t;
+                s[j - 1u] = s[j];
+                s[j]      = t;
+            }
+            n++;
         }
     }
-    return s[g_o.sw_n / 2u];
+    return (n == 0u) ? OBST_RANGE_NONE : s[(n - 1u) / 2u];
 }
 
 /* One ping result at a scan angle: true once OBST_SCAN_PINGS are in
@@ -317,7 +326,9 @@ static void publish_profile(void)
 /* The scan finished: decide (PLAN). */
 static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
 {
-    obst_scan_profile(&g_scan, &g_prof);
+    obst_scan_profile_detected(&g_scan,
+                               (uint16_t)app_clamp_i32((int32_t)g_o.det_mm + g_o.back_mm, 0, OBST_RANGE_NONE),
+                               &g_prof);
     publish_profile();
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
 
@@ -327,6 +338,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
            the second profile plans with OBST_WIDTH_MAX if still unsure */
         g_o.b_second_look = true;
         goto_state((uint8_t)OBST_ST_REVERSE);
+        g_o.back_mm += OBST_SECOND_LOOK_MM;
         send_step((uint8_t)OBST_STEP_MOVE, -OBST_SECOND_LOOK_MM, p_odom);
     }
     else if (g_prof.plan != (uint8_t)OBST_PLAN_BLOCKED)
@@ -343,6 +355,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
     {
         g_o.retries++;
         goto_state((uint8_t)OBST_ST_REVERSE);
+        g_o.back_mm += OBST_REVERSE_MM;
         send_step((uint8_t)OBST_STEP_MOVE, -OBST_REVERSE_MM, p_odom);
     }
     else
@@ -379,6 +392,7 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             g_o.retries       = 0u;
             g_o.b_blocked     = false;
             g_o.b_second_look = false;
+            g_o.back_mm       = 0;
             start_scan(now_ms);
             break;
 
@@ -511,6 +525,7 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
             {
                 g_o.b_obst_sent = true;
                 store_pose(p_odom);
+                g_o.det_mm = g_o.d_mm;
                 post((uint8_t)MISSION_EV_OBSTACLE, 0u, (int32_t)g_o.d_mm);
             }
             break;

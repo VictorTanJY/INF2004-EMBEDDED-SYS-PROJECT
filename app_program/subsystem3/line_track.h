@@ -95,7 +95,8 @@ typedef struct
 void     line_slip_start(line_slip_t * p_s, int32_t heading_cdeg);
 void     line_slip_sample(line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l, uint16_t raw_r);
 /* After line_cal_finish(): encoder deg per real deg x 1000, from where the
-   line sensors cross the line again; 0 if not found or implausible. */
-uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal);
+   line sensors cross the line again; 0 if not found or implausible.
+   *p_diag = dark runs seen by L << 24 | by R << 16 | encoder deg spun. */
+uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal, uint32_t * p_diag);
 
 #endif /* LINE_TRACK_H */

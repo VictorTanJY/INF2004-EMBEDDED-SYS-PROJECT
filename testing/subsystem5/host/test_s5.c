@@ -381,6 +381,23 @@ static void test_obstacle(void)
         obst_profile(none, 3u, none, 0u, &prof);
         CHECK("S5-H11", !prof.b_valid && prof.plan == OBST_PLAN_CONTINUE);
     }
+    {
+        /* 3 Nov: a round bottle seen at 16 cm while driving, no echo at
+           all in the scan: plan around a 20 cm object there, never CONTINUE */
+        obst_point_t none[3] = { { 80, OBST_RANGE_NONE }, { 90, OBST_RANGE_NONE }, { 100, OBST_RANGE_NONE } };
+        int32_t const need = (OBST_WIDTH_MAX_MM / 2) + (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
+
+        obst_profile_detected(none, 3u, none, 0u, 160u, &prof);
+        CHECK("S5-H16", prof.b_valid && (prof.closest_mm == 160u) &&
+                        ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
+                        (abs(prof.deviation_mm) >= need));
+        /* the scan saw it off to the side and clear: the detection does not override */
+        {
+            box_t b = { 200.0, 100.0, 260.0 };
+            scan_box(&b, 1, &prof);
+            CHECK("S5-H16", prof.plan == OBST_PLAN_CONTINUE);
+        }
+    }
 
     /* S5-H12: bypass path returns to the original line, clears the margin.
        3 Nov: simulated about the axle (sensor OBST_US_AHEAD_MM in front,
