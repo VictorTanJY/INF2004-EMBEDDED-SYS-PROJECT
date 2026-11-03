@@ -97,7 +97,7 @@
 #define OBST_TURN_OUT_DDEG          600     /* bypass turn-out 60.0 deg        */
 #define OBST_BYPASS_SPEED_MM_S      250
 #define OBST_BYPASS_TURN_DEG_S      180
-#define OBST_PASS_MAX_MM            600
+#define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
 #define OBST_SEEK_SPEED_MM_S        150
 #define OBST_SEEK_LAT_MM            60      /* accept black only within +-60 mm */

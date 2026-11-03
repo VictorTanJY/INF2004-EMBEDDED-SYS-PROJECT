@@ -397,6 +397,13 @@ static void test_obstacle(void)
             x += d * cos(h * M_PI / 180.0);
             y += d * sin(h * M_PI / 180.0);
             if (fabs(y) > max_lat) { max_lat = fabs(y); }
+            if (steps[i].kind == OBST_STEP_PASS)
+            {
+                /* 3 Nov: the car turned in beside the box.  Before turning
+                   back in, its rear is past the far side of a 200 mm deep
+                   box (sensor at the front, start at the stop point) */
+                CHECK("S5-H12", (x - OBST_ROBOT_LENGTH_MM) >= ((double)prof.closest_mm + 200.0));
+            }
         }
         printf("bypass: %u steps, end (%.0f, %.0f) heading %.1f, max lateral %.0f mm\n",
                (unsigned)n, x, y, h, max_lat);

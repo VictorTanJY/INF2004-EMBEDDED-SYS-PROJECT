@@ -609,8 +609,12 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                                                                    : (OBST_SERVO_CENTRE_DEG + OBST_SIDE_SERVO_DEG),
                              now_ms);
                 }
-                if ((g_o.b_seen && ((p_odom->dist_mm - g_o.last_seen_mm) >= (OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM))) ||
-                    (done_mm >= p_st->value))
+                /* 3 Nov: at least the planned distance; then on until the
+                   side ping has not seen the obstacle for a car length +
+                   margin; never beyond OBST_PASS_MAX_MM */
+                if (((done_mm >= p_st->value) &&
+                     (!g_o.b_seen || ((p_odom->dist_mm - g_o.last_seen_mm) >= (OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM)))) ||
+                    (done_mm >= OBST_PASS_MAX_MM))
                 {
                     stop_motion();
                     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);

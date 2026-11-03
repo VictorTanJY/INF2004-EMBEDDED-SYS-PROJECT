@@ -583,8 +583,12 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(-s * OBST_TURN_OUT_DDEG); n++;
 
     /* PASS: the task ends it when the side ping has seen the obstacle and
-       lost it again; this value is the fallback distance. */
-    pass = app_max_i32((int32_t)p_prof->closest_mm - fwd, 0) + OBST_ASSUMED_DEPTH_MM + OBST_ROBOT_LENGTH_MM;
+       lost it again; 3 Nov: this value is now the MINIMUM (face to the
+       far side of a 20 cm deep object, plus the car, plus the margin):
+       the side ping lost a flat side early and the car turned in beside
+       the box. */
+    pass = app_max_i32((int32_t)p_prof->closest_mm - fwd, 0) + OBST_ASSUMED_DEPTH_MM + OBST_ROBOT_LENGTH_MM +
+           OBST_MARGIN_MM;
     p_steps[n].kind = (uint8_t)OBST_STEP_PASS; p_steps[n].value = (int16_t)app_min_i32(pass, OBST_PASS_MAX_MM); n++;
 
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(-s * OBST_TURN_OUT_DDEG); n++;
