@@ -654,7 +654,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             }
             if (p_st->kind == (uint8_t)OBST_STEP_PASS)
             {
-                int32_t const done_mm = p_odom->dist_mm - g_o.phase_start_mm;
+                int32_t done_mm;
 
                 if (!g_o.b_wait_motion)
                 {
@@ -667,6 +667,9 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                                                                    : (OBST_SERVO_CENTRE_DEG + OBST_SIDE_SERVO_DEG),
                              now_ms);
                 }
+                /* after the start above (3 Nov: computed before it, the first
+                   check used the distance since boot and ended PASS at once) */
+                done_mm = p_odom->dist_mm - g_o.phase_start_mm;
                 /* 3 Nov: at least the planned distance; then on until the
                    side ping has not seen the obstacle for a car length +
                    margin; never beyond OBST_PASS_MAX_MM */
@@ -692,8 +695,8 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             }
             else if (p_st->kind == (uint8_t)OBST_STEP_JOIN)
             {
-                line_snap_t   line;
-                int32_t const done_mm = p_odom->dist_mm - g_o.phase_start_mm;
+                line_snap_t line;
+                int32_t     done_mm;
 
                 if (!g_o.b_wait_motion)
                 {
@@ -701,6 +704,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     g_o.phase_start_mm = p_odom->dist_mm;
                     g_o.join_h         = p_odom->heading_cdeg;
                 }
+                done_mm = p_odom->dist_mm - g_o.phase_start_mm;
                 line_get_snap(&line);
                 if (((line.flags & LINE_FLAG_ON_LINE) != 0u) || (done_mm >= p_st->value))
                 {
