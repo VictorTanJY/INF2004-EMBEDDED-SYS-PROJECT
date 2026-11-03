@@ -45,6 +45,8 @@ typedef struct
     uint8_t  bc_state;          /* line_bc_state_t                          */
     char     last_barcode;      /* last valid Code 39 character, 0 = none   */
     uint8_t  last_reject;       /* code39_result_t of the last reject       */
+    uint16_t turn_gain_pm;      /* turn slip from the calibration spin: ask
+                                   for real deg x this / 1000; 0 = not measured */
 } line_snap_t;
 
 #endif /* LINE_TYPES_H */

@@ -15,7 +15,7 @@ SRCS    := $(SRC_DIR)/subsystem3/code39.c $(SRC_DIR)/subsystem3/line_barcode.c \
            $(SRC_DIR)/subsystem3/line_track.c
 
 test_s3: test_s3.c vectors_slides.h $(SRCS)
-	$(CC) $(CFLAGS) $(SAN) -o $@ test_s3.c $(SRCS)
+	$(CC) $(CFLAGS) $(SAN) -o $@ test_s3.c $(SRCS) -lm
 
 run: test_s3
 	./test_s3

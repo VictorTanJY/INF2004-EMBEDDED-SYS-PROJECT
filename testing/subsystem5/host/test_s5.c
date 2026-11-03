@@ -382,35 +382,50 @@ static void test_obstacle(void)
         CHECK("S5-H11", !prof.b_valid && prof.plan == OBST_PLAN_CONTINUE);
     }
 
-    /* S5-H12: bypass path returns to the original line, clears the margin */
+    /* S5-H12: bypass path returns to the original line, clears the margin.
+       3 Nov: simulated about the axle (sensor OBST_US_AHEAD_MM in front,
+       line sensors OBST_IR_AHEAD_MM in front, rear LENGTH - US_AHEAD
+       behind); JOIN ends where the line sensors reach the line (y = 0). */
     {
         box_t b = { 200.0, 150.0, 0.0 };
         uint8_t n, i;
-        double x = 0.0, y = 0.0, h = 0.0, max_lat = 0.0;
+        double x = -OBST_US_AHEAD_MM, y = 0.0, h = 0.0, max_lat = 0.0;
+        bool b_joined = false;
 
         scan_box(&b, 1, &prof);
         n = obst_bypass_plan(&prof, prof.plan, steps);
         for (i = 0; i < n; i++)
         {
             double d = (steps[i].kind == OBST_STEP_TURN) ? 0.0 : (double)steps[i].value;
+            double const c = cos(h * M_PI / 180.0), sn = sin(h * M_PI / 180.0);
+
             if (steps[i].kind == OBST_STEP_TURN) { h += steps[i].value / 10.0; }
-            x += d * cos(h * M_PI / 180.0);
-            y += d * sin(h * M_PI / 180.0);
+            if (steps[i].kind == OBST_STEP_JOIN)
+            {
+                d = (-(y + (OBST_IR_AHEAD_MM * sn)) / sn);
+                b_joined = (d >= 0.0) && (d <= steps[i].value);
+            }
+            x += d * c;
+            y += d * sn;
             if (fabs(y) > max_lat) { max_lat = fabs(y); }
             if (steps[i].kind == OBST_STEP_PASS)
             {
-                /* 3 Nov: the car turned in beside the box.  Before turning
-                   back in, its rear is past the far side of a 200 mm deep
-                   box (sensor at the front, start at the stop point) */
-                CHECK("S5-H12", (x - OBST_ROBOT_LENGTH_MM) >= ((double)prof.closest_mm + 200.0));
+                /* before turning back in, the rear is past the far side
+                   of a 200 mm deep box (face at closest from the sensor) */
+                CHECK("S5-H12", (x - (OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM)) >= ((double)prof.closest_mm + 200.0));
             }
         }
-        printf("bypass: %u steps, end (%.0f, %.0f) heading %.1f, max lateral %.0f mm\n",
+        printf("bypass: %u steps, axle ends (%.0f, %.0f) heading %.1f, max lateral %.0f mm\n",
                (unsigned)n, x, y, h, max_lat);
-        CHECK("S5-H12", fabs(y) < 2.0 && fabs(h) < 0.1 && x > 300.0);
+        CHECK("S5-H12", b_joined && (n <= OBST_BYPASS_MAX_STEPS));
+        CHECK("S5-H12", fabs(y) < 2.0 && fabs(h) < 0.1 && x > ((double)prof.closest_mm + 200.0));
         /* FR11: max deviation <= w/2 + robot/2 + 100 mm; clearance >= 50 mm */
         CHECK("S5-H12", max_lat <= 150.0 / 2 + OBST_ROBOT_WIDTH_MM / 2 + 100.0);
         CHECK("S5-H12", max_lat - OBST_ROBOT_WIDTH_MM / 2.0 - 75.0 >= OBST_MARGIN_MM);
+    }
+    {
+        /* 45 deg turns, slow bypass, turns at the calibration spin rate */
+        CHECK("S5-H12", (OBST_TURN_OUT_DDEG == 450) && (OBST_BYPASS_TURN_DEG_S == MISSION_CAL_SPIN_RATE));
     }
 
     /* S5-H15 (3 Nov, instructor's guidance; the robot read a bottle as 2 mm

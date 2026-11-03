@@ -9,6 +9,19 @@
 #ifndef LINE_CFG_H
 #define LINE_CFG_H
 
+/* ---- Turn slip, measured in the calibration spin (3 Nov) ------------ */
+/* The car spins in place over the line; the pair of line sensors crosses
+   it again after 180 deg of REAL rotation, so the encoder heading there
+   / 180 is how much the encoders over-count a spin on this floor.  The
+   bypass turns are asked for x this gain.  Blocks are 10 ms: 90 deg/s
+   for 360 deg is 400 blocks; 800 allow a slow spin.                     */
+#define LINE_SLIP_MAX_BLOCKS        800u
+#define LINE_SLIP_SKIP_DDEG         600         /* ignore the line the spin starts on */
+#define LINE_SLIP_DARK              500         /* normalised: a sensor on the line   */
+#define LINE_SLIP_MIN_BLOCKS        3u          /* an 18 mm line at 120 mm, 90 deg/s: ~10 */
+#define LINE_SLIP_GAIN_MIN_PM       800         /* plausible gains, permille          */
+#define LINE_SLIP_GAIN_MAX_PM       1900
+
 /* ---- Sensors --------------------------------------------------------- */
 #define LINE_CH_L                   0u          /* ADC0 = GP26 */
 #define LINE_CH_R                   1u          /* ADC1 = GP27 */

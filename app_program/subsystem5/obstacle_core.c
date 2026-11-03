@@ -569,13 +569,15 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
     int32_t const fwd   = (int32_t)(((int64_t)d1 * cos_q) / 32768);
     int32_t const room  = (int32_t)p_prof->closest_mm - OBST_MARGIN_MM;
     int32_t       pass;
+    int32_t       back = 0;
     uint8_t       n = 0u;
 
     /* Not enough room to get sideways before reaching the face: back up. */
     if (fwd > room)
     {
+        back             = fwd - room + 20;
         p_steps[n].kind  = (uint8_t)OBST_STEP_MOVE;
-        p_steps[n].value = (int16_t)-(fwd - room + 20);
+        p_steps[n].value = (int16_t)-back;
         n++;
     }
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(s * OBST_TURN_OUT_DDEG);  n++;
@@ -586,13 +588,21 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
        lost it again; 3 Nov: this value is now the MINIMUM (face to the
        far side of a 20 cm deep object, plus the car, plus the margin):
        the side ping lost a flat side early and the car turned in beside
-       the box. */
-    pass = app_max_i32((int32_t)p_prof->closest_mm - fwd, 0) + OBST_ASSUMED_DEPTH_MM + OBST_ROBOT_LENGTH_MM +
+       the box.  OBST_ROBOT_LENGTH_MM is measured from the sensor, so the
+       sensor's OBST_US_AHEAD_MM in front of the turning axle cancels out
+       (face at US_AHEAD + closest from the axle, rear at LENGTH - US_AHEAD
+       behind it). */
+    pass = app_max_i32((int32_t)p_prof->closest_mm + back - fwd, 0) + OBST_ASSUMED_DEPTH_MM + OBST_ROBOT_LENGTH_MM +
            OBST_MARGIN_MM;
     p_steps[n].kind = (uint8_t)OBST_STEP_PASS; p_steps[n].value = (int16_t)app_min_i32(pass, OBST_PASS_MAX_MM); n++;
 
+    /* 3 Nov: back in at the same angle until a line sensor touches the
+       line (not a fixed distance: the turns slip), then OBST_IR_AHEAD_MM
+       on so the axle is on the line, then turn onto it. */
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(-s * OBST_TURN_OUT_DDEG); n++;
-    p_steps[n].kind = (uint8_t)OBST_STEP_MOVE; p_steps[n].value = (int16_t)d1;                        n++;
+    p_steps[n].kind  = (uint8_t)OBST_STEP_JOIN;
+    p_steps[n].value = (int16_t)(((d1 * OBST_JOIN_MAX_PERMILLE) / 1000) + OBST_JOIN_EXTRA_MM);         n++;
+    p_steps[n].kind = (uint8_t)OBST_STEP_MOVE; p_steps[n].value = (int16_t)OBST_IR_AHEAD_MM;          n++;
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(s * OBST_TURN_OUT_DDEG);  n++;
     return n;
 }

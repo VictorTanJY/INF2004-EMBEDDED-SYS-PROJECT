@@ -23,8 +23,8 @@
 
 /* ---- Navigation at a junction (FR4) ---------------------------------- */
 /* Line sensors to wheel axle: drive this far so the robot turns about the
-   junction centre.  MEASURE.                                            */
-#define MISSION_NAV_CENTRE_MM       55
+   junction centre.  Measured 3 Nov: 120 mm (OBST_IR_AHEAD_MM).          */
+#define MISSION_NAV_CENTRE_MM       120
 #define MISSION_NAV_STRAIGHT_MM     60      /* clear the crossing before following again */
 #define MISSION_NAV_SPEED_MM_S      200
 #define MISSION_TURN_RATE_DEG_S     120
@@ -43,14 +43,17 @@
 #define MISSION_CAL_DONE_TIMEOUT_MS 2000
 #define MISSION_NAV_TIMEOUT_MS      10000
 #define MISSION_OBST_TIMEOUT_MS     25000   /* > ObstacleTask's 10 s BLOCKED   */
-#define MISSION_AVOID_TIMEOUT_MS    15000
-#define MISSION_RECOVER_TIMEOUT_MS  10000
+#define MISSION_AVOID_TIMEOUT_MS    40000   /* 3 Nov: slow 80 mm/s bypass takes ~25 s */
+#define MISSION_RECOVER_TIMEOUT_MS  15000   /* 0.5 m at 100 mm/s + the sweep */
 #define MISSION_SEARCH_RATE_DEG_S   60      /* LINE_SEARCH sweep +-60 deg      */
 #define MISSION_SEARCH_ANGLE_DDEG   600     /* 60.0 deg                        */
 
 /* ---- Obstacle geometry (FR10, FR11) ---------------------------------- */
 #define OBST_ROBOT_WIDTH_MM         130     /* MEASURE: outer width            */
 #define OBST_ROBOT_LENGTH_MM        180     /* MEASURE: sensor to rear         */
+/* Measured 3 Nov with a ruler (car geometry, fixed by the chassis):     */
+#define OBST_US_AHEAD_MM            85      /* ultrasonic front to wheel axle  */
+#define OBST_IR_AHEAD_MM            120     /* IR line sensors to wheel axle   */
 #define OBST_MARGIN_MM              50      /* FR11 clearance                  */
 #define OBST_MAX_RANGE_MM           800     /* profile only what is this close */
 #define OBST_DEPTH_TOL_MM           60      /* same object: within r_min + this; a flat
@@ -91,15 +94,21 @@
 /* After the bypass: if the straight seek finds no line, sweep +-45 deg on
    the spot, accepting any line the sensors see. */
 #define OBST_SWEEP_DDEG             450
-#define OBST_SWEEP_TURN_DEG_S       90
+#define OBST_SWEEP_TURN_DEG_S       MISSION_CAL_SPIN_RATE
 #define OBST_CLEAR_MAX_MM           500     /* nothing seen: this much free    */
 #define OBST_TOO_CLOSE_MM           80      /* < 8 cm: TOO_CLOSE (FR15)        */
-#define OBST_TURN_OUT_DDEG          600     /* bypass turn-out 60.0 deg        */
-#define OBST_BYPASS_SPEED_MM_S      250
-#define OBST_BYPASS_TURN_DEG_S      180
+/* 3 Nov bypass: 45 deg turns, slow, turns at the calibration spin rate
+   (where the turn slip is measured, line_slip_gain) and scaled by that
+   slip; back in at 45 deg until a line sensor touches the line, then
+   OBST_IR_AHEAD_MM on (axle on the line), then turn onto it.            */
+#define OBST_TURN_OUT_DDEG          450     /* bypass turn-out 45.0 deg        */
+#define OBST_BYPASS_SPEED_MM_S      80
+#define OBST_BYPASS_TURN_DEG_S      MISSION_CAL_SPIN_RATE
+#define OBST_JOIN_MAX_PERMILLE      1500    /* back in: give up after 1.5 x the step-out leg */
+#define OBST_JOIN_EXTRA_MM          100     /* ... + this                      */
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
-#define OBST_SEEK_SPEED_MM_S        150
+#define OBST_SEEK_SPEED_MM_S        100
 #define OBST_SEEK_LAT_MM            60      /* accept black only within +-60 mm */
 #define OBST_SEEK_HEADING_CDEG      2000    /* ... and +-20 deg of the original heading */
 #define OBST_REVERSE_MM             100

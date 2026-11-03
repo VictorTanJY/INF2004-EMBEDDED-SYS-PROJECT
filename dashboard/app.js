@@ -20,7 +20,7 @@ const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
-const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode',
+const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 43: 'Impact not confirmed (peak jolt, mg)', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
   54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
@@ -72,6 +72,10 @@ function describe(e) {
     if (p.code === 37) detail = `${p.data} elements (a letter has 29)`;
     if (p.code === 35) { const d = p.data >>> 0; detail = `${d >>> 24} elements (a letter has 29), ${(d >>> 8) & 0xFFFF} mm long, darkest ${(d & 0xFF) * 4} / 1000`; }
     if (p.code === 36) { const d = p.data >>> 0; detail = `narrowest ${((d >>> 16) / 10).toFixed(1)} mm, widest ${((d & 0xFFFF) / 10).toFixed(1)} mm`; }
+    if (p.code === 38) detail = p.data ? `turns asked for ×${(p.data / 1000).toFixed(2)} (encoders count ${(p.data / 10).toFixed(0)}% of a real turn)` : 'not measured: turns not corrected';
+    if (p.code === 39) { const d = p.data >>> 0, off = ((d >>> 16) << 16) >> 16; detail = `${off >= 0 ? 'left' : 'right'}, ${Math.abs(off) / 10} cm to the side, pass at least ${(d & 0xFFFF) / 10} cm`; }
+    if (p.code === 40) { const d = p.data >>> 0; detail = `drove ${(d & 0xFFFF) / 10} cm, side ping ${(d >>> 16) ? 'saw' : 'did not see'} the obstacle`; }
+    if (p.code === 44) detail = p.data ? `line touched after ${p.data / 10} cm` : 'line not found on the way back in';
     if (p.code === 53 || p.code === 62) detail = `0x${(p.data >>> 0).toString(16).padStart(8, '0')}`;
     const cat = [63, 64, 31, 65, 66, 67].includes(p.code) ? 'mission' : 'diagnostic';
     return {cat, title: LOGS[p.code] || `Log ${p.code}`, detail, sym: '·', tone: [31, 41, 61, 66, 69, 70, 110].includes(p.code) ? 'warn' : ''};

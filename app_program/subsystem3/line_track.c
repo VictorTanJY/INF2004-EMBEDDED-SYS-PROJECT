@@ -279,3 +279,117 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     }
     return ev;
 }
+
+/* ---- Turn slip (3 Nov) ---------------------------------------------- */
+void line_slip_start(line_slip_t * p_s, int32_t heading_cdeg)
+{
+    p_s->n         = 0u;
+    p_s->prev_cdeg = heading_cdeg;
+    p_s->acc_cdeg  = 0;
+}
+
+void line_slip_sample(line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l, uint16_t raw_r)
+{
+    int32_t d = heading_cdeg - p_s->prev_cdeg;
+
+    while (d > 18000)
+    {
+        d -= 36000;
+    }
+    while (d < -18000)
+    {
+        d += 36000;
+    }
+    p_s->prev_cdeg  = heading_cdeg;
+    p_s->acc_cdeg  += d;
+    if (p_s->n < LINE_SLIP_MAX_BLOCKS)
+    {
+        p_s->h_ddeg[p_s->n] = (int16_t)app_clamp_i32(app_abs_i32(p_s->acc_cdeg) / 10, 0, 32767);
+        p_s->raw_l[p_s->n]  = raw_l;
+        p_s->raw_r[p_s->n]  = raw_r;
+        p_s->n++;
+    }
+}
+
+/* Heading (0.1 deg) where L - R changes sign between the two sensors'
+   darkest blocks lo..hi: there the pair is centred on the line. */
+static int32_t slip_cross(line_slip_t const * p_s, line_cal_t const * p_cal, uint16_t lo, uint16_t hi)
+{
+    uint16_t k;
+
+    for (k = lo; k < hi; k++)
+    {
+        int32_t const d0 = (int32_t)line_cal_norm(p_cal, LINE_CH_L, p_s->raw_l[k]) -
+                           (int32_t)line_cal_norm(p_cal, LINE_CH_R, p_s->raw_r[k]);
+        int32_t const d1 = (int32_t)line_cal_norm(p_cal, LINE_CH_L, p_s->raw_l[k + 1u]) -
+                           (int32_t)line_cal_norm(p_cal, LINE_CH_R, p_s->raw_r[k + 1u]);
+
+        if (d0 == 0)
+        {
+            return p_s->h_ddeg[k];
+        }
+        if ((d0 > 0) != (d1 > 0))
+        {
+            return p_s->h_ddeg[k] + (((int32_t)(p_s->h_ddeg[k + 1u] - p_s->h_ddeg[k]) * d0) / (d0 - d1));
+        }
+    }
+    return ((int32_t)p_s->h_ddeg[lo] + (int32_t)p_s->h_ddeg[hi]) / 2;
+}
+
+uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal)
+{
+    bool     b_in  = false;
+    uint16_t pk_l  = 0u;
+    uint16_t pk_r  = 0u;
+    uint16_t i_l   = 0u;
+    uint16_t i_r   = 0u;
+    uint16_t i_in  = 0u;
+    uint16_t i;
+
+    if (!p_cal->b_valid)
+    {
+        return 0u;
+    }
+    for (i = 0u; i < p_s->n; i++)
+    {
+        uint16_t const nl     = line_cal_norm(p_cal, LINE_CH_L, p_s->raw_l[i]);
+        uint16_t const nr     = line_cal_norm(p_cal, LINE_CH_R, p_s->raw_r[i]);
+        bool const     b_dark = (p_s->h_ddeg[i] >= LINE_SLIP_SKIP_DDEG) &&
+                                ((nl >= LINE_SLIP_DARK) || (nr >= LINE_SLIP_DARK));
+
+        if (b_dark)
+        {
+            if (!b_in)
+            {
+                b_in = true;
+                i_in = i;
+                pk_l = 0u;
+                pk_r = 0u;
+            }
+            if (nl > pk_l)
+            {
+                pk_l = nl;
+                i_l  = i;
+            }
+            if (nr > pk_r)
+            {
+                pk_r = nr;
+                i_r  = i;
+            }
+        }
+        if (b_in && (!b_dark || (i == (uint16_t)(p_s->n - 1u))))
+        {
+            b_in = false;
+            if ((pk_l >= LINE_SLIP_DARK) && (pk_r >= LINE_SLIP_DARK) &&
+                ((uint16_t)(i - i_in) >= LINE_SLIP_MIN_BLOCKS))
+            {
+                /* both sensors crossed it: the line, 180 real deg on */
+                int32_t const h    = slip_cross(p_s, p_cal, (i_l < i_r) ? i_l : i_r, (i_l < i_r) ? i_r : i_l);
+                int32_t const gain = ((h * 1000) + 900) / 1800;
+
+                return ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM)) ? (uint16_t)gain : 0u;
+            }
+        }
+    }
+    return 0u;
+}

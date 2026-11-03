@@ -11,6 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#include <stdbool.h>
 #include "code39.h"
 #include "line_barcode.h"
 #include "line_track.h"
@@ -550,6 +555,70 @@ static void test_track(void)
     }
 }
 
+/* S3-H16 (3 Nov): turn slip from the calibration spin.  Model: the car
+   spins about its axle on a straight 18 mm line through the axle; the
+   line sensors are OBST_IR_AHEAD 120 mm ahead, 9 mm either side (both
+   half on the line at the start); the encoders count `gain` x the real
+   rotation; a sensor reads the fraction of its 8 mm spot on black. */
+static uint16_t slip_raw(double x, double y)
+{
+    double const half = 9.0;
+    double       f;
+
+    (void)x;
+    f = (half - fabs(y) + 4.0) / 8.0;
+    f = (f < 0.0) ? 0.0 : ((f > 1.0) ? 1.0 : f);
+    return (uint16_t)(300.0 + (f * 2700.0));
+}
+
+static uint16_t slip_run(int gain_pm, bool b_line, int start_cdeg)
+{
+    static line_slip_t slip;
+    line_cal_t         cal;
+    int                k;
+
+    memset(&cal, 0, sizeof(cal));
+    line_cal_start(&cal);
+    line_slip_start(&slip, start_cdeg);
+    for (k = 1; k <= 400; k++)
+    {
+        double const enc  = 360.0 * k / 400.0;
+        double const real = enc * 1000.0 / gain_pm * M_PI / 180.0;
+        double const xs   = 120.0 * cos(real);
+        double const yl   = (120.0 * sin(real)) + (9.0 * cos(real));
+        double const yr   = (120.0 * sin(real)) - (9.0 * cos(real));
+        uint16_t     raw[3];
+        int          h    = start_cdeg + (int)(enc * 100.0);
+
+        while (h > 18000) { h -= 36000; }
+        raw[0] = b_line ? slip_raw(xs, yl) : 300u;
+        raw[1] = b_line ? slip_raw(xs, yr) : 300u;
+        raw[2] = 300u;
+        if (!b_line && (k == 200)) { raw[0] = 3000u; raw[1] = 3000u; }   /* contrast for the cal */
+        line_cal_sample(&cal, raw);
+        line_slip_sample(&slip, h, raw[0], raw[1]);
+    }
+    (void)line_cal_finish(&cal);
+    return line_slip_gain(&slip, &cal);     /* no line: both dark for one block only */
+}
+
+static void test_slip(void)
+{
+    int const gains[4] = { 1000, 1200, 1500, 1800 };
+    int       i;
+
+    for (i = 0; i < 4; i++)
+    {
+        uint16_t const g = slip_run(gains[i], true, 17000);
+
+        printf("turn slip: real gain %d -> measured %u\n", gains[i], (unsigned)g);
+        CHECK("S3-H16", abs((int)g - gains[i]) <= 25);
+    }
+    CHECK("S3-H16", slip_run(1500, true, -9000) != 0u);
+    /* no line under the car: not measured */
+    CHECK("S3-H16", slip_run(1500, false, 0) == 0u);
+}
+
 int main(void)
 {
     test_table();
@@ -558,6 +627,7 @@ int main(void)
     test_rejects();
     test_capture();
     test_track();
+    test_slip();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

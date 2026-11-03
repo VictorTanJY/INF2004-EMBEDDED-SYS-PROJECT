@@ -37,10 +37,13 @@
 /* 37 = a dark pattern of 2..8 elements, dropped as "not a barcode" (a
    crossing line is 1): data = elements; LOG 35 / 36 follow.            */
 #define LINE_LOG_BC_SHORT       37u
+/* 38 = turn slip from the calibration spin, permille (0 = not found) */
+#define LINE_LOG_TURN_GAIN      38u
 
 static line_cal_t   g_cal;
 static line_track_t g_trk;
 static bc_capture_t g_bc;
+static line_slip_t  g_slip;
 
 /* LOG 35 / 36 for the capture that was just rejected (still in g_bc). */
 static void bc_reject_detail(bc_capture_t const * p_bc)
@@ -150,15 +153,23 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         /* ---- 2. calibration (360 deg spin) -------------------------- */
         if (ms.cal_phase == (uint8_t)MISSION_CAL_PH_SPIN)
         {
+            uint32_t cl = 0u;
+            uint32_t cr = 0u;
+
             if (!b_cal_active)
             {
                 line_cal_start(&g_cal);
+                line_slip_start(&g_slip, odom.heading_cdeg);
                 b_cal_active = true;
             }
             for (i = 0u; i < LINE_SAMPLES_PER_BLOCK; i++)
             {
                 line_cal_sample(&g_cal, &block[i * LINE_CH_COUNT]);
+                cl += block[(i * LINE_CH_COUNT) + LINE_CH_L];
+                cr += block[(i * LINE_CH_COUNT) + LINE_CH_R];
             }
+            line_slip_sample(&g_slip, odom.heading_cdeg, (uint16_t)(cl / LINE_SAMPLES_PER_BLOCK),
+                             (uint16_t)(cr / LINE_SAMPLES_PER_BLOCK));
         }
         else if (b_cal_active && (ms.cal_phase == (uint8_t)MISSION_CAL_PH_FINISH))
         {
@@ -172,6 +183,10 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                                        (uint16_t)(LINE_LOG_CAL_LEVELS + ch),
                                        (int32_t)(((uint32_t)g_cal.max[ch] << 16) | g_cal.min[ch]));
             }
+            /* turn slip for the bypass turns (3 Nov) */
+            snap.turn_gain_pm = b_ok ? line_slip_gain(&g_slip, &g_cal) : 0u;
+            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_TURN_GAIN,
+                                   (int32_t)snap.turn_gain_pm);
             b_cal_active      = false;
             snap.contrast_x10 = g_cal.contrast_x10;
             line_track_init(&g_trk);

@@ -81,4 +81,21 @@ void    line_track_init(line_track_t * p_t);
 uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
                         uint16_t norm_l, uint16_t norm_r, uint32_t step_um);
 
+/* ---- Turn slip (calibration spin, 3 Nov) ---------------------------- */
+typedef struct
+{
+    int16_t  h_ddeg[LINE_SLIP_MAX_BLOCKS];  /* encoder heading turned since the start */
+    uint16_t raw_l[LINE_SLIP_MAX_BLOCKS];   /* block means, raw ADC                    */
+    uint16_t raw_r[LINE_SLIP_MAX_BLOCKS];
+    uint16_t n;
+    int32_t  prev_cdeg;
+    int32_t  acc_cdeg;
+} line_slip_t;
+
+void     line_slip_start(line_slip_t * p_s, int32_t heading_cdeg);
+void     line_slip_sample(line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l, uint16_t raw_r);
+/* After line_cal_finish(): encoder deg per real deg x 1000, from where the
+   line sensors cross the line again; 0 if not found or implausible. */
+uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal);
+
 #endif /* LINE_TRACK_H */

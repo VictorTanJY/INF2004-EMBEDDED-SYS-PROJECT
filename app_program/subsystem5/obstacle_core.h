@@ -95,12 +95,15 @@ void    obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm);
 bool    obst_scan_done(obst_scan_t const * p_s);
 void    obst_scan_profile(obst_scan_t const * p_s, obst_profile_t * p_out);
 
-/* Bypass path: up to 8 steps of MOVE / TURN / PASS. */
+/* Bypass path: up to OBST_BYPASS_MAX_STEPS steps.  TURN values are real
+   degrees; the task scales them by the measured turn slip. */
 typedef enum
 {
     OBST_STEP_MOVE = 1,         /* value = mm (+ forward)                  */
     OBST_STEP_TURN = 2,         /* value = 0.1 deg (+ left)                */
-    OBST_STEP_PASS = 3          /* drive on, servo watching the obstacle   */
+    OBST_STEP_PASS = 3,         /* drive on, servo watching the obstacle   */
+    OBST_STEP_JOIN = 4          /* drive on until a line sensor sees the
+                                   line; value = give up after this, mm    */
 } obst_step_kind_t;
 
 typedef struct
@@ -109,7 +112,7 @@ typedef struct
     int16_t value;
 } obst_step_t;
 
-#define OBST_BYPASS_MAX_STEPS   8u
+#define OBST_BYPASS_MAX_STEPS   10u
 
 uint8_t  obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_t * p_steps);
 
