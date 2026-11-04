@@ -412,10 +412,8 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             {
                 /* deviation from the profile is signed by the planned side */
                 g_prof.deviation_mm = (int16_t)((g_o.side == (uint8_t)OBST_PLAN_LEFT) ?
-                    (app_max_i32(g_prof.plan_l_mm, OBST_WIDTH_MAX_MM / 2) + OBST_MARGIN_MM +
-                     (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM) :
-                    -(app_max_i32(-g_prof.plan_r_mm, OBST_WIDTH_MAX_MM / 2) + OBST_MARGIN_MM +
-                      (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
+                    (g_prof.left_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM) :
+                    -(-g_prof.right_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
             }
             g_o.n_steps  = obst_bypass_plan(&g_prof, g_o.side, g_steps);
             g_o.step_i   = 0u;
