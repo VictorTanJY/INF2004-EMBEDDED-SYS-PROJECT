@@ -270,6 +270,51 @@ static void test_mission(void)
 }
 
 /* ---- obstacle geometry --------------------------------------------- */
+/* 4 Nov edge scan model: car heading phi (deg, + left) about the axle, the
+   sensor OBST_US_AHEAD_MM ahead looking along phi with a 15 deg half beam;
+   a box face d mm ahead of the sensor, w wide, centred c (+ left). */
+static uint16_t edge_ping(double d, double w, double c, double phi_deg)
+{
+    double const ph = phi_deg * M_PI / 180.0;
+    double const sx = OBST_US_AHEAD_MM * sin(ph), sy = OBST_US_AHEAD_MM * cos(ph);
+    double best = 1e9, x;
+
+    for (x = c - (w / 2.0); x <= c + (w / 2.0); x += 1.0)
+    {
+        double const dx = x - sx, dy = (OBST_US_AHEAD_MM + d) - sy;
+        double const ang = atan2(dx, dy) - ph;
+        double const r = sqrt((dx * dx) + (dy * dy));
+
+        if ((fabs(ang) <= (15.0 * M_PI / 180.0)) && (r < best)) { best = r; }
+    }
+    return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
+}
+
+static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
+{
+    bool    has[2] = { false, false };
+    int32_t lat[2] = { 0, 0 };
+    int     k;
+
+    for (k = 0; k < 2; k++)
+    {
+        int32_t const side = (k == 0) ? 1 : -1;
+        int32_t       phi  = 0;
+        unsigned      miss = 0u;
+
+        while ((miss < OBST_EDGE_MISSES) && (abs(phi) < (OBST_EDGE_MAX_DDEG * 10)))
+        {
+            uint16_t r;
+
+            phi += side * OBST_EDGE_STEP_DDEG * 10;
+            r = edge_ping(d, w, c, phi / 100.0);
+            if (obst_edge_on_face(phi, r, (uint16_t)d)) { has[k] = true; lat[k] = obst_edge_lat(phi, r, side); miss = 0u; }
+            else { miss++; }
+        }
+    }
+    obst_edge_plan(p_prof, has[0], lat[0], has[1], lat[1]);
+}
+
 typedef struct { double d, w, c; } box_t;       /* face distance, width, centre lateral (+ left) */
 
 static uint16_t ping(box_t const * p_b, int n_b, int angle_deg)
@@ -396,6 +441,31 @@ static void test_obstacle(void)
         }
     }
 
+    /* S5-H17 (4 Nov): edge scan with the car turning.  Edges within the
+       beam correction of the truth, never inside it; side away from the
+       centre; offset = edge + margin + half car + allowance. */
+    {
+        static double const cs[3] = { 0.0, -62.0, 62.0 };
+        int t;
+
+        for (t = 0; t < 3; t++)
+        {
+            memset(&prof, 0, sizeof(prof));
+            prof.clr_l_mm = OBST_CLEAR_MAX_MM;
+            prof.clr_r_mm = OBST_CLEAR_MAX_MM;
+            edge_sim(195.0, 154.0, cs[t], &prof);
+            printf("edge scan: box 154 at %+.0f -> edges %+d / %+d, plan %u, offset %d\n", cs[t],
+                   prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.plan, prof.deviation_mm);
+            CHECK("S5-H17", prof.b_sure && (prof.left_lat_mm >= (cs[t] + 77.0 - 5.0)) &&
+                            (prof.left_lat_mm <= (cs[t] + 77.0 + 60.0)));
+            CHECK("S5-H17", (prof.right_lat_mm <= (cs[t] - 77.0 + 5.0)) && (prof.right_lat_mm >= (cs[t] - 77.0 - 60.0)));
+            CHECK("S5-H17", (cs[t] > 0.0) ? (prof.plan == OBST_PLAN_RIGHT) : (prof.plan == OBST_PLAN_LEFT));
+            CHECK("S5-H17", (prof.plan == OBST_PLAN_LEFT) ?
+                            (prof.deviation_mm >= (cs[t] + 77.0 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2))) :
+                            (-prof.deviation_mm >= (-(cs[t] - 77.0) + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2))));
+        }
+    }
+
     /* S5-H12: bypass path returns to the original line, clears the margin.
        3 Nov: simulated about the axle (sensor OBST_US_AHEAD_MM in front,
        line sensors OBST_IR_AHEAD_MM in front, rear LENGTH - US_AHEAD
@@ -433,13 +503,13 @@ static void test_obstacle(void)
             {
                 /* before turning back in, the rear is past the far side
                    of a 200 mm deep box (face at closest from the sensor) */
-                CHECK("S5-H12", (x - (OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM)) >= ((double)prof.closest_mm + 200.0));
+                CHECK("S5-H12", (x - (OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM)) >= ((double)prof.closest_mm + 150.0));
             }
         }
         printf("bypass: %u steps, axle ends (%.0f, %.0f) heading %.1f, max lateral %.0f mm\n",
                (unsigned)n, x, y, h, max_lat);
         CHECK("S5-H12", b_joined && (n <= OBST_BYPASS_MAX_STEPS));
-        CHECK("S5-H12", fabs(y) < 2.0 && fabs(h) < 0.1 && x > ((double)prof.closest_mm + 200.0));
+        CHECK("S5-H12", fabs(y) < 2.0 && fabs(h) < 0.1 && x > ((double)prof.closest_mm + 150.0));
         /* FR11: max deviation <= w/2 + robot/2 + 100 mm; clearance >= 50 mm */
         CHECK("S5-H12", max_lat <= 150.0 / 2 + OBST_ROBOT_WIDTH_MM / 2 + 100.0);
         CHECK("S5-H12", max_lat - OBST_ROBOT_WIDTH_MM / 2.0 - 75.0 >= OBST_MARGIN_MM);

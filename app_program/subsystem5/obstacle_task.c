@@ -10,7 +10,10 @@
  *  MONITOR   servo 90 deg, median of 3: < slow_mm SLOW_DOWN, < stop_mm
  *            OBSTACLE (both masked on a hump), < 8 cm TOO_CLOSE (never masked).
  *  PROFILE   coarse 30..150 by 30, fine +-40 by 5 around the nearest echo,
- *            two bisection pings per edge -> width, edges, clearances, plan
+ *            two bisection pings per edge -> width, edges, clearances, plan.
+ *            4 Nov, for a bypass: EDGE_SCAN, sensor straight ahead, the car
+ *            turns 5 deg at a time to each side until the echo leaves the
+ *            face; the edges from the car's heading re-plan the bypass
  *            -> PROFILE_DONE(plan, width).  No clearance: reverse 100 mm and
  *            rescan (twice), then BLOCKED: rescan every 2 s, 5 times; after
  *            10 s BLOCKED_TIMEOUT.
@@ -55,6 +58,13 @@
 #define OBST_LOG_JOIN           44u     /* back in: line touched after mm, 0 = not found */
 #define OBST_LOG_LINESCAN       46u     /* turned onto the line after 0.1 deg, 0 = not found */
 #define OBST_LOG_EDGES          47u     /* scan edges, mm (+ left): left << 16 | right (int16 each) */
+#define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
+
+/* edge scan phases */
+#define EDGE_PH_TURN            0u
+#define EDGE_PH_SETTLE          1u
+#define EDGE_PH_PING            2u
+#define EDGE_PH_RETURN          3u
 #define OBST_GAIN_UNIT          1000
 
 static obst_scan_t    g_scan;
@@ -113,6 +123,14 @@ typedef struct
     int32_t  join_h;            /* JOIN: heading held while driving back in */
     bool     b_joined;          /* the line was found: accept it in SEEK    */
     bool     b_line_seen;       /* LINESCAN: a sensor has reached the line  */
+    /* edge scan (4 Nov) */
+    int8_t   edge_side;         /* +1 left, -1 right */
+    uint8_t  edge_ph;           /* EDGE_PH_* */
+    uint8_t  edge_miss;
+    int32_t  edge_h0;           /* encoder heading where the car stopped */
+    uint32_t edge_until_ms;
+    bool     b_edge_has[2];     /* [0] left, [1] right */
+    int32_t  edge_lat[2];
     int32_t  scan_h0;           /* LINESCAN: heading at the start           */
     uint16_t det_mm;            /* range when the monitor saw the obstacle  */
     int32_t  back_mm;           /* backed off since then (second look, reverse) */
@@ -157,13 +175,18 @@ static void log_ev(uint16_t code, int32_t data)
 
 /* A real turn (0.1 deg) as the encoders must count it: x the turn slip
    gain measured in the calibration spin (line snapshot, 0 = not measured). */
-static int16_t slip_ddeg(int16_t ddeg)
+static int32_t turn_gain(void)
 {
     line_snap_t line;
-    int32_t     gain;
 
     line_get_snap(&line);
-    gain = (line.turn_gain_pm != 0u) ? (int32_t)line.turn_gain_pm : OBST_GAIN_UNIT;
+    return (line.turn_gain_pm != 0u) ? (int32_t)line.turn_gain_pm : OBST_GAIN_UNIT;
+}
+
+static int16_t slip_ddeg(int16_t ddeg)
+{
+    int32_t const gain = turn_gain();
+
     return (int16_t)app_clamp_i32(((int32_t)ddeg * gain) / OBST_GAIN_UNIT, -3600, 3600);
 }
 
@@ -351,6 +374,18 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.back_mm += OBST_SECOND_LOOK_MM;
         send_step((uint8_t)OBST_STEP_MOVE, -OBST_SECOND_LOOK_MM, p_odom);
     }
+    else if ((g_prof.plan == (uint8_t)OBST_PLAN_LEFT) || (g_prof.plan == (uint8_t)OBST_PLAN_RIGHT))
+    {
+        /* 4 Nov: measure the edges for the bypass by turning the car */
+        g_o.b_blocked     = false;
+        goto_state((uint8_t)OBST_ST_EDGE_SCAN);
+        g_o.edge_side     = 1;
+        g_o.edge_ph       = EDGE_PH_TURN;
+        g_o.edge_miss     = 0u;
+        g_o.edge_h0       = p_odom->heading_cdeg;
+        g_o.b_edge_has[0] = false;
+        g_o.b_edge_has[1] = false;
+    }
     else if (g_prof.plan != (uint8_t)OBST_PLAN_BLOCKED)
     {
         g_o.b_blocked = false;
@@ -379,6 +414,17 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         goto_state((uint8_t)OBST_ST_BLOCKED);
         g_o.next_rescan_ms = now_ms + OBST_BLOCKED_RESCAN_MS;
     }
+}
+
+/* Edge scan finished: re-plan from the measured edges and report. */
+static void edge_finish(void)
+{
+    obst_edge_plan(&g_prof, g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
+    publish_profile();
+    log_ev(OBST_LOG_EDGES_CAR, (int32_t)(((uint32_t)(uint16_t)g_prof.left_lat_mm << 16) |
+                                         (uint16_t)g_prof.right_lat_mm));
+    post((uint8_t)MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
+    goto_state((uint8_t)OBST_ST_IDLE);
 }
 
 /* ------------------------------------------------------------------ */
@@ -452,7 +498,7 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
 
         default:                        /* STOP */
             if ((g_o.state == (uint8_t)OBST_ST_BYPASS) || (g_o.state == (uint8_t)OBST_ST_SEEK_LINE) ||
-                (g_o.state == (uint8_t)OBST_ST_SEEK_SWEEP))
+                (g_o.state == (uint8_t)OBST_ST_SEEK_SWEEP) || (g_o.state == (uint8_t)OBST_ST_EDGE_SCAN))
             {
                 stop_motion();
             }
@@ -533,6 +579,31 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
             break;
         }
 
+        case OBST_ST_EDGE_SCAN:
+        {
+            uint16_t rm;
+
+            if ((g_o.edge_ph == EDGE_PH_PING) && scan_sample(r, &rm))
+            {
+                uint8_t const k   = (g_o.edge_side > 0) ? 0u : 1u;
+                int32_t const phi = (app_wrap_cdeg(p_odom->heading_cdeg - g_o.edge_h0) * OBST_GAIN_UNIT) / turn_gain();
+
+                if (obst_edge_on_face(phi, rm, g_prof.closest_mm))
+                {
+                    g_o.b_edge_has[k] = true;
+                    g_o.edge_lat[k]   = obst_edge_lat(phi, rm, g_o.edge_side);
+                    g_o.edge_miss     = 0u;
+                }
+                else
+                {
+                    g_o.edge_miss++;
+                }
+                g_o.edge_ph = ((g_o.edge_miss >= OBST_EDGE_MISSES) ||
+                               (app_abs_i32(phi) >= (OBST_EDGE_MAX_DDEG * 10))) ? EDGE_PH_RETURN : EDGE_PH_TURN;
+            }
+            break;
+        }
+
         case OBST_ST_COARSE_SCAN:
         case OBST_ST_FINE_SCAN:
         {
@@ -582,6 +653,75 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             if (servo_settled(now_ms))
             {
                 ping();
+            }
+            break;
+
+        case OBST_ST_EDGE_SCAN:
+            switch (g_o.edge_ph)
+            {
+                case EDGE_PH_TURN:
+                    if (!g_o.b_wait_motion)
+                    {
+                        if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                        {
+                            send_turn(slip_ddeg((int16_t)(g_o.edge_side * OBST_EDGE_STEP_DDEG)),
+                                      OBST_EDGE_TURN_DEG_S, p_odom);
+                        }
+                    }
+                    else if (motion_result(p_odom) != 0)
+                    {
+                        g_o.edge_ph       = EDGE_PH_SETTLE;
+                        g_o.edge_until_ms = now_ms + OBST_EDGE_SETTLE_MS;
+                    }
+                    else
+                    {
+                        /* turning */
+                    }
+                    break;
+
+                case EDGE_PH_SETTLE:
+                    if ((int32_t)(now_ms - g_o.edge_until_ms) >= 0)
+                    {
+                        g_o.sw_n    = 0u;
+                        g_o.edge_ph = EDGE_PH_PING;
+                    }
+                    break;
+
+                case EDGE_PH_PING:
+                    if (servo_settled(now_ms))
+                    {
+                        ping();
+                    }
+                    break;
+
+                default:                    /* EDGE_PH_RETURN: back to where it stopped */
+                    if (!g_o.b_wait_motion)
+                    {
+                        if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                        {
+                            int32_t const dh = app_wrap_cdeg(g_o.edge_h0 - p_odom->heading_cdeg);
+
+                            if (app_abs_i32(dh) > 100)
+                            {
+                                send_step((uint8_t)OBST_STEP_TURN, (int16_t)(dh / 10), p_odom);
+                            }
+                            else if (g_o.edge_side > 0)
+                            {
+                                g_o.edge_side = -1;
+                                g_o.edge_miss = 0u;
+                                g_o.edge_ph   = EDGE_PH_TURN;
+                            }
+                            else
+                            {
+                                edge_finish();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        (void)motion_result(p_odom);    /* clears b_wait_motion when done */
+                    }
+                    break;
             }
             break;
 

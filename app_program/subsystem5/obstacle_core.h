@@ -61,6 +61,20 @@ void     obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
                                obst_point_t const * p_coarse, uint8_t n_coarse,
                                uint16_t r_det_mm, obst_profile_t * p_out);
 
+/* ---- Edge scan (4 Nov): the car turns, the sensor looks straight ahead.
+   phi = the car's real heading from where it stopped (0.01 deg, + left),
+   r = range from the sensor (OBST_US_AHEAD_MM ahead of the axle).       */
+/* The echo comes from the obstacle's face (not something behind it). */
+bool    obst_edge_on_face(int32_t phi_cdeg, uint16_t r_mm, uint16_t face_mm);
+/* The face's corner seen at the last on-face heading on side +1 (left) /
+   -1 (right): lateral mm from the line (+ left), the beam's inner edge on
+   the corner (OBST_HALF_BEAM_CDEG). */
+int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
+/* Re-plan p from the edge scan: edges, width, side (away from the
+   obstacle's centre, unless that side has no room), offset.  A side
+   whose edge was not found reaches OBST_WIDTH_MAX from the other. */
+void    obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
+
 /* ---- Scan sequencer: COARSE (30..150 by 30) -> FINE (nearest +-40 by 5)
    -> REFINE each edge by bisection.  The task pings obst_scan_angle(),
    feeds the range with obst_scan_feed() until obst_scan_done(). */

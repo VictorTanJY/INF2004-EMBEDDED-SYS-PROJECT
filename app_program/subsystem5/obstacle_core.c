@@ -9,7 +9,6 @@
 #include "../app_math.h"
 
 #define OBST_NEAR_EXTRA_MM      300     /* other objects this close matter for clearance */
-#define OBST_ASSUMED_DEPTH_MM   200     /* PASS fallback when the side ping never sees it */
 
 uint16_t obst_median3(uint16_t a, uint16_t b, uint16_t c)
 {
@@ -546,6 +545,75 @@ void obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, obst
     obst_profile_detected(p_s->fine, p_s->n_fine, p_s->coarse, p_s->n_coarse, r_det_mm, p_out);
 }
 
+/* ---- edge scan (4 Nov) ------------------------------------------------ */
+bool obst_edge_on_face(int32_t phi_cdeg, uint16_t r_mm, uint16_t face_mm)
+{
+    /* forward distance of the echo from the axle vs the face plane */
+    int32_t const fwd = (int32_t)((((int64_t)OBST_US_AHEAD_MM + r_mm) * app_cos_q15(phi_cdeg)) / 32768);
+
+    return (r_mm != OBST_RANGE_NONE) && (r_mm <= OBST_MAX_RANGE_MM) &&
+           (fwd <= ((int32_t)OBST_US_AHEAD_MM + (int32_t)face_mm + OBST_EDGE_BAND_MM));
+}
+
+int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
+{
+    int32_t const psi = phi_cdeg - (side * OBST_HALF_BEAM_CDEG);
+
+    return (int32_t)((((int64_t)OBST_US_AHEAD_MM * app_sin_q15(phi_cdeg)) +
+                      ((int64_t)r_mm * app_sin_q15(psi))) / 32768);
+}
+
+void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r)
+{
+    int32_t const need  = OBST_ROBOT_WIDTH_MM + (2 * OBST_MARGIN_MM);
+    int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+    bool          b_left;
+
+    if (!b_has_l && !b_has_r)
+    {
+        return;                         /* keep the servo scan's plan */
+    }
+    if (!b_has_l)
+    {
+        lat_l = lat_r + OBST_WIDTH_MAX_MM;
+    }
+    if (!b_has_r)
+    {
+        lat_r = lat_l - OBST_WIDTH_MAX_MM;
+    }
+    if (lat_l < lat_r)
+    {
+        int32_t const mid = (lat_l + lat_r) / 2;
+
+        lat_l = mid;
+        lat_r = mid;
+    }
+    p->b_valid      = true;
+    p->b_sure       = b_has_l && b_has_r;
+    p->left_lat_mm  = (int16_t)lat_l;
+    p->right_lat_mm = (int16_t)lat_r;
+    p->plan_l_mm    = (int16_t)lat_l;
+    p->plan_r_mm    = (int16_t)lat_r;
+    p->w_mm         = (uint16_t)(lat_l - lat_r);
+
+    /* away from the centre (centre on or right of the line: go left) */
+    b_left = ((lat_l + lat_r) <= 0);
+    if (b_left && (p->clr_l_mm < need) && (p->clr_r_mm >= need))
+    {
+        b_left = false;
+    }
+    else if (!b_left && (p->clr_r_mm < need) && (p->clr_l_mm >= need))
+    {
+        b_left = true;
+    }
+    else
+    {
+        /* the side away from the centre has room (or neither has: try it) */
+    }
+    p->plan         = b_left ? (uint8_t)OBST_PLAN_LEFT : (uint8_t)OBST_PLAN_RIGHT;
+    p->deviation_mm = (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
+}
+
 /* ---- bypass ----------------------------------------------------------- */
 uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_t * p_steps)
 {
@@ -558,6 +626,7 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
     int32_t const room  = (int32_t)p_prof->closest_mm - OBST_MARGIN_MM;
     int32_t       pass;
     int32_t       back = 0;
+    int32_t       depth;
     uint8_t       n = 0u;
 
     /* Not enough room to get sideways before reaching the face: back up. */
@@ -580,7 +649,11 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
        sensor's OBST_US_AHEAD_MM in front of the turning axle cancels out
        (face at US_AHEAD + closest from the axle, rear at LENGTH - US_AHEAD
        behind it). */
-    pass = app_max_i32((int32_t)p_prof->closest_mm + back - fwd, 0) + OBST_ASSUMED_DEPTH_MM + OBST_ROBOT_LENGTH_MM +
+    /* depth (4 Nov): taken as the measured width (square), at most
+       OBST_WIDTH_MAX; OBST_WIDTH_MAX when the width is not known */
+    depth = ((p_prof->w_mm > 0u) && (p_prof->w_mm <= OBST_WIDTH_MAX_MM)) ? (int32_t)p_prof->w_mm
+                                                                       : OBST_WIDTH_MAX_MM;
+    pass = app_max_i32((int32_t)p_prof->closest_mm + back - fwd, 0) + depth + OBST_ROBOT_LENGTH_MM +
            OBST_MARGIN_MM;
     p_steps[n].kind = (uint8_t)OBST_STEP_PASS; p_steps[n].value = (int16_t)app_min_i32(pass, OBST_PASS_MAX_MM); n++;
 

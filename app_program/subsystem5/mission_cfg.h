@@ -42,7 +42,7 @@
 #define MISSION_CAL_SPIN_RATE       90      /* deg/s, 360 deg spin             */
 #define MISSION_CAL_DONE_TIMEOUT_MS 2000
 #define MISSION_NAV_TIMEOUT_MS      10000
-#define MISSION_OBST_TIMEOUT_MS     25000   /* > ObstacleTask's 10 s BLOCKED   */
+#define MISSION_OBST_TIMEOUT_MS     60000   /* > BLOCKED 10 s + the 4 Nov edge scan */
 #define MISSION_AVOID_TIMEOUT_MS    40000   /* 3 Nov: slow 80 mm/s bypass takes ~25 s */
 #define MISSION_RECOVER_TIMEOUT_MS  15000   /* 0.5 m at 100 mm/s + the sweep */
 #define MISSION_SEARCH_RATE_DEG_S   60      /* LINE_SEARCH sweep +-60 deg      */
@@ -100,6 +100,17 @@
    line is centred between the two line sensors (measured, not assumed:
    the line may curve there); up to the turn-out angle + this.          */
 #define OBST_LINESCAN_DEG_S         30
+/* 4 Nov edge scan (as the reference robot measures its bypass): after the
+   servo scan, the sensor looks straight ahead and the CAR turns in steps
+   to each side until the echo leaves the obstacle's face; the edge comes
+   from the car's heading (encoders / turn slip), so it does not depend on
+   the servo's angle or direction.                                       */
+#define OBST_EDGE_STEP_DDEG         50      /* chassis step, 5 deg               */
+#define OBST_EDGE_MAX_DDEG          500     /* look at most 50 deg to each side  */
+#define OBST_EDGE_TURN_DEG_S        30
+#define OBST_EDGE_SETTLE_MS         150     /* after each step, before the pings */
+#define OBST_EDGE_BAND_MM           40      /* echo within this behind the face plane = face */
+#define OBST_EDGE_MISSES            2u      /* clear readings in a row that end a side */
 #define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
