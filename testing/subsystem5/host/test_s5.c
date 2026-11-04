@@ -290,6 +290,8 @@ static uint16_t edge_ping(double d, double w, double c, double phi_deg)
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
 }
 
+static uint16_t g_edge_clutter = 0u;    /* range of clutter seen beyond 25 deg right, 0 = none */
+
 static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
 {
     bool    has[2] = { false, false };
@@ -308,7 +310,12 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
 
             phi += side * OBST_EDGE_STEP_DDEG * 10;
             r = edge_ping(d, w, c, phi / 100.0);
-            if (obst_edge_on_face(phi, r, (uint16_t)d)) { has[k] = true; lat[k] = obst_edge_lat(phi, r, side); miss = 0u; }
+            if ((side < 0) && (phi <= -2500) && (g_edge_clutter != 0u)) { r = g_edge_clutter; }   /* something to the right */
+            if (obst_edge_on_face(phi, r, (uint16_t)d))
+            {
+                if (obst_edge_past_max(obst_edge_lat(phi, r, side), side)) { break; }
+                has[k] = true; lat[k] = obst_edge_lat(phi, r, side); miss = 0u;
+            }
             else { miss++; }
         }
     }
@@ -464,6 +471,22 @@ static void test_obstacle(void)
                             (prof.deviation_mm >= (cs[t] + 77.0 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2))) :
                             (-prof.deviation_mm >= (-(cs[t] - 77.0) + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2))));
         }
+    }
+
+    {
+        /* 4 Nov run: box 150 at 245 mm; clutter answering at 320 mm from 25 deg
+           right on: its echoes are past where any 20 cm obstacle's edge can be,
+           so the right edge stays the box's own and the offset clears the box */
+        memset(&prof, 0, sizeof(prof));
+        prof.clr_l_mm = OBST_CLEAR_MAX_MM;
+        prof.clr_r_mm = OBST_CLEAR_MAX_MM;
+        g_edge_clutter = 320u;
+        edge_sim(245.0, 150.0, 0.0, &prof);
+        g_edge_clutter = 0u;
+        printf("edge scan with clutter right: edges %+d / %+d, plan %u, offset %d\n",
+               prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.plan, prof.deviation_mm);
+        CHECK("S5-H17", (prof.right_lat_mm >= -(OBST_WIDTH_MAX_MM)) &&
+                        (abs(prof.deviation_mm) >= 75 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2)));
     }
 
     /* S5-H12: bypass path returns to the original line, clears the margin.

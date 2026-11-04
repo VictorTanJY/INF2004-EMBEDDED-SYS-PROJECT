@@ -59,6 +59,7 @@
 #define OBST_LOG_LINESCAN       46u     /* turned onto the line after 0.1 deg, 0 = not found */
 #define OBST_LOG_EDGES          47u     /* scan edges, mm (+ left): left << 16 | right (int16 each) */
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
+#define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
 
 /* edge scan phases */
 #define EDGE_PH_TURN            0u
@@ -131,6 +132,8 @@ typedef struct
     uint32_t edge_until_ms;
     bool     b_edge_has[2];     /* [0] left, [1] right */
     int32_t  edge_lat[2];
+    uint8_t  edge_hits[2];      /* on-face pings per side (log)  */
+    uint8_t  edge_deg[2];       /* last heading reached, deg (log) */
     int32_t  scan_h0;           /* LINESCAN: heading at the start           */
     uint16_t det_mm;            /* range when the monitor saw the obstacle  */
     int32_t  back_mm;           /* backed off since then (second look, reverse) */
@@ -385,6 +388,10 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.edge_h0       = p_odom->heading_cdeg;
         g_o.b_edge_has[0] = false;
         g_o.b_edge_has[1] = false;
+        g_o.edge_hits[0]  = 0u;
+        g_o.edge_hits[1]  = 0u;
+        g_o.edge_deg[0]   = 0u;
+        g_o.edge_deg[1]   = 0u;
     }
     else if (g_prof.plan != (uint8_t)OBST_PLAN_BLOCKED)
     {
@@ -421,6 +428,8 @@ static void edge_finish(void)
 {
     obst_edge_plan(&g_prof, g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
     publish_profile();
+    log_ev(OBST_LOG_EDGE_SIDES, (int32_t)(((uint32_t)g_o.edge_hits[0] << 24) | ((uint32_t)g_o.edge_deg[0] << 16) |
+                                          ((uint32_t)g_o.edge_hits[1] << 8) | (uint32_t)g_o.edge_deg[1]));
     log_ev(OBST_LOG_EDGES_CAR, (int32_t)(((uint32_t)(uint16_t)g_prof.left_lat_mm << 16) |
                                          (uint16_t)g_prof.right_lat_mm));
     post((uint8_t)MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
@@ -588,17 +597,34 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                 uint8_t const k   = (g_o.edge_side > 0) ? 0u : 1u;
                 int32_t const phi = (app_wrap_cdeg(p_odom->heading_cdeg - g_o.edge_h0) * OBST_GAIN_UNIT) / turn_gain();
 
+                int32_t const lat = obst_edge_lat(phi, rm, g_o.edge_side);
+                bool          b_past = false;
+
+                g_o.edge_deg[k] = (uint8_t)app_min_i32(app_abs_i32(phi) / 100, 255);
                 if (obst_edge_on_face(phi, rm, g_prof.closest_mm))
                 {
-                    g_o.b_edge_has[k] = true;
-                    g_o.edge_lat[k]   = obst_edge_lat(phi, rm, g_o.edge_side);
-                    g_o.edge_miss     = 0u;
+                    if (obst_edge_past_max(lat, g_o.edge_side))
+                    {
+                        /* 4 Nov: echoes 32 cm away at 50 deg right (mat edge,
+                           floor) were taken as the box, edge 28.6 cm right of
+                           the line.  An edge further from the line than the
+                           largest obstacle is not this obstacle: stop here,
+                           that side's edge is not known. */
+                        b_past = true;
+                    }
+                    else
+                    {
+                        g_o.b_edge_has[k] = true;
+                        g_o.edge_lat[k]   = lat;
+                        g_o.edge_miss     = 0u;
+                        g_o.edge_hits[k]++;
+                    }
                 }
                 else
                 {
                     g_o.edge_miss++;
                 }
-                g_o.edge_ph = ((g_o.edge_miss >= OBST_EDGE_MISSES) ||
+                g_o.edge_ph = (b_past || (g_o.edge_miss >= OBST_EDGE_MISSES) ||
                                (app_abs_i32(phi) >= (OBST_EDGE_MAX_DDEG * 10))) ? EDGE_PH_RETURN : EDGE_PH_TURN;
             }
             break;

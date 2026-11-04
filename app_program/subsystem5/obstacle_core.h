@@ -70,6 +70,10 @@ bool    obst_edge_on_face(int32_t phi_cdeg, uint16_t r_mm, uint16_t face_mm);
    -1 (right): lateral mm from the line (+ left), the beam's inner edge on
    the corner (OBST_HALF_BEAM_CDEG). */
 int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
+/* That edge is further out from the line than an OBST_WIDTH_MAX obstacle's
+   could be on this side (as the reference robot's "past max"): it is
+   something else, the side's edge is not known. */
+bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
 /* Re-plan p from the edge scan: edges, width, side (away from the
    obstacle's centre, unless that side has no room), offset.  A side
    whose edge was not found reaches OBST_WIDTH_MAX from the other. */

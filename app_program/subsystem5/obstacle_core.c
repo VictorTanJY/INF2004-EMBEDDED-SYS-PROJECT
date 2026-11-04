@@ -563,6 +563,11 @@ int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
                       ((int64_t)r_mm * app_sin_q15(psi))) / 32768);
 }
 
+bool obst_edge_past_max(int32_t lat_mm, int32_t side)
+{
+    return ((side * lat_mm) > OBST_WIDTH_MAX_MM);
+}
+
 void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r)
 {
     int32_t const need  = OBST_ROBOT_WIDTH_MM + (2 * OBST_MARGIN_MM);
