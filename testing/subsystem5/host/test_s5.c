@@ -481,12 +481,15 @@ static void test_obstacle(void)
         prof.clr_l_mm = OBST_CLEAR_MAX_MM;
         prof.clr_r_mm = OBST_CLEAR_MAX_MM;
         g_edge_clutter = 320u;
+        prof.clr_l_mm  = 20u;           /* 4 Nov: servo scan "saw" the box's left half as a blocker */
         edge_sim(245.0, 150.0, 0.0, &prof);
         g_edge_clutter = 0u;
         printf("edge scan with clutter right: edges %+d / %+d, plan %u, offset %d\n",
                prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.plan, prof.deviation_mm);
         CHECK("S5-H17", (prof.right_lat_mm >= -(OBST_WIDTH_MAX_MM)) &&
                         (abs(prof.deviation_mm) >= 75 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2)));
+        /* clutter only on the right: never pass on the right (towards it) */
+        CHECK("S5-H17", prof.plan == OBST_PLAN_LEFT);
     }
 
     /* S5-H12: bypass path returns to the original line, clears the margin.

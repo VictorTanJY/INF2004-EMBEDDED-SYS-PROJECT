@@ -75,7 +75,7 @@ int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
    something else, the side's edge is not known. */
 bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
 /* Re-plan p from the edge scan: edges, width, side (away from the
-   obstacle's centre, unless that side has no room), offset.  A side
+   obstacle's centre), offset.  A side
    whose edge was not found reaches OBST_WIDTH_MAX from the other. */
 void    obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
 

@@ -109,7 +109,10 @@
 #define OBST_EDGE_MAX_DDEG          500     /* look at most 50 deg to each side  */
 #define OBST_EDGE_TURN_DEG_S        30
 #define OBST_EDGE_SETTLE_MS         150     /* after each step, before the pings */
-#define OBST_EDGE_BAND_MM           40      /* echo within this behind the face plane = face */
+/* 4 Nov: 40 let something beside the box, ~28 mm behind its face, count
+   as the face (right edge read 20 cm right of the line).  25 as the
+   reference robot measured it (80 too loose, 35 cut faces at 25-30 deg). */
+#define OBST_EDGE_BAND_MM           25      /* echo within this behind the face plane = face */
 #define OBST_EDGE_MISSES            2u      /* clear readings in a row that end a side */
 #define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */

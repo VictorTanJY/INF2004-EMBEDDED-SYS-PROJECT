@@ -570,7 +570,6 @@ bool obst_edge_past_max(int32_t lat_mm, int32_t side)
 
 void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r)
 {
-    int32_t const need  = OBST_ROBOT_WIDTH_MM + (2 * OBST_MARGIN_MM);
     int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
     bool          b_left;
 
@@ -601,20 +600,12 @@ void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_
     p->plan_r_mm    = (int16_t)lat_r;
     p->w_mm         = (uint16_t)(lat_l - lat_r);
 
-    /* away from the centre (centre on or right of the line: go left) */
+    /* away from the centre (centre on or right of the line: go left).
+       4 Nov: not overridden by the servo scan's clearances any more: that
+       scan split a centred box in two and took the box's own left half
+       for a second object blocking the left, so the car went right, off
+       the mat.  The reference robot also plans from the edges only. */
     b_left = ((lat_l + lat_r) <= 0);
-    if (b_left && (p->clr_l_mm < need) && (p->clr_r_mm >= need))
-    {
-        b_left = false;
-    }
-    else if (!b_left && (p->clr_r_mm < need) && (p->clr_l_mm >= need))
-    {
-        b_left = true;
-    }
-    else
-    {
-        /* the side away from the centre has room (or neither has: try it) */
-    }
     p->plan         = b_left ? (uint8_t)OBST_PLAN_LEFT : (uint8_t)OBST_PLAN_RIGHT;
     p->deviation_mm = (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
 }
