@@ -54,6 +54,7 @@
 #define OBST_LOG_PASS           40u     /* pass leg: driven mm | side ping saw it << 16 */
 #define OBST_LOG_JOIN           44u     /* back in: line touched after mm, 0 = not found */
 #define OBST_LOG_LINESCAN       46u     /* turned onto the line after 0.1 deg, 0 = not found */
+#define OBST_LOG_EDGES          47u     /* scan edges, mm (+ left): left << 16 | right (int16 each) */
 #define OBST_GAIN_UNIT          1000
 
 static obst_scan_t    g_scan;
@@ -328,10 +329,17 @@ static void publish_profile(void)
 /* The scan finished: decide (PLAN). */
 static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
 {
+    obst_profile_t const * const p_pr = &g_prof;
+
     obst_scan_profile_detected(&g_scan,
                                (uint16_t)app_clamp_i32((int32_t)g_o.det_mm + g_o.back_mm, 0, OBST_RANGE_NONE),
                                &g_prof);
     publish_profile();
+    if (p_pr->b_valid)
+    {
+        log_ev(OBST_LOG_EDGES, (int32_t)(((uint32_t)(uint16_t)p_pr->left_lat_mm << 16) |
+                                         (uint16_t)p_pr->right_lat_mm));
+    }
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
 
     if (g_prof.b_valid && !g_prof.b_sure && !g_o.b_second_look)
