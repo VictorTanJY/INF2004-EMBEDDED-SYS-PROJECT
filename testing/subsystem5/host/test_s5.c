@@ -133,9 +133,6 @@ static void test_mission(void)
     ev(MISSION_EV_CAL_DONE, 4u, 0);                                          /* IMU failed */
     tick(100u);
     CHECK("S5-H02", g_mc.snap.state == MISSION_ST_IDLE && g_mc.snap.calibrated == MISSION_CAL_IR);
-    /* 3 Nov: the background scan is asked for after IDLE's STOP */
-    CHECK("S5-H02", find(MISSION_ACT_SCAN, SCAN_REQ_BACKGROUND) > find(MISSION_ACT_SCAN, SCAN_REQ_STOP) &&
-                    find(MISSION_ACT_SCAN, SCAN_REQ_STOP) >= 0);
     calibrate();
     CHECK("S5-H02", g_mc.snap.calibrated == MISSION_CAL_ALL);
 
@@ -413,10 +410,17 @@ static void test_obstacle(void)
         n = obst_bypass_plan(&prof, prof.plan, steps);
         for (i = 0; i < n; i++)
         {
-            double d = (steps[i].kind == OBST_STEP_TURN) ? 0.0 : (double)steps[i].value;
+            double d = ((steps[i].kind == OBST_STEP_TURN) || (steps[i].kind == OBST_STEP_LINESCAN)) ? 0.0
+                                                                                                : (double)steps[i].value;
             double const c = cos(h * M_PI / 180.0), sn = sin(h * M_PI / 180.0);
 
             if (steps[i].kind == OBST_STEP_TURN) { h += steps[i].value / 10.0; }
+            if (steps[i].kind == OBST_STEP_LINESCAN)
+            {
+                /* spins toward value's side until parallel to the line */
+                CHECK("S5-H12", ((steps[i].value > 0) == (h < 0)) && (fabs(h) <= fabs(steps[i].value / 10.0)));
+                h = 0.0;
+            }
             if (steps[i].kind == OBST_STEP_JOIN)
             {
                 d = (-(y + (OBST_IR_AHEAD_MM * sn)) / sn);
@@ -467,58 +471,8 @@ static void test_obstacle(void)
                         (prof.plan_r_mm <= prof.right_lat_mm));
     }
     {
-        /* (c) background: low walls 250 mm ahead on both sides (as the floor
-           or the mat edge read on the robot) merge with a 150 mm box at
-           200 mm into one wide object; with the background scanned first
-           (scene without the box) they drop out and the width is right */
-        box_t const walls[2] = { { 230.0, 300.0, 250.0 }, { 230.0, 300.0, -250.0 } };
-        box_t const scene[3] = { { 200.0, 150.0, 0.0 }, { 230.0, 300.0, 250.0 }, { 230.0, 300.0, -250.0 } };
-        int a;
-        uint16_t w_no_bg;
-
-        obst_bg_clear();
-        scan_box(scene, 3, &prof);
-        w_no_bg = prof.w_mm;
-        for (a = OBST_SCAN_MIN_DEG; a <= OBST_SCAN_MAX_DEG; a += OBST_BG_STEP_DEG)
-        {
-            uint16_t const r = ping(walls, 2, a);
-            obst_bg_set((int16_t)a, obst_median3(r, r, r));
-        }
-        scan_box(scene, 3, &prof);
-        printf("background: width without %u mm, with %u mm (box 150)\n", (unsigned)w_no_bg, (unsigned)prof.w_mm);
-        CHECK("S5-H15", w_no_bg > 200u);
-        CHECK("S5-H15", prof.w_mm >= 125u && prof.w_mm <= 175u);
-        CHECK("S5-H15", obst_bg_at(90) == OBST_RANGE_NONE || obst_bg_at(90) > 300u);
-        obst_bg_clear();
-        CHECK("S5-H15", obst_bg_at(90) == 0u);
-    }
-    {
-        /* (e) 3 Nov, the robot drove into a box twice: the box was on the
-           track during calibration, so the background scan stored it and
-           the profile then found nothing (width 0 -> CONTINUE).  A near
-           echo ahead is never background, and an echo straight ahead
-           closer than the guard distance forbids CONTINUE. */
-        box_t const box = { 160.0, 150.0, 0.0 };
-        int a;
-
-        obst_bg_clear();
-        for (a = OBST_SCAN_MIN_DEG; a <= OBST_SCAN_MAX_DEG; a += OBST_BG_STEP_DEG)
-        {
-            obst_bg_set((int16_t)a, ping(&box, 1, a));      /* box there at calibration */
-        }
-        CHECK("S5-H15", obst_bg_at(90) == 0u);              /* not stored as background */
-        scan_box(&box, 1, &prof);
-        printf("box at calibration: width %u mm, plan edges %+d/%+d, plan %u\n", (unsigned)prof.w_mm,
-               prof.plan_l_mm, prof.plan_r_mm, (unsigned)prof.plan);
-        /* its sides beyond +-25 deg may still be masked, so the width can
-           read short, but the plan covers the whole 150 mm box */
-        CHECK("S5-H15", prof.b_valid && (prof.plan == OBST_PLAN_LEFT || prof.plan == OBST_PLAN_RIGHT) &&
-                        (prof.plan_l_mm >= 75) && (prof.plan_r_mm <= -75));
-        obst_bg_clear();
-    }
-    {
-        /* (f) guard: the profile itself sees nothing usable (every echo
-           beyond range or masked), yet the raw reading straight ahead is
+        /* (f) guard: the profile itself sees nothing usable (no fine
+           scan), yet the raw reading straight ahead is
            150 mm: plan a bypass for a 20 cm object, never CONTINUE */
         obst_point_t pts[5];
         uint8_t k;
@@ -529,9 +483,6 @@ static void test_obstacle(void)
             pts[k].r_mm      = OBST_RANGE_NONE;
         }
         pts[2].r_mm = 150u;                     /* 90 deg */
-        obst_bg_clear();
-        obst_bg_set(90, 900u);                  /* pretend: nothing usable... */
-        obst_bg_set(90, 0u);
         obst_profile(pts, 0u, pts, 5u, &prof);  /* no fine scan at all */
         CHECK("S5-H15", prof.plan != OBST_PLAN_CONTINUE && prof.closest_mm == 150u);
         CHECK("S5-H15", (prof.plan_l_mm >= (OBST_WIDTH_MAX_MM / 2)) && (prof.plan_r_mm <= -(OBST_WIDTH_MAX_MM / 2)));

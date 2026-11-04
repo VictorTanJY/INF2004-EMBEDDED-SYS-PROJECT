@@ -76,17 +76,6 @@
 #define OBST_WIDTH_MAX_MM           200
 #define OBST_SECOND_LOOK_MM         60      /* back-off before the second scan */
 #define OBST_SCAN_PINGS             3       /* median of this many pings per angle */
-/* Background: after a calibration the car scans 20..160 deg (median of 3,
-   nothing in front) and keeps each angle's range (floor, walls).  In a
-   profile, an echo counts only if it is this much closer than the
-   background at that angle; the stop check while driving does not use it. */
-#define OBST_BG_MARGIN_MM           25      /* HC-SR04 repeatability ~5 mm after the median */
-#define OBST_BG_STEP_DEG            5
-/* 3 Nov: within +-OBST_BG_AHEAD_DEG of straight ahead, nearer than
-   OBST_BG_MIN_MM in the background scan is an object (e.g. the obstacle
-   already on the track at calibration), never background.              */
-#define OBST_BG_AHEAD_DEG           25
-#define OBST_BG_MIN_MM              350
 /* 3 Nov guard: an echo within +-10 deg of straight ahead nearer than
    this (stop distance + 5 cm) forbids CONTINUE (see obst_profile).    */
 #define OBST_GUARD_HALF_DEG         10
@@ -106,6 +95,12 @@
 #define OBST_BYPASS_TURN_DEG_S      MISSION_CAL_SPIN_RATE
 #define OBST_JOIN_MAX_PERMILLE      1500    /* back in: give up after 1.5 x the step-out leg */
 #define OBST_JOIN_EXTRA_MM          100     /* ... + this                      */
+/* 4 Nov: the car overshot the line after the fixed 45 deg turn back.
+   Now it spins slowly toward the line's direction and stops where the
+   line is centred between the two line sensors (measured, not assumed:
+   the line may curve there); up to the turn-out angle + this.          */
+#define OBST_LINESCAN_DEG_S         30
+#define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
 #define OBST_SEEK_SPEED_MM_S        100

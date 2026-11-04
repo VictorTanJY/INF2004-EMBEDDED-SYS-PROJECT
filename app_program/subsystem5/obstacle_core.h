@@ -41,14 +41,6 @@ typedef struct
     int16_t  deviation_mm;      /* lateral offset for the chosen bypass    */
 } obst_profile_t;
 
-/* Background ranges by angle (OBST_SCAN_MIN_DEG..MAX in OBST_BG_STEP_DEG
-   steps).  obst_bg_clear() forgets them (0 = not scanned: no subtraction
-   at that angle), obst_bg_set() stores one angle's median range. */
-#define OBST_BG_COUNT   ((uint8_t)(((OBST_SCAN_MAX_DEG - OBST_SCAN_MIN_DEG) / OBST_BG_STEP_DEG) + 1))
-void     obst_bg_clear(void);
-void     obst_bg_set(int16_t angle_deg, uint16_t r_mm);
-uint16_t obst_bg_at(int16_t angle_deg);
-
 /* Median of three ranges (OBST_RANGE_NONE counts as far away). */
 uint16_t obst_median3(uint16_t a, uint16_t b, uint16_t c);
 
@@ -110,8 +102,10 @@ typedef enum
     OBST_STEP_MOVE = 1,         /* value = mm (+ forward)                  */
     OBST_STEP_TURN = 2,         /* value = 0.1 deg (+ left)                */
     OBST_STEP_PASS = 3,         /* drive on, servo watching the obstacle   */
-    OBST_STEP_JOIN = 4          /* drive on until a line sensor sees the
+    OBST_STEP_JOIN = 4,         /* drive on until a line sensor sees the
                                    line; value = give up after this, mm    */
+    OBST_STEP_LINESCAN = 5      /* spin slowly until the line is centred
+                                   under the sensors; value = most 0.1 deg (+ left) */
 } obst_step_kind_t;
 
 typedef struct

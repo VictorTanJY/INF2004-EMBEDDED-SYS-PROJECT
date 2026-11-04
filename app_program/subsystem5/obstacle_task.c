@@ -17,7 +17,8 @@
  *  BYPASS    turn out 45, offset, turn parallel, PASS (servo looking at the
  *            obstacle until it has been seen and passed), turn in 45, JOIN
  *            (on until a line sensor touches the line), OBST_IR_AHEAD_MM on,
- *            turn onto the line -> BYPASS_DONE.  3 Nov: bypass and sweep
+ *            LINESCAN (spin slowly until the line is centred under the
+ *            sensors) -> BYPASS_DONE.  3 Nov: bypass and sweep
  *            turns are scaled by the turn slip measured at calibration.  Commands use AVOID authority;
  *            completion is read from last_done_seq in the odometry snapshot.
  *  RECOVER   creep forward (<= 0.5 m) until a line sensor sees black within
@@ -26,8 +27,7 @@
  *            line -> RECOVERY_DONE, or RECOVERY_FAILED.
  *  3 Nov (instructor's guidance): every scan angle is the median of
  *  OBST_SCAN_PINGS pings after the servo settles; an unsure profile (see
- *  mission_cfg.h) backs off OBST_SECOND_LOOK_MM and scans once more; after
- *  a calibration (SCAN_REQ_BACKGROUND) the background is scanned.
+ *  mission_cfg.h) backs off OBST_SECOND_LOOK_MM and scans once more.
  */
 
 #include "subsystem5.h"
@@ -53,6 +53,7 @@
 #define OBST_LOG_PLAN           39u     /* bypass plan: offset mm (+ left) << 16 | pass mm */
 #define OBST_LOG_PASS           40u     /* pass leg: driven mm | side ping saw it << 16 */
 #define OBST_LOG_JOIN           44u     /* back in: line touched after mm, 0 = not found */
+#define OBST_LOG_LINESCAN       46u     /* turned onto the line after 0.1 deg, 0 = not found */
 #define OBST_GAIN_UNIT          1000
 
 static obst_scan_t    g_scan;
@@ -107,10 +108,11 @@ typedef struct
     uint16_t sw[OBST_SCAN_PINGS];   /* pings at the current scan angle */
     uint8_t  sw_n;
     bool     b_second_look;     /* this obstacle was already scanned twice */
-    int16_t  bg_angle;          /* background scan: current angle */
     uint8_t  sweep_i;           /* SEEK_SWEEP step */
     int32_t  join_h;            /* JOIN: heading held while driving back in */
-    bool     b_joined;          /* JOIN touched the line: accept it in SEEK */
+    bool     b_joined;          /* the line was found: accept it in SEEK    */
+    bool     b_line_seen;       /* LINESCAN: a sensor has reached the line  */
+    int32_t  scan_h0;           /* LINESCAN: heading at the start           */
     uint16_t det_mm;            /* range when the monitor saw the obstacle  */
     int32_t  back_mm;           /* backed off since then (second look, reverse) */
 } obst_ctx_t;
@@ -396,14 +398,6 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             start_scan(now_ms);
             break;
 
-        case SCAN_REQ_BACKGROUND:
-            obst_bg_clear();
-            g_o.sw_n     = 0u;
-            g_o.bg_angle = OBST_SCAN_MIN_DEG;
-            goto_state((uint8_t)OBST_ST_BG_SCAN);
-            servo_to(g_o.bg_angle, now_ms);
-            break;
-
         case SCAN_REQ_BYPASS_LEFT:
         case SCAN_REQ_BYPASS_RIGHT:
             g_o.side    = (p_req->type == (uint8_t)SCAN_REQ_BYPASS_LEFT) ? (uint8_t)OBST_PLAN_LEFT
@@ -531,27 +525,6 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
             break;
         }
 
-        case OBST_ST_BG_SCAN:
-        {
-            uint16_t rm;
-
-            if (scan_sample(r, &rm))
-            {
-                obst_bg_set(g_o.bg_angle, rm);
-                g_o.bg_angle = (int16_t)(g_o.bg_angle + OBST_BG_STEP_DEG);
-                if (g_o.bg_angle > OBST_SCAN_MAX_DEG)
-                {
-                    goto_state((uint8_t)OBST_ST_IDLE);
-                    servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
-                }
-                else
-                {
-                    servo_to(g_o.bg_angle, now_ms);
-                }
-            }
-            break;
-        }
-
         case OBST_ST_COARSE_SCAN:
         case OBST_ST_FINE_SCAN:
         {
@@ -598,7 +571,6 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
         case OBST_ST_MONITOR:
         case OBST_ST_COARSE_SCAN:
         case OBST_ST_FINE_SCAN:
-        case OBST_ST_BG_SCAN:
             if (servo_settled(now_ms))
             {
                 ping();
@@ -717,6 +689,49 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 else
                 {
                     drive(OBST_BYPASS_SPEED_MM_S, g_o.join_h, p_odom);
+                }
+            }
+            else if (p_st->kind == (uint8_t)OBST_STEP_LINESCAN)
+            {
+                line_snap_t   line;
+                int32_t const s = (p_st->value >= 0) ? 1 : -1;
+
+                line_get_snap(&line);
+                if (!g_o.b_wait_motion)
+                {
+                    if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                    {
+                        g_o.b_line_seen = false;
+                        g_o.scan_h0     = p_odom->heading_cdeg;
+                        send_turn(slip_ddeg(p_st->value), OBST_LINESCAN_DEG_S, p_odom);
+                    }
+                }
+                else
+                {
+                    bool const b_on = ((line.flags & LINE_FLAG_ON_LINE) != 0u);
+
+                    g_o.b_line_seen = g_o.b_line_seen || b_on;
+                    /* err + = line to the left: turning toward s, the line
+                       moves across from the s side; centred when it changes sign */
+                    if (g_o.b_line_seen && b_on && ((s * (int32_t)line.err) <= 0))
+                    {
+                        stop_motion();
+                        g_o.b_wait_motion = false;
+                        g_o.b_joined      = true;
+                        log_ev(OBST_LOG_LINESCAN,
+                               app_max_i32(app_abs_i32(app_wrap_cdeg(p_odom->heading_cdeg - g_o.scan_h0)) / 10, 1));
+                        g_o.step_i++;
+                    }
+                    else if (motion_result(p_odom) != 0)
+                    {
+                        g_o.b_joined = false;       /* turned all the way: SEEK / sweep look for it */
+                        log_ev(OBST_LOG_LINESCAN, 0);
+                        g_o.step_i++;
+                    }
+                    else
+                    {
+                        /* still turning */
+                    }
                 }
             }
             else if (!g_o.b_wait_motion)

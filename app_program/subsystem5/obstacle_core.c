@@ -46,51 +46,10 @@ static int32_t lateral_mm(int32_t angle_cdeg, uint16_t r_mm)
     return -(int32_t)(((int64_t)r_mm * app_cos_q15(angle_cdeg)) / 32768);
 }
 
-/* ---- background (3 Nov) ------------------------------------------------ */
-/* 0 = not scanned (zero-initialised at boot), OBST_RANGE_NONE = no echo. */
-static uint16_t g_bg[OBST_BG_COUNT];
-
-void obst_bg_clear(void)
-{
-    uint8_t i;
-
-    for (i = 0u; i < OBST_BG_COUNT; i++)
-    {
-        g_bg[i] = 0u;
-    }
-}
-
-static uint8_t bg_index(int16_t angle_deg)
-{
-    int32_t const k = ((app_clamp_i32(angle_deg, OBST_SCAN_MIN_DEG, OBST_SCAN_MAX_DEG) - OBST_SCAN_MIN_DEG)
-                       + (OBST_BG_STEP_DEG / 2)) / OBST_BG_STEP_DEG;
-
-    return (uint8_t)app_min_i32(k, (int32_t)OBST_BG_COUNT - 1);
-}
-
-void obst_bg_set(int16_t angle_deg, uint16_t r_mm)
-{
-    /* 3 Nov: anything this close AHEAD during the background scan is an
-       object on the track (e.g. the obstacle already placed), never
-       background; further to the sides near echoes (floor, mat edge) are. */
-    bool const b_ahead = (app_abs_i32((int32_t)angle_deg - OBST_SERVO_CENTRE_DEG) <= OBST_BG_AHEAD_DEG);
-
-    g_bg[bg_index(angle_deg)] = (b_ahead && (r_mm < OBST_BG_MIN_MM)) ? 0u : r_mm;
-}
-
-uint16_t obst_bg_at(int16_t angle_deg)
-{
-    return g_bg[bg_index(angle_deg)];
-}
-
-/* An echo that can be part of an obstacle: in range and clearly closer
-   than the background at that angle (OBST_RANGE_NONE = no background). */
+/* An echo that can be part of an obstacle: in range. */
 static bool usable(obst_point_t const * p)
 {
-    uint16_t const bg = obst_bg_at(p->angle_deg);
-
-    return (p->r_mm != OBST_RANGE_NONE) && (p->r_mm <= OBST_MAX_RANGE_MM) &&
-           ((bg == 0u) || (bg == OBST_RANGE_NONE) || (((uint32_t)p->r_mm + OBST_BG_MARGIN_MM) < bg));
+    return (p->r_mm != OBST_RANGE_NONE) && (p->r_mm <= OBST_MAX_RANGE_MM);
 }
 
 static bool same_object(obst_point_t const * p, uint16_t r_min)
@@ -627,12 +586,14 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
 
     /* 3 Nov: back in at the same angle until a line sensor touches the
        line (not a fixed distance: the turns slip), then OBST_IR_AHEAD_MM
-       on so the axle is on the line, then turn onto it. */
+       on so the axle is on the line, then (4 Nov) spin until the line is
+       centred under the sensors, wherever it runs. */
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(-s * OBST_TURN_OUT_DDEG); n++;
     p_steps[n].kind  = (uint8_t)OBST_STEP_JOIN;
     p_steps[n].value = (int16_t)(((d1 * OBST_JOIN_MAX_PERMILLE) / 1000) + OBST_JOIN_EXTRA_MM);         n++;
     p_steps[n].kind = (uint8_t)OBST_STEP_MOVE; p_steps[n].value = (int16_t)OBST_IR_AHEAD_MM;          n++;
-    p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(s * OBST_TURN_OUT_DDEG);  n++;
+    p_steps[n].kind  = (uint8_t)OBST_STEP_LINESCAN;
+    p_steps[n].value = (int16_t)(s * (OBST_TURN_OUT_DDEG + OBST_LINESCAN_SPARE_DDEG));               n++;
     return n;
 }
 
