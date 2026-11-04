@@ -436,10 +436,13 @@ static void test_obstacle(void)
         obst_point_t none[3] = { { 80, OBST_RANGE_NONE }, { 90, OBST_RANGE_NONE }, { 100, OBST_RANGE_NONE } };
         int32_t const need = (OBST_WIDTH_MAX_MM / 2) + (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
 
-        obst_profile_detected(none, 3u, none, 0u, 160u, &prof);
+        obst_profile_detected(none, 3u, none, 0u, 160u, 0u, &prof);
         CHECK("S5-H16", prof.b_valid && (prof.closest_mm == 160u) &&
                         ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
                         (abs(prof.deviation_mm) >= need));
+        /* 4 Nov: seen at 192 mm, backed off 60 mm, still no echo: still a bypass */
+        obst_profile_detected(none, 3u, none, 0u, 192u, 60u, &prof);
+        CHECK("S5-H16", prof.b_valid && (prof.closest_mm == 252u) && (prof.plan != OBST_PLAN_CONTINUE));
         /* the scan saw it off to the side and clear: the detection does not override */
         {
             box_t b = { 200.0, 100.0, 260.0 };
@@ -473,6 +476,19 @@ static void test_obstacle(void)
         }
     }
 
+    {
+        /* 4 Nov: centred box, no echo at all on the left; the servo scan had
+           seen it -73..+87 (+ left): use its left edge, so the side is
+           decided by a real reading, not by "unseen = 20 cm more" */
+        memset(&prof, 0, sizeof(prof));
+        prof.b_valid = true; prof.w_mm = 160u; prof.plan_l_mm = 73; prof.plan_r_mm = -87;
+        obst_edge_plan(&prof, false, 0, true, -88);
+        CHECK("S5-H17", (prof.left_lat_mm == 73) && (prof.plan == OBST_PLAN_LEFT));
+        /* without a servo reading: as far as the largest obstacle */
+        memset(&prof, 0, sizeof(prof));
+        obst_edge_plan(&prof, false, 0, true, -88);
+        CHECK("S5-H17", (prof.left_lat_mm == -88 + OBST_WIDTH_MAX_MM));
+    }
     {
         /* 4 Nov run: box 150 at 245 mm; clutter answering at 320 mm from 25 deg
            right on: its echoes are past where any 20 cm obstacle's edge can be,

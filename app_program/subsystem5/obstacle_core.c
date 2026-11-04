@@ -332,7 +332,7 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
 
 void obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
                            obst_point_t const * p_coarse, uint8_t n_coarse,
-                           uint16_t r_det_mm, obst_profile_t * p_out)
+                           uint16_t r_det_mm, uint16_t back_mm, obst_profile_t * p_out)
 {
     obst_profile(p_fine, n_fine, p_coarse, n_coarse, p_out);
 
@@ -340,9 +340,11 @@ void obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
        of 3) but not in the scan (curved glass returns few echoes), the
        profile was empty, the plan CONTINUE, and the car drove into it.
        Nothing seen in the scan after a detection = trust the detection. */
+    /* 4 Nov: the test is on the range when it was seen, not after the
+       back-off (19.2 cm + 6 cm passed the 25 cm limit and the car drove on) */
     if (!p_out->b_valid && (r_det_mm < OBST_GUARD_MM))
     {
-        force_ahead(p_fine, n_fine, p_coarse, n_coarse, r_det_mm, p_out);
+        force_ahead(p_fine, n_fine, p_coarse, n_coarse, (uint16_t)(r_det_mm + back_mm), p_out);
     }
 }
 
@@ -540,9 +542,10 @@ void obst_scan_profile(obst_scan_t const * p_s, obst_profile_t * p_out)
     obst_profile(p_s->fine, p_s->n_fine, p_s->coarse, p_s->n_coarse, p_out);
 }
 
-void obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, obst_profile_t * p_out)
+void obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, uint16_t back_mm,
+                                obst_profile_t * p_out)
 {
-    obst_profile_detected(p_s->fine, p_s->n_fine, p_s->coarse, p_s->n_coarse, r_det_mm, p_out);
+    obst_profile_detected(p_s->fine, p_s->n_fine, p_s->coarse, p_s->n_coarse, r_det_mm, back_mm, p_out);
 }
 
 /* ---- edge scan (4 Nov) ------------------------------------------------ */
@@ -573,17 +576,23 @@ void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_
     int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
     bool          b_left;
 
+    bool const b_servo = p->b_valid && (p->w_mm > 0u);   /* the servo scan saw a real face */
+
     if (!b_has_l && !b_has_r)
     {
         return;                         /* keep the servo scan's plan */
     }
+    /* 4 Nov: a side with no echo at all is not proof that the obstacle runs
+       on that way (a centred box got 0 echoes on the left and the car went
+       right).  Take the servo scan's edge for it when that scan saw a real
+       face, otherwise as far as the largest obstacle from the seen edge. */
     if (!b_has_l)
     {
-        lat_l = lat_r + OBST_WIDTH_MAX_MM;
+        lat_l = b_servo ? app_max_i32(p->plan_l_mm, lat_r) : (lat_r + OBST_WIDTH_MAX_MM);
     }
     if (!b_has_r)
     {
-        lat_r = lat_l - OBST_WIDTH_MAX_MM;
+        lat_r = b_servo ? app_min_i32(p->plan_r_mm, lat_l) : (lat_l - OBST_WIDTH_MAX_MM);
     }
     if (lat_l < lat_r)
     {

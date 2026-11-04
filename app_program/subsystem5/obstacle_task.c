@@ -136,6 +136,8 @@ typedef struct
     int32_t  edge_lat[2];
     uint8_t  edge_hits[2];      /* on-face pings per side (log)  */
     uint8_t  edge_deg[2];       /* last heading reached, deg (log) */
+    uint16_t edge_face;         /* face range straight ahead, measured first */
+    bool     b_edge_face;       /* edge_face measured */
     int32_t  scan_h0;           /* LINESCAN: heading at the start           */
     uint16_t det_mm;            /* range when the monitor saw the obstacle  */
     int32_t  back_mm;           /* backed off since then (second look, reverse) */
@@ -359,9 +361,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
 {
     obst_profile_t const * const p_pr = &g_prof;
 
-    obst_scan_profile_detected(&g_scan,
-                               (uint16_t)app_clamp_i32((int32_t)g_o.det_mm + g_o.back_mm, 0, OBST_RANGE_NONE),
-                               &g_prof);
+    obst_scan_profile_detected(&g_scan, g_o.det_mm, (uint16_t)app_clamp_i32(g_o.back_mm, 0, 1000), &g_prof);
     publish_profile();
     if (p_pr->b_valid)
     {
@@ -385,7 +385,10 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.b_blocked     = false;
         goto_state((uint8_t)OBST_ST_EDGE_SCAN);
         g_o.edge_side     = 1;
-        g_o.edge_ph       = EDGE_PH_TURN;
+        g_o.edge_ph       = EDGE_PH_SETTLE;     /* 4 Nov: first ping straight ahead for the face */
+        g_o.edge_until_ms = now_ms;
+        g_o.b_edge_face   = false;
+        g_o.edge_face     = g_prof.closest_mm;
         g_o.edge_miss     = 0u;
         g_o.edge_h0       = p_odom->heading_cdeg;
         g_o.b_edge_has[0] = false;
@@ -603,8 +606,21 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                 int32_t const lat = obst_edge_lat(phi, rm, g_o.edge_side);
                 bool          b_past = false;
 
+                if (!g_o.b_edge_face)
+                {
+                    /* 4 Nov: the face straight ahead, measured here, not the
+                       servo scan's nearest echo (one close stray made the
+                       real face look "behind" and the left got 0 echoes) */
+                    g_o.b_edge_face = true;
+                    if (rm != OBST_RANGE_NONE)
+                    {
+                        g_o.edge_face = rm;
+                    }
+                    g_o.edge_ph = EDGE_PH_TURN;
+                    break;
+                }
                 g_o.edge_deg[k] = (uint8_t)app_min_i32(app_abs_i32(phi) / 100, 255);
-                if (obst_edge_on_face(phi, rm, g_prof.closest_mm))
+                if (obst_edge_on_face(phi, rm, g_o.edge_face))
                 {
                     if (obst_edge_past_max(lat, g_o.edge_side))
                     {

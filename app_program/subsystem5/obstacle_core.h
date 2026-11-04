@@ -59,7 +59,7 @@ void     obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
    object there (never CONTINUE into a detected obstacle). */
 void     obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
                                obst_point_t const * p_coarse, uint8_t n_coarse,
-                               uint16_t r_det_mm, obst_profile_t * p_out);
+                               uint16_t r_det_mm, uint16_t back_mm, obst_profile_t * p_out);
 
 /* ---- Edge scan (4 Nov): the car turns, the sensor looks straight ahead.
    phi = the car's real heading from where it stopped (0.01 deg, + left),
@@ -75,8 +75,9 @@ int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
    something else, the side's edge is not known. */
 bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
 /* Re-plan p from the edge scan: edges, width, side (away from the
-   obstacle's centre), offset.  A side
-   whose edge was not found reaches OBST_WIDTH_MAX from the other. */
+   obstacle's centre), offset.  A side whose edge was not found takes the
+   servo scan's edge (p on entry) if it saw a real width, else reaches
+   OBST_WIDTH_MAX from the other. */
 void    obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
 
 /* ---- Scan sequencer: COARSE (30..150 by 30) -> FINE (nearest +-40 by 5)
@@ -111,7 +112,8 @@ int16_t obst_scan_angle(obst_scan_t const * p_s);
 void    obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm);
 bool    obst_scan_done(obst_scan_t const * p_s);
 void    obst_scan_profile(obst_scan_t const * p_s, obst_profile_t * p_out);
-void    obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, obst_profile_t * p_out);
+void    obst_scan_profile_detected(obst_scan_t const * p_s, uint16_t r_det_mm, uint16_t back_mm,
+                                   obst_profile_t * p_out);
 
 /* Bypass path: up to OBST_BYPASS_MAX_STEPS steps.  TURN values are real
    degrees; the task scales them by the measured turn slip. */
