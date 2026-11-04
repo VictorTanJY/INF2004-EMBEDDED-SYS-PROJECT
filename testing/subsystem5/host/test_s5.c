@@ -391,6 +391,21 @@ static void test_obstacle(void)
         CHECK("S5-H16", prof.b_valid && (prof.closest_mm == 160u) &&
                         ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
                         (abs(prof.deviation_mm) >= need));
+        /* 4 Nov: a 154 mm phone read 62 mm right of the line (left edge
+           15 mm left of it): still step out for a 20 cm object on the line */
+        {
+            box_t b = { 195.0, 154.0, -62.0 };
+            int32_t const dmin = (OBST_WIDTH_MAX_MM / 2) + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) +
+                                 OBST_EDGE_ALLOW_MM;
+
+            scan_box(&b, 1, &prof);
+            CHECK("S5-H16", ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
+                            (abs(prof.deviation_mm) >= dmin));
+            b.c = 62.0;
+            scan_box(&b, 1, &prof);
+            CHECK("S5-H16", ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
+                            (abs(prof.deviation_mm) >= dmin));
+        }
         /* the scan saw it off to the side and clear: the detection does not override */
         {
             box_t b = { 200.0, 100.0, 260.0 };

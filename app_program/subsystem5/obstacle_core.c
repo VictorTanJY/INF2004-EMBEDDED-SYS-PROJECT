@@ -301,8 +301,15 @@ static void decide(obst_point_t const * p_fine, uint8_t n_fine,
     }
     else
     {
-        int32_t const dev_l  = pl_l + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
-        int32_t const dev_r  = -pl_r + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+        /* 4 Nov: a phone 154 mm wide read its left edge 15 mm left of the
+           line, the car stepped out only 145 mm and clipped it.  An
+           obstacle in our path is on the line: step out at least far
+           enough for an OBST_WIDTH_MAX object centred on the line, however
+           the edges were read (beam, flat faces, servo centre). */
+        int32_t const dev_l  = app_max_i32(pl_l, OBST_WIDTH_MAX_MM / 2) + OBST_MARGIN_MM +
+                               (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+        int32_t const dev_r  = app_max_i32(-pl_r, OBST_WIDTH_MAX_MM / 2) + OBST_MARGIN_MM +
+                               (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
         bool const    b_left = (clr_l >= need);
         bool const    b_right = (clr_r >= need);
 
