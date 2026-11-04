@@ -124,6 +124,8 @@ typedef struct
     int32_t  join_h;            /* JOIN: heading held while driving back in */
     bool     b_joined;          /* the line was found: accept it in SEEK    */
     bool     b_line_seen;       /* LINESCAN: a sensor has reached the line  */
+    uint8_t  scan_pass;         /* LINESCAN: 0 not started, 1 first sweep, 2 second */
+    int16_t  scan_prev_err;     /* LINESCAN: last error while on the line   */
     /* edge scan (4 Nov) */
     int8_t   edge_side;         /* +1 left, -1 right */
     uint8_t  edge_ph;           /* EDGE_PH_* */
@@ -473,8 +475,9 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
                     -(-g_prof.right_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
             }
             g_o.n_steps  = obst_bypass_plan(&g_prof, g_o.side, g_steps);
-            g_o.step_i   = 0u;
-            g_o.b_joined = false;
+            g_o.step_i    = 0u;
+            g_o.b_joined  = false;
+            g_o.scan_pass = 0u;
             {
                 uint8_t k;
 
@@ -867,44 +870,75 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             }
             else if (p_st->kind == (uint8_t)OBST_STEP_LINESCAN)
             {
+                /* 4 Nov: sweep toward value's side, then (as the reference
+                   robot) back the other way to OBST_LINESCAN_SPARE past the
+                   heading it began at; stop where the line is centred
+                   under the two sensors: small error, or the error changes
+                   sign while on the line (the line can come from either
+                   side, e.g. on a curve) */
                 line_snap_t   line;
-                int32_t const s = (p_st->value >= 0) ? 1 : -1;
+                int32_t const s    = (p_st->value >= 0) ? 1 : -1;
+                bool          b_on;
 
                 line_get_snap(&line);
+                b_on = ((line.flags & LINE_FLAG_ON_LINE) != 0u);
                 if (!g_o.b_wait_motion)
                 {
-                    if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                    if ((g_o.scan_pass < 2u) && (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
                     {
+                        if (g_o.scan_pass == 0u)
+                        {
+                            g_o.scan_h0 = p_odom->heading_cdeg;
+                            send_turn(slip_ddeg(p_st->value), OBST_LINESCAN_DEG_S, p_odom);
+                        }
+                        else
+                        {
+                            send_turn(slip_ddeg((int16_t)(-s * (app_abs_i32(p_st->value) + OBST_LINESCAN_SPARE_DDEG))),
+                                      OBST_LINESCAN_DEG_S, p_odom);
+                        }
+                        g_o.scan_pass++;
                         g_o.b_line_seen = false;
-                        g_o.scan_h0     = p_odom->heading_cdeg;
-                        send_turn(slip_ddeg(p_st->value), OBST_LINESCAN_DEG_S, p_odom);
+                    }
+                    else if (g_o.scan_pass >= 2u)
+                    {
+                        /* both sweeps done, not centred: SEEK takes any line
+                           if one was touched on the way in (b_joined) */
+                        log_ev(OBST_LOG_LINESCAN, 0);
+                        g_o.scan_pass = 0u;
+                        g_o.step_i++;
+                    }
+                    else
+                    {
+                        /* still stopping */
                     }
                 }
                 else
                 {
-                    bool const b_on = ((line.flags & LINE_FLAG_ON_LINE) != 0u);
+                    bool const b_flip = g_o.b_line_seen && b_on &&
+                                        ((line.err > 0) != (g_o.scan_prev_err > 0)) && (line.err != 0);
 
-                    g_o.b_line_seen = g_o.b_line_seen || b_on;
-                    /* err + = line to the left: turning toward s, the line
-                       moves across from the s side; centred when it changes sign */
-                    if (g_o.b_line_seen && b_on && ((s * (int32_t)line.err) <= 0))
+                    if (b_on && ((app_abs_i32(line.err) <= OBST_LINESCAN_CENTRE_ERR) || b_flip))
                     {
                         stop_motion();
                         g_o.b_wait_motion = false;
                         g_o.b_joined      = true;
                         log_ev(OBST_LOG_LINESCAN,
                                app_max_i32(app_abs_i32(app_wrap_cdeg(p_odom->heading_cdeg - g_o.scan_h0)) / 10, 1));
+                        g_o.scan_pass = 0u;
                         g_o.step_i++;
                     }
                     else if (motion_result(p_odom) != 0)
                     {
-                        g_o.b_joined = false;       /* turned all the way: SEEK / sweep look for it */
-                        log_ev(OBST_LOG_LINESCAN, 0);
-                        g_o.step_i++;
+                        /* this sweep is over: the next one starts above */
                     }
                     else
                     {
                         /* still turning */
+                    }
+                    if (b_on)
+                    {
+                        g_o.b_line_seen   = true;
+                        g_o.scan_prev_err = line.err;
                     }
                 }
             }

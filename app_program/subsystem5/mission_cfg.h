@@ -112,6 +112,7 @@
 #define OBST_EDGE_BAND_MM           40      /* echo within this behind the face plane = face */
 #define OBST_EDGE_MISSES            2u      /* clear readings in a row that end a side */
 #define OBST_LINESCAN_SPARE_DDEG    450
+#define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
 #define OBST_SEEK_SPEED_MM_S        100
