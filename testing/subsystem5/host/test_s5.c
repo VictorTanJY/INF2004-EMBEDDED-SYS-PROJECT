@@ -483,7 +483,19 @@ static void test_obstacle(void)
         memset(&prof, 0, sizeof(prof));
         prof.b_valid = true; prof.w_mm = 160u; prof.plan_l_mm = 73; prof.plan_r_mm = -87;
         obst_edge_plan(&prof, false, 0, true, -88);
-        CHECK("S5-H17", (prof.left_lat_mm == 73) && (prof.plan == OBST_PLAN_LEFT));
+        /* 5 Nov: the step-outs are within 2 cm (203 / 218): the side whose
+           edge was measured (right) is taken, its edge being known */
+        CHECK("S5-H17", (prof.left_lat_mm == 73) && (prof.plan == OBST_PLAN_RIGHT));
+        /* 5 Nov tie rule: centred within 2 cm -> measured side, then left */
+        memset(&prof, 0, sizeof(prof));
+        obst_edge_plan(&prof, true, 80, true, -90);         /* 1 cm right of centre: tie */
+        CHECK("S5-H18", prof.plan == OBST_PLAN_LEFT);
+        memset(&prof, 0, sizeof(prof));
+        obst_edge_plan(&prof, true, 90, true, -80);         /* 1 cm left of centre: tie, still left */
+        CHECK("S5-H18", prof.plan == OBST_PLAN_LEFT);
+        memset(&prof, 0, sizeof(prof));
+        obst_edge_plan(&prof, true, 120, true, -60);        /* 3 cm left: right is 6 cm shorter */
+        CHECK("S5-H18", prof.plan == OBST_PLAN_RIGHT);
         /* without a servo reading: as far as the largest obstacle */
         memset(&prof, 0, sizeof(prof));
         obst_edge_plan(&prof, false, 0, true, -88);

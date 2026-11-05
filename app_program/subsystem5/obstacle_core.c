@@ -609,12 +609,32 @@ void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_
     p->plan_r_mm    = (int16_t)lat_r;
     p->w_mm         = (uint16_t)(lat_l - lat_r);
 
-    /* away from the centre (centre on or right of the line: go left).
-       4 Nov: not overridden by the servo scan's clearances any more: that
-       scan split a centred box in two and took the box's own left half
-       for a second object blocking the left, so the car went right, off
-       the mat.  The reference robot also plans from the edges only. */
-    b_left = ((lat_l + lat_r) <= 0);
+    /* 5 Nov: the smaller step-out; within OBST_TIE_MM they are equal, then
+       the side whose edge was measured rather than filled in, then
+       OBST_PREF_LEFT.  (4 Nov: from the edges only, not the servo scan's
+       clearances: that scan split a centred box in two and its left half
+       "blocked" the left, so the car went right, off the mat.) */
+    {
+        int32_t const sh_l = lat_l + extra;
+        int32_t const sh_r = -lat_r + extra;
+
+        if ((sh_l + OBST_TIE_MM) < sh_r)
+        {
+            b_left = true;
+        }
+        else if ((sh_r + OBST_TIE_MM) < sh_l)
+        {
+            b_left = false;
+        }
+        else if (b_has_l != b_has_r)
+        {
+            b_left = b_has_l;
+        }
+        else
+        {
+            b_left = (OBST_PREF_LEFT != 0);
+        }
+    }
     p->plan         = b_left ? (uint8_t)OBST_PLAN_LEFT : (uint8_t)OBST_PLAN_RIGHT;
     p->deviation_mm = (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
 }

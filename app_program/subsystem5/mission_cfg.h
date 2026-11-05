@@ -43,8 +43,8 @@
 #define MISSION_CAL_DONE_TIMEOUT_MS 2000
 #define MISSION_NAV_TIMEOUT_MS      10000
 #define MISSION_OBST_TIMEOUT_MS     60000   /* > BLOCKED 10 s + the 4 Nov edge scan */
-#define MISSION_AVOID_TIMEOUT_MS    40000   /* 3 Nov: slow 80 mm/s bypass takes ~25 s */
-#define MISSION_RECOVER_TIMEOUT_MS  15000   /* 0.5 m at 100 mm/s + the sweep */
+#define MISSION_AVOID_TIMEOUT_MS    90000   /* 5 Nov: 40 mm/s bypass with the edge scan takes ~60 s */
+#define MISSION_RECOVER_TIMEOUT_MS  30000   /* 0.5 m at 30 mm/s + the sweep */
 #define MISSION_SEARCH_RATE_DEG_S   60      /* LINE_SEARCH sweep +-60 deg      */
 #define MISSION_SEARCH_ANGLE_DDEG   600     /* 60.0 deg                        */
 
@@ -91,7 +91,7 @@
    slip; back in at 45 deg until a line sensor touches the line, then
    OBST_IR_AHEAD_MM on (axle on the line), then turn onto it.            */
 #define OBST_TURN_OUT_DDEG          450     /* bypass turn-out 45.0 deg        */
-#define OBST_BYPASS_SPEED_MM_S      80
+#define OBST_BYPASS_SPEED_MM_S      40      /* 5 Nov: slower legs slip less; MOTION_PROFILE_V_MIN is 40 */
 #define OBST_BYPASS_TURN_DEG_S      MISSION_CAL_SPIN_RATE
 #define OBST_JOIN_MAX_PERMILLE      1500    /* back in: give up after 1.5 x the step-out leg */
 #define OBST_JOIN_EXTRA_MM          100     /* ... + this                      */
@@ -114,11 +114,16 @@
    reference robot measured it (80 too loose, 35 cut faces at 25-30 deg). */
 #define OBST_EDGE_BAND_MM           25      /* echo within this behind the face plane = face */
 #define OBST_EDGE_MISSES            2u      /* clear readings in a row that end a side */
+/* 5 Nov side choice: the smaller step-out; within OBST_TIE_MM of each
+   other they count as equal, then the side whose edge was measured (not
+   filled in), then OBST_PREF_LEFT.                                       */
+#define OBST_TIE_MM                 20
+#define OBST_PREF_LEFT              1       /* 1: pass on the left when equal, 0: right */
 #define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
-#define OBST_SEEK_SPEED_MM_S        100
+#define OBST_SEEK_SPEED_MM_S        30      /* 5 Nov: creep to the line */
 #define OBST_SEEK_LAT_MM            60      /* accept black only within +-60 mm */
 #define OBST_SEEK_HEADING_CDEG      2000    /* ... and +-20 deg of the original heading */
 #define OBST_REVERSE_MM             100
