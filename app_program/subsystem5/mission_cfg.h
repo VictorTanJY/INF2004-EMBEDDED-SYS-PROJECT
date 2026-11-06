@@ -91,7 +91,7 @@
    slip; back in at 45 deg until a line sensor touches the line, then
    OBST_IR_AHEAD_MM on (axle on the line), then turn onto it.            */
 #define OBST_TURN_OUT_DDEG          450     /* bypass turn-out 45.0 deg        */
-#define OBST_BYPASS_SPEED_MM_S      40      /* 5 Nov: slower legs slip less; MOTION_PROFILE_V_MIN is 40 */
+#define OBST_BYPASS_SPEED_MM_S      80      /* 6 Nov: at 40 the drive-out leg stalled and restarted (stationary / cruising) */
 #define OBST_BYPASS_TURN_DEG_S      MISSION_CAL_SPIN_RATE
 #define OBST_JOIN_MAX_PERMILLE      1500    /* back in: give up after 1.5 x the step-out leg */
 #define OBST_JOIN_EXTRA_MM          100     /* ... + this                      */
@@ -136,7 +136,7 @@
 #define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
-#define OBST_SEEK_SPEED_MM_S        30      /* 5 Nov: creep to the line */
+#define OBST_SEEK_SPEED_MM_S        60      /* creep to the line (30 risks the same stalls) */
 #define OBST_SEEK_LAT_MM            60      /* accept black only within +-60 mm */
 #define OBST_SEEK_HEADING_CDEG      2000    /* ... and +-20 deg of the original heading */
 #define OBST_REVERSE_MM             100
