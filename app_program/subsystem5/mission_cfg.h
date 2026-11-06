@@ -153,7 +153,11 @@
 #define OBST_SERVO_SETTLE_MS        20
 #define OBST_SERVO_MIN_US           500     /* pulse at 0 deg   MEASURE        */
 #define OBST_SERVO_MAX_US           2500    /* pulse at 180 deg MEASURE        */
-#define OBST_SERVO_LEFT_IS_HIGH     1       /* 1: larger angle looks left      */
+/* 6 Nov, measured on the car: a box placed LEFT of the line read 7-20 cm
+   RIGHT in both servo scans (and a centred box read mostly right): the
+   mounted servo turns the other way, so the driver mirrors the pulse
+   (scan angle > 90 still means left).                                  */
+#define OBST_SERVO_LEFT_IS_HIGH     0       /* 1: a longer pulse turns it left */
 #define OBST_NO_ECHO_PINGS          5       /* report NO_ECHO after this many  */
 #define OBST_HUMP_MASK_CDEG         500     /* |pitch| > 5 deg masks 40 / 20 cm */
 #define OBST_HUMP_MASK_MM           600
