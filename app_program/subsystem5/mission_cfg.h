@@ -125,6 +125,12 @@
    smears it sideways): that is how the old check took a box's own half
    for a second object.  Flat things (the mat edge) give no echo.      */
 #define OBST_ROOM_TOL_MM            70
+/* 6 Nov: the line curved toward the bypass side and was under the
+   sensors at the end of the pass leg; the planned turn-in then headed
+   away from it.  A line met within this of the end of the pass (the
+   OBST_IR_AHEAD_MM drive-on that follows puts the rear further past)
+   is taken: no turn-in, the line scan turns toward the bypass side.  */
+#define OBST_PASS_LINE_EARLY_MM     100
 #define OBST_PREF_LEFT              1       /* 1: pass on the left when equal, 0: right */
 #define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */
