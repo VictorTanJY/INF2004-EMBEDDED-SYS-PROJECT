@@ -496,6 +496,19 @@ static void test_obstacle(void)
         memset(&prof, 0, sizeof(prof));
         obst_edge_plan(&prof, true, 120, true, -60);        /* 3 cm left: right is 6 cm shorter */
         CHECK("S5-H18", prof.plan == OBST_PLAN_RIGHT);
+        /* 6 Nov: no echo either side; servo scan put the box 25..134 mm
+           left: the right is the short way round */
+        memset(&prof, 0, sizeof(prof));
+        prof.b_valid = true; prof.w_mm = 109u; prof.plan_l_mm = 134; prof.plan_r_mm = 25;
+        prof.plan = OBST_PLAN_LEFT;                       /* what the servo scan's own rules said */
+        obst_edge_plan(&prof, false, 0, false, 0);
+        CHECK("S5-H20", (prof.plan == OBST_PLAN_RIGHT) &&
+                        (prof.deviation_mm == -(-25 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM)));
+        /* nothing from either scan: unchanged */
+        memset(&prof, 0, sizeof(prof));
+        prof.plan = OBST_PLAN_CONTINUE;
+        obst_edge_plan(&prof, false, 0, false, 0);
+        CHECK("S5-H20", prof.plan == OBST_PLAN_CONTINUE);
         /* without a servo reading: as far as the largest obstacle */
         memset(&prof, 0, sizeof(prof));
         obst_edge_plan(&prof, false, 0, true, -88);

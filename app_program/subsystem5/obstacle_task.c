@@ -61,6 +61,7 @@
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
 #define OBST_LOG_PASS_LINE      50u     /* met the line while passing, after mm */
+#define OBST_LOG_EDGE_FACE      51u     /* edge scan: face mm straight ahead << 16 | first left ping mm */
 
 /* line scan phases */
 #define LS_PH_SWEEP             0u
@@ -148,6 +149,7 @@ typedef struct
     uint8_t  edge_hits[2];      /* on-face pings per side (log)  */
     uint8_t  edge_deg[2];       /* last heading reached, deg (log) */
     uint16_t edge_face;         /* face range straight ahead, measured first */
+    uint16_t edge_first_l;      /* first ping on the left (log)             */
     bool     b_edge_face;       /* edge_face measured */
     int32_t  scan_h0;           /* LINESCAN: heading at the start           */
     uint16_t det_mm;            /* range when the monitor saw the obstacle  */
@@ -400,6 +402,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.edge_until_ms = now_ms;
         g_o.b_edge_face   = false;
         g_o.edge_face     = g_prof.closest_mm;
+        g_o.edge_first_l  = 0u;
         g_o.edge_miss     = 0u;
         g_o.edge_h0       = p_odom->heading_cdeg;
         g_o.b_edge_has[0] = false;
@@ -444,6 +447,7 @@ static void edge_finish(void)
 {
     obst_edge_plan(&g_prof, g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
     publish_profile();
+    log_ev(OBST_LOG_EDGE_FACE, (int32_t)(((uint32_t)g_o.edge_face << 16) | g_o.edge_first_l));
     log_ev(OBST_LOG_EDGE_SIDES, (int32_t)(((uint32_t)g_o.edge_hits[0] << 24) | ((uint32_t)g_o.edge_deg[0] << 16) |
                                           ((uint32_t)g_o.edge_hits[1] << 8) | (uint32_t)g_o.edge_deg[1]));
     log_ev(OBST_LOG_EDGES_CAR, (int32_t)(((uint32_t)(uint16_t)g_prof.left_lat_mm << 16) |
@@ -632,6 +636,10 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                     break;
                 }
                 g_o.edge_deg[k] = (uint8_t)app_min_i32(app_abs_i32(phi) / 100, 255);
+                if ((k == 0u) && (g_o.edge_first_l == 0u))
+                {
+                    g_o.edge_first_l = (rm == OBST_RANGE_NONE) ? 0xFFFFu : rm;
+                }
                 if (obst_edge_on_face(phi, rm, g_o.edge_face))
                 {
                     if (obst_edge_past_max(lat, g_o.edge_side))

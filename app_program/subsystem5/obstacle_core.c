@@ -580,7 +580,16 @@ void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_
 
     if (!b_has_l && !b_has_r)
     {
-        return;                         /* keep the servo scan's plan */
+        /* 6 Nov: no echo on either side: plan from the servo scan's edges
+           with the same side rule below (keeping the servo scan's own
+           plan chose sides by other rules: left 35 cm when right was
+           the short way) */
+        if (!p->b_valid)
+        {
+            return;
+        }
+        lat_l = p->plan_l_mm;
+        lat_r = p->plan_r_mm;
     }
     /* 4 Nov: a side with no echo at all is not proof that the obstacle runs
        on that way (a centred box got 0 echoes on the left and the car went
