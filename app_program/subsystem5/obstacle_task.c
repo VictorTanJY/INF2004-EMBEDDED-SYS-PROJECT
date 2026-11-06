@@ -442,8 +442,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
 /* Edge scan finished: re-plan from the measured edges and report. */
 static void edge_finish(void)
 {
-    obst_edge_plan(&g_prof, g_scan.fine, g_scan.n_fine, g_scan.coarse, g_scan.n_coarse,
-                   g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
+    obst_edge_plan(&g_prof, g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
     publish_profile();
     log_ev(OBST_LOG_EDGE_SIDES, (int32_t)(((uint32_t)g_o.edge_hits[0] << 24) | ((uint32_t)g_o.edge_deg[0] << 16) |
                                           ((uint32_t)g_o.edge_hits[1] << 8) | (uint32_t)g_o.edge_deg[1]));

@@ -571,48 +571,8 @@ bool obst_edge_past_max(int32_t lat_mm, int32_t side)
     return ((side * lat_mm) > OBST_WIDTH_MAX_MM);
 }
 
-/* Room beyond the edges lat_l / lat_r (+ left): the nearest usable point
-   further out than OBST_ROOM_TOL, close enough to matter. */
-static void edge_room(obst_point_t const * p_fine, uint8_t n_fine,
-                      obst_point_t const * p_coarse, uint8_t n_coarse, uint16_t r_min,
-                      int32_t lat_l, int32_t lat_r, int32_t * p_clr_l, int32_t * p_clr_r)
+void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r)
 {
-    uint8_t i;
-
-    *p_clr_l = OBST_CLEAR_MAX_MM;
-    *p_clr_r = OBST_CLEAR_MAX_MM;
-    for (i = 0u; i < (uint8_t)(n_fine + n_coarse); i++)
-    {
-        obst_point_t const * pt = (i < n_fine) ? &p_fine[i] : &p_coarse[i - n_fine];
-        int32_t              lat;
-
-        if (!usable(pt) || (pt->r_mm > ((uint32_t)r_min + OBST_DEPTH_TOL_MM + OBST_NEAR_EXTRA_MM)))
-        {
-            continue;
-        }
-        lat = lateral_mm((int32_t)pt->angle_deg * 100, pt->r_mm);
-        if (lat > (lat_l + OBST_ROOM_TOL_MM))
-        {
-            *p_clr_l = app_min_i32(*p_clr_l, lat - lat_l);
-        }
-        else if (lat < (lat_r - OBST_ROOM_TOL_MM))
-        {
-            *p_clr_r = app_min_i32(*p_clr_r, lat_r - lat);
-        }
-        else
-        {
-            /* the obstacle itself */
-        }
-    }
-}
-
-void obst_edge_plan(obst_profile_t * p, obst_point_t const * p_fine, uint8_t n_fine,
-                    obst_point_t const * p_coarse, uint8_t n_coarse,
-                    bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r)
-{
-    int32_t const need = OBST_ROBOT_WIDTH_MM + (2 * OBST_MARGIN_MM);
-    int32_t       clr_l;
-    int32_t       clr_r;
     int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
     bool          b_left;
 
@@ -674,23 +634,6 @@ void obst_edge_plan(obst_profile_t * p, obst_point_t const * p_fine, uint8_t n_f
         {
             b_left = (OBST_PREF_LEFT != 0);
         }
-    }
-    /* 6 Nov: a side without room for the car (an upright object beside
-       the obstacle) is not used while the other side has room */
-    edge_room(p_fine, n_fine, p_coarse, n_coarse, p->closest_mm, lat_l, lat_r, &clr_l, &clr_r);
-    p->clr_l_mm = (uint16_t)clr_l;
-    p->clr_r_mm = (uint16_t)clr_r;
-    if (b_left && (clr_l < need) && (clr_r >= need))
-    {
-        b_left = false;
-    }
-    else if (!b_left && (clr_r < need) && (clr_l >= need))
-    {
-        b_left = true;
-    }
-    else
-    {
-        /* the chosen side has room, or neither has: keep it */
     }
     p->plan         = b_left ? (uint8_t)OBST_PLAN_LEFT : (uint8_t)OBST_PLAN_RIGHT;
     p->deviation_mm = (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));

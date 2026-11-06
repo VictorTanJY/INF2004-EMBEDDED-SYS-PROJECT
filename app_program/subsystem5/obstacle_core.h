@@ -77,12 +77,8 @@ bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
 /* Re-plan p from the edge scan: edges, width, side (away from the
    obstacle's centre), offset.  A side whose edge was not found takes the
    servo scan's edge (p on entry) if it saw a real width, else reaches
-   OBST_WIDTH_MAX from the other.  The servo scan's points (may be NULL /
-   0) give the free room beyond each edge: a side without room for the
-   car is not chosen (clr_l_mm / clr_r_mm are set from them). */
-void    obst_edge_plan(obst_profile_t * p, obst_point_t const * p_fine, uint8_t n_fine,
-                       obst_point_t const * p_coarse, uint8_t n_coarse,
-                       bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
+   OBST_WIDTH_MAX from the other. */
+void    obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
 
 /* ---- Scan sequencer: COARSE (30..150 by 30) -> FINE (nearest +-40 by 5)
    -> REFINE each edge by bisection.  The task pings obst_scan_angle(),

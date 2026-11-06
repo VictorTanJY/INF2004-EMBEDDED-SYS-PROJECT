@@ -319,7 +319,7 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
             else { miss++; }
         }
     }
-    obst_edge_plan(p_prof, NULL, 0u, NULL, 0u, has[0], lat[0], has[1], lat[1]);
+    obst_edge_plan(p_prof, has[0], lat[0], has[1], lat[1]);
 }
 
 typedef struct { double d, w, c; } box_t;       /* face distance, width, centre lateral (+ left) */
@@ -482,52 +482,23 @@ static void test_obstacle(void)
            decided by a real reading, not by "unseen = 20 cm more" */
         memset(&prof, 0, sizeof(prof));
         prof.b_valid = true; prof.w_mm = 160u; prof.plan_l_mm = 73; prof.plan_r_mm = -87;
-        obst_edge_plan(&prof, NULL, 0u, NULL, 0u, false, 0, true, -88);
+        obst_edge_plan(&prof, false, 0, true, -88);
         /* 5 Nov: the step-outs are within 2 cm (203 / 218): the side whose
            edge was measured (right) is taken, its edge being known */
         CHECK("S5-H17", (prof.left_lat_mm == 73) && (prof.plan == OBST_PLAN_RIGHT));
         /* 5 Nov tie rule: centred within 2 cm -> measured side, then left */
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, NULL, 0u, NULL, 0u, true, 80, true, -90);         /* 1 cm right of centre: tie */
+        obst_edge_plan(&prof, true, 80, true, -90);         /* 1 cm right of centre: tie */
         CHECK("S5-H18", prof.plan == OBST_PLAN_LEFT);
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, NULL, 0u, NULL, 0u, true, 90, true, -80);         /* 1 cm left of centre: tie, still left */
+        obst_edge_plan(&prof, true, 90, true, -80);         /* 1 cm left of centre: tie, still left */
         CHECK("S5-H18", prof.plan == OBST_PLAN_LEFT);
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, NULL, 0u, NULL, 0u, true, 120, true, -60);        /* 3 cm left: right is 6 cm shorter */
+        obst_edge_plan(&prof, true, 120, true, -60);        /* 3 cm left: right is 6 cm shorter */
         CHECK("S5-H18", prof.plan == OBST_PLAN_RIGHT);
-        /* 6 Nov: a wall 15 cm left of a centred box's left edge (servo
-           points at 60..75 deg left) rules out the left; the box's own
-           echoes just past its edges do not */
-        {
-            obst_point_t pts[4];
-            int k;
-
-            for (k = 0; k < 4; k++)
-            {
-                double const lat = 77.0 + 150.0, fwd = 200.0 + (40.0 * k);
-                pts[k].angle_deg = (int16_t)(180.0 - (atan2(fwd, lat) * 180.0 / M_PI));
-                pts[k].r_mm      = (uint16_t)sqrt((lat * lat) + (fwd * fwd));
-            }
-            memset(&prof, 0, sizeof(prof));
-            prof.closest_mm = 200u;
-            obst_edge_plan(&prof, pts, 4u, NULL, 0u, true, 77, true, -77);
-            CHECK("S5-H19", (prof.plan == OBST_PLAN_RIGHT) && (prof.clr_l_mm < 230u));
-            /* the box's own side echoes (within 7 cm of the edge) do not block */
-            for (k = 0; k < 4; k++)
-            {
-                double const lat = 77.0 + 50.0, fwd = 200.0 + (10.0 * k);
-                pts[k].angle_deg = (int16_t)(180.0 - (atan2(fwd, lat) * 180.0 / M_PI));
-                pts[k].r_mm      = (uint16_t)sqrt((lat * lat) + (fwd * fwd));
-            }
-            memset(&prof, 0, sizeof(prof));
-            prof.closest_mm = 200u;
-            obst_edge_plan(&prof, pts, 4u, NULL, 0u, true, 77, true, -77);
-            CHECK("S5-H19", prof.plan == OBST_PLAN_LEFT);
-        }
         /* without a servo reading: as far as the largest obstacle */
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, NULL, 0u, NULL, 0u, false, 0, true, -88);
+        obst_edge_plan(&prof, false, 0, true, -88);
         CHECK("S5-H17", (prof.left_lat_mm == -88 + OBST_WIDTH_MAX_MM));
     }
     {
