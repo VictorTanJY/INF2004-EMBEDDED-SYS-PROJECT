@@ -84,6 +84,7 @@ static void reverse(uint32_t * p_w, uint16_t n)
 static uint32_t g_spot_um = 1500u;
 static uint32_t g_white   = 80u;
 static uint32_t g_black   = 920u;
+static uint8_t  g_last_pass = 0u;    /* which reading decoded in the last run_pass */
 
 static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
 {
@@ -115,11 +116,12 @@ static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
 /* Run one pass at v_mm_s; returns the result and fills *p_out. */
 static bc_result_t run_pass(uint32_t const * p_w, uint16_t n, uint32_t v_mm_s, int noise, bc_out_t * p_out)
 {
-    bc_capture_t bc;
+    static bc_capture_t bc;
     uint32_t     x;
     uint32_t     step = v_mm_s;     /* um per 1 ms sample = mm/s */
     bc_result_t  found = BC_NONE;
 
+    g_last_pass = 0u;
     bc_init(&bc);
     for (x = 0u; x < TRACK_LEN_UM; x += step)
     {
@@ -135,6 +137,7 @@ static bc_result_t run_pass(uint32_t const * p_w, uint16_t n, uint32_t v_mm_s, i
         {
             found = r;
             *p_out = out;
+            g_last_pass = bc.pass;
         }
         else if (r != BC_NONE)
         {
@@ -387,6 +390,100 @@ static void test_capture(void)
                blur_good, blur_total, blur_wrong, weak_good, weak_total, weak_wrong);
         CHECK("S3-H15", blur_wrong == 0 && blur_good == blur_total);
         CHECK("S3-H15", weak_wrong == 0 && (weak_good * 3) >= (weak_total * 2));
+    }
+
+    /* S3-H18 (7 Nov): (a) a read one bar short at either end (2 elements
+       lost) still decodes, both directions, never a wrong letter; (b) black
+       bleeding into white (bars +40 % of a narrow, spaces -40 %) decodes
+       with bars and spaces ranked apart; (c) a 5-6 mm spot over 3 mm
+       elements: the profile's second try decodes more than the swing
+       reading alone, never a wrong letter. */
+    {
+        int good = 0, total = 0, wrong = 0;
+        int k;
+
+        for (s = 0; s < N_SLIDES; s++)
+        {
+            for (d = 0; d < 2; d++)
+            {
+                int cut;
+
+                for (cut = 0; cut < 2; cut++)
+                {
+                    uint32_t w[29];
+                    char ch;
+                    bool b_rev;
+
+                    for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k]; }
+                    if (d) { reverse(w, 29); }
+                    total++;
+                    if (code39_decode_one_repair(cut ? w : &w[2], 27, 15, &ch, &b_rev) == CODE39_OK)
+                    {
+                        if (ch == k_slides[s].ch) { good++; } else { wrong++; }
+                    }
+                }
+            }
+        }
+        printf("one bar short at an end: %d / %d decoded, %d wrong\n", good, total, wrong);
+        CHECK("S3-H18", (wrong == 0) && (good == total));
+
+        good = 0; total = 0; wrong = 0;
+        {
+            size_t i;
+
+            for (i = 0u; i < 26u; i++)
+            {
+                uint32_t w[29];
+                uint16_t n = make_code((char)('A' + i), 3000u, 2.5, 0.0, w);
+                char ch;
+                bool b_rev;
+                uint16_t e;
+
+                for (e = 0u; e < n; e++)
+                {
+                    w[e] = ((e % 2u) == 0u) ? (w[e] + 1200u) : ((w[e] > 1200u) ? (w[e] - 1200u) : 100u);
+                }
+                total++;
+                if (code39_decode_one(w, n, 15, &ch, &b_rev) == CODE39_OK)
+                {
+                    if (ch == (char)('A' + i)) { good++; } else { wrong++; }
+                }
+            }
+        }
+        printf("black bleeding 40 %%: %d / %d decoded, %d wrong\n", good, total, wrong);
+        CHECK("S3-H18", (wrong == 0) && (good == total));
+
+        {
+            uint32_t const spots[2] = { 5000u, 6000u };
+            int sp, pass2 = 0;
+
+            good = 0; total = 0; wrong = 0;
+            for (sp = 0; sp < 2; sp++)
+            {
+                g_spot_um = spots[sp];
+                for (s = 0; s < N_SLIDES; s++)
+                {
+                    for (d = 0; d < 2; d++)
+                    {
+                        uint32_t w[29];
+                        bc_out_t out;
+                        bc_result_t r;
+
+                        for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
+                        if (d) { reverse(w, 29); }
+                        memset(&out, 0, sizeof(out));
+                        r = run_pass(w, 29, 90u, 0, &out);
+                        total++;
+                        if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { good++; }
+                        else if (r == BC_VALID) { wrong++; }
+                        pass2 += (g_last_pass != 0u) ? 1 : 0;
+                    }
+                }
+            }
+            g_spot_um = 1500u;
+            printf("5-6 mm spot: %d / %d decoded (%d by the second try), %d wrong\n", good, total, pass2, wrong);
+            CHECK("S3-H18", wrong == 0);
+        }
     }
 
     /* S3-H06: a crossing line (18 mm black) is not a barcode and not an error */

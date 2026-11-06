@@ -77,52 +77,89 @@ static uint32_t width_at(uint32_t const * p_w, uint16_t n, uint16_t k, bool b_re
     return b_rev ? p_w[n - 1u - k] : p_w[k];
 }
 
-/* Classify one character's 9 elements: the 3 widest are wide. */
+/* The k-th widest (k = 0, 1, ...) of the elements of one kind: bars at
+   even indexes 0..8, spaces at odd ones 1..7. */
+static uint32_t kth_widest(uint32_t const * p_w, uint8_t first, uint8_t k, uint8_t * p_idx)
+{
+    uint32_t used = 0u;
+    uint32_t best = 0u;
+    uint8_t  r;
+    uint8_t  i;
+
+    *p_idx = first;
+    for (r = 0u; r <= k; r++)
+    {
+        bool b_any = false;
+
+        for (i = first; i < 9u; i += 2u)
+        {
+            if (((used & (1u << i)) == 0u) && (!b_any || (p_w[i] > best)))
+            {
+                best   = p_w[i];
+                *p_idx = i;
+                b_any  = true;
+            }
+        }
+        used |= (1u << *p_idx);
+    }
+    return best;
+}
+
+/* Classify one character's 9 elements (7 Nov): bars and spaces are ranked
+   SEPARATELY, the 2 widest bars and the widest space being wide, each
+   standing out from the rest of its kind by ratio_min.  Under the sensor's
+   spot black reads wider and white narrower, so ranking all 9 together
+   could take a fat narrow bar for the wide space. */
 static code39_result_t classify(uint32_t const * p_w, uint16_t n, uint16_t first, bool b_rev,
                                 uint16_t ratio_min_x10, uint16_t * p_pattern)
 {
     uint32_t w[9];
-    uint32_t sorted[9];
-    uint32_t min_wide;
-    uint32_t max_narrow;
+    uint32_t wide = 0u;
     uint16_t pattern = 0u;
-    uint8_t  wide_count = 0u;
+    uint8_t  ib1;
+    uint8_t  ib2;
+    uint8_t  ib3;
+    uint8_t  is1;
+    uint8_t  is2;
+    uint32_t b2;
+    uint32_t b3;
+    uint32_t s1;
+    uint32_t s2;
     uint8_t  i;
-    uint8_t  j;
 
     for (i = 0u; i < 9u; i++)
     {
-        w[i]      = width_at(p_w, n, (uint16_t)(first + i), b_rev);
-        sorted[i] = w[i];
+        w[i] = width_at(p_w, n, (uint16_t)(first + i), b_rev);
     }
-    for (i = 1u; i < 9u; i++)               /* insertion sort, descending */
+    (void)kth_widest(w, 0u, 0u, &ib1);
+    b2 = kth_widest(w, 0u, 1u, &ib2);
+    b3 = kth_widest(w, 0u, 2u, &ib3);           /* widest narrow bar   */
+    s1 = kth_widest(w, 1u, 0u, &is1);
+    s2 = kth_widest(w, 1u, 1u, &is2);           /* widest narrow space */
+    if ((b3 != 0u) && (s2 != 0u) &&
+        (((uint64_t)b2 * 10u) >= ((uint64_t)b3 * ratio_min_x10)) &&
+        (((uint64_t)s1 * 10u) >= ((uint64_t)s2 * ratio_min_x10)))
     {
-        uint32_t v = sorted[i];
+        wide = (1u << ib1) | (1u << ib2) | (1u << is1);
+    }
+    else
+    {
+        /* '$' '/' '+' '%': three wide spaces, no wide bar */
+        uint8_t        is3;
+        uint8_t        is4;
+        uint32_t const s3 = kth_widest(w, 1u, 2u, &is3);
+        uint32_t const s4 = kth_widest(w, 1u, 3u, &is4);
 
-        j = i;
-        while ((j > 0u) && (sorted[j - 1u] < v))
+        if ((s4 == 0u) || (((uint64_t)s3 * 10u) < ((uint64_t)s4 * ratio_min_x10)))
         {
-            sorted[j] = sorted[j - 1u];
-            j--;
+            return CODE39_ERR_RATIO;
         }
-        sorted[j] = v;
-    }
-    min_wide   = sorted[2];
-    max_narrow = sorted[3];
-    if ((max_narrow == 0u) || (((uint64_t)min_wide * 10u) < ((uint64_t)max_narrow * ratio_min_x10)))
-    {
-        return CODE39_ERR_RATIO;
+        (void)s2;
+        wide = (1u << is1) | (1u << is2) | (1u << is3);
     }
     for (i = 0u; i < 9u; i++)
     {
-        uint16_t const bit = (w[i] >= min_wide) ? 1u : 0u;
-
-        wide_count = (uint8_t)(wide_count + bit);
-        pattern    = (uint16_t)((pattern << 1) | bit);
-    }
-    if (wide_count != 3u)
-    {
-        return CODE39_ERR_RATIO;            /* ties: cannot tell which are wide */
+        pattern = (uint16_t)((pattern << 1) | (((wide & (1u << i)) != 0u) ? 1u : 0u));
     }
     *p_pattern = pattern;
     return CODE39_OK;
@@ -224,5 +261,78 @@ code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n, uint16_
         return CODE39_ERR_LENGTH;
     }
     *p_char = text[0];
+    return CODE39_OK;
+}
+
+/* ---- one element pair lost at an end (7 Nov) ----------------------- */
+/* A read one bar short at either end still decodes: the start '*' begins
+   (narrow bar, wide space) and the stop '*' ends (narrow space, narrow
+   bar); a missed end bar takes its neighbouring space into the quiet
+   zone, so 2 elements are gone.  Each of the four ways of putting them
+   back is tried (front / back, either reading direction); the read is
+   kept only if every way that decodes gives the same character. */
+code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
+                                         char * p_char, bool * p_b_reversed)
+{
+    static uint32_t w[CODE39_MAX_CHARS * 10u];
+    code39_result_t r = code39_decode_one(p_widths, n, ratio_min_x10, p_char, p_b_reversed);
+    uint32_t        narrow = 0xFFFFFFFFu;
+    uint32_t        widest = 0u;
+    char            got = '\0';
+    bool            b_got_rev = false;
+    uint16_t        i;
+    uint8_t         k;
+
+    if ((r == CODE39_OK) || (r == CODE39_NOT_BARCODE) || ((n + 2u) > (CODE39_MAX_CHARS * 10u)) ||
+        (((n + 3u) % 10u) != 0u))
+    {
+        return r;
+    }
+    for (i = 0u; i < n; i++)
+    {
+        narrow = (p_widths[i] < narrow) ? p_widths[i] : narrow;
+        widest = (p_widths[i] > widest) ? p_widths[i] : widest;
+    }
+    for (k = 0u; k < 4u; k++)
+    {
+        bool const     b_front = (k < 2u);
+        uint32_t const e0 = (k == 0u) ? narrow : ((k == 3u) ? widest : narrow);   /* first added */
+        uint32_t const e1 = (k == 0u) ? widest : narrow;                          /* second added */
+        char           ch;
+        bool           b_rev;
+        uint16_t       o = 0u;
+
+        if (b_front)
+        {
+            w[o++] = e0;
+            w[o++] = e1;
+        }
+        for (i = 0u; i < n; i++)
+        {
+            w[o++] = p_widths[i];
+        }
+        if (!b_front)
+        {
+            w[o++] = (k == 2u) ? narrow : widest;       /* k 2: space n, bar n; k 3: space W, bar n */
+            w[o++] = narrow;
+        }
+        if (code39_decode_one(w, o, ratio_min_x10, &ch, &b_rev) == CODE39_OK)
+        {
+            if ((got != '\0') && (ch != got))
+            {
+                *p_char = '\0';
+                return CODE39_ERR_PATTERN;              /* repairs disagree */
+            }
+            got       = ch;
+            b_got_rev = b_rev;
+        }
+    }
+    if (got == '\0')
+    {
+        *p_char = '\0';
+        return r;
+    }
+    *p_char       = got;
+    *p_b_reversed = b_got_rev;
     return CODE39_OK;
 }

@@ -122,5 +122,23 @@
 #define BC_MAX_ELEMENTS             59          /* 6 characters              */
 #define BC_COOLDOWN_UM              100000      /* 100 mm after a read       */
 #define BC_RATIO_MIN_X10            15          /* wide >= 1.5 x narrow      */
+/* 7 Nov second try: the capture keeps the darkest reading of every
+   BC_PROF_BIN_UM of travel; if the swing reading does not decode, bars
+   are found again from that profile against this code's own levels
+   (light = BC_PROF_WHITE_PCT percentile, dark = BC_PROF_DARK_PCT):
+   first at mid-way, then at BC_PROF_LOW_DIV of the way up for faint thin
+   bars.  Bars or spaces under BC_PROF_MIN_BINS bins are noise.          */
+#define BC_PROF_BIN_UM              330
+#define BC_PROF_BINS                ((BC_MAX_LEN_UM / BC_PROF_BIN_UM) + 64u)
+#define BC_PROF_WHITE_PCT           10u
+#define BC_PROF_DARK_PCT            95u
+#define BC_PROF_LOW_DIV             4u
+#define BC_PROF_MIN_BINS            3u
+/* Reading mode (7 Nov): while a code is being captured and the line is
+   near the centre, steering is limited so the side-mounted barcode IR
+   crosses the bars on a steady path (a weave swings it sideways and
+   breaks the read up).  Curves (larger error) are not limited.        */
+#define LINE_BC_OMEGA_MAX           300         /* mrad/s while reading      */
+#define LINE_BC_HOLD_ERR            400         /* |err| above this: no limit */
 
 #endif /* LINE_CFG_H */

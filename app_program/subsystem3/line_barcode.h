@@ -48,9 +48,22 @@ typedef struct
     uint16_t peak;
     uint16_t ext;               /* extreme of the current element (BC_DELTA) */
     uint32_t widths[BC_MAX_ELEMENTS + 1u];
+    uint16_t prof[BC_PROF_BINS];    /* darkest norm per BC_PROF_BIN_UM   */
+    uint16_t prof_n;
+    uint32_t bin_um;                /* travel into the current bin       */
+    uint8_t  pass;                  /* which reading decoded: 0 swing, 1 mid, 2 low */
 } bc_capture_t;
 
 void        bc_init(bc_capture_t * p_bc);
+
+/* From a darkness profile (bins of BC_PROF_BIN_UM), the elements against
+   threshold thr (bars at or above thr + hyst, spaces below thr - hyst);
+   runs under BC_PROF_MIN_BINS merge into their neighbours.  Returns the
+   element count (widths in um), the trailing white run excluded. */
+uint16_t    bc_prof_elements(uint16_t const * p_prof, uint16_t n_bins, uint16_t thr, uint16_t hyst,
+                             uint32_t * p_widths, uint16_t max);
+/* Light / dark levels of a profile (percentiles BC_PROF_WHITE_PCT / DARK_PCT). */
+void        bc_prof_levels(uint16_t const * p_prof, uint16_t n_bins, uint16_t * p_white, uint16_t * p_dark);
 
 /* norm: 0..1000 (1000 = black).  step_um: distance since the last sample
    (absolute value).  Returns BC_VALID / BC_REJECT once per code. */

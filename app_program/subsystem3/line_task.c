@@ -293,9 +293,18 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         if ((odom.auth == (uint8_t)MOTION_SRC_LINE) &&
             (ms.state == (uint8_t)MISSION_ST_LINE_FOLLOW) && g_cal.b_valid)
         {
+            int32_t omega = g_trk.omega;
+
+            /* 7 Nov reading mode: steady steering while a code is read, so
+               the side barcode IR crosses the bars on a straight path; not
+               on curves (the line well off centre) */
+            if ((g_bc.state == (uint8_t)LINE_BC_CAPTURING) && (app_abs_i32(g_trk.err) <= LINE_BC_HOLD_ERR))
+            {
+                omega = app_clamp_i32(omega, -LINE_BC_OMEGA_MAX, LINE_BC_OMEGA_MAX);
+            }
             drive_seq++;
             (void)motion_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
-                               (int16_t)g_trk.v, (int16_t)g_trk.omega);
+                               (int16_t)g_trk.v, (int16_t)omega);
         }
 
         /* ---- 6. snapshot -------------------------------------------- */

@@ -54,4 +54,9 @@ code39_result_t code39_decode(uint32_t const * p_widths, uint16_t n, uint16_t ra
 code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
                                   char * p_char, bool * p_b_reversed);
 
+/* As code39_decode_one(), and if the read is one bar short at either end
+   (n = 10 k - 3) the lost pair is put back; kept only if unambiguous. */
+code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
+                                         char * p_char, bool * p_b_reversed);
+
 #endif /* CODE39_H */
