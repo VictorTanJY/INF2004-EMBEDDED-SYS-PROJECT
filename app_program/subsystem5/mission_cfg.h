@@ -133,7 +133,7 @@
 #define OBST_PASS_LINE_EARLY_MM     100
 #define OBST_PREF_LEFT              1       /* 1: pass on the left when equal, 0: right */
 #define OBST_LINESCAN_SPARE_DDEG    450
-#define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */
+#define OBST_LINESCAN_SETTLE_MS     150     /* 6 Nov: stop, then turn to the middle of the crossings */
 #define OBST_PASS_MAX_MM            800     /* 3 Nov: room to extend past a seen side */
 #define OBST_SEEK_MAX_MM            500     /* FR11: back on the line within 0.5 m */
 #define OBST_SEEK_SPEED_MM_S        30      /* 5 Nov: creep to the line */

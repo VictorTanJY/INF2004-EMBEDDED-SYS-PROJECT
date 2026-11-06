@@ -17,6 +17,9 @@
 #define LINE_FLAG_ON_LINE       0x10u       /* at least one line sensor on black */
 #define LINE_FLAG_HW_OK         0x20u       /* ADC + DMA running                */
 #define LINE_FLAG_GAP           0x40u       /* bridging a short white gap       */
+/* line_snap_t.sens: this sensor is not fully white (sees the line) */
+#define LINE_SENS_L             0x01u
+#define LINE_SENS_R             0x02u
 
 /* line_snap_t.bc_state */
 typedef enum
@@ -47,6 +50,7 @@ typedef struct
     uint8_t  last_reject;       /* code39_result_t of the last reject       */
     uint16_t turn_gain_pm;      /* turn slip from the calibration spin: ask
                                    for real deg x this / 1000; 0 = not measured */
+    uint8_t  sens;              /* LINE_SENS_*: each line sensor on the line  */
 } line_snap_t;
 
 #endif /* LINE_TYPES_H */

@@ -77,7 +77,7 @@ function describe(e) {
     if (p.code === 49) { const d = p.data >>> 0; detail = `left: ${d >>> 24} echoes, turned ${(d >>> 16) & 0xFF}°; right: ${(d >>> 8) & 0xFF} echoes, turned ${d & 0xFF}°`; }
     if (p.code === 47 || p.code === 48) { const d = p.data >>> 0, l = ((d >>> 16) << 16) >> 16, r = (d << 16) >> 16, side = v => v >= 0 ? `${(v / 10).toFixed(1)} cm left` : `${(-v / 10).toFixed(1)} cm right`;
       detail = `left edge ${side(l)} of the line, right edge ${side(r)}`; }
-    if (p.code === 46) detail = p.data ? `centred on the line after turning ${(p.data / 10).toFixed(0)}°` : 'line not centred: searching';
+    if (p.code === 46) detail = p.data ? `both sensors crossed it: line runs ${(p.data / 10).toFixed(0)}° from where the scan began` : 'no full crossing found: searching';
     if (p.code === 45) { const d = p.data >>> 0; detail = `left sensor ${d >>> 24}, right sensor ${(d >>> 16) & 0xFF}, spun ${d & 0xFFFF}° (encoders)`; }
     if (p.code === 39) { const d = p.data >>> 0, off = ((d >>> 16) << 16) >> 16; detail = `${off >= 0 ? 'left' : 'right'}, ${Math.abs(off) / 10} cm to the side, pass at least ${(d & 0xFFFF) / 10} cm`; }
     if (p.code === 40) { const d = p.data >>> 0; detail = `drove ${(d & 0xFFFF) / 10} cm, side ping ${(d >>> 16) ? 'saw' : 'did not see'} the obstacle`; }

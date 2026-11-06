@@ -62,6 +62,10 @@
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
 #define OBST_LOG_PASS_LINE      50u     /* met the line while passing, after mm */
 
+/* line scan phases */
+#define LS_PH_SWEEP             0u
+#define LS_PH_ALIGN             1u
+
 /* edge scan phases */
 #define EDGE_PH_TURN            0u
 #define EDGE_PH_SETTLE          1u
@@ -124,9 +128,15 @@ typedef struct
     uint8_t  sweep_i;           /* SEEK_SWEEP step */
     int32_t  join_h;            /* JOIN: heading held while driving back in */
     bool     b_joined;          /* the line was found: accept it in SEEK    */
-    bool     b_line_seen;       /* LINESCAN: a sensor has reached the line  */
     uint8_t  scan_pass;         /* LINESCAN: 0 not started, 1 first sweep, 2 second */
-    int16_t  scan_prev_err;     /* LINESCAN: last error while on the line   */
+    uint8_t  scan_ph;           /* LINESCAN: LS_PH_* */
+    uint8_t  ls_seen[2];        /* per sensor: 0 not yet, 1 on, 2 on and off */
+    bool     b_ls_prev[2];      /* per sensor: on the line at the last slot  */
+    int32_t  ls_on[2];          /* heading (from scan_h0) it went on, 0.01 deg */
+    int32_t  ls_off[2];         /* ... and off */
+    int32_t  scan_target;       /* the line's heading: midway between them   */
+    uint32_t scan_until_ms;     /* settle before the turn to it              */
+    bool     b_scan_turned;     /* the turn to it has been sent              */
     /* edge scan (4 Nov) */
     int8_t   edge_side;         /* +1 left, -1 right */
     uint8_t  edge_ph;           /* EDGE_PH_* */
@@ -483,6 +493,7 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             g_o.step_i    = 0u;
             g_o.b_joined  = false;
             g_o.scan_pass = 0u;
+            g_o.scan_ph   = LS_PH_SWEEP;
             {
                 uint8_t k;
 
@@ -910,39 +921,78 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             }
             else if (p_st->kind == (uint8_t)OBST_STEP_LINESCAN)
             {
-                /* 4 Nov: sweep toward value's side, then (as the reference
-                   robot) back the other way to OBST_LINESCAN_SPARE past the
-                   heading it began at; stop where the line is centred
-                   under the two sensors: small error, or the error changes
-                   sign while on the line (the line can come from either
-                   side, e.g. on a curve) */
+                /* 6 Nov, as the reference robot: spin toward value's side
+                   noting the heading where each line sensor goes on to
+                   and off the line; once both have crossed it the line
+                   runs midway between those four headings: stop, settle,
+                   turn there.  If the sweep ends first, sweep back the
+                   other way to OBST_LINESCAN_SPARE past the start. */
                 line_snap_t   line;
-                int32_t const s    = (p_st->value >= 0) ? 1 : -1;
-                bool          b_on;
+                int32_t const s   = (p_st->value >= 0) ? 1 : -1;
+                int32_t const rel = app_wrap_cdeg(p_odom->heading_cdeg - g_o.scan_h0);
+                uint8_t       i;
 
                 line_get_snap(&line);
-                b_on = ((line.flags & LINE_FLAG_ON_LINE) != 0u);
-                if (!g_o.b_wait_motion)
+                if (g_o.scan_ph == LS_PH_ALIGN)
+                {
+                    if (!g_o.b_wait_motion)
+                    {
+                        if ((int32_t)(now_ms - g_o.scan_until_ms) >= 0)
+                        {
+                            int32_t const d = g_o.scan_target - rel;   /* encoder heading: slip already in it */
+
+                            if (g_o.b_scan_turned || (app_abs_i32(d) < 200))
+                            {
+                                log_ev(OBST_LOG_LINESCAN, app_max_i32(app_abs_i32(g_o.scan_target) / 10, 1));
+                                g_o.b_joined  = true;
+                                g_o.scan_pass = 0u;
+                                g_o.scan_ph   = LS_PH_SWEEP;
+                                g_o.step_i++;
+                            }
+                            else if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                            {
+                                g_o.b_scan_turned = true;
+                                send_step((uint8_t)OBST_STEP_TURN, (int16_t)(d / 10), p_odom);
+                            }
+                            else
+                            {
+                                /* still stopping */
+                            }
+                        }
+                    }
+                    else
+                    {
+                        (void)motion_result(p_odom);    /* the turn to the middle */
+                    }
+                }
+                else if (!g_o.b_wait_motion)
                 {
                     if ((g_o.scan_pass < 2u) && (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
                     {
+                        int16_t amount;
+
                         if (g_o.scan_pass == 0u)
                         {
                             g_o.scan_h0 = p_odom->heading_cdeg;
-                            send_turn(slip_ddeg(p_st->value), OBST_LINESCAN_DEG_S, p_odom);
+                            amount      = slip_ddeg(p_st->value);
                         }
                         else
                         {
-                            send_turn(slip_ddeg((int16_t)(-s * (app_abs_i32(p_st->value) + OBST_LINESCAN_SPARE_DDEG))),
-                                      OBST_LINESCAN_DEG_S, p_odom);
+                            /* back to OBST_LINESCAN_SPARE past where the scan began */
+                            amount = (int16_t)((-s * ((OBST_LINESCAN_SPARE_DDEG * 10) + (s * rel))) / 10);
                         }
+                        for (i = 0u; i < 2u; i++)
+                        {
+                            g_o.ls_seen[i] = 0u;
+                            g_o.b_ls_prev[i] = false;
+                        }
+                        send_turn(amount, OBST_LINESCAN_DEG_S, p_odom);
                         g_o.scan_pass++;
-                        g_o.b_line_seen = false;
                     }
                     else if (g_o.scan_pass >= 2u)
                     {
-                        /* both sweeps done, not centred: SEEK takes any line
-                           if one was touched on the way in (b_joined) */
+                        /* both sweeps done, no full crossing: SEEK takes any
+                           line if one was touched on the way in (b_joined) */
                         log_ev(OBST_LOG_LINESCAN, 0);
                         g_o.scan_pass = 0u;
                         g_o.step_i++;
@@ -954,18 +1004,34 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 }
                 else
                 {
-                    bool const b_flip = g_o.b_line_seen && b_on &&
-                                        ((line.err > 0) != (g_o.scan_prev_err > 0)) && (line.err != 0);
-
-                    if (b_on && ((app_abs_i32(line.err) <= OBST_LINESCAN_CENTRE_ERR) || b_flip))
+                    for (i = 0u; i < 2u; i++)
                     {
+                        bool const b_on = ((line.sens & ((i == 0u) ? LINE_SENS_L : LINE_SENS_R)) != 0u);
+
+                        if (b_on && !g_o.b_ls_prev[i] && (g_o.ls_seen[i] == 0u))
+                        {
+                            g_o.ls_on[i]   = rel;
+                            g_o.ls_seen[i] = 1u;
+                        }
+                        else if (!b_on && g_o.b_ls_prev[i] && (g_o.ls_seen[i] == 1u))
+                        {
+                            g_o.ls_off[i]  = rel;
+                            g_o.ls_seen[i] = 2u;
+                        }
+                        else
+                        {
+                            /* no change */
+                        }
+                        g_o.b_ls_prev[i] = b_on;
+                    }
+                    if ((g_o.ls_seen[0] == 2u) && (g_o.ls_seen[1] == 2u))
+                    {
+                        g_o.scan_target   = (g_o.ls_on[0] + g_o.ls_off[0] + g_o.ls_on[1] + g_o.ls_off[1]) / 4;
                         stop_motion();
                         g_o.b_wait_motion = false;
-                        g_o.b_joined      = true;
-                        log_ev(OBST_LOG_LINESCAN,
-                               app_max_i32(app_abs_i32(app_wrap_cdeg(p_odom->heading_cdeg - g_o.scan_h0)) / 10, 1));
-                        g_o.scan_pass = 0u;
-                        g_o.step_i++;
+                        g_o.b_scan_turned = false;
+                        g_o.scan_ph       = LS_PH_ALIGN;
+                        g_o.scan_until_ms = now_ms + OBST_LINESCAN_SETTLE_MS;
                     }
                     else if (motion_result(p_odom) != 0)
                     {
@@ -974,11 +1040,6 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     else
                     {
                         /* still turning */
-                    }
-                    if (b_on)
-                    {
-                        g_o.b_line_seen   = true;
-                        g_o.scan_prev_err = line.err;
                     }
                 }
             }

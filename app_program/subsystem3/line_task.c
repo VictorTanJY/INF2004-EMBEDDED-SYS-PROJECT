@@ -303,6 +303,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         snap.err          = (int16_t)g_trk.err;
         snap.omega_mrad_s = (int16_t)g_trk.omega;
         snap.bc_state     = g_bc.state;
+        snap.sens         = (uint8_t)((g_trk.b_white_l ? 0u : LINE_SENS_L) | (g_trk.b_white_r ? 0u : LINE_SENS_R));
         snap.flags        = (uint8_t)((g_cal.b_valid ? LINE_FLAG_CALIBRATED : 0u) |
                                       (g_trk.b_lost ? LINE_FLAG_LOST : 0u) |
                                       (g_trk.b_junction ? LINE_FLAG_JUNCTION : 0u) |
