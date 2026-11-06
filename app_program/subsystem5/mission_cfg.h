@@ -118,6 +118,13 @@
    other they count as equal, then the side whose edge was measured (not
    filled in), then OBST_PREF_LEFT.                                       */
 #define OBST_TIE_MM                 20
+/* 6 Nov: free room beside the edge-scan edges, from the servo scan's
+   points.  A side with less than car + 2 margins of room (a wall, a bag)
+   is not used.  Points within OBST_ROOM_TOL of an edge count as the
+   obstacle itself (its edge can read a few cm short, and the beam
+   smears it sideways): that is how the old check took a box's own half
+   for a second object.  Flat things (the mat edge) give no echo.      */
+#define OBST_ROOM_TOL_MM            70
 #define OBST_PREF_LEFT              1       /* 1: pass on the left when equal, 0: right */
 #define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_LINESCAN_CENTRE_ERR    300     /* |(L - R)/(L + R)| x 1000 at or below this = centred */
