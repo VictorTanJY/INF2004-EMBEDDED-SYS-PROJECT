@@ -60,7 +60,6 @@
 #define OBST_LOG_EDGES          47u     /* scan edges, mm (+ left): left << 16 | right (int16 each) */
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
-#define OBST_LOG_PASS_LINE      50u     /* met the line while passing, after mm */
 #define OBST_LOG_EDGE_FACE      51u     /* edge scan: face mm straight ahead << 16 | first left ping mm */
 
 /* line scan phases */
@@ -840,7 +839,6 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             if (p_st->kind == (uint8_t)OBST_STEP_PASS)
             {
                 int32_t     done_mm;
-                line_snap_t line;
 
                 if (!g_o.b_wait_motion)
                 {
@@ -856,31 +854,12 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 /* after the start above (3 Nov: computed before it, the first
                    check used the distance since boot and ended PASS at once) */
                 done_mm = p_odom->dist_mm - g_o.phase_start_mm;
-                line_get_snap(&line);
-                if (((line.flags & LINE_FLAG_ON_LINE) != 0u) && (done_mm >= (p_st->value - OBST_PASS_LINE_EARLY_MM)))
-                {
-                    /* 6 Nov: the line has come to the car (it curves toward
-                       the bypass side): skip the turn-in and the drive back,
-                       go on to the drive-on and the line scan */
-                    uint8_t k = (uint8_t)(g_o.step_i + 1u);
-
-                    stop_motion();
-                    servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
-                    log_ev(OBST_LOG_PASS, (int32_t)(((g_o.b_seen ? 1u : 0u) << 16) |
-                                                    (uint32_t)app_clamp_i32(done_mm, 0, 0xFFFF)));
-                    log_ev(OBST_LOG_PASS_LINE, app_max_i32(done_mm, 1));
-                    while ((k < g_o.n_steps) && (g_steps[k].kind != (uint8_t)OBST_STEP_JOIN))
-                    {
-                        k++;
-                    }
-                    g_o.b_joined      = true;
-                    g_o.b_wait_motion = false;
-                    g_o.step_i        = (k < g_o.n_steps) ? (uint8_t)(k + 1u) : (uint8_t)(g_o.step_i + 1u);
-                }
+                /* 7 Nov: the pass ignores the line; the turn back in always
+                   follows (the 6 Nov skip fired on straight track) */
                 /* 3 Nov: at least the planned distance; then on until the
                    side ping has not seen the obstacle for a car length +
                    margin; never beyond OBST_PASS_MAX_MM */
-                else if (((done_mm >= p_st->value) &&
+                if (((done_mm >= p_st->value) &&
                      (!g_o.b_seen || ((p_odom->dist_mm - g_o.last_seen_mm) >= (OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM)))) ||
                     (done_mm >= OBST_PASS_MAX_MM))
                 {

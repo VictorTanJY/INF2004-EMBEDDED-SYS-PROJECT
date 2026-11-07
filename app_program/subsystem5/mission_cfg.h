@@ -127,7 +127,6 @@
    away from it.  A line met within this of the end of the pass (the
    OBST_IR_AHEAD_MM drive-on that follows puts the rear further past)
    is taken: no turn-in, the line scan turns toward the bypass side.  */
-#define OBST_PASS_LINE_EARLY_MM     100
 #define OBST_PREF_LEFT              1       /* 1: pass on the left when equal, 0: right */
 #define OBST_LINESCAN_SPARE_DDEG    450
 #define OBST_LINESCAN_SETTLE_MS     150     /* 6 Nov: stop, then turn to the middle of the crossings */
