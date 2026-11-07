@@ -37,6 +37,10 @@
 /* 37 = a dark pattern of 2..8 elements, dropped as "not a barcode" (a
    crossing line is 1): data = elements; LOG 35 / 36 follow.            */
 #define LINE_LOG_BC_SHORT       37u
+/* 73 (7 Nov) = barcode sensor levels after every capture, 0..1000 each:
+   decoded by pass << 30 | white noise (darkest - lightest white) << 20 |
+   lightest white << 10 | darkest bar.  For choosing BC_DELTA. */
+#define LINE_LOG_BC_LEVELS      73u
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
 #define LINE_LOG_TURN_GAIN      38u
 /* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
@@ -72,6 +76,18 @@ static void bc_reject_detail(bc_capture_t const * p_bc)
                                      ((uint32_t)p_bc->peak / 4u)));
     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_WIDTHS,
                            (int32_t)((w_min << 16) | w_max));
+}
+
+/* LOG 73 for the capture that just ended (still in g_bc). */
+static void bc_levels_log(bc_capture_t const * p_bc)
+{
+    uint32_t const noise = (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
+
+    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_LEVELS,
+                           (int32_t)(((uint32_t)(p_bc->pass & 3u) << 30) |
+                                     ((uint32_t)app_min_i32((int32_t)noise, 1023) << 20) |
+                                     ((uint32_t)app_min_i32(p_bc->q_lo, 1023) << 10) |
+                                     (uint32_t)app_min_i32(p_bc->peak, 1023)));
 }
 
 static void timing_pin_init(void)
@@ -235,6 +251,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 snap.last_barcode = out.ch;
                 (void)mission_post((uint8_t)MISSION_EV_BARCODE, (uint8_t)APP_SRC_LINE,
                                    out.b_reversed ? 1u : 0u, (int32_t)out.ch);
+                bc_levels_log(&g_bc);
             }
             else if (r == BC_REJECT)
             {
@@ -244,6 +261,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                        LINE_LOG_BC_REJECT, (int32_t)out.reason);
                 bc_reject_detail(&g_bc);
+                bc_levels_log(&g_bc);
             }
             else if (bc_was_capturing && (g_bc.state == (uint8_t)LINE_BC_ARMED) && (g_bc.n >= 2u))
             {
@@ -251,6 +269,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                        LINE_LOG_BC_SHORT, (int32_t)g_bc.n);
                 bc_reject_detail(&g_bc);
+                bc_levels_log(&g_bc);
             }
             else
             {

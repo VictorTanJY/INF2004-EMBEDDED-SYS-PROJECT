@@ -118,6 +118,12 @@
    white run longer than both the quiet zone and 2.5 x its widest element. */
 #define BC_QUIET_UM                 25000       /* 25 mm white before a code */
 #define BC_END_FACTOR_X10           25          /* end: white > 2.5 x widest */
+/* 7 Nov: and at least this.  On the robot only the 9 mm bars of "*Z*" were
+   seen (3 mm bars too faint at speed): the white between them inside the
+   code reached 33 mm and ended the capture after 51 mm, before the
+   profile pass could look for the faint bars.  After a real code the mat
+   is white, so a longer end costs nothing.                            */
+#define BC_END_MIN_UM               40000
 #define BC_MAX_LEN_UM               420000      /* 420 mm: longer = REJECT   */
 #define BC_MAX_ELEMENTS             59          /* 6 characters              */
 #define BC_COOLDOWN_UM              100000      /* 100 mm after a read       */
@@ -129,7 +135,11 @@
    first at mid-way, then at BC_PROF_LOW_DIV of the way up for faint thin
    bars.  Bars or spaces under BC_PROF_MIN_BINS bins are noise.          */
 #define BC_PROF_BIN_UM              330
-#define BC_PROF_BINS                ((BC_MAX_LEN_UM / BC_PROF_BIN_UM) + 64u)
+/* 7 Nov: the darkness record also keeps this much from before the first
+   bar the swing reading saw ("*" starts with a narrow bar, and faint
+   narrow bars do not start a capture): 25 mm = the quiet zone.       */
+#define BC_PRE_BINS                 (BC_QUIET_UM / BC_PROF_BIN_UM)
+#define BC_PROF_BINS                ((BC_MAX_LEN_UM / BC_PROF_BIN_UM) + BC_PRE_BINS + 64u)
 #define BC_PROF_WHITE_PCT           10u
 #define BC_PROF_DARK_PCT            95u
 #define BC_PROF_LOW_DIV             4u
@@ -138,7 +148,9 @@
    near the centre, steering is limited so the side-mounted barcode IR
    crosses the bars on a steady path (a weave swings it sideways and
    breaks the read up).  Curves (larger error) are not limited.        */
-#define LINE_BC_OMEGA_MAX           300         /* mrad/s while reading      */
+/* 7 Nov: 300 let a weave carry the car off the line onto the barcode
+   (17:46 and 18:33 runs: line lost mid-read); 1000 still damps a swing. */
+#define LINE_BC_OMEGA_MAX           1000        /* mrad/s while reading      */
 #define LINE_BC_HOLD_ERR            400         /* |err| above this: no limit */
 
 #endif /* LINE_CFG_H */

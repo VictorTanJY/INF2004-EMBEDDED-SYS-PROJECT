@@ -5,6 +5,32 @@
 
 #include "line_barcode.h"
 
+static void pre_reset(bc_capture_t * p_bc)
+{
+    p_bc->pre_n   = 0u;
+    p_bc->pre_i   = 0u;
+    p_bc->pre_cur = 0u;
+    p_bc->pre_um  = 0u;
+}
+
+/* While armed: keep the darkness record of the last BC_PRE_BINS bins. */
+static void pre_feed(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um)
+{
+    p_bc->pre_cur = (norm > p_bc->pre_cur) ? norm : p_bc->pre_cur;
+    p_bc->pre_um += step_um;
+    while (p_bc->pre_um >= BC_PROF_BIN_UM)
+    {
+        p_bc->pre_um -= BC_PROF_BIN_UM;
+        p_bc->pre[p_bc->pre_i] = p_bc->pre_cur;
+        p_bc->pre_i = (uint16_t)((p_bc->pre_i + 1u) % BC_PRE_BINS);
+        if (p_bc->pre_n < BC_PRE_BINS)
+        {
+            p_bc->pre_n++;
+        }
+        p_bc->pre_cur = norm;
+    }
+}
+
 void bc_init(bc_capture_t * p_bc)
 {
     p_bc->state       = (uint8_t)LINE_BC_WAIT_QUIET;
@@ -20,6 +46,11 @@ void bc_init(bc_capture_t * p_bc)
     p_bc->prof_n      = 0u;
     p_bc->bin_um      = 0u;
     p_bc->pass        = 0u;
+    p_bc->q_lo        = 0u;
+    p_bc->q_hi        = 0u;
+    p_bc->q_wlo       = 0xFFFFu;
+    p_bc->q_whi       = 0u;
+    pre_reset(p_bc);
 }
 
 static void start_cooldown(bc_capture_t * p_bc)
@@ -224,22 +255,56 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um, bc_o
             p_bc->white_um = p_bc->b_black ? 0u : (p_bc->white_um + step_um);
             if (p_bc->white_um >= BC_QUIET_UM)
             {
-                p_bc->state = (uint8_t)LINE_BC_ARMED;
+                p_bc->state    = (uint8_t)LINE_BC_ARMED;
+                p_bc->white_um = 0u;
+                pre_reset(p_bc);
+                p_bc->q_lo     = 0u;
+                p_bc->q_hi     = 0u;
+                p_bc->q_wlo    = 0xFFFFu;
+                p_bc->q_whi    = 0u;
             }
             break;
 
         case LINE_BC_ARMED:
+            if (!p_bc->b_black)
+            {
+                /* white-paper levels, one BC_QUIET_UM window at a time */
+                p_bc->q_wlo     = (norm < p_bc->q_wlo) ? norm : p_bc->q_wlo;
+                p_bc->q_whi     = (norm > p_bc->q_whi) ? norm : p_bc->q_whi;
+                p_bc->white_um += step_um;
+                if (p_bc->white_um >= BC_QUIET_UM)
+                {
+                    p_bc->q_lo     = p_bc->q_wlo;
+                    p_bc->q_hi     = p_bc->q_whi;
+                    p_bc->q_wlo    = 0xFFFFu;
+                    p_bc->q_whi    = 0u;
+                    p_bc->white_um = 0u;
+                }
+            }
             if (p_bc->b_black)
             {
+                uint16_t k;
+
                 p_bc->state       = (uint8_t)LINE_BC_CAPTURING;
                 p_bc->n           = 0u;
                 p_bc->run_um      = step_um;
                 p_bc->total_um    = step_um;
                 p_bc->max_elem_um = 0u;
                 p_bc->peak        = norm;
-                p_bc->prof_n      = 1u;
-                p_bc->prof[0]     = norm;
+                /* the darkness record starts with what came just before,
+                   oldest first (faint leading bars) */
+                for (k = 0u; k < p_bc->pre_n; k++)
+                {
+                    p_bc->prof[k] = p_bc->pre[(uint16_t)((p_bc->pre_i + BC_PRE_BINS - p_bc->pre_n + k) % BC_PRE_BINS)];
+                }
+                p_bc->prof[p_bc->pre_n] = norm;
+                p_bc->prof_n      = (uint16_t)(p_bc->pre_n + 1u);
                 p_bc->bin_um      = step_um;
+                pre_reset(p_bc);
+            }
+            else
+            {
+                pre_feed(p_bc, norm, step_um);
             }
             break;
 
@@ -288,9 +353,9 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um, bc_o
             {
                 uint32_t end_um = (p_bc->max_elem_um * BC_END_FACTOR_X10) / 10u;
 
-                if (end_um < BC_QUIET_UM)
+                if (end_um < BC_END_MIN_UM)
                 {
-                    end_um = BC_QUIET_UM;
+                    end_um = BC_END_MIN_UM;
                 }
                 if (p_bc->run_um >= end_um)
                 {

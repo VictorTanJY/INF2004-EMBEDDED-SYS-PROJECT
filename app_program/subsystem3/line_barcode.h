@@ -52,6 +52,18 @@ typedef struct
     uint16_t prof_n;
     uint32_t bin_um;                /* travel into the current bin       */
     uint8_t  pass;                  /* which reading decoded: 0 swing, 1 mid, 2 low */
+    /* 7 Nov: white-paper levels over the last BC_QUIET_UM before a code
+       (lightest, darkest: their difference is the noise a bar must beat) */
+    uint16_t q_lo;
+    uint16_t q_hi;
+    uint16_t q_wlo;                 /* the window being measured            */
+    uint16_t q_whi;
+    /* 7 Nov: darkness record of the last BC_PRE_BINS bins while armed */
+    uint16_t pre[BC_PRE_BINS];
+    uint16_t pre_n;                 /* bins held (up to BC_PRE_BINS)        */
+    uint16_t pre_i;                 /* next slot                            */
+    uint16_t pre_cur;               /* darkest in the bin being filled      */
+    uint32_t pre_um;                /* travel into it                       */
 } bc_capture_t;
 
 void        bc_init(bc_capture_t * p_bc);

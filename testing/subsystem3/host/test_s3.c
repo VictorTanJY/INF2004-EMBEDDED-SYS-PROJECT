@@ -85,12 +85,14 @@ static uint32_t g_spot_um = 1500u;
 static uint32_t g_white   = 80u;
 static uint32_t g_black   = 920u;
 static uint8_t  g_last_pass = 0u;    /* which reading decoded in the last run_pass */
+static uint32_t g_thin_black = 0u;   /* S3-H19: level of bars narrower than g_thin_um (0 = g_black) */
+static uint32_t g_thin_um    = 0u;
 
 static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
 {
     uint32_t const lead = 60000u;
     uint32_t       spot;
-    uint32_t       black = 0u;
+    uint32_t       level = 0u;
     uint32_t       taps  = 0u;
 
     for (spot = 0u; spot < g_spot_um; spot += 100u)
@@ -99,18 +101,23 @@ static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
         uint32_t x = x_um + spot;
         uint32_t pos = lead;
         uint16_t e;
+        uint32_t here = g_white;
 
         for (e = 0u; e < n; e++)
         {
             if ((x >= pos) && (x < pos + p_w[e]))
             {
-                black += ((e % 2u) == 0u) ? 1u : 0u;
+                if ((e % 2u) == 0u)
+                {
+                    here = ((g_thin_black != 0u) && (p_w[e] < g_thin_um)) ? g_thin_black : g_black;
+                }
                 break;
             }
             pos += p_w[e];
         }
+        level += here;
     }
-    return (uint16_t)(g_white + ((g_black - g_white) * black) / taps);
+    return (uint16_t)(level / taps);
 }
 
 /* Run one pass at v_mm_s; returns the result and fills *p_out. */
@@ -484,6 +491,52 @@ static void test_capture(void)
             printf("5-6 mm spot: %d / %d decoded (%d by the second try), %d wrong\n", good, total, pass2, wrong);
             CHECK("S3-H18", wrong == 0);
         }
+    }
+
+    /* S3-H19 (7 Nov 18:33 robot runs): "*Z*", the robot's levels while
+       driving: white ~20, wide bars ~690, 3 mm bars too faint for the
+       swing reading (here 240: a rise of 220 < BC_DELTA).  Only the 9 mm
+       bars were found; inside the Z the white between them reaches 33 mm,
+       which with a 25 mm end stopped every capture at 3 elements / 51 mm.
+       With the 40 mm end the whole code is kept and the darkness record
+       (low threshold) finds the faint bars. */
+    {
+        int s, d, good = 0, total = 0, wrong = 0;
+        int noise;
+
+        g_spot_um = 1500u;  g_white = 20u;  g_black = 690u;  g_thin_black = 240u;
+        for (noise = 0; noise <= 40; noise += 40)
+        {
+            for (s = 0; s < N_SLIDES; s++)
+            {
+                if (k_slides[s].ch != 'Z') { continue; }
+                for (d = 0; d < 2; d++)
+                {
+                    uint32_t w[29];
+                    bc_out_t out;
+                    bc_result_t r;
+                    int k;
+
+                    uint32_t wmin = 0xFFFFFFFFu;
+
+                    /* printed at the specified size: 3 mm narrow (~141 mm code) */
+                    for (k = 0; k < 29; k++) { wmin = (k_slides[s].p_w[k] < wmin) ? k_slides[s].p_w[k] : wmin; }
+                    for (k = 0; k < 29; k++) { w[k] = (k_slides[s].p_w[k] * 3000u) / wmin; }
+                    g_thin_um = 6000u;          /* bars under 6 mm are the faint narrow ones */
+                    if (d) { reverse(w, 29); }
+                    memset(&out, 0, sizeof(out));
+                    r = run_pass(w, 29, 90u, noise, &out);
+                    total++;
+                    if ((r == BC_VALID) && (out.ch == 'Z')) { good++; }
+                    else if (r == BC_VALID) { wrong++; }
+                    else { printf("  Z slide %d dir %d noise %d: result %d, %u elements, %u mm\n", k_slides[s].slide, d,
+                                  noise, (int)r, (unsigned)out.elements, (unsigned)(out.length_um / 1000u)); }
+                }
+            }
+        }
+        g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;  g_thin_black = 0u;
+        printf("faint 3 mm bars (robot 7 Nov): Z %d / %d decoded, %d wrong\n", good, total, wrong);
+        CHECK("S3-H19", (wrong == 0) && (good == total));
     }
 
     /* S3-H06: a crossing line (18 mm black) is not a barcode and not an error */
