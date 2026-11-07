@@ -272,10 +272,10 @@ static void test_mission(void)
 /* ---- obstacle geometry --------------------------------------------- */
 /* 4 Nov edge scan model: car heading phi (deg, + left) about the axle, the
    sensor OBST_US_AHEAD_MM ahead looking along phi; the beam hears the box
-   up to 36 deg off its axis (7 Nov run: a 9.5 cm box at 33 cm was last
-   heard with the car turned 33 / 36 deg, which in this model needs a beam
-   of 35-41 deg); the firmware corrects by OBST_EDGE_HALF_BEAM_CDEG = 30;
-   a box face d mm ahead of the sensor, w wide, centred c (+ left). */
+   up to g_edge_beam deg off its axis (7 Nov: the black box ~36, the blue
+   box's left side ~20: it depends on the box, so the firmware assumes
+   none); a box face d mm ahead of the sensor, w wide, centred c (+ left). */
+static double g_edge_beam = 36.0;
 static uint16_t edge_ping(double d, double w, double c, double phi_deg)
 {
     double const ph = phi_deg * M_PI / 180.0;
@@ -288,7 +288,7 @@ static uint16_t edge_ping(double d, double w, double c, double phi_deg)
         double const ang = atan2(dx, dy) - ph;
         double const r = sqrt((dx * dx) + (dy * dy));
 
-        if ((fabs(ang) <= (36.0 * M_PI / 180.0)) && (r < best)) { best = r; }
+        if ((fabs(ang) <= (g_edge_beam * M_PI / 180.0)) && (r < best)) { best = r; }
     }
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
 }
@@ -299,6 +299,7 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
 {
     bool    has[2] = { false, false };
     int32_t lat[2] = { 0, 0 };
+    int32_t mn[2]  = { 0, 0 };
     int     k;
 
     for (k = 0; k < 2; k++)
@@ -316,13 +317,57 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
             if ((side < 0) && (phi <= -2500) && (g_edge_clutter != 0u)) { r = g_edge_clutter; }   /* something to the right */
             if (obst_edge_on_face(phi, r, (uint16_t)d))
             {
-                if (obst_edge_past_max(obst_edge_lat(phi, r, side), side)) { break; }
-                has[k] = true; lat[k] = obst_edge_lat(phi, r, side); miss = 0u;
+                if (obst_edge_past_max(obst_edge_wide_lat(phi, r, side), side)) { break; }
+                has[k] = true; lat[k] = obst_edge_wide_lat(phi, r, side); mn[k] = obst_edge_lat(phi); miss = 0u;
             }
             else { miss++; }
         }
     }
     obst_edge_plan(p_prof, has[0], lat[0], has[1], lat[1]);
+    obst_edge_plan_min(p_prof, has[0], mn[0], has[1], mn[1]);
+}
+
+/* 7 Nov step-out leg model: from where the edge scan stopped (box face d
+   ahead of the sensor, w wide, centred c, + left), the car turns 45 deg
+   to side s and drives out; the servo shaft sits OBST_US_AHEAD -
+   OBST_SERVO_ARM ahead of the axle and the sensor looks along the line,
+   hearing the nearest face point within +-beam_deg; beam_deg 0: only the
+   face straight ahead of it answers (a flat face reflects straight back,
+   as the 7 Nov edge scans suggest).  A ping every 60 ms
+   at the bypass speed.  Returns the axle's lateral (toward s) when the
+   leg ends; *p_edge = the box edge on that side (toward s). */
+static int32_t out_sim(double d, double w, double c, int32_t s, int32_t min_lat, double beam_deg,
+                       double * p_edge)
+{
+    double const th    = 45.0 * M_PI / 180.0;
+    double const shaft = OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM;
+    double const face  = OBST_US_AHEAD_MM + d;          /* ahead of the axle */
+    double const lo    = (s * c) - (w / 2.0), hi = (s * c) + (w / 2.0);   /* box toward s */
+    double const step  = (OBST_BYPASS_SPEED_MM_S * 60.0) / 1000.0;
+    obst_out_t   o;
+    double       t;
+
+    *p_edge = hi;
+    obst_out_start(&o, min_lat);
+    for (t = 0.0; t < 2000.0; t += step)
+    {
+        double const ax = t * sin(th), ay = t * cos(th);
+        double const sx = ax + (shaft * sin(th)), sy = ay + (shaft * cos(th)) + OBST_SERVO_ARM_MM;
+        double       best = 1e9, x;
+        uint16_t     r;
+
+        if (obst_out_done(&o, (int32_t)ax)) { return (int32_t)ax; }
+        for (x = lo; x <= hi; x += 1.0)
+        {
+            double const dx = x - sx, dy = face - sy;
+            double const rr = sqrt((dx * dx) + (dy * dy));
+
+            if ((dy > 0.0) && (fabs(atan2(dx, dy)) <= (fmax(beam_deg, 0.2) * M_PI / 180.0)) && (rr < best)) { best = rr; }
+        }
+        r = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
+        obst_out_ping(&o, (int32_t)ax, (int32_t)ay, 4500, r, (int32_t)face);
+    }
+    return -1;
 }
 
 typedef struct { double d, w, c; } box_t;       /* face distance, width, centre lateral (+ left) */
@@ -460,23 +505,66 @@ static void test_obstacle(void)
         }
     }
 
-    /* S5-H21 (7 Nov): the run that read a 9.5 cm box as 37.9 cm wide (face
-       32.6 cm ahead, centred): the edges now come out at the box or a
-       little outside it, never inside */
+    /* S5-H21 (7 Nov): edge scan + step-out leg, end to end, on the two
+       7 Nov runs and offset boxes.  The car must end clear of the box's
+       edge by half its width + the margin (FR11), and not more than 10 cm
+       further out than that (the step-out is measured, not padded).
+       Black: 9.5 cm box, face 32.6 cm, heard 36 deg off the beam (read
+       37.9 cm wide with a 7.5 deg correction).  Blue: ~15 cm box across
+       the line, more to the left, its left side heard only 20 deg off
+       (with a 30 deg correction the car stepped out 10.6 cm and hit it). */
     {
-        memset(&prof, 0, sizeof(prof));
-        prof.clr_l_mm = OBST_CLEAR_MAX_MM;
-        prof.clr_r_mm = OBST_CLEAR_MAX_MM;
-        edge_sim(326.0, 95.0, 0.0, &prof);
-        printf("edge scan: 95 mm box at 326 mm -> edges %+d / %+d (width %d)\n",
-               prof.left_lat_mm, prof.right_lat_mm, prof.left_lat_mm - prof.right_lat_mm);
-        CHECK("S5-H21", (prof.left_lat_mm >= 45) && (prof.left_lat_mm <= 80) &&
-                        (prof.right_lat_mm <= -45) && (prof.right_lat_mm >= -80));
+        static struct { double d, w, c, beam, out_beam; char const * name; } const runs[] = {
+            { 326.0,  95.0,   0.0, 36.0,  0.0, "black 9.5 cm" },
+            { 326.0,  95.0,   0.0, 36.0, 15.0, "black, 15 deg beam out" },
+            { 326.0,  95.0,   0.0, 36.0, 36.0, "black, 36 deg beam out" },
+            { 326.0, 150.0,  15.0, 20.0,  0.0, "blue 15 cm, 1.5 cm left" },
+            { 326.0, 150.0,  15.0, 20.0, 15.0, "blue, 15 deg beam out" },
+            { 326.0, 150.0,  15.0, 20.0, 36.0, "blue, 36 deg beam out" },
+            { 200.0, 150.0, -60.0, 36.0,  0.0, "15 cm, 6 cm right" },
+            { 200.0, 100.0,  60.0, 20.0,  0.0, "10 cm, 6 cm left" },
+            { 200.0, 100.0,  60.0, 20.0, 15.0, "10 cm, 6 cm left, 15 deg" },
+            { 250.0, 200.0,   0.0, 36.0,  0.0, "20 cm centred" },
+            { 250.0, 200.0,   0.0, 36.0, 15.0, "20 cm centred, 15 deg" },
+        };
+        unsigned i;
+
+        for (i = 0u; i < (sizeof(runs) / sizeof(runs[0])); i++)
+        {
+            int32_t s;
+            int32_t lat;
+            double  edge;
+
+            memset(&prof, 0, sizeof(prof));
+            prof.clr_l_mm = OBST_CLEAR_MAX_MM;
+            prof.clr_r_mm = OBST_CLEAR_MAX_MM;
+            g_edge_beam   = runs[i].beam;
+            edge_sim(runs[i].d, runs[i].w, runs[i].c, &prof);
+            g_edge_beam   = 36.0;
+            s   = (prof.plan == OBST_PLAN_LEFT) ? 1 : -1;
+            lat = out_sim(runs[i].d, runs[i].w, runs[i].c, s, abs(prof.deviation_mm), runs[i].out_beam, &edge);
+            printf("step-out %-26s: edges %+4d/%+4d, %s, plan %3d mm, stepped %3d mm, need %3.0f\n", runs[i].name,
+                   prof.left_lat_mm, prof.right_lat_mm, (s > 0) ? "left " : "right", abs(prof.deviation_mm), lat,
+                   edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2));
+            CHECK("S5-H21", (prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT));
+            CHECK("S5-H21", lat > 0);
+            CHECK("S5-H21", lat >= (int32_t)(edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2)));
+            /* not padded: a flat face answering straight back ends the leg
+               within the allowance + a ping or two of the need */
+            CHECK("S5-H21", (runs[i].out_beam > 0.0) ||
+                            (lat <= (int32_t)(edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + 40.0)));
+        }
     }
 
-    /* S5-H17 (4 Nov): edge scan with the car turning.  Edges within the
-       beam correction of the truth, never inside it; side away from the
-       centre; offset = edge + margin + half car + allowance. */
+    /* S5-H21: the servo looks back along the line (> 90 = left), and the
+       leg ends before the front corner reaches the face */
+    CHECK("S5-H21", (obst_out_servo_deg(4500, 1) == 45) && (obst_out_servo_deg(4500, -1) == 135));
+    CHECK("S5-H21", !obst_out_blocked(411, 100, 4500) && obst_out_blocked(411, 250, 4500));
+
+    /* S5-H17 (4 Nov): edge scan with the car turning.  The wide edges
+       (side choice) never inside the truth; side away from the centre.
+       7 Nov: the offset is now only the step-out leg's minimum; clearing
+       the box end to end is S5-H21. */
     {
         static double const cs[3] = { 0.0, -62.0, 62.0 };
         int t;
@@ -489,13 +577,10 @@ static void test_obstacle(void)
             edge_sim(195.0, 154.0, cs[t], &prof);
             printf("edge scan: box 154 at %+.0f -> edges %+d / %+d, plan %u, offset %d\n", cs[t],
                    prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.plan, prof.deviation_mm);
-            CHECK("S5-H17", prof.b_sure && (prof.left_lat_mm >= (cs[t] + 77.0 - 5.0)) &&
-                            (prof.left_lat_mm <= (cs[t] + 77.0 + 60.0)));
-            CHECK("S5-H17", (prof.right_lat_mm <= (cs[t] - 77.0 + 5.0)) && (prof.right_lat_mm >= (cs[t] - 77.0 - 60.0)));
+            CHECK("S5-H17", prof.b_sure && (prof.left_lat_mm >= (cs[t] + 77.0 - 5.0)));
+            CHECK("S5-H17", prof.right_lat_mm <= (cs[t] - 77.0 + 5.0));
             CHECK("S5-H17", (cs[t] > 0.0) ? (prof.plan == OBST_PLAN_RIGHT) : (prof.plan == OBST_PLAN_LEFT));
-            CHECK("S5-H17", (prof.plan == OBST_PLAN_LEFT) ?
-                            (prof.deviation_mm >= (cs[t] + 77.0 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2))) :
-                            (-prof.deviation_mm >= (-(cs[t] - 77.0) + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2))));
+            CHECK("S5-H17", abs(prof.deviation_mm) >= (OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
         }
     }
 
@@ -550,8 +635,7 @@ static void test_obstacle(void)
         g_edge_clutter = 0u;
         printf("edge scan with clutter right: edges %+d / %+d, plan %u, offset %d\n",
                prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.plan, prof.deviation_mm);
-        CHECK("S5-H17", (prof.right_lat_mm >= -(OBST_WIDTH_MAX_MM)) &&
-                        (abs(prof.deviation_mm) >= 75 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2)));
+        CHECK("S5-H17", prof.right_lat_mm >= -(OBST_WIDTH_MAX_MM));
         /* clutter only on the right: never pass on the right (towards it) */
         CHECK("S5-H17", prof.plan == OBST_PLAN_LEFT);
     }

@@ -64,11 +64,16 @@
                                                face 20 cm wide at 15-20 cm spans < 30 mm.
                                                MEASURE with angled boxes (A11)        */
 #define OBST_HALF_BEAM_CDEG         750     /* servo scan: HC-SR04 ~15 deg beam */
-/* Edge scan (car turns), measured 7 Nov: a 9.5 cm box at ~33 cm kept
-   echoing from its corner until the car had turned 33 deg left / 36 deg
-   right, so the beam hears a corner ~33 deg off its axis (37.9 cm width
-   with 7.5).  30 keeps any error on the wide (safe) side.              */
-#define OBST_EDGE_HALF_BEAM_CDEG    3000
+/* Step-out leg (7 Nov): how far a box keeps echoing past its corner
+   depends on the box (9.5 cm black box: 33-36 deg off the beam; blue box
+   left side: ~20), so no beam angle is assumed.  The edge scan gives a
+   first edge (the sensor's own sideways position at the last echo) and
+   the car steps out with the sensor looking along the line at the face
+   until it has lost the face and is clear of it.                      */
+#define OBST_OUT_MIN_PINGS          3       /* pings before the leg may end   */
+/* Room planned for the leg to go this much further out than the first
+   edge (the back-up before the turn-out allows for it).               */
+#define OBST_OUT_SPARE_MM           100
 /* 3 Nov, after the instructor's guidance (25 Oct forum: estimate, not
    measure; median-filtered pings, background subtraction, consecutive-
    angle edges, conservative margins, more than one scan position, plan

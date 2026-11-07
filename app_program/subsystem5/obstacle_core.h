@@ -66,10 +66,18 @@ void     obst_profile_detected(obst_point_t const * p_fine, uint8_t n_fine,
    r = range from the sensor (OBST_US_AHEAD_MM ahead of the axle).       */
 /* The echo comes from the obstacle's face (not something behind it). */
 bool    obst_edge_on_face(int32_t phi_cdeg, uint16_t r_mm, uint16_t face_mm);
-/* The face's corner seen at the last on-face heading on side +1 (left) /
-   -1 (right): lateral mm from the line (+ left), the beam's inner edge on
-   the corner (OBST_HALF_BEAM_CDEG). */
-int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
+/* First edge estimate at the last on-face heading (7 Nov): the sensor's
+   own lateral position (mm, + left).  The sensor swings with the car and
+   a flat face echoes while the sensor is still behind it (9.5 cm box:
+   4.6 / 5.0 cm, true 4.75).  It can fall short (blue box left side), so
+   it is only the step-out leg's minimum: obst_out_* measure the rest. */
+int32_t obst_edge_lat(int32_t phi_cdeg);
+/* The same echo placed on the corner with the beam's inner edge
+   (OBST_HALF_BEAM_CDEG, as before 7 Nov): the widest believable edge on
+   side +1 / -1.  Used for the past-max test and the side choice (the
+   sensor positions above stay within OBST_US_AHEAD_MM, too close
+   together to tell the sides apart). */
+int32_t obst_edge_wide_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
 /* That edge is further out from the line than an OBST_WIDTH_MAX obstacle's
    could be on this side (as the reference robot's "past max"): it is
    something else, the side's edge is not known. */
@@ -80,6 +88,10 @@ bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
    OBST_WIDTH_MAX from the other.  Neither found: the servo scan's plan
    edges, with the same side rule (p unchanged if that scan saw nothing). */
 void    obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
+/* 7 Nov: after obst_edge_plan (given the far edges): the offset on the
+   chosen side becomes the step-out leg's minimum, from the sensor-position
+   edge (obst_edge_lat) when that side had an echo. */
+void    obst_edge_plan_min(obst_profile_t * p, bool b_has_l, int32_t min_l, bool b_has_r, int32_t min_r);
 
 /* ---- Scan sequencer: COARSE (30..150 by 30) -> FINE (nearest +-40 by 5)
    -> REFINE each edge by bisection.  The task pings obst_scan_angle(),
@@ -125,8 +137,12 @@ typedef enum
     OBST_STEP_PASS = 3,         /* drive on, servo watching the obstacle   */
     OBST_STEP_JOIN = 4,         /* drive on until a line sensor sees the
                                    line; value = give up after this, mm    */
-    OBST_STEP_LINESCAN = 5      /* spin slowly until the line is centred
+    OBST_STEP_LINESCAN = 5,     /* spin slowly until the line is centred
                                    under the sensors; value = most 0.1 deg (+ left) */
+    OBST_STEP_OUT = 6           /* 7 Nov: step out at the turned heading,
+                                   the servo looking along the line at the
+                                   face, until clear of it (obst_out_*);
+                                   value = planned leg, mm               */
 } obst_step_kind_t;
 
 typedef struct
@@ -138,6 +154,36 @@ typedef struct
 #define OBST_BYPASS_MAX_STEPS   10u
 
 uint8_t  obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_t * p_steps);
+
+/* ---- Step-out leg (7 Nov).  Lateral values are mm from the line toward
+   the bypass side; theta = the car's real heading from the line (0.01
+   deg, toward the side, > 0); face_mm = the face's distance ahead of the
+   axle where the car stopped (before any back-up). */
+typedef struct
+{
+    int32_t min_lat;            /* the plan's offset: never step out less  */
+    int32_t seen_lat;           /* sensor lateral at the furthest face echo */
+    bool    b_seen;
+    uint8_t pings;
+} obst_out_t;
+
+void    obst_out_start(obst_out_t * p_o, int32_t min_lat);
+/* Range at which the face would echo, the sensor looking along the line. */
+int32_t obst_out_expect_mm(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg);
+/* One ping: the axle is axle_lat out and axle_fwd on from the stop. */
+void    obst_out_ping(obst_out_t * p_o, int32_t axle_lat, int32_t axle_fwd, int32_t theta_cdeg,
+                      uint16_t r_mm, int32_t face_mm);
+/* Axle lateral to reach: clear of the furthest face echo by the car's
+   half width + margin + allowance, never less than the plan, never more
+   than past an OBST_WIDTH_MAX obstacle's furthest possible edge. */
+int32_t obst_out_target(obst_out_t const * p_o);
+bool    obst_out_done(obst_out_t const * p_o, int32_t axle_lat);
+/* The car's front corner is within OBST_MARGIN_MM of the face plane: the
+   leg must end here, whatever it has seen. */
+bool    obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg);
+/* Servo angle (deg, > 90 left) that looks along the line from a car
+   turned theta toward side +1 (left) / -1 (right). */
+int32_t obst_out_servo_deg(int32_t theta_cdeg, int32_t side);
 
 /* Cross-track offset (+ left) of (x, y) from the line through (x0, y0)
    with heading h0, all from the odometry snapshot. */

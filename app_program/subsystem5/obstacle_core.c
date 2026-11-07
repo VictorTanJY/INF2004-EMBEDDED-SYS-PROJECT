@@ -570,9 +570,14 @@ bool obst_edge_on_face(int32_t phi_cdeg, uint16_t r_mm, uint16_t face_mm)
            (fwd <= ((int32_t)OBST_US_AHEAD_MM + (int32_t)face_mm + OBST_EDGE_BAND_MM));
 }
 
-int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
+int32_t obst_edge_lat(int32_t phi_cdeg)
 {
-    int32_t const psi = phi_cdeg - (side * OBST_EDGE_HALF_BEAM_CDEG);
+    return (int32_t)(((int64_t)OBST_US_AHEAD_MM * app_sin_q15(phi_cdeg)) / 32768);
+}
+
+int32_t obst_edge_wide_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
+{
+    int32_t const psi = phi_cdeg - (side * OBST_HALF_BEAM_CDEG);
 
     return (int32_t)((((int64_t)OBST_US_AHEAD_MM * app_sin_q15(phi_cdeg)) +
                       ((int64_t)r_mm * app_sin_q15(psi))) / 32768);
@@ -660,6 +665,24 @@ void obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_
     p->deviation_mm = (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
 }
 
+void obst_edge_plan_min(obst_profile_t * p, bool b_has_l, int32_t min_l, bool b_has_r, int32_t min_r)
+{
+    int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+
+    if ((p->plan == (uint8_t)OBST_PLAN_LEFT) && b_has_l)
+    {
+        p->deviation_mm = (int16_t)app_max_i32(min_l + extra, extra);
+    }
+    else if ((p->plan == (uint8_t)OBST_PLAN_RIGHT) && b_has_r)
+    {
+        p->deviation_mm = (int16_t)-app_max_i32(-min_r + extra, extra);
+    }
+    else
+    {
+        /* unseen side or no bypass: the plan's offset stands */
+    }
+}
+
 /* ---- bypass ----------------------------------------------------------- */
 uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_t * p_steps)
 {
@@ -670,21 +693,23 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
     int32_t const d1    = (int32_t)(((int64_t)dev * 32768) / sin_q);
     int32_t const fwd   = (int32_t)(((int64_t)d1 * cos_q) / 32768);
     int32_t const room  = (int32_t)p_prof->closest_mm - OBST_MARGIN_MM;
+    /* 7 Nov: the step-out leg may go OBST_OUT_SPARE further out */
+    int32_t const fwd_r = (int32_t)(((int64_t)(dev + OBST_OUT_SPARE_MM) * cos_q) / sin_q);
     int32_t       pass;
     int32_t       back = 0;
     int32_t       depth;
     uint8_t       n = 0u;
 
     /* Not enough room to get sideways before reaching the face: back up. */
-    if (fwd > room)
+    if (fwd_r > room)
     {
-        back             = fwd - room + 20;
+        back             = fwd_r - room + 20;
         p_steps[n].kind  = (uint8_t)OBST_STEP_MOVE;
         p_steps[n].value = (int16_t)-back;
         n++;
     }
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(s * OBST_TURN_OUT_DDEG);  n++;
-    p_steps[n].kind = (uint8_t)OBST_STEP_MOVE; p_steps[n].value = (int16_t)d1;                        n++;
+    p_steps[n].kind = (uint8_t)OBST_STEP_OUT;  p_steps[n].value = (int16_t)d1;                        n++;
     p_steps[n].kind = (uint8_t)OBST_STEP_TURN; p_steps[n].value = (int16_t)(-s * OBST_TURN_OUT_DDEG); n++;
 
     /* PASS: the task ends it when the side ping has seen the obstacle and
@@ -714,6 +739,76 @@ uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_
     p_steps[n].kind  = (uint8_t)OBST_STEP_LINESCAN;
     p_steps[n].value = (int16_t)(s * (OBST_TURN_OUT_DDEG + OBST_LINESCAN_SPARE_DDEG));               n++;
     return n;
+}
+
+/* ---- step-out leg (7 Nov) -------------------------------------------- */
+#define OUT_EXTRA_MM    (OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM)
+#define OUT_SHAFT_MM    (OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM)  /* servo shaft ahead of the axle */
+
+void obst_out_start(obst_out_t * p_o, int32_t min_lat)
+{
+    p_o->min_lat  = min_lat;
+    p_o->seen_lat = 0;
+    p_o->b_seen   = false;
+    p_o->pings    = 0u;
+}
+
+int32_t obst_out_expect_mm(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg)
+{
+    /* the sensor: the shaft OUT_SHAFT ahead of the axle along the car,
+       then the arm along the line */
+    int32_t const sensor_fwd = axle_fwd_mm + (int32_t)(((int64_t)OUT_SHAFT_MM * app_cos_q15(theta_cdeg)) / 32768) +
+                               OBST_SERVO_ARM_MM;
+
+    return face_mm - sensor_fwd;
+}
+
+void obst_out_ping(obst_out_t * p_o, int32_t axle_lat, int32_t axle_fwd, int32_t theta_cdeg,
+                   uint16_t r_mm, int32_t face_mm)
+{
+    int32_t const expect = obst_out_expect_mm(face_mm, axle_fwd, theta_cdeg);
+
+    p_o->pings = (uint8_t)app_min_i32((int32_t)p_o->pings + 1, 255);
+    if ((r_mm != OBST_RANGE_NONE) && ((int32_t)r_mm <= (expect + OBST_DEPTH_TOL_MM)))
+    {
+        int32_t const lat = axle_lat + (int32_t)(((int64_t)OUT_SHAFT_MM * app_sin_q15(theta_cdeg)) / 32768);
+
+        if (!p_o->b_seen || (lat > p_o->seen_lat))
+        {
+            p_o->seen_lat = lat;
+        }
+        p_o->b_seen = true;
+    }
+}
+
+int32_t obst_out_target(obst_out_t const * p_o)
+{
+    int32_t t = p_o->min_lat;
+
+    if (p_o->b_seen)
+    {
+        t = app_max_i32(t, p_o->seen_lat + OUT_EXTRA_MM);
+    }
+    return app_min_i32(t, OBST_WIDTH_MAX_MM + OUT_EXTRA_MM);
+}
+
+bool obst_out_done(obst_out_t const * p_o, int32_t axle_lat)
+{
+    return ((p_o->pings >= OBST_OUT_MIN_PINGS) && (axle_lat >= obst_out_target(p_o))) ||
+           (axle_lat >= (OBST_WIDTH_MAX_MM + OUT_EXTRA_MM));
+}
+
+bool obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg)
+{
+    /* the front corner on the line's side sits half a width further on */
+    int32_t const corner = (int32_t)(((int64_t)(OBST_ROBOT_WIDTH_MM / 2) * app_sin_q15(theta_cdeg)) / 32768);
+
+    return obst_out_expect_mm(face_mm, axle_fwd_mm, theta_cdeg) <= (OBST_MARGIN_MM + corner);
+}
+
+int32_t obst_out_servo_deg(int32_t theta_cdeg, int32_t side)
+{
+    return app_clamp_i32(OBST_SERVO_CENTRE_DEG - ((side * theta_cdeg) / 100), OBST_SCAN_MIN_DEG, OBST_SCAN_MAX_DEG);
 }
 
 int32_t obst_cross_track_mm(int32_t x, int32_t y, int32_t x0, int32_t y0, int32_t h0_cdeg)

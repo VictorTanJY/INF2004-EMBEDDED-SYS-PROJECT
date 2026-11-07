@@ -61,6 +61,7 @@
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
 #define OBST_LOG_EDGE_FACE      50u     /* edge scan: face mm straight ahead << 16 | first left ping mm */
+#define OBST_LOG_OUT            60u     /* step-out: face edge seen at mm (0xFFFF none) << 16 | stepped out mm */
 
 /* line scan phases */
 #define LS_PH_SWEEP             0u
@@ -144,7 +145,8 @@ typedef struct
     int32_t  edge_h0;           /* encoder heading where the car stopped */
     uint32_t edge_until_ms;
     bool     b_edge_has[2];     /* [0] left, [1] right */
-    int32_t  edge_lat[2];
+    int32_t  edge_lat[2];       /* wide edge (side choice)           */
+    int32_t  edge_min[2];       /* sensor-position edge (7 Nov): step-out minimum */
     uint8_t  edge_hits[2];      /* on-face pings per side (log)  */
     uint8_t  edge_deg[2];       /* last heading reached, deg (log) */
     uint16_t edge_face;         /* face range straight ahead, measured first */
@@ -153,6 +155,10 @@ typedef struct
     int32_t  scan_h0;           /* LINESCAN: heading at the start           */
     uint16_t det_mm;            /* range when the monitor saw the obstacle  */
     int32_t  back_mm;           /* backed off since then (second look, reverse) */
+    /* step-out leg (7 Nov) */
+    obst_out_t out;
+    int32_t  out_face_mm;       /* face ahead of the axle at the turn-out    */
+    int32_t  out_h;             /* heading held while stepping out            */
 } obst_ctx_t;
 
 static obst_ctx_t g_o;
@@ -200,6 +206,15 @@ static int32_t turn_gain(void)
 
     line_get_snap(&line);
     return (line.turn_gain_pm != 0u) ? (int32_t)line.turn_gain_pm : OBST_GAIN_UNIT;
+}
+
+/* Step-out leg: the car's real heading from the line toward side s,
+   0.01 deg (encoder heading corrected by the measured turn slip). */
+static int32_t out_theta(motion_odom_t const * p_odom, int32_t s)
+{
+    int32_t const raw = s * app_wrap_cdeg(p_odom->heading_cdeg - g_o.h0);
+
+    return app_clamp_i32((raw * OBST_GAIN_UNIT) / turn_gain(), 0, 9000);
 }
 
 static int16_t slip_ddeg(int16_t ddeg)
@@ -445,6 +460,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
 static void edge_finish(void)
 {
     obst_edge_plan(&g_prof, g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
+    obst_edge_plan_min(&g_prof, g_o.b_edge_has[0], g_o.edge_min[0], g_o.b_edge_has[1], g_o.edge_min[1]);
     publish_profile();
     log_ev(OBST_LOG_EDGE_FACE, (int32_t)(((uint32_t)g_o.edge_face << 16) | g_o.edge_first_l));
     log_ev(OBST_LOG_EDGE_SIDES, (int32_t)(((uint32_t)g_o.edge_hits[0] << 24) | ((uint32_t)g_o.edge_deg[0] << 16) |
@@ -490,6 +506,9 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
                 g_prof.deviation_mm = (int16_t)((g_o.side == (uint8_t)OBST_PLAN_LEFT) ?
                     (g_prof.left_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM) :
                     -(-g_prof.right_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
+                g_prof.plan = g_o.side;
+                /* 7 Nov: the step-out leg measures the rest */
+                obst_edge_plan_min(&g_prof, g_o.b_edge_has[0], g_o.edge_min[0], g_o.b_edge_has[1], g_o.edge_min[1]);
             }
             g_o.n_steps  = obst_bypass_plan(&g_prof, g_o.side, g_steps);
             g_o.step_i    = 0u;
@@ -618,7 +637,7 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                 uint8_t const k   = (g_o.edge_side > 0) ? 0u : 1u;
                 int32_t const phi = (app_wrap_cdeg(p_odom->heading_cdeg - g_o.edge_h0) * OBST_GAIN_UNIT) / turn_gain();
 
-                int32_t const lat = obst_edge_lat(phi, rm, g_o.edge_side);
+                int32_t const lat = obst_edge_wide_lat(phi, rm, g_o.edge_side);
                 bool          b_past = false;
 
                 if (!g_o.b_edge_face)
@@ -654,6 +673,7 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                     {
                         g_o.b_edge_has[k] = true;
                         g_o.edge_lat[k]   = lat;
+                        g_o.edge_min[k]   = obst_edge_lat(phi);
                         g_o.edge_miss     = 0u;
                         g_o.edge_hits[k]++;
                     }
@@ -692,7 +712,17 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
         }
 
         case OBST_ST_BYPASS:
-            if ((g_o.step_i < g_o.n_steps) && (g_steps[g_o.step_i].kind == (uint8_t)OBST_STEP_PASS) &&
+            if ((g_o.step_i < g_o.n_steps) && (g_steps[g_o.step_i].kind == (uint8_t)OBST_STEP_OUT) &&
+                g_o.b_wait_motion && servo_settled(now_ms))
+            {
+                int32_t const s    = (g_o.side == (uint8_t)OBST_PLAN_LEFT) ? 1 : -1;
+                int32_t const th   = out_theta(p_odom, s);
+                int32_t const done = p_odom->dist_mm - g_o.phase_start_mm;
+
+                obst_out_ping(&g_o.out, (int32_t)(((int64_t)done * app_sin_q15(th)) / 32768),
+                              (int32_t)(((int64_t)done * app_cos_q15(th)) / 32768), th, r, g_o.out_face_mm);
+            }
+            else if ((g_o.step_i < g_o.n_steps) && (g_steps[g_o.step_i].kind == (uint8_t)OBST_STEP_PASS) &&
                 (r != OBST_RANGE_NONE) &&
                 ((int32_t)r < (app_abs_i32(g_prof.deviation_mm) + 150)))
             {
@@ -836,7 +866,73 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 goto_state((uint8_t)OBST_ST_IDLE);
                 break;
             }
-            if (p_st->kind == (uint8_t)OBST_STEP_PASS)
+            if (p_st->kind == (uint8_t)OBST_STEP_OUT)
+            {
+                int32_t const s   = (g_o.side == (uint8_t)OBST_PLAN_LEFT) ? 1 : -1;
+                int32_t const th  = out_theta(p_odom, s);
+                int32_t       done_mm;
+                int32_t       lat;
+
+                if (!g_o.b_wait_motion)
+                {
+                    /* start OUT: the sensor looks along the line at the face */
+                    int32_t back = 0;
+
+                    if ((g_steps[0].kind == (uint8_t)OBST_STEP_MOVE) && (g_steps[0].value < 0))
+                    {
+                        back = -g_steps[0].value;
+                    }
+                    g_o.b_wait_motion  = true;
+                    g_o.phase_start_mm = p_odom->dist_mm;
+                    g_o.out_h          = p_odom->heading_cdeg;
+                    g_o.out_face_mm    = (int32_t)OBST_US_AHEAD_MM + back +
+                                         (int32_t)(g_o.b_edge_face ? g_o.edge_face : g_prof.closest_mm);
+                    obst_out_start(&g_o.out, app_abs_i32(g_prof.deviation_mm));
+                    servo_to(obst_out_servo_deg(th, s), now_ms);
+                }
+                done_mm = p_odom->dist_mm - g_o.phase_start_mm;
+                lat     = (int32_t)(((int64_t)done_mm * app_sin_q15(th)) / 32768);
+                if (obst_out_done(&g_o.out, lat) ||
+                    obst_out_blocked(g_o.out_face_mm, (int32_t)(((int64_t)done_mm * app_cos_q15(th)) / 32768), th))
+                {
+                    /* later legs from the real step-out: PASS shorter by the
+                       extra forward travel, JOIN's limit from the real leg */
+                    int32_t const extra_fwd = (int32_t)(((int64_t)(done_mm - p_st->value) * app_cos_q15(th)) / 32768);
+                    uint8_t       k;
+
+                    stop_motion();
+                    servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
+                    log_ev(OBST_LOG_OUT, (int32_t)(((g_o.out.b_seen ? (uint32_t)(uint16_t)g_o.out.seen_lat : 0xFFFFu) << 16) |
+                                                   (uint32_t)app_clamp_i32(lat, 0, 0xFFFF)));
+                    for (k = (uint8_t)(g_o.step_i + 1u); k < g_o.n_steps; k++)
+                    {
+                        if (g_steps[k].kind == (uint8_t)OBST_STEP_PASS)
+                        {
+                            g_steps[k].value = (int16_t)app_max_i32((int32_t)g_steps[k].value - extra_fwd, 0);
+                        }
+                        else if (g_steps[k].kind == (uint8_t)OBST_STEP_JOIN)
+                        {
+                            g_steps[k].value = (int16_t)app_min_i32(((done_mm * OBST_JOIN_MAX_PERMILLE) / 1000) +
+                                                                    OBST_JOIN_EXTRA_MM, 0x7FFF);
+                        }
+                        else
+                        {
+                            /* unchanged */
+                        }
+                    }
+                    g_o.b_wait_motion = false;
+                    g_o.step_i++;
+                }
+                else
+                {
+                    drive(OBST_BYPASS_SPEED_MM_S, g_o.out_h, p_odom);
+                    if (servo_settled(now_ms))
+                    {
+                        ping();
+                    }
+                }
+            }
+            else if (p_st->kind == (uint8_t)OBST_STEP_PASS)
             {
                 int32_t     done_mm;
 
