@@ -137,9 +137,10 @@
    the corner at this half-angle.  CALIBRATE on a box of known width:
    the dashboard works out the value from LOG 71/72 and the ruler width.
    Boxes that echo differently read differently (black box ~33-36 deg,
-   blue box's left ~20); the bypass does not use it.  20 = the start
-   value (a 10.4 cm object on the same sensor read right at 20).       */
-#define OBST_WIDTH_BEAM_CDEG        2000
+   blue box's left ~20); the bypass does not use it.
+   Calibrated 7 Nov 16:17 on the 15 cm box (face 32.9 cm, last echoes at
+   30.6 / 30.7 deg, 35.3 / 35.0 cm): 25.5 deg gives 150 mm (20 read 216). */
+#define OBST_WIDTH_BEAM_CDEG        2550
 /* 5 Nov side choice: the smaller step-out; within OBST_TIE_MM of each
    other they count as equal, then the side whose edge was measured (not
    filled in), then OBST_PREF_LEFT.                                       */
