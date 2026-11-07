@@ -56,7 +56,7 @@
 #define OBST_LOG_PLAN           39u     /* bypass plan: offset mm (+ left) << 16 | pass mm */
 #define OBST_LOG_PASS           40u     /* pass leg: driven mm | side ping saw it << 16 */
 #define OBST_LOG_JOIN           44u     /* back in: line touched after mm, 0 = not found */
-#define OBST_LOG_LINESCAN       46u     /* turned onto the line after 0.1 deg, 0 = not found */
+#define OBST_LOG_LINESCAN       46u     /* turned onto the line after 0.1 deg (< 0: one sensor only), 0 = not found */
 #define OBST_LOG_EDGES          47u     /* scan edges, mm (+ left): left << 16 | right (int16 each) */
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
@@ -140,6 +140,10 @@ typedef struct
     int32_t  scan_target;       /* the line's heading: midway between them   */
     uint32_t scan_until_ms;     /* settle before the turn to it              */
     bool     b_scan_turned;     /* the turn to it has been sent              */
+    uint8_t  ls_part_q;         /* 7 Nov: best one-sensor crossing: 0 none,
+                                   1 went on only, 2 on and off             */
+    int32_t  ls_part_h;         /* ... its heading (from scan_h0)             */
+    bool     b_scan_part;       /* turning to a one-sensor crossing           */
     /* edge scan (4 Nov) */
     int8_t   edge_side;         /* +1 left, -1 right */
     uint8_t  edge_ph;           /* EDGE_PH_* */
@@ -1086,7 +1090,10 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
 
                             if (g_o.b_scan_turned || (app_abs_i32(d) < 200))
                             {
-                                log_ev(OBST_LOG_LINESCAN, app_max_i32(app_abs_i32(g_o.scan_target) / 10, 1));
+                                /* 7 Nov: < 0 = turned to a one-sensor crossing */
+                                log_ev(OBST_LOG_LINESCAN, (g_o.b_scan_part ? -1 : 1) *
+                                                          app_max_i32(app_abs_i32(g_o.scan_target) / 10, 1));
+                                g_o.b_scan_part = false;
                                 g_o.b_joined  = true;
                                 g_o.scan_pass = 0u;
                                 g_o.scan_ph   = LS_PH_SWEEP;
@@ -1116,8 +1123,10 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
 
                         if (g_o.scan_pass == 0u)
                         {
-                            g_o.scan_h0 = p_odom->heading_cdeg;
-                            amount      = slip_ddeg(p_st->value);
+                            g_o.scan_h0     = p_odom->heading_cdeg;
+                            amount          = slip_ddeg(p_st->value);
+                            g_o.ls_part_q   = 0u;
+                            g_o.b_scan_part = false;
                         }
                         else
                         {
@@ -1132,9 +1141,21 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                         send_turn(amount, OBST_LINESCAN_DEG_S, p_odom);
                         g_o.scan_pass++;
                     }
+                    else if ((g_o.scan_pass >= 2u) && (g_o.ls_part_q > 0u))
+                    {
+                        /* 7 Nov: both sweeps done, only one sensor crossed the
+                           line (it curves away under the car, 21:10 run):
+                           turn to where it crossed and let line following,
+                           which can take a bend, carry on from there */
+                        g_o.scan_target   = g_o.ls_part_h;
+                        g_o.b_scan_part   = true;
+                        g_o.b_scan_turned = false;
+                        g_o.scan_ph       = LS_PH_ALIGN;
+                        g_o.scan_until_ms = now_ms + OBST_LINESCAN_SETTLE_MS;
+                    }
                     else if (g_o.scan_pass >= 2u)
                     {
-                        /* both sweeps done, no full crossing: SEEK takes any
+                        /* both sweeps done, no sensor crossed: SEEK takes any
                            line if one was touched on the way in (b_joined) */
                         log_ev(OBST_LOG_LINESCAN, 0);
                         g_o.scan_pass = 0u;
@@ -1155,11 +1176,21 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                         {
                             g_o.ls_on[i]   = rel;
                             g_o.ls_seen[i] = 1u;
+                            if (g_o.ls_part_q == 0u)
+                            {
+                                g_o.ls_part_q = 1u;         /* went on: a fallback */
+                                g_o.ls_part_h = rel;
+                            }
                         }
                         else if (!b_on && g_o.b_ls_prev[i] && (g_o.ls_seen[i] == 1u))
                         {
                             g_o.ls_off[i]  = rel;
                             g_o.ls_seen[i] = 2u;
+                            if (g_o.ls_part_q < 2u)
+                            {
+                                g_o.ls_part_q = 2u;         /* a full crossing by one sensor */
+                                g_o.ls_part_h = (g_o.ls_on[i] + rel) / 2;
+                            }
                         }
                         else
                         {
