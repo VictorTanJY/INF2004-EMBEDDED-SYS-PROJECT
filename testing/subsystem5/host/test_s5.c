@@ -295,6 +295,9 @@ static uint16_t edge_ping(double d, double w, double c, double phi_deg)
 
 static uint16_t g_edge_clutter = 0u;    /* range of clutter seen beyond 25 deg right, 0 = none */
 
+static int32_t  g_edge_phi[2];          /* last echo per side (left, right), 0.01 deg */
+static uint16_t g_edge_r[2];
+
 static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
 {
     bool    has[2] = { false, false };
@@ -308,6 +311,10 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
         int32_t       phi  = 0;
         unsigned      miss = 0u;
 
+        int32_t       lo = 0, hi = 0;
+        bool          b_past = false;
+        unsigned      it;
+
         while ((miss < OBST_EDGE_MISSES) && (abs(phi) < (OBST_EDGE_MAX_DDEG * 10)))
         {
             uint16_t r;
@@ -317,10 +324,26 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
             if ((side < 0) && (phi <= -2500) && (g_edge_clutter != 0u)) { r = g_edge_clutter; }   /* something to the right */
             if (obst_edge_on_face(phi, r, (uint16_t)d))
             {
-                if (obst_edge_past_max(obst_edge_wide_lat(phi, r, side), side)) { break; }
+                if (obst_edge_past_max(obst_edge_wide_lat(phi, r, side), side)) { b_past = true; break; }
                 has[k] = true; lat[k] = obst_edge_wide_lat(phi, r, side); mn[k] = obst_edge_lat(phi); miss = 0u;
+                g_edge_phi[k] = phi; g_edge_r[k] = r; lo = phi;
             }
-            else { miss++; }
+            else { if (miss == 0u) { hi = phi; } miss++; }
+        }
+        /* 7 Nov: refine between the last echo and the first miss, as the task */
+        for (it = 0u; has[k] && !b_past && (miss >= OBST_EDGE_MISSES) && (it < OBST_EDGE_REFINE_ITERS); it++)
+        {
+            uint16_t r;
+
+            phi = (lo + hi) / 2;
+            r   = edge_ping(d, w, c, phi / 100.0);
+            if (obst_edge_on_face(phi, r, (uint16_t)d) && !obst_edge_past_max(obst_edge_wide_lat(phi, r, side), side))
+            {
+                lat[k] = obst_edge_wide_lat(phi, r, side); mn[k] = obst_edge_lat(phi);
+                g_edge_phi[k] = phi; g_edge_r[k] = r; lo = phi;
+            }
+            else { hi = phi; }
+            g_edge_phi[k] = (lo + hi) / 2;      /* the edge is between the last echo and the miss */
         }
     }
     obst_edge_plan(p_prof, has[0], lat[0], has[1], lat[1]);
@@ -550,10 +573,51 @@ static void test_obstacle(void)
             CHECK("S5-H21", lat > 0);
             CHECK("S5-H21", lat >= (int32_t)(edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2)));
             /* not padded: a flat face answering straight back ends the leg
-               within the allowance + a ping or two of the need */
+               within the allowance + a ping or two of the need, or of the
+               plan's minimum if that was already further out */
             CHECK("S5-H21", (runs[i].out_beam > 0.0) ||
-                            (lat <= (int32_t)(edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + 40.0)));
+                            (lat <= (int32_t)fmax(edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + 40.0,
+                                                     (double)abs(prof.deviation_mm) + 10.0)));
         }
+    }
+
+    /* S5-H22 (7 Nov): reported width from the last echoes with the
+       calibrated beam angle (OBST_WIDTH_BEAM_CDEG).  Boxes that echo like
+       the calibration box read within 10 % (grade A) at 15-33 cm; a box
+       heard much further off the beam reads wide (printed, the known
+       limit: it only affects the dashboard number). */
+    {
+        static double const ws[3] = { 100.0, 150.0, 200.0 };
+        static double const ds[3] = { 150.0, 250.0, 326.0 };
+        double worst_w = 0.0;
+        int    a, b2;
+
+        for (a = 0; a < 3; a++)
+        {
+            for (b2 = 0; b2 < 3; b2++)
+            {
+                uint16_t w;
+                double   e;
+
+                memset(&prof, 0, sizeof(prof));
+                prof.clr_l_mm = OBST_CLEAR_MAX_MM;
+                prof.clr_r_mm = OBST_CLEAR_MAX_MM;
+                g_edge_beam = OBST_WIDTH_BEAM_CDEG / 100.0;
+                edge_sim(ds[b2], ws[a], 0.0, &prof);
+                g_edge_beam = 36.0;
+                w = obst_edge_width(g_edge_phi[0], g_edge_r[0], g_edge_phi[1], g_edge_r[1]);
+                e = fabs(w - ws[a]) / ws[a];
+                if (e > worst_w) { worst_w = e; }
+                printf("width: %3.0f mm box at %3.0f mm -> %3u mm (%4.1f %%)\n", ws[a], ds[b2], (unsigned)w, e * 100.0);
+            }
+        }
+        CHECK("S5-H22", worst_w <= 0.10);
+        memset(&prof, 0, sizeof(prof));
+        g_edge_beam = 36.0;
+        edge_sim(326.0, 95.0, 0.0, &prof);
+        printf("width: 95 mm box heard to 36 deg (black box) -> %u mm with the %d deg calibration\n",
+               (unsigned)obst_edge_width(g_edge_phi[0], g_edge_r[0], g_edge_phi[1], g_edge_r[1]),
+               OBST_WIDTH_BEAM_CDEG / 100);
     }
 
     /* S5-H21: the servo looks back along the line (> 90 = left), and the

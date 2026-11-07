@@ -583,6 +583,20 @@ int32_t obst_edge_wide_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
                       ((int64_t)r_mm * app_sin_q15(psi))) / 32768);
 }
 
+static int32_t width_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
+{
+    int32_t const psi = phi_cdeg - (side * OBST_WIDTH_BEAM_CDEG);
+
+    return (int32_t)((((int64_t)OBST_US_AHEAD_MM * app_sin_q15(phi_cdeg)) +
+                      ((int64_t)r_mm * app_sin_q15(psi))) / 32768);
+}
+
+uint16_t obst_edge_width(int32_t phi_l_cdeg, uint16_t r_l_mm, int32_t phi_r_cdeg, uint16_t r_r_mm)
+{
+    return (uint16_t)app_clamp_i32(width_lat(phi_l_cdeg, r_l_mm, 1) - width_lat(phi_r_cdeg, r_r_mm, -1),
+                                   0, 0xFFFF);
+}
+
 bool obst_edge_past_max(int32_t lat_mm, int32_t side)
 {
     return ((side * lat_mm) > OBST_WIDTH_MAX_MM);

@@ -82,6 +82,10 @@ int32_t obst_edge_wide_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
    could be on this side (as the reference robot's "past max"): it is
    something else, the side's edge is not known. */
 bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
+/* Reported width (7 Nov) from the last echo on each side (heading phi,
+   range r), the beam's inner edge on the corner at OBST_WIDTH_BEAM_CDEG.
+   Only the dashboard's width: the bypass does not use it. */
+uint16_t obst_edge_width(int32_t phi_l_cdeg, uint16_t r_l_mm, int32_t phi_r_cdeg, uint16_t r_r_mm);
 /* Re-plan p from the edge scan: edges, width, side (away from the
    obstacle's centre), offset.  A side whose edge was not found takes the
    servo scan's edge (p on entry) if it saw a real width, else reaches

@@ -20,7 +20,7 @@ const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
-const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)',
+const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)', 71: 'Edge scan: last left echo', 72: 'Edge scan: last right echo',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 43: 'Impact not confirmed (peak jolt, mg)', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
   54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
@@ -45,6 +45,24 @@ function band(value, limits) { return value <= limits[0] ? 'a' : value <= limits
 const bandText = b => b === 'f' ? 'outside C' : 'band ' + b.toUpperCase();
 const ev = e => e.payload || {};
 const isType = (e, t) => e.topic.endsWith('/event') && ev(e).type === t;
+/* 7 Nov: OBST_WIDTH_BEAM_CDEG calibration.  The last edge scan's last
+   echo each side (LOG 71/72: heading, range) and the ruler width give the
+   beam half-angle that reproduces it (firmware: obst_edge_width, sensor
+   OBST_US_AHEAD_MM = 85 ahead of the axle). */
+const US_AHEAD_MM = 85;
+function beamCalText(trueMm) {
+  const last = c => [...(snap.events || [])].reverse().find(e => isType(e, 'LOG') && ev(e).code === c);
+  const L = last(71), R = last(72);
+  if (!L || !R || !ev(L).data || !ev(R).data) return 'Beam calibration: needs an edge scan with an echo on both sides (LOG 71/72).';
+  const dec = x => { const d = x >>> 0; return [(((d >>> 16) << 16) >> 16) / 100 * Math.PI / 180, d & 0xFFFF]; };
+  const [pl, rl] = dec(ev(L).data), [pr, rr] = dec(ev(R).data);
+  const width = b => (US_AHEAD_MM * Math.sin(pl) + rl * Math.sin(pl - b)) - (US_AHEAD_MM * Math.sin(pr) + rr * Math.sin(pr + b));
+  let lo = 0, hi = 60 * Math.PI / 180;
+  if (width(lo) < trueMm || width(hi) > trueMm) return 'Beam calibration: no beam angle between 0 and 60° gives that width from this scan.';
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (width(m) > trueMm) lo = m; else hi = m; }
+  const deg = (lo + hi) / 2 * 180 / Math.PI;
+  return `Beam calibration from the last scan: ${deg.toFixed(1)}° → set OBST_WIDTH_BEAM_CDEG to ${Math.round(deg * 100)} in mission_cfg.h`;
+}
 const isLog = (e, c) => e.topic.endsWith('/event') && ev(e).type === 'LOG' && ev(e).code === c;
 const charOf = d => typeof d === 'string' ? d : isNum(d) && d >= 32 && d < 127 ? String.fromCharCode(d) : '?';
 
@@ -74,6 +92,8 @@ function describe(e) {
     if (p.code === 36) { const d = p.data >>> 0; detail = `narrowest ${((d >>> 16) / 10).toFixed(1)} mm, widest ${((d & 0xFFFF) / 10).toFixed(1)} mm`; }
     if (p.code === 38) detail = p.data ? `turns asked for ×${(p.data / 1000).toFixed(2)} (encoders count ${(p.data / 10).toFixed(0)}% of a real turn)` : 'not measured: turns not corrected';
     if (p.code === 60) { const d = p.data >>> 0, e = d >>> 16, o = d & 0xFFFF; detail = `stepped out ${(o / 10).toFixed(1)} cm; ${e === 0xFFFF ? 'face never seen while stepping out' : 'face last seen with the sensor ' + (((e << 16) >> 16) / 10).toFixed(1) + ' cm out'}`; }
+    if (p.code === 71 || p.code === 72) { const d = p.data >>> 0, ph = ((d >>> 16) << 16) >> 16, r = d & 0xFFFF;
+      detail = d ? `car turned ${(Math.abs(ph) / 100).toFixed(1)}°, echo at ${(r / 10).toFixed(1)} cm` : 'no echo on this side'; }
     if (p.code === 50) { const d = p.data >>> 0, f = d >>> 16, l = d & 0xFFFF; detail = `face straight ahead ${(f / 10).toFixed(1)} cm, first ping on the left ${l === 0xFFFF ? 'no echo' : (l / 10).toFixed(1) + ' cm'}`; }
     if (p.code === 49) { const d = p.data >>> 0; detail = `left: ${d >>> 24} echoes, turned ${(d >>> 16) & 0xFF}°; right: ${(d >>> 8) & 0xFF} echoes, turned ${d & 0xFF}°`; }
     if (p.code === 47 || p.code === 48) { const d = p.data >>> 0, l = ((d >>> 16) << 16) >> 16, r = (d << 16) >> 16, side = v => v >= 0 ? `${(v / 10).toFixed(1)} cm left` : `${(-v / 10).toFixed(1)} cm right`;
@@ -277,6 +297,7 @@ function render() {
     $('widthGrade').className = 'grade ' + b;
     $('widthGrade').innerHTML = `<b>${fmt(err, 1)} % error</b>${bandText(b)} (${fmt(ob.w_mm)} vs ${fmt(tw)} mm)`;
   } else { $('widthGrade').className = 'grade'; $('widthGrade').textContent = isNum(ob.w_mm) ? 'Enter the box width to see the error' : 'No width measured yet'; }
+  $('beamCal').textContent = tw > 0 ? beamCalText(tw) : '';
   const br = bypassResult();
   if (br && isNum(br.sec)) {
     const b = br.end === 'RECOVERY_DONE' ? band(br.sec, [2.999, 4.999, 6.999]) : 'f';

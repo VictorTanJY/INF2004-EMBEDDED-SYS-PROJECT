@@ -61,6 +61,8 @@
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
 #define OBST_LOG_EDGE_FACE      50u     /* edge scan: face mm straight ahead << 16 | first left ping mm */
+#define OBST_LOG_EDGE_RAW_L     71u     /* edge scan, last left echo: heading 0.01 deg << 16 | range mm */
+#define OBST_LOG_EDGE_RAW_R     72u     /* the same on the right (heading < 0)       */
 #define OBST_LOG_OUT            60u     /* step-out: face edge seen at mm (0xFFFF none) << 16 | stepped out mm */
 
 /* line scan phases */
@@ -147,6 +149,12 @@ typedef struct
     bool     b_edge_has[2];     /* [0] left, [1] right */
     int32_t  edge_lat[2];       /* wide edge (side choice)           */
     int32_t  edge_min[2];       /* sensor-position edge (7 Nov): step-out minimum */
+    int32_t  edge_phi[2];       /* 7 Nov: heading of the last echo, 0.01 deg  */
+    uint16_t edge_r[2];         /* ... and its range                          */
+    int32_t  edge_lo;           /* refine: last echo heading                  */
+    int32_t  edge_hi;           /* refine: first miss heading                 */
+    uint8_t  edge_ref;          /* refine iteration, 0 = coarse steps         */
+    int16_t  edge_step;         /* next turn, 0.1 deg (+ left)                */
     uint8_t  edge_hits[2];      /* on-face pings per side (log)  */
     uint8_t  edge_deg[2];       /* last heading reached, deg (log) */
     uint16_t edge_face;         /* face range straight ahead, measured first */
@@ -418,6 +426,8 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.edge_face     = g_prof.closest_mm;
         g_o.edge_first_l  = 0u;
         g_o.edge_miss     = 0u;
+        g_o.edge_ref      = 0u;
+        g_o.edge_step     = (int16_t)OBST_EDGE_STEP_DDEG;
         g_o.edge_h0       = p_odom->heading_cdeg;
         g_o.b_edge_has[0] = false;
         g_o.b_edge_has[1] = false;
@@ -461,6 +471,13 @@ static void edge_finish(void)
 {
     obst_edge_plan(&g_prof, g_o.b_edge_has[0], g_o.edge_lat[0], g_o.b_edge_has[1], g_o.edge_lat[1]);
     obst_edge_plan_min(&g_prof, g_o.b_edge_has[0], g_o.edge_min[0], g_o.b_edge_has[1], g_o.edge_min[1]);
+    if (g_o.b_edge_has[0] && g_o.b_edge_has[1])
+    {
+        /* 7 Nov: the reported width, with the calibrated beam angle */
+        g_prof.w_mm = obst_edge_width(g_o.edge_phi[0], g_o.edge_r[0], g_o.edge_phi[1], g_o.edge_r[1]);
+    }
+    log_ev(OBST_LOG_EDGE_RAW_L, g_o.b_edge_has[0] ? (int32_t)(((uint32_t)(uint16_t)g_o.edge_phi[0] << 16) | g_o.edge_r[0]) : 0);
+    log_ev(OBST_LOG_EDGE_RAW_R, g_o.b_edge_has[1] ? (int32_t)(((uint32_t)(uint16_t)g_o.edge_phi[1] << 16) | g_o.edge_r[1]) : 0);
     publish_profile();
     log_ev(OBST_LOG_EDGE_FACE, (int32_t)(((uint32_t)g_o.edge_face << 16) | g_o.edge_first_l));
     log_ev(OBST_LOG_EDGE_SIDES, (int32_t)(((uint32_t)g_o.edge_hits[0] << 24) | ((uint32_t)g_o.edge_deg[0] << 16) |
@@ -658,9 +675,20 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                 {
                     g_o.edge_first_l = (rm == OBST_RANGE_NONE) ? 0xFFFFu : rm;
                 }
-                if (obst_edge_on_face(phi, rm, g_o.edge_face))
+                if (obst_edge_on_face(phi, rm, g_o.edge_face) && !obst_edge_past_max(lat, g_o.edge_side))
                 {
-                    if (obst_edge_past_max(lat, g_o.edge_side))
+                    g_o.b_edge_has[k] = true;
+                    g_o.edge_lat[k]   = lat;
+                    g_o.edge_min[k]   = obst_edge_lat(phi);
+                    g_o.edge_phi[k]   = phi;
+                    g_o.edge_r[k]     = rm;
+                    g_o.edge_lo       = phi;
+                    g_o.edge_miss     = 0u;
+                    g_o.edge_hits[k]++;
+                }
+                else
+                {
+                    if (obst_edge_on_face(phi, rm, g_o.edge_face))
                     {
                         /* 4 Nov: echoes 32 cm away at 50 deg right (mat edge,
                            floor) were taken as the box, edge 28.6 cm right of
@@ -669,21 +697,53 @@ static void handle_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_od
                            that side's edge is not known. */
                         b_past = true;
                     }
-                    else
+                    if ((g_o.edge_miss == 0u) || (g_o.edge_ref > 0u))
                     {
-                        g_o.b_edge_has[k] = true;
-                        g_o.edge_lat[k]   = lat;
-                        g_o.edge_min[k]   = obst_edge_lat(phi);
-                        g_o.edge_miss     = 0u;
-                        g_o.edge_hits[k]++;
+                        g_o.edge_hi = phi;  /* first miss (refine: the nearer one) */
                     }
+                    g_o.edge_miss++;
+                }
+                if (g_o.edge_ref > 0u)
+                {
+                    /* refining: next halfway, or done; the edge is taken
+                       halfway between the last echo and the nearest miss
+                       (the last echo alone always reads a little inside) */
+                    g_o.edge_phi[k] = (g_o.edge_lo + g_o.edge_hi) / 2;
+                    g_o.edge_ref++;
+                    g_o.edge_ph = (g_o.edge_ref > OBST_EDGE_REFINE_ITERS) ? EDGE_PH_RETURN : EDGE_PH_TURN;
+                }
+                else if (b_past || (g_o.edge_miss >= OBST_EDGE_MISSES) ||
+                         (app_abs_i32(phi) >= (OBST_EDGE_MAX_DDEG * 10)))
+                {
+                    /* 7 Nov: a side that ended on clear readings after an
+                       echo is refined between the last echo and the first
+                       miss; past-max (clutter) and the turn limit are not */
+                    g_o.edge_ref = (g_o.b_edge_has[k] && !b_past && (g_o.edge_miss >= OBST_EDGE_MISSES) &&
+                                    (OBST_EDGE_REFINE_ITERS > 0u)) ? 1u : 0u;
+                    g_o.edge_ph  = (g_o.edge_ref > 0u) ? EDGE_PH_TURN : EDGE_PH_RETURN;
                 }
                 else
                 {
-                    g_o.edge_miss++;
+                    g_o.edge_ph = EDGE_PH_TURN;
                 }
-                g_o.edge_ph = (b_past || (g_o.edge_miss >= OBST_EDGE_MISSES) ||
-                               (app_abs_i32(phi) >= (OBST_EDGE_MAX_DDEG * 10))) ? EDGE_PH_RETURN : EDGE_PH_TURN;
+                if (g_o.edge_ph == EDGE_PH_TURN)
+                {
+                    int32_t step = g_o.edge_side * OBST_EDGE_STEP_DDEG;
+
+                    if (g_o.edge_ref > 0u)
+                    {
+                        /* halfway between the last echo and the miss; at
+                           least 1.5 deg (a smaller turn may not move the
+                           wheels and could read as a stall); the ping is
+                           tagged with the heading reached, not asked */
+                        step = (((g_o.edge_lo + g_o.edge_hi) / 2) - phi) / 10;
+                        if (app_abs_i32(step) < OBST_EDGE_MIN_TURN_DDEG)
+                        {
+                            step = (step >= 0) ? OBST_EDGE_MIN_TURN_DDEG : -OBST_EDGE_MIN_TURN_DDEG;
+                        }
+                    }
+                    g_o.edge_step = (int16_t)step;
+                }
             }
             break;
         }
@@ -758,8 +818,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     {
                         if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
                         {
-                            send_turn(slip_ddeg((int16_t)(g_o.edge_side * OBST_EDGE_STEP_DDEG)),
-                                      OBST_EDGE_TURN_DEG_S, p_odom);
+                            send_turn(slip_ddeg(g_o.edge_step), OBST_EDGE_TURN_DEG_S, p_odom);
                         }
                     }
                     else if (motion_result(p_odom) != 0)
@@ -803,6 +862,8 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                             {
                                 g_o.edge_side = -1;
                                 g_o.edge_miss = 0u;
+                                g_o.edge_ref  = 0u;
+                                g_o.edge_step = (int16_t)-OBST_EDGE_STEP_DDEG;
                                 g_o.edge_ph   = EDGE_PH_TURN;
                             }
                             else

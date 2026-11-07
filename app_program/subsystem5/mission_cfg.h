@@ -128,6 +128,18 @@
    reference robot measured it (80 too loose, 35 cut faces at 25-30 deg). */
 #define OBST_EDGE_BAND_MM           25      /* echo within this behind the face plane = face */
 #define OBST_EDGE_MISSES            2u      /* clear readings in a row that end a side */
+/* 7 Nov: after a side ends, halve the gap between the last echo and the
+   first miss this many times (5 deg -> 1.25 deg), as the servo scan's
+   refine; about 1.5 s more per side.                                  */
+#define OBST_EDGE_REFINE_ITERS      2u
+#define OBST_EDGE_MIN_TURN_DDEG     15      /* smallest refine turn, 1.5 deg   */
+/* Reported width only (7 Nov): the edges as the beam's inner edge on
+   the corner at this half-angle.  CALIBRATE on a box of known width:
+   the dashboard works out the value from LOG 71/72 and the ruler width.
+   Boxes that echo differently read differently (black box ~33-36 deg,
+   blue box's left ~20); the bypass does not use it.  20 = the start
+   value (a 10.4 cm object on the same sensor read right at 20).       */
+#define OBST_WIDTH_BEAM_CDEG        2000
 /* 5 Nov side choice: the smaller step-out; within OBST_TIE_MM of each
    other they count as equal, then the side whose edge was measured (not
    filled in), then OBST_PREF_LEFT.                                       */
