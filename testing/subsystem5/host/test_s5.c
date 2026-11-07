@@ -335,8 +335,14 @@ static uint16_t ping(box_t const * p_b, int n_b, int angle_deg)
 
         for (lat = p_b[k].c - p_b[k].w / 2.0; lat <= p_b[k].c + p_b[k].w / 2.0 + 1e-9; lat += 1.0)
         {
-            double a = atan2(p_b[k].d, -lat) * 180.0 / M_PI;
-            double r = sqrt(p_b[k].d * p_b[k].d + lat * lat);
+            /* 7 Nov: the sensor faces along the servo horn, OBST_SERVO_ARM_MM
+               out from the shaft; box d is from the face with the servo at
+               90 deg, so the shaft sits ARM behind that point */
+            double const ar = angle_deg * M_PI / 180.0;
+            double const sx = -OBST_SERVO_ARM_MM * cos(ar);
+            double const sy = OBST_SERVO_ARM_MM * (sin(ar) - 1.0);
+            double a = atan2(p_b[k].d - sy, -(lat - sx)) * 180.0 / M_PI;
+            double r = sqrt((p_b[k].d - sy) * (p_b[k].d - sy) + (lat - sx) * (lat - sx));
 
             if ((fabs(a - angle_deg) <= 7.5) && (r < best)) { best = r; }
         }

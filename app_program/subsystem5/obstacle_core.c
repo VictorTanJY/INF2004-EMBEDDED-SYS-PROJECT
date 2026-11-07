@@ -40,9 +40,21 @@ uint16_t obst_echo_to_mm(uint32_t width_us)
     return (uint16_t)((width_us * 10u) / 58u);      /* us / 58 = cm */
 }
 
+/* Lateral (+ left) of a servo-scan echo from the servo shaft (7 Nov): the
+   sensor sits OBST_SERVO_ARM_MM out along the horn at servo angle
+   servo_cdeg, and the echo is r_mm from it along beam_cdeg (the servo angle,
+   or an edge corrected by half a beam). */
+static int32_t lateral2_mm(int32_t servo_cdeg, int32_t beam_cdeg, uint16_t r_mm)
+{
+    int64_t const q = ((int64_t)r_mm * app_cos_q15(beam_cdeg)) +
+                      ((int64_t)OBST_SERVO_ARM_MM * app_cos_q15(servo_cdeg));
+
+    return -(int32_t)(q / 32768);
+}
+
 static int32_t lateral_mm(int32_t angle_cdeg, uint16_t r_mm)
 {
-    return -(int32_t)(((int64_t)r_mm * app_cos_q15(angle_cdeg)) / 32768);
+    return lateral2_mm(angle_cdeg, angle_cdeg, r_mm);
 }
 
 /* An echo that can be part of an obstacle: in range. */
@@ -160,8 +172,8 @@ static void profile_core(obst_point_t const * p_fine, uint8_t n_fine,
         a_left  = mid;
         a_right = mid;
     }
-    lat_l = lateral_mm(a_left, p_fine[hi].r_mm);
-    lat_r = lateral_mm(a_right, p_fine[lo].r_mm);
+    lat_l = lateral2_mm((int32_t)p_fine[hi].angle_deg * 100, a_left, p_fine[hi].r_mm);
+    lat_r = lateral2_mm((int32_t)p_fine[lo].angle_deg * 100, a_right, p_fine[lo].r_mm);
 
     /* Edges for the PLAN (3 Nov): uncorrected, so never narrower than seen.
        Too narrow to be plausible: at least OBST_WIDTH_MAX wide around the

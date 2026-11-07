@@ -54,6 +54,10 @@
 /* Measured 3 Nov with a ruler (car geometry, fixed by the chassis):     */
 #define OBST_US_AHEAD_MM            85      /* ultrasonic front to wheel axle  */
 #define OBST_IR_AHEAD_MM            120     /* IR line sensors to wheel axle   */
+/* Measured 7 Nov: the sensor sits on the servo horn, its face 29 mm in
+   front of the servo shaft, so it swings on that arm as the servo turns.
+   Servo-scan positions use range + arm from the shaft.                 */
+#define OBST_SERVO_ARM_MM           29
 #define OBST_MARGIN_MM              50      /* FR11 clearance                  */
 #define OBST_MAX_RANGE_MM           800     /* profile only what is this close */
 #define OBST_DEPTH_TOL_MM           60      /* same object: within r_min + this; a flat
