@@ -71,6 +71,23 @@
    the car steps out with the sensor looking along the line at the face
    until it has lost the face and is clear of it.                      */
 #define OBST_OUT_MIN_PINGS          3       /* pings before the leg may end   */
+/* Width probe (7 Nov): turning on the
+   spot cannot measure a flat face's width (it echoes only square-on, and
+   the sensor barely moves sideways), so the car turns ~65 deg, the servo
+   looks back along the line at the face, and the car drives sideways past
+   one edge, then back past the other.  An edge is where the face echo
+   stops, at the sensor's sideways position (wheels).  Replaces the
+   turning edge scan when 1.                                            */
+#define OBST_WIDTH_PROBE            1
+#define OBST_PROBE_FACE_MM          250     /* face this far from the sensor first */
+#define OBST_PROBE_DDEG             650     /* car turn: the servo reaches +-70 */
+#define OBST_PROBE_SPEED_MM_S       60
+#define OBST_PROBE_MAX_MM           250     /* axle sideways, each side        */
+#define OBST_PROBE_OFF              2u      /* clear pings in a row = past an edge */
+/* The echo runs on past each edge: 7 Nov step-out legs on the centred
+   15 cm box last saw the face with the sensor 9.5 / 9.7 cm out (edge 7.5
+   cm), ~20 mm.  MEASURE again with the probe (dashboard LOG 74).      */
+#define OBST_PROBE_EDGE_OVER_MM     20
 /* Room planned for the leg to go this much further out than the first
    edge (the back-up before the turn-out allows for it).               */
 #define OBST_OUT_SPARE_MM           100

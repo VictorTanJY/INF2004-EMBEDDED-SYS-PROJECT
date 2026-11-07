@@ -620,6 +620,84 @@ static void test_obstacle(void)
                OBST_WIDTH_BEAM_CDEG / 100);
     }
 
+    /* S5-H23 (7 Nov): width probe, as the task runs it: the car turned 65
+       deg, the servo looking back along the line, drives left past the
+       left edge, then back past the right edge, a ping every 60 ms at 60
+       mm/s.  The face echoes while the sensor is within the face plus a
+       run-on past each edge (15-25 mm; 20 measured on the car, corrected
+       by OBST_PROBE_EDGE_OVER_MM).  10-20 cm boxes, centred and 6 cm off:
+       with the run-on as corrected, width within 5 %%; 5 mm more or less
+       run-on than corrected costs 10 mm of width (15 %% on a 10 cm box,
+       so OBST_PROBE_EDGE_OVER_MM must be measured); edges within 15 mm. */
+    {
+        static double const ws[3] = { 100.0, 150.0, 200.0 };
+        static double const cs[3] = { 0.0, 60.0, -60.0 };
+        static double const runs[3] = { 15.0, 20.0, 25.0 };
+        double const th_deg = OBST_PROBE_DDEG / 10.0;
+        int32_t const th = OBST_PROBE_DDEG * 10;
+        double worst = 0.0, worst_off = 0.0;
+        int a2, b3, c4;
+
+        for (a2 = 0; a2 < 3; a2++)
+        {
+            for (b3 = 0; b3 < 3; b3++)
+            {
+                for (c4 = 0; c4 < 3; c4++)
+                {
+                    double const w = ws[a2], c = cs[b3], run = runs[c4];
+                    int32_t const face = OBST_US_AHEAD_MM + OBST_PROBE_FACE_MM;
+                    double const step = (OBST_PROBE_SPEED_MM_S * 60.0) / 1000.0;
+                    obst_probe_t pr;
+                    double d = 0.0;
+                    int pass;
+                    int32_t l, r;
+                    double e;
+
+                    obst_probe_start(&pr);
+                    for (pass = 0; pass < 2; pass++)
+                    {
+                        bool seen = false;
+
+                        pr.off = 0u;
+                        for (;;)
+                        {
+                            int32_t const lat = (int32_t)(d * sin(th_deg * M_PI / 180.0));
+                            int32_t const fwd = (int32_t)(d * cos(th_deg * M_PI / 180.0));
+                            int32_t const sl  = obst_probe_sensor_lat(lat, th);
+                            int32_t const ex  = obst_out_expect_mm(face, fwd, th);
+                            bool const on = (sl <= (c + (w / 2.0) + run)) && (sl >= (c - (w / 2.0) - run));
+
+                            if (obst_probe_ping(&pr, sl, on ? (uint16_t)ex : OBST_RANGE_NONE, ex)) { seen = true; }
+                            if (pass == 0)
+                            {
+                                if (((pr.off >= OBST_PROBE_OFF) && (lat >= 20)) || (lat >= OBST_PROBE_MAX_MM)) { break; }
+                                d += step;
+                            }
+                            else
+                            {
+                                if ((seen && (pr.off >= OBST_PROBE_OFF)) || (lat <= -OBST_PROBE_MAX_MM)) { break; }
+                                d -= step;
+                            }
+                        }
+                    }
+                    CHECK("S5-H23", obst_probe_edges(&pr, &l, &r));
+                    e = fabs((l - r) - w) / w;
+                    if ((c4 == 1) && (e > worst)) { worst = e; }
+                    if ((c4 != 1) && (e > worst_off)) { worst_off = e; }
+                    if ((c4 == 1) || (e > 0.10))
+                    {
+                        printf("probe: %3.0f mm box at %+3.0f, run-on %2.0f -> edges %+4d / %+4d, width %3d (%.1f %%)\n",
+                               w, c, run, (int)l, (int)r, (int)(l - r), e * 100.0);
+                    }
+                    CHECK("S5-H23", (fabs(l - (c + w / 2.0)) <= 15.0) && (fabs(r - (c - w / 2.0)) <= 15.0));
+                }
+            }
+        }
+        printf("probe: worst width error %.1f %% (run-on as corrected), %.1f %% (5 mm off)\n",
+               worst * 100.0, worst_off * 100.0);
+        CHECK("S5-H23", (worst <= 0.05) && (worst_off <= 0.15));
+    }
+
     /* S5-H21: the servo looks back along the line (> 90 = left), and the
        leg ends before the front corner reaches the face */
     CHECK("S5-H21", (obst_out_servo_deg(4500, 1) == 45) && (obst_out_servo_deg(4500, -1) == 135));

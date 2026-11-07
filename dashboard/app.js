@@ -20,7 +20,7 @@ const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
-const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)', 71: 'Edge scan: last left echo', 72: 'Edge scan: last right echo', 73: 'Barcode sensor levels',
+const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)', 71: 'Edge scan: last left echo', 72: 'Edge scan: last right echo', 73: 'Barcode sensor levels', 74: 'Width probe (side-step): edges',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 43: 'Impact not confirmed (peak jolt, mg)', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
   54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
@@ -50,8 +50,16 @@ const isType = (e, t) => e.topic.endsWith('/event') && ev(e).type === t;
    beam half-angle that reproduces it (firmware: obst_edge_width, sensor
    OBST_US_AHEAD_MM = 85 ahead of the axle). */
 const US_AHEAD_MM = 85;
+const PROBE_OVER_MM = 20;   /* OBST_PROBE_EDGE_OVER_MM in mission_cfg.h */
 function beamCalText(trueMm) {
   const last = c => [...(snap.events || [])].reverse().find(e => isType(e, 'LOG') && ev(e).code === c);
+  const P = last(74);
+  if (P && (ev(P).data >>> 0) !== 0x7FFF7FFF) {
+    /* width probe: the echo run-on past each edge that gives the ruler width */
+    const d = ev(P).data >>> 0, w = (((d >>> 16) << 16) >> 16) - ((d << 16) >> 16);
+    const over = Math.round(((w + 2 * PROBE_OVER_MM) - trueMm) / 2);
+    return `Width probe from the last scan: echo ran on ${over} mm past each edge → set OBST_PROBE_EDGE_OVER_MM to ${over} in mission_cfg.h (now ${PROBE_OVER_MM})`;
+  }
   const L = last(71), R = last(72);
   if (!L || !R || !ev(L).data || !ev(R).data) return 'Beam calibration: needs an edge scan with an echo on both sides (LOG 71/72).';
   const dec = x => { const d = x >>> 0; return [(((d >>> 16) << 16) >> 16) / 100 * Math.PI / 180, d & 0xFFFF]; };
@@ -92,6 +100,8 @@ function describe(e) {
     if (p.code === 36) { const d = p.data >>> 0; detail = `narrowest ${((d >>> 16) / 10).toFixed(1)} mm, widest ${((d & 0xFFFF) / 10).toFixed(1)} mm`; }
     if (p.code === 38) detail = p.data ? `turns asked for ×${(p.data / 1000).toFixed(2)} (encoders count ${(p.data / 10).toFixed(0)}% of a real turn)` : 'not measured: turns not corrected';
     if (p.code === 60) { const d = p.data >>> 0, e = d >>> 16, o = d & 0xFFFF; detail = `stepped out ${(o / 10).toFixed(1)} cm; ${e === 0xFFFF ? 'face never seen while stepping out' : 'face last seen with the sensor ' + (((e << 16) >> 16) / 10).toFixed(1) + ' cm out'}`; }
+    if (p.code === 74) { const d = p.data >>> 0, l = ((d >>> 16) << 16) >> 16, r = (d << 16) >> 16, side = v => v >= 0 ? `${(v / 10).toFixed(1)} cm left` : `${(-v / 10).toFixed(1)} cm right`;
+      detail = d === 0x7FFF7FFF ? 'face never seen: planned from the servo scan' : `left edge ${side(l)} of the line, right edge ${side(r)}: width ${((l - r) / 10).toFixed(1)} cm`; }
     if (p.code === 73) { const d = p.data >>> 0, pass = d >>> 30, nz = (d >>> 20) & 0x3FF, wl = (d >>> 10) & 0x3FF, dk = d & 0x3FF;
       detail = `white ${wl} / 1000, white noise ${nz}, darkest ${dk}` + (pass ? ['', '; decoded from the darkness record (mid threshold)', '; decoded from the darkness record (low threshold, faint bars)'][pass] : '') +
         ` (a bar must rise 250 above white; noise ${nz} leaves ${Math.max(0, 250 - nz)} margin)`; }

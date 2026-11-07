@@ -194,7 +194,8 @@ typedef enum
     OBST_ST_SEEK_LINE   = 8,
     OBST_ST_ALIGN       = 9,
     OBST_ST_EDGE_SCAN   = 10,   /* 4 Nov: car turns to find each edge  */
-    OBST_ST_SEEK_SWEEP  = 11    /* no line straight ahead: sweep +-45 deg */
+    OBST_ST_SEEK_SWEEP  = 11,   /* no line straight ahead: sweep +-45 deg */
+    OBST_ST_WIDTH_PROBE = 12    /* 7 Nov: side-step past both edges     */
 } obst_state_t;
 
 #define OBST_RANGE_NONE         0xFFFFu

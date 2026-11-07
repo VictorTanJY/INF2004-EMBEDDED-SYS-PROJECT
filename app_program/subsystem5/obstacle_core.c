@@ -820,6 +820,63 @@ bool obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg)
     return obst_out_expect_mm(face_mm, axle_fwd_mm, theta_cdeg) <= (OBST_MARGIN_MM + corner);
 }
 
+void obst_probe_start(obst_probe_t * p_p)
+{
+    p_p->b_seen = false;
+    p_p->lo     = 0;
+    p_p->hi     = 0;
+    p_p->off    = 0u;
+}
+
+int32_t obst_probe_sensor_lat(int32_t axle_lat, int32_t theta_cdeg)
+{
+    return axle_lat + (int32_t)(((int64_t)OUT_SHAFT_MM * app_sin_q15(theta_cdeg)) / 32768);
+}
+
+bool obst_probe_ping(obst_probe_t * p_p, int32_t sensor_lat, uint16_t r_mm, int32_t expect_mm)
+{
+    bool const b_face = (r_mm != OBST_RANGE_NONE) && ((int32_t)r_mm <= (expect_mm + OBST_DEPTH_TOL_MM));
+
+    if (b_face)
+    {
+        if (!p_p->b_seen)
+        {
+            p_p->lo = sensor_lat;
+            p_p->hi = sensor_lat;
+        }
+        p_p->lo     = app_min_i32(p_p->lo, sensor_lat);
+        p_p->hi     = app_max_i32(p_p->hi, sensor_lat);
+        p_p->b_seen = true;
+        p_p->off    = 0u;
+    }
+    else
+    {
+        p_p->off = (uint8_t)app_min_i32((int32_t)p_p->off + 1, 255);
+    }
+    return b_face;
+}
+
+bool obst_probe_edges(obst_probe_t const * p_p, int32_t * p_left, int32_t * p_right)
+{
+    int32_t l;
+    int32_t r;
+
+    if (!p_p->b_seen)
+    {
+        return false;
+    }
+    l = p_p->hi - OBST_PROBE_EDGE_OVER_MM;
+    r = p_p->lo + OBST_PROBE_EDGE_OVER_MM;
+    if (l < r)
+    {
+        l = (p_p->hi + p_p->lo) / 2;    /* narrower than the run-on: a post */
+        r = l;
+    }
+    *p_left  = l;
+    *p_right = r;
+    return true;
+}
+
 int32_t obst_out_servo_deg(int32_t theta_cdeg, int32_t side)
 {
     return app_clamp_i32(OBST_SERVO_CENTRE_DEG - ((side * theta_cdeg) / 100), OBST_SCAN_MIN_DEG, OBST_SCAN_MAX_DEG);

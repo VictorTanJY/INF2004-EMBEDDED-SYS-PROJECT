@@ -185,6 +185,26 @@ bool    obst_out_done(obst_out_t const * p_o, int32_t axle_lat);
 /* The car's front corner is within OBST_MARGIN_MM of the face plane: the
    leg must end here, whatever it has seen. */
 bool    obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg);
+/* ---- Width probe (7 Nov): sensor lateral positions (mm, + left) of the
+   face echoes while the car side-steps past both edges. */
+typedef struct
+{
+    bool    b_seen;
+    int32_t lo;                 /* rightmost sensor lateral with a face echo */
+    int32_t hi;                 /* leftmost                                  */
+    uint8_t off;                /* clear pings in a row                      */
+} obst_probe_t;
+
+void    obst_probe_start(obst_probe_t * p_p);
+/* Sensor lateral (+ left) when the axle is axle_lat out and the car turned
+   theta (0.01 deg, + left) with the servo looking back along the line. */
+int32_t obst_probe_sensor_lat(int32_t axle_lat, int32_t theta_cdeg);
+/* One ping; true if it was the face (within OBST_DEPTH_TOL of expect). */
+bool    obst_probe_ping(obst_probe_t * p_p, int32_t sensor_lat, uint16_t r_mm, int32_t expect_mm);
+/* Edges with the echo run-on (OBST_PROBE_EDGE_OVER_MM) taken off; false if
+   the face was never seen.  Never narrower than nothing. */
+bool    obst_probe_edges(obst_probe_t const * p_p, int32_t * p_left, int32_t * p_right);
+
 /* Servo angle (deg, > 90 left) that looks along the line from a car
    turned theta toward side +1 (left) / -1 (right). */
 int32_t obst_out_servo_deg(int32_t theta_cdeg, int32_t side);
