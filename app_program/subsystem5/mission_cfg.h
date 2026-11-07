@@ -63,7 +63,12 @@
 #define OBST_DEPTH_TOL_MM           60      /* same object: within r_min + this; a flat
                                                face 20 cm wide at 15-20 cm spans < 30 mm.
                                                MEASURE with angled boxes (A11)        */
-#define OBST_HALF_BEAM_CDEG         750     /* HC-SR04 ~15 deg beam: MEASURE (A11) */
+#define OBST_HALF_BEAM_CDEG         750     /* servo scan: HC-SR04 ~15 deg beam */
+/* Edge scan (car turns), measured 7 Nov: a 9.5 cm box at ~33 cm kept
+   echoing from its corner until the car had turned 33 deg left / 36 deg
+   right, so the beam hears a corner ~33 deg off its axis (37.9 cm width
+   with 7.5).  30 keeps any error on the wide (safe) side.              */
+#define OBST_EDGE_HALF_BEAM_CDEG    3000
 /* 3 Nov, after the instructor's guidance (25 Oct forum: estimate, not
    measure; median-filtered pings, background subtraction, consecutive-
    angle edges, conservative margins, more than one scan position, plan
@@ -158,8 +163,11 @@
 /* 6 Nov, measured on the car: a box placed LEFT of the line read 7-20 cm
    RIGHT in both servo scans (and a centred box read mostly right): the
    mounted servo turns the other way, so the driver mirrors the pulse
-   (scan angle > 90 still means left).                                  */
-#define OBST_SERVO_LEFT_IS_HIGH     0       /* 1: a longer pulse turns it left */
+   (scan angle > 90 still means left).
+   7 Nov: back to 1.  Told to look right at the box during the pass leg
+   (bypass on the left), the servo looked left: with 0 the pulse was
+   mirrored, and so were the servo scan's left and right edges.        */
+#define OBST_SERVO_LEFT_IS_HIGH     1       /* 1: a longer pulse turns it left */
 #define OBST_NO_ECHO_PINGS          5       /* report NO_ECHO after this many  */
 #define OBST_HUMP_MASK_CDEG         500     /* |pitch| > 5 deg masks 40 / 20 cm */
 #define OBST_HUMP_MASK_MM           600

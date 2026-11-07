@@ -60,7 +60,7 @@
 #define OBST_LOG_EDGES          47u     /* scan edges, mm (+ left): left << 16 | right (int16 each) */
 #define OBST_LOG_EDGES_CAR      48u     /* the same from the edge scan (car turns) */
 #define OBST_LOG_EDGE_SIDES     49u     /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
-#define OBST_LOG_EDGE_FACE      51u     /* edge scan: face mm straight ahead << 16 | first left ping mm */
+#define OBST_LOG_EDGE_FACE      50u     /* edge scan: face mm straight ahead << 16 | first left ping mm */
 
 /* line scan phases */
 #define LS_PH_SWEEP             0u

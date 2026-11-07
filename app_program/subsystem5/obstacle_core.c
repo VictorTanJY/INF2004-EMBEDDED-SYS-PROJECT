@@ -572,7 +572,7 @@ bool obst_edge_on_face(int32_t phi_cdeg, uint16_t r_mm, uint16_t face_mm)
 
 int32_t obst_edge_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side)
 {
-    int32_t const psi = phi_cdeg - (side * OBST_HALF_BEAM_CDEG);
+    int32_t const psi = phi_cdeg - (side * OBST_EDGE_HALF_BEAM_CDEG);
 
     return (int32_t)((((int64_t)OBST_US_AHEAD_MM * app_sin_q15(phi_cdeg)) +
                       ((int64_t)r_mm * app_sin_q15(psi))) / 32768);

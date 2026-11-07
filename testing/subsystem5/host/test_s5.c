@@ -271,7 +271,10 @@ static void test_mission(void)
 
 /* ---- obstacle geometry --------------------------------------------- */
 /* 4 Nov edge scan model: car heading phi (deg, + left) about the axle, the
-   sensor OBST_US_AHEAD_MM ahead looking along phi with a 15 deg half beam;
+   sensor OBST_US_AHEAD_MM ahead looking along phi; the beam hears the box
+   up to 36 deg off its axis (7 Nov run: a 9.5 cm box at 33 cm was last
+   heard with the car turned 33 / 36 deg, which in this model needs a beam
+   of 35-41 deg); the firmware corrects by OBST_EDGE_HALF_BEAM_CDEG = 30;
    a box face d mm ahead of the sensor, w wide, centred c (+ left). */
 static uint16_t edge_ping(double d, double w, double c, double phi_deg)
 {
@@ -285,7 +288,7 @@ static uint16_t edge_ping(double d, double w, double c, double phi_deg)
         double const ang = atan2(dx, dy) - ph;
         double const r = sqrt((dx * dx) + (dy * dy));
 
-        if ((fabs(ang) <= (15.0 * M_PI / 180.0)) && (r < best)) { best = r; }
+        if ((fabs(ang) <= (36.0 * M_PI / 180.0)) && (r < best)) { best = r; }
     }
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
 }
@@ -455,6 +458,20 @@ static void test_obstacle(void)
             scan_box(&b, 1, &prof);
             CHECK("S5-H16", prof.plan == OBST_PLAN_CONTINUE);
         }
+    }
+
+    /* S5-H21 (7 Nov): the run that read a 9.5 cm box as 37.9 cm wide (face
+       32.6 cm ahead, centred): the edges now come out at the box or a
+       little outside it, never inside */
+    {
+        memset(&prof, 0, sizeof(prof));
+        prof.clr_l_mm = OBST_CLEAR_MAX_MM;
+        prof.clr_r_mm = OBST_CLEAR_MAX_MM;
+        edge_sim(326.0, 95.0, 0.0, &prof);
+        printf("edge scan: 95 mm box at 326 mm -> edges %+d / %+d (width %d)\n",
+               prof.left_lat_mm, prof.right_lat_mm, prof.left_lat_mm - prof.right_lat_mm);
+        CHECK("S5-H21", (prof.left_lat_mm >= 45) && (prof.left_lat_mm <= 80) &&
+                        (prof.right_lat_mm <= -45) && (prof.right_lat_mm >= -80));
     }
 
     /* S5-H17 (4 Nov): edge scan with the car turning.  Edges within the
