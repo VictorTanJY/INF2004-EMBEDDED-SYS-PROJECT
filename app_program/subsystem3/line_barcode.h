@@ -51,7 +51,7 @@ typedef struct
     uint16_t prof[BC_PROF_BINS];    /* darkest norm per BC_PROF_BIN_UM   */
     uint16_t prof_n;
     uint32_t bin_um;                /* travel into the current bin       */
-    uint8_t  pass;                  /* which reading decoded: 0 swing, 1 mid, 2 low, 3 best match */
+    uint8_t  pass;                  /* which reading decoded: 0 swing, 1 mid, 2 low, 3 adaptive swing, 4 best match */
     /* 7 Nov: white-paper levels over the last BC_QUIET_UM before a code
        (lightest, darkest: their difference is the noise a bar must beat) */
     uint16_t q_lo;
@@ -74,6 +74,15 @@ void        bc_init(bc_capture_t * p_bc);
    element count (widths in um), the trailing white run excluded. */
 uint16_t    bc_prof_elements(uint16_t const * p_prof, uint16_t n_bins, uint16_t thr, uint16_t hyst,
                              uint32_t * p_widths, uint16_t max);
+/* As bc_prof_elements() but by swing: a bar starts delta above the
+   lightest point of the space before it and ends delta below its darkest
+   point (BC_ADAPT_*, 9 Nov). */
+uint16_t    bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
+                          uint32_t * p_widths, uint16_t max);
+/* The widths of one reading of the capture just ended (for the log):
+   reading 0 swing, 1 mid, 2 low, 3 adaptive swing; returns the count. */
+#define BC_READINGS                 4u
+uint16_t    bc_reading(bc_capture_t const * p_bc, uint8_t reading, uint32_t * p_widths);
 /* Light / dark levels of a profile (percentiles BC_PROF_WHITE_PCT / DARK_PCT). */
 void        bc_prof_levels(uint16_t const * p_prof, uint16_t n_bins, uint16_t * p_white, uint16_t * p_dark);
 

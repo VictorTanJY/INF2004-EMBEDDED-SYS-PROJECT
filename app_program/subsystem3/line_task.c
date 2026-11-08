@@ -38,9 +38,18 @@
    crossing line is 1): data = elements; LOG 35 / 36 follow.            */
 #define LINE_LOG_BC_SHORT       37u
 /* 73 (7 Nov) = barcode sensor levels after every capture, 0..1000 each:
-   decoded by pass << 30 | white noise (darkest - lightest white) << 20 |
+   decoded by pass << 29 (0 swing, 1 mid, 2 low, 3 adaptive swing, 4 best
+   match) | white noise (darkest - lightest white, max 511) << 20 |
    lightest white << 10 | darkest bar.  For choosing BC_DELTA. */
 #define LINE_LOG_BC_LEVELS      73u
+/* 9 Nov, after a rejected read: 76 = elements found by each reading,
+   swing << 24 | mid << 16 | low << 8 | adaptive swing; then 75 = every
+   width of the swing and adaptive readings, three per record: reading
+   << 30 | index of the first << 24 | three widths of 8 bits in 0.2 mm
+   (255 = 51 mm or more, 0 = none). */
+#define LINE_LOG_BC_ELEM        75u
+#define LINE_LOG_BC_COUNTS      76u
+#define LINE_LOG_ELEM_MAX       45u     /* widths logged per reading (15 records) */
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
 #define LINE_LOG_TURN_GAIN      38u
 /* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
@@ -78,14 +87,51 @@ static void bc_reject_detail(bc_capture_t const * p_bc)
                            (int32_t)((w_min << 16) | w_max));
 }
 
+/* LOG 76 and 75 for the capture that was just rejected (still in g_bc). */
+static void bc_widths_log(bc_capture_t const * p_bc)
+{
+    static uint32_t w[BC_MAX_ELEMENTS + 1u];
+    uint32_t        counts = 0u;
+    uint8_t         rd;
+
+    for (rd = 0u; rd < BC_READINGS; rd++)
+    {
+        uint16_t const n = bc_reading(p_bc, rd, w);
+
+        counts |= (uint32_t)app_min_i32(n, 255) << (8u * (3u - rd));
+    }
+    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_COUNTS,
+                           (int32_t)counts);
+    for (rd = 0u; rd < BC_READINGS; rd += 3u)          /* swing (0), adaptive swing (3) */
+    {
+        uint16_t const n = bc_reading(p_bc, rd, w);
+        uint16_t       k;
+
+        for (k = 0u; (k < n) && (k < LINE_LOG_ELEM_MAX); k += 3u)
+        {
+            uint32_t data = ((uint32_t)rd << 30) | ((uint32_t)k << 24);
+            uint8_t  j;
+
+            for (j = 0u; j < 3u; j++)
+            {
+                uint32_t const e = ((k + j) < n) ? ((w[k + j] + 100u) / 200u) : 0u;    /* 0.2 mm */
+
+                data |= ((e > 255u) ? 255u : ((e == 0u) && ((k + j) < n) ? 1u : e)) << (8u * (2u - j));
+            }
+            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_ELEM,
+                                   (int32_t)data);
+        }
+    }
+}
+
 /* LOG 73 for the capture that just ended (still in g_bc). */
 static void bc_levels_log(bc_capture_t const * p_bc)
 {
     uint32_t const noise = (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
 
     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_LEVELS,
-                           (int32_t)(((uint32_t)(p_bc->pass & 3u) << 30) |
-                                     ((uint32_t)app_min_i32((int32_t)noise, 1023) << 20) |
+                           (int32_t)(((uint32_t)(p_bc->pass & 7u) << 29) |
+                                     ((uint32_t)app_min_i32((int32_t)noise, 511) << 20) |
                                      ((uint32_t)app_min_i32(p_bc->q_lo, 1023) << 10) |
                                      (uint32_t)app_min_i32(p_bc->peak, 1023)));
 }
@@ -262,6 +308,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                                        LINE_LOG_BC_REJECT, (int32_t)out.reason);
                 bc_reject_detail(&g_bc);
                 bc_levels_log(&g_bc);
+                bc_widths_log(&g_bc);
             }
             else if (bc_was_capturing && (g_bc.state == (uint8_t)LINE_BC_ARMED) && (g_bc.n >= 2u))
             {

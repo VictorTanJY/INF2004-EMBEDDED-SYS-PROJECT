@@ -980,7 +980,7 @@ static void test_best(void)
                 memset(&out, 0, sizeof(out));
                 rr = run_pass(a, 31, 150u, 0, &out);
                 t2++;
-                if ((rr == BC_VALID) && (out.ch == k_slides[s2].ch)) { g2++; p3 += (g_last_pass == 3u) ? 1 : 0; }
+                if ((rr == BC_VALID) && (out.ch == k_slides[s2].ch)) { g2++; p3 += (g_last_pass == 4u) ? 1 : 0; }
                 else if (rr == BC_VALID) { w2n++; }
                 else { printf("  speck slide %d dir %d: result %d reason %d, %u elements\n", k_slides[s2].slide, d2,
                               (int)rr, (int)out.reason, (unsigned)out.elements); }
@@ -992,6 +992,64 @@ static void test_best(void)
     }
 }
 
+/* S3-H21 (9 Nov 00:02-00:17 robot runs): a light print -- wide bars only
+   ~700-720 / 1000, white ~7, white noise 20-30 -- under a 3-5 mm spot:
+   the 3 mm elements swing less than BC_DELTA and the swing reading finds
+   13-17 elements.  The adaptive swing (BC_ADAPT_*) over the darkness
+   record recovers them; never a wrong letter, every character, both
+   directions, three speeds. */
+static void test_light_print(void)
+{
+    uint32_t const spots[3]  = { 3000u, 4000u, 5000u };
+    uint32_t const thin[3]   = { 300u, 230u, 170u };   /* 3 mm bars: rise under BC_DELTA */
+    int th;
+    uint32_t const speeds[3] = { 90u, 150u, 250u };
+    int sp, v, d, good = 0, total = 0, wrong = 0, by_adapt = 0, before = 0;
+    size_t c;
+
+    g_white = 7u;  g_black = 715u;  g_thin_um = 6000u;
+    for (th = 0; th < 3; th++)
+    for (sp = 0; sp < 3; sp++)
+    {
+        g_spot_um = spots[sp];  g_thin_black = thin[th];
+        for (c = 0u; c < (sizeof(k_data_chars) - 1u); c++)
+        {
+            for (v = 0; v < 3; v++)
+            {
+                for (d = 0; d < 2; d++)
+                {
+                    uint32_t w[29];
+                    uint16_t n = make_code(k_data_chars[c], 3000u, 3.0, 0.05, w);
+                    bc_out_t out;
+                    bc_result_t r;
+
+                    if (d) { reverse(w, n); }
+                    memset(&out, 0, sizeof(out));
+                    r = run_pass(w, n, speeds[v], 25, &out);
+                    total++;
+                    if ((r == BC_VALID) && (out.ch == k_data_chars[c]))
+                    {
+                        good++;
+                        by_adapt += (g_last_pass == 3u) ? 1 : 0;
+                        before   += (g_last_pass < 3u) ? 1 : 0;
+                    }
+                    else if (r == BC_VALID)
+                    {
+                        wrong++;
+                        printf("  WRONG light '%c' spot %u v %u d %d -> '%c' pass %u\n", k_data_chars[c],
+                               (unsigned)spots[sp], (unsigned)speeds[v], d, out.ch, (unsigned)g_last_pass);
+                    }
+                }
+            }
+        }
+        printf("light print, thin bars %u, %u mm spot: %d / %d so far (%d by the adaptive swing, %d by the first three readings)\n",
+               (unsigned)thin[th], (unsigned)(spots[sp] / 1000u), good, total, by_adapt, before);
+    }
+    g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;  g_thin_black = 0u;  g_thin_um = 0u;
+    printf("light print: %d / %d decoded (%d by the adaptive swing), %d wrong\n", good, total, by_adapt, wrong);
+    CHECK("S3-H21", (wrong == 0) && (by_adapt > 0));
+}
+
 int main(void)
 {
     test_table();
@@ -1000,6 +1058,7 @@ int main(void)
     test_rejects();
     test_capture();
     test_best();
+    test_light_print();
     test_track();
     test_slip();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);

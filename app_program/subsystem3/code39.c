@@ -144,13 +144,20 @@ static code39_result_t classify(uint32_t const * p_w, uint16_t n, uint16_t first
     }
     else
     {
-        /* '$' '/' '+' '%': three wide spaces, no wide bar */
+        /* '$' '/' '+' '%': three wide spaces, no wide bar.  9 Nov: only if
+           the bars really are all alike (widest < ratio_min x narrowest);
+           a faint read whose wide bars came out too thin otherwise looked
+           like one of these (L read as %, R as $). */
         uint8_t        is3;
         uint8_t        is4;
+        uint8_t        ib5;
         uint32_t const s3 = kth_widest(w, 1u, 2u, &is3);
         uint32_t const s4 = kth_widest(w, 1u, 3u, &is4);
+        uint32_t const b1 = kth_widest(w, 0u, 0u, &ib1);
+        uint32_t const b5 = kth_widest(w, 0u, 4u, &ib5);
 
-        if ((s4 == 0u) || (((uint64_t)s3 * 10u) < ((uint64_t)s4 * ratio_min_x10)))
+        if ((s4 == 0u) || (((uint64_t)s3 * 10u) < ((uint64_t)s4 * ratio_min_x10)) ||
+            (((uint64_t)b1 * 10u) >= ((uint64_t)b5 * ratio_min_x10)))
         {
             return CODE39_ERR_RATIO;
         }

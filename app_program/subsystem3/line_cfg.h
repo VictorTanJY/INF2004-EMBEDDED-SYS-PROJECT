@@ -144,6 +144,15 @@
 #define BC_PROF_DARK_PCT            95u
 #define BC_PROF_LOW_DIV             4u
 #define BC_PROF_MIN_BINS            3u
+/* 9 Nov: a light print (bars only ~700 / 1000 on the robot, 3 mm bars
+   rising less than BC_DELTA) is read once more by swing over the
+   darkness record, with the swing set by THIS code: BC_ADAPT_PCT % of
+   its dark - white span, but never under BC_ADAPT_NOISE_X x the white
+   noise measured before the code, nor under BC_ADAPT_MIN.  Only used
+   when that is below BC_DELTA (otherwise it is the first reading).    */
+#define BC_ADAPT_PCT                20u
+#define BC_ADAPT_NOISE_X            4u
+#define BC_ADAPT_MIN                60u
 /* Reading mode (7 Nov): while a code is being captured and the line is
    near the centre, steering is limited so the side-mounted barcode IR
    crosses the bars on a steady path (a weave swings it sideways and
