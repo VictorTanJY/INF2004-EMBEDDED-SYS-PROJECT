@@ -78,7 +78,15 @@
    one edge, then back past the other.  An edge is where the face echo
    stops, at the sensor's sideways position (wheels).  Replaces the
    turning edge scan when 1.                                            */
-#define OBST_WIDTH_PROBE            1
+#define OBST_WIDTH_PROBE            0   /* 9 Nov: off (OBST_SINGLE_SWEEP) */
+/* 9 Nov: one servo sweep only.  The plan comes straight from it: no
+   second look from further back, no car-turning edge scan, no width
+   probe (each cost seconds; the bypass took ~65 s against the brief's
+   7 s).  An unsure sweep already plans as for an OBST_WIDTH_MAX object
+   around what it saw, and the step-out leg pings the face live and
+   goes on until the car is past the edge, so clearance does not rest
+   on the width.  0 = the earlier sequence (OBST_WIDTH_PROBE / edge scan). */
+#define OBST_SINGLE_SWEEP           1
 #define OBST_PROBE_FACE_MM          250     /* face this far from the sensor first */
 /* 9 Nov: the straight-ahead ping before the width probe is the face only
    within this of where the scan put it; otherwise (the beam passed an

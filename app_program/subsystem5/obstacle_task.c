@@ -427,7 +427,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
     }
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
 
-    if (g_prof.b_valid && !g_prof.b_sure && !g_o.b_second_look)
+    if (g_prof.b_valid && !g_prof.b_sure && !g_o.b_second_look && (OBST_SINGLE_SWEEP == 0))
     {
         /* unsure estimate: look again from a little further back once;
            the second profile plans with OBST_WIDTH_MAX if still unsure */
@@ -439,6 +439,21 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
     else if ((g_prof.plan == (uint8_t)OBST_PLAN_LEFT) || (g_prof.plan == (uint8_t)OBST_PLAN_RIGHT))
     {
         g_o.b_blocked     = false;
+#if OBST_SINGLE_SWEEP
+        /* 9 Nov: plan from this sweep, by the same side rule as the edge
+           scans (the smaller step-out), and bypass at once */
+        {
+            uint16_t const w_seen = g_prof.w_mm;    /* beam-corrected width, for the report */
+
+            obst_edge_plan(&g_prof, false, 0, false, 0);   /* plans from the wider plan edges */
+            g_prof.w_mm = w_seen;
+        }
+        g_o.b_edge_face = false;
+        publish_profile();
+        post((uint8_t)MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
+        goto_state((uint8_t)OBST_ST_IDLE);
+        return;
+#endif
 #if OBST_WIDTH_PROBE
         /* 7 Nov: measure the edges by side-stepping past them */
         goto_state((uint8_t)OBST_ST_WIDTH_PROBE);

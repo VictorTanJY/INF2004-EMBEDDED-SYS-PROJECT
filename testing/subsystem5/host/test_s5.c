@@ -503,6 +503,42 @@ static void test_obstacle(void)
         }
     }
     {
+        /* 9 Nov single sweep: the plan straight from the servo scan.  A
+           15 cm box 6 cm either side of the line: the car goes the short
+           way, and the planned step-out clears the box's near edge
+           by half the car + the margin (the step-out leg still pings live) */
+        int cx;
+
+        for (cx = -60; cx <= 60; cx += 60)
+        {
+            box_t b = { 200.0, 150.0, (double)cx };
+            int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2);
+
+            uint16_t w_seen;
+
+            scan_box(&b, 1, &prof);
+            w_seen = prof.w_mm;
+            obst_edge_plan(&prof, false, 0, false, 0);
+            prof.w_mm = w_seen;
+            CHECK("S5-H25", abs((int)w_seen - 150) <= 15);
+            printf("single sweep: box at %+d mm -> plan %u, step-out %d mm, width %u\n", cx,
+                   (unsigned)prof.plan, prof.deviation_mm, (unsigned)prof.w_mm);
+            if (cx > 0)
+            {
+                CHECK("S5-H25", (prof.plan == OBST_PLAN_RIGHT) && (-prof.deviation_mm >= (75 - cx) + extra));
+            }
+            else if (cx < 0)
+            {
+                CHECK("S5-H25", (prof.plan == OBST_PLAN_LEFT) && (prof.deviation_mm >= (75 + cx) + extra));
+            }
+            else
+            {
+                CHECK("S5-H25", ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
+                                (abs(prof.deviation_mm) >= 75 + extra));
+            }
+        }
+    }
+    {
         /* 9 Nov: the approach ping before the width probe */
         CHECK("S5-H24", obst_probe_face(470u, 300u) == 300u);               /* passed the box */
         CHECK("S5-H24", obst_probe_face(OBST_RANGE_NONE, 300u) == 300u);
