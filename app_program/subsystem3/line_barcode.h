@@ -51,7 +51,7 @@ typedef struct
     uint16_t prof[BC_PROF_BINS];    /* darkest norm per BC_PROF_BIN_UM   */
     uint16_t prof_n;
     uint32_t bin_um;                /* travel into the current bin       */
-    uint8_t  pass;                  /* which reading decoded: 0 swing, 1 mid, 2 low */
+    uint8_t  pass;                  /* which reading decoded: 0 swing, 1 mid, 2 low, 3 best match */
     /* 7 Nov: white-paper levels over the last BC_QUIET_UM before a code
        (lightest, darkest: their difference is the noise a bar must beat) */
     uint16_t q_lo;

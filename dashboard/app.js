@@ -103,7 +103,7 @@ function describe(e) {
     if (p.code === 74) { const d = p.data >>> 0, l = ((d >>> 16) << 16) >> 16, r = (d << 16) >> 16, side = v => v >= 0 ? `${(v / 10).toFixed(1)} cm left` : `${(-v / 10).toFixed(1)} cm right`;
       detail = d === 0x7FFF7FFF ? 'face never seen: planned from the servo scan' : `left edge ${side(l)} of the line, right edge ${side(r)}: width ${((l - r) / 10).toFixed(1)} cm`; }
     if (p.code === 73) { const d = p.data >>> 0, pass = d >>> 30, nz = (d >>> 20) & 0x3FF, wl = (d >>> 10) & 0x3FF, dk = d & 0x3FF;
-      detail = `white ${wl} / 1000, white noise ${nz}, darkest ${dk}` + (pass ? ['', '; decoded from the darkness record (mid threshold)', '; decoded from the darkness record (low threshold, faint bars)'][pass] : '') +
+      detail = `white ${wl} / 1000, white noise ${nz}, darkest ${dk}` + (pass ? ['', '; decoded from the darkness record (mid threshold)', '; decoded from the darkness record (low threshold, faint bars)', '; decoded by best match (a split or merged bar)'][pass] : '') +
         ` (a bar must rise 250 above white; noise ${nz} leaves ${Math.max(0, 250 - nz)} margin)`; }
     if (p.code === 71 || p.code === 72) { const d = p.data >>> 0, ph = ((d >>> 16) << 16) >> 16, r = d & 0xFFFF;
       detail = d ? `car turned ${(Math.abs(ph) / 100).toFixed(1)}°, echo at ${(r / 10).toFixed(1)} cm` : 'no echo on this side'; }

@@ -336,3 +336,296 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, 
     *p_b_reversed = b_got_rev;
     return CODE39_OK;
 }
+
+/* ---- best match for one data character (8 Nov) --------------------- */
+/* On the robot 3 mm elements are at the limit of the sensor's spot: a
+   speck splits one bar in three (a ~1 mm "gap"), or a thin bar and the
+   thin space beside it are lost in a neighbour.  Either way the count is
+   no longer 29 and the exact decoders reject.  Here the read is lined up
+   (dynamic programming) against the 29 printed elements of *X*.  Each
+   step pairs:
+     1 measured with 1 printed,
+     3 measured with 1 printed (split; the 3 add up),
+     1 measured with 3 printed (merge; the 3 add up),
+   so bars stay bars and spaces stay spaces.  The first or last two
+   printed elements (end bar + its space) may also be lost.  Each step
+   costs its width error squared, in hundredths of a narrow element; a
+   split, merge or lost end adds BEST_EDIT.  Only the defects the sensor
+   makes are allowed: a split's middle is a speck (thinner than
+   BEST_SPECK_PCT % of a narrow element of its kind), and a speck may
+   not stand for a printed element; a merge loses a narrow element. */
+
+#define BEST_T          29u         /* elements of *X*                  */
+#define BEST_N_MIN      (BEST_T - (2u * BEST_MAX_EDITS))    /* 25 */
+#define BEST_N_MAX      (BEST_T + (2u * BEST_MAX_EDITS))    /* 33 */
+#define BEST_BAND       (2u * BEST_MAX_EDITS)   /* |measured - printed| index */
+#define BEST_EDIT       2500u       /* = a 0.5 narrow width error        */
+#define BEST_MAX_EDITS  2u          /* more defects than this: no read   */
+#define BEST_ELEM_MAX   1600u       /* mean error <= 0.4 narrow per step */
+#define BEST_MARGIN_X10 20u         /* runner-up must cost >= 2 x best   */
+#define BEST_SPECK_PCT  50u         /* speck: under half a narrow       */
+#define BEST_INF        0x3FFFFFFFu
+
+static uint32_t median_of(uint32_t * p_v, uint16_t n)
+{
+    uint16_t i;
+    uint16_t j;
+
+    for (i = 1u; i < n; i++)            /* insertion sort, n <= 33 */
+    {
+        uint32_t const v = p_v[i];
+
+        for (j = i; (j > 0u) && (p_v[j - 1u] > v); j--)
+        {
+            p_v[j] = p_v[j - 1u];
+        }
+        p_v[j] = v;
+    }
+    return (n == 0u) ? 0u : p_v[n / 2u];
+}
+
+/* This read's widths of narrow and wide bars and spaces: the median
+   narrow and wide of each kind, split half-way between the median of
+   all elements (most are narrow) and the median of the widest third. */
+static void best_levels(uint32_t const * p_w, uint16_t n, uint32_t * p_lv)
+{
+    static uint32_t s[BEST_N_MAX];   /* n <= BEST_N_MAX here */
+    uint32_t        nar;
+    uint32_t        wid;
+    uint32_t        thr;
+    uint16_t        m;
+    uint16_t        i;
+    uint8_t         kind;
+    uint8_t         wide;
+
+    for (i = 0u; i < n; i++)
+    {
+        s[i] = p_w[i];
+    }
+    nar = median_of(s, n);
+    wid = s[n - 1u - ((n / 3u) / 2u)];   /* median of the widest third (sorted) */
+    thr = (nar + wid) / 2u;
+    for (kind = 0u; kind < 2u; kind++)
+    {
+        for (wide = 0u; wide < 2u; wide++)
+        {
+            m = 0u;
+            for (i = kind; i < n; i += 2u)
+            {
+                if ((p_w[i] >= thr) == (wide != 0u))
+                {
+                    s[m++] = p_w[i];
+                }
+            }
+            p_lv[(kind * 2u) + wide] = (m > 0u) ? median_of(s, m) : ((wide != 0u) ? wid : nar);
+        }
+    }
+}
+
+/* Width error squared in hundredths of a narrow; inv = 100 x 65536 / narrow.
+   Multiply and shift only: the Cortex-M0+ has no 64-bit divide, and this
+   runs about 50 000 times per read. */
+static uint32_t sq_err(uint32_t meas, uint32_t expect, uint32_t inv)
+{
+    uint32_t const d = (meas > expect) ? (meas - expect) : (expect - meas);
+    uint32_t       e;
+
+    if (d > 0x3FFFFu)
+    {
+        return 1000000u;
+    }
+    e = (d * inv) >> 16;
+    return (e > 1000u) ? 1000000u : (e * e);
+}
+
+static bool in_band(uint16_t i, uint16_t j)
+{
+    uint16_t const d = (i > j) ? (uint16_t)(i - j) : (uint16_t)(j - i);
+
+    return (d <= BEST_BAND);
+}
+
+static bool is_speck(uint32_t w, uint16_t i, uint32_t const * p_lv)
+{
+    uint32_t const narrow = p_lv[((i % 2u) != 0u) ? 2u : 0u];
+
+    return ((uint64_t)w * 100u) < ((uint64_t)narrow * BEST_SPECK_PCT);
+}
+
+/* Cost of lining p_w up with the printed widths p_e (BEST_T of them);
+   p_lv: this read's narrow / wide levels, p_wide: printed element wide. */
+static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e, bool const * p_wide,
+                         uint32_t const * p_lv, uint32_t inv)
+{
+    static uint32_t dp[BEST_N_MAX + 1u][BEST_T + 1u];
+    static uint8_t  ed[BEST_N_MAX + 1u][BEST_T + 1u];
+    uint32_t        best;
+    uint16_t        i;
+    uint16_t        j;
+
+    /* Every defect moves the two indexes apart by 2, so only a band of
+       cells can be reached; only those are used. */
+    for (i = 0u; i <= n; i++)
+    {
+        for (j = (i > BEST_BAND) ? (uint16_t)(i - BEST_BAND) : 0u; (j <= BEST_T) && (j <= (i + BEST_BAND)); j++)
+        {
+            dp[i][j] = BEST_INF;
+            ed[i][j] = 0u;
+        }
+    }
+    dp[0][0] = 0u;
+    dp[0][2] = BEST_EDIT;               /* first bar and space lost */
+    ed[0][2] = 1u;
+    for (i = 0u; i < n; i++)
+    {
+        for (j = (i > BEST_BAND) ? (uint16_t)(i - BEST_BAND) : 0u; (j < BEST_T) && (j <= (i + BEST_BAND)); j++)
+        {
+            uint32_t const c0 = dp[i][j];
+            uint8_t const  e0 = ed[i][j];
+
+            if (c0 >= BEST_INF)
+            {
+                continue;
+            }
+            if (!is_speck(p_w[i], i, p_lv))
+            {   /* 1 : 1 */
+                uint32_t const c = c0 + sq_err(p_w[i], p_e[j], inv);
+
+                if (c < dp[i + 1u][j + 1u])
+                {
+                    dp[i + 1u][j + 1u] = c;
+                    ed[i + 1u][j + 1u] = e0;
+                }
+            }
+            if ((e0 < BEST_MAX_EDITS) && ((i + 3u) <= n) && in_band((uint16_t)(i + 3u), (uint16_t)(j + 1u)) &&
+                is_speck(p_w[i + 1u], (uint16_t)(i + 1u), p_lv))
+            {   /* 3 measured : 1 printed */
+                uint32_t const c = c0 + BEST_EDIT +
+                                   sq_err(p_w[i] + p_w[i + 1u] + p_w[i + 2u], p_e[j], inv);
+
+                if (c < dp[i + 3u][j + 1u])
+                {
+                    dp[i + 3u][j + 1u] = c;
+                    ed[i + 3u][j + 1u] = (uint8_t)(e0 + 1u);
+                }
+            }
+            if ((e0 < BEST_MAX_EDITS) && ((j + 3u) <= BEST_T) && in_band((uint16_t)(i + 1u), (uint16_t)(j + 3u)) &&
+                !p_wide[j + 1u])
+            {   /* 1 measured : 3 printed */
+                uint32_t const c = c0 + BEST_EDIT +
+                                   sq_err(p_w[i], p_e[j] + p_e[j + 1u] + p_e[j + 2u], inv);
+
+                if (c < dp[i + 1u][j + 3u])
+                {
+                    dp[i + 1u][j + 3u] = c;
+                    ed[i + 1u][j + 3u] = (uint8_t)(e0 + 1u);
+                }
+            }
+        }
+    }
+    best = in_band(n, BEST_T) ? dp[n][BEST_T] : BEST_INF;
+    if (in_band(n, (uint16_t)(BEST_T - 2u)) && (ed[n][BEST_T - 2u] < BEST_MAX_EDITS) &&
+        (dp[n][BEST_T - 2u] < BEST_INF) &&
+        ((dp[n][BEST_T - 2u] + BEST_EDIT) < best))
+    {
+        best = dp[n][BEST_T - 2u] + BEST_EDIT;      /* last space and bar lost */
+    }
+    return best;
+}
+
+code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n,
+                                       char * p_char, bool * p_b_reversed)
+{
+    uint32_t       lv[4];               /* bar n, bar W, space n, space W */
+    uint32_t       e[BEST_T];
+    bool           wd[BEST_T];
+    uint16_t const star = code39_pattern('*');
+    uint32_t       nar;
+    uint32_t       inv;
+    uint32_t       c1 = BEST_INF;       /* best cost and its character */
+    uint32_t       c2 = BEST_INF;       /* best cost of any other character */
+    char           ch1 = '\0';
+    bool           b_rev1 = false;
+    size_t         t;
+    uint8_t        d;
+
+    *p_char       = '\0';
+    *p_b_reversed = false;
+    if (n < 9u)
+    {
+        return CODE39_NOT_BARCODE;
+    }
+    if ((n < BEST_N_MIN) || (n > BEST_N_MAX) || ((n % 2u) == 0u))
+    {
+        return CODE39_ERR_COUNT;        /* a read starts and ends with a bar */
+    }
+    best_levels(p_widths, n, lv);
+    nar = (lv[0] + lv[2]) / 2u;
+    if ((nar == 0u) || (lv[1] <= lv[0]) || (lv[3] <= lv[2]))
+    {
+        return CODE39_ERR_RATIO;
+    }
+    inv = (100u << 16) / nar;
+    for (t = 0u; t < TABLE_LEN; t++)
+    {
+        uint16_t const pat = bits_of(k_table[t].p_bits);
+        uint8_t        k;
+
+        if (k_table[t].c == '*')
+        {
+            continue;
+        }
+        /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
+        for (k = 0u; k < BEST_T; k++)
+        {
+            uint8_t const  c   = (uint8_t)(k / 10u);
+            uint8_t const  pos = (uint8_t)(k % 10u);
+            uint16_t const p   = (c == 1u) ? pat : star;
+            bool const     b_w = (pos < 9u) && (((p >> (8u - pos)) & 1u) != 0u);
+
+            e[k]  = lv[(((k % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
+            wd[k] = b_w;
+        }
+        for (d = 0u; d < 2u; d++)
+        {
+            uint32_t cost;
+
+            if (d == 1u)
+            {
+                for (k = 0u; k < (BEST_T / 2u); k++)
+                {
+                    uint32_t const x  = e[k];
+                    bool const     bx = wd[k];
+
+                    e[k]  = e[BEST_T - 1u - k];
+                    wd[k] = wd[BEST_T - 1u - k];
+                    e[BEST_T - 1u - k]  = x;
+                    wd[BEST_T - 1u - k] = bx;
+                }
+            }
+            cost = best_fit(p_widths, n, e, wd, lv, inv);
+            if (cost < c1)
+            {
+                if (k_table[t].c != ch1)
+                {
+                    c2 = c1;
+                }
+                c1     = cost;
+                ch1    = k_table[t].c;
+                b_rev1 = (d == 1u);
+            }
+            else if ((cost < c2) && (k_table[t].c != ch1))
+            {
+                c2 = cost;
+            }
+        }
+    }
+    if ((ch1 == '\0') || (c1 > ((uint32_t)BEST_ELEM_MAX * BEST_T)) ||
+        (((uint64_t)c2 * 10u) < ((uint64_t)c1 * BEST_MARGIN_X10)))
+    {
+        return CODE39_ERR_PATTERN;
+    }
+    *p_char       = ch1;
+    *p_b_reversed = b_rev1;
+    return CODE39_OK;
+}

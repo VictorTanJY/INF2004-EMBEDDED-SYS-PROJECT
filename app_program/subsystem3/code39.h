@@ -11,7 +11,10 @@
  *  is decoded ('0'-'9', 'A'-'Z', '-', '.', ' ', '$', '/', '+', '%', '*').
  *  The code is accepted forwards or reversed (read after a U-turn, or
  *  the robot travelling the other way), so A reads as A in both directions.
- *  Nothing is guessed: any element that cannot be classified rejects.
+ *  The exact decoders guess nothing: any element that cannot be classified
+ *  rejects.  code39_decode_one_best() is the last resort for one bar
+ *  split by a speck or two thin elements run together; it keeps a letter
+ *  only when that letter fits clearly better than every other.
  */
 
 #ifndef CODE39_H
@@ -58,5 +61,19 @@ code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n, uint16_
    (n = 10 k - 3) the lost pair is put back; kept only if unambiguous. */
 code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
                                          char * p_char, bool * p_b_reversed);
+
+/*
+ * Last resort for one data character (8 Nov): the read is lined up with
+ * the 29 elements of *X* for every X, both directions, letting one
+ * measured element stand for three printed ones (two thin elements lost
+ * in a neighbour) or three measured ones for one printed (a bar split by
+ * a speck), and the two end elements be lost.  The expected widths are
+ * this read's own narrow and wide bars and spaces.  X is kept only if
+ * its fit is good and clearly better than the next best different
+ * character; otherwise CODE39_ERR_PATTERN.  At most 2 defects, so
+ * 25..33 elements; others CODE39_ERR_COUNT.
+ */
+code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n,
+                                       char * p_char, bool * p_b_reversed);
 
 #endif /* CODE39_H */

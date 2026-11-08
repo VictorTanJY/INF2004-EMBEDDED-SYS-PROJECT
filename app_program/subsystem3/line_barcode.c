@@ -159,45 +159,80 @@ uint16_t bc_prof_elements(uint16_t const * p_prof, uint16_t n_bins, uint16_t thr
     return out;
 }
 
+/* Elements found again from the darkness profile at threshold k (1 mid,
+   2 low for faint thin bars) against this code's own levels; 0 if none. */
+static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
+{
+    uint16_t white;
+    uint16_t dark;
+    uint16_t span;
+    uint16_t thr;
+
+    if (p_bc->prof_n == 0u)
+    {
+        return 0u;
+    }
+    bc_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
+    if (dark <= white)
+    {
+        return 0u;
+    }
+    span = (uint16_t)(dark - white);
+    thr  = (uint16_t)(white + ((k == 1u) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
+    return bc_prof_elements(p_bc->prof, p_bc->prof_n, thr, (uint16_t)(span / 16u),
+                            p_w, (uint16_t)BC_MAX_ELEMENTS);
+}
+
 /* The trailing white run ended the code: decode what was captured.
    7 Nov: the swing reading first; if it does not decode, bars found
    again from the darkness profile against this code's own levels, at
    mid-way and then low for faint thin bars; each reading may also be
-   repaired for a bar lost at either end. */
+   repaired for a bar lost at either end.
+   8 Nov: if none decodes exactly, the best match (code39_decode_one_best:
+   a bar split by a speck, or two thin elements run together) is tried on
+   the same readings in the same order; pass 3 says so. */
 static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
 {
     static uint32_t w2[BC_MAX_ELEMENTS + 1u];
     code39_result_t r;
+    uint8_t         k;
 
     p_out->elements  = p_bc->n;
     p_out->length_um = p_bc->total_um - p_bc->run_um;   /* without the trailing white */
     p_out->peak_norm = p_bc->peak;
     p_bc->pass       = 0u;
     r = code39_decode_one_repair(p_bc->widths, p_bc->n, BC_RATIO_MIN_X10, &p_out->ch, &p_out->b_reversed);
-    if ((r != CODE39_OK) && (p_bc->prof_n > 0u))
+    for (k = 1u; (k <= 2u) && (r != CODE39_OK); k++)
     {
-        uint16_t white;
-        uint16_t dark;
-        uint8_t  k;
+        uint16_t const n2 = prof_read(p_bc, k, w2);
+        char           ch;
+        bool           b_rev;
 
-        bc_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
-        for (k = 1u; (k <= 2u) && (dark > white); k++)
+        if ((n2 > 0u) && (code39_decode_one_repair(w2, n2, BC_RATIO_MIN_X10, &ch, &b_rev) == CODE39_OK))
         {
-            uint16_t const span = (uint16_t)(dark - white);
-            uint16_t const thr  = (uint16_t)(white + ((k == 1u) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
-            uint16_t const n2   = bc_prof_elements(p_bc->prof, p_bc->prof_n, thr, (uint16_t)(span / 16u),
-                                                   w2, (uint16_t)BC_MAX_ELEMENTS);
+            p_out->ch         = ch;
+            p_out->b_reversed = b_rev;
+            p_out->elements   = n2;
+            p_bc->pass        = k;
+            r = CODE39_OK;
+        }
+    }
+    if ((r != CODE39_OK) && (r != CODE39_NOT_BARCODE))
+    {
+        for (k = 0u; (k <= 2u) && (r != CODE39_OK); k++)
+        {
+            uint16_t const n2 = (k == 0u) ? p_bc->n : prof_read(p_bc, k, w2);
             char           ch;
             bool           b_rev;
 
-            if (code39_decode_one_repair(w2, n2, BC_RATIO_MIN_X10, &ch, &b_rev) == CODE39_OK)
+            if ((n2 > 0u) &&
+                (code39_decode_one_best((k == 0u) ? p_bc->widths : w2, n2, &ch, &b_rev) == CODE39_OK))
             {
                 p_out->ch         = ch;
                 p_out->b_reversed = b_rev;
                 p_out->elements   = n2;
-                p_bc->pass        = k;
+                p_bc->pass        = 3u;
                 r = CODE39_OK;
-                break;
             }
         }
     }

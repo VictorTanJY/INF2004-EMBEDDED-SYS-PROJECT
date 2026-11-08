@@ -784,6 +784,214 @@ static void test_slip(void)
     CHECK("S3-H16", slip_run(1500, false, 0) == 0u);
 }
 
+
+/* S3-H20 (8 Nov robot run: 27 of 29 elements with a 1.0 mm element):
+   best match for a bar split by a speck (29 -> 31), two thin elements
+   run into a neighbour (29 -> 27), both at once (29, ratio broken), and
+   a lost end with a split; every character, both directions, 3 mm
+   narrow, black bleeding +0.8 mm.  Never a wrong letter, also over
+   random widths and over codes with more damage than it may repair. */
+static uint16_t split_at(uint32_t const * p_in, uint16_t n, uint16_t at, uint32_t speck, uint32_t * p_out)
+{
+    uint16_t o = 0u;
+    uint16_t i;
+
+    for (i = 0u; i < n; i++)
+    {
+        if (i == at)
+        {
+            uint32_t const a = (p_in[i] - speck) / 2u;
+
+            p_out[o++] = a;
+            p_out[o++] = speck;
+            p_out[o++] = p_in[i] - speck - a;
+        }
+        else
+        {
+            p_out[o++] = p_in[i];
+        }
+    }
+    return o;
+}
+
+static uint16_t merge_at(uint32_t const * p_in, uint16_t n, uint16_t at, uint32_t * p_out)
+{
+    uint16_t o = 0u;
+    uint16_t i;
+
+    for (i = 0u; i < n; i++)
+    {
+        if ((i == at) && ((i + 2u) < n))
+        {
+            p_out[o++] = p_in[i] + p_in[i + 1u] + p_in[i + 2u];
+            i = (uint16_t)(i + 2u);
+        }
+        else
+        {
+            p_out[o++] = p_in[i];
+        }
+    }
+    return o;
+}
+
+/* the merges the sensor makes: a thin space (or bar) between two of the
+   other kind, at least one of them thin */
+static bool thin_triplet(uint32_t const * p_w, uint16_t at, uint32_t narrow)
+{
+    return (p_w[at + 1u] < (narrow * 3u / 2u)) &&
+           ((p_w[at] < (narrow * 3u / 2u)) || (p_w[at + 2u] < (narrow * 3u / 2u)));
+}
+
+static void test_best(void)
+{
+    size_t c;
+    int    good = 0, total = 0, wrong = 0, kind;
+
+    for (kind = 0; kind < 4; kind++)
+    {
+        int kgood = 0, ktotal = 0;
+
+        for (c = 0u; c < (sizeof(k_data_chars) - 1u); c++)
+        {
+            uint16_t at;
+
+            for (at = 1u; at < 28u; at++)
+            {
+                int d;
+
+                for (d = 0; d < 2; d++)
+                {
+                    uint32_t w[29], a[40], b[40];
+                    uint16_t n = make_code(k_data_chars[c], 3000u, 2.5, 0.08, w), e, m;
+                    char     ch;
+                    bool     b_rev;
+
+                    for (e = 0u; e < n; e++)
+                    {
+                        w[e] = ((e % 2u) == 0u) ? (w[e] + 800u) : (w[e] - 800u);
+                    }
+                    if (d) { reverse(w, n); }
+                    if (kind == 0)
+                    {
+                        if ((at % 2u) != 0u) { continue; }     /* a speck in a bar */
+                        m = split_at(w, n, at, 1000u, a);
+                    }
+                    else if (kind == 1)
+                    {
+                        if ((at > 26u) || !thin_triplet(w, at, 3000u)) { continue; }
+                        m = merge_at(w, n, at, a);
+                    }
+                    else if (kind == 2)
+                    {
+                        uint16_t const sp = (uint16_t)((at + 12u) % 27u);
+
+                        if ((at > 26u) || !thin_triplet(w, at, 3000u) || ((sp % 2u) != 0u) ||
+                            ((sp + 2u) >= at && sp <= (at + 2u))) { continue; }
+                        m = merge_at(w, n, at, b);
+                        m = split_at(b, m, (sp < at) ? sp : (uint16_t)(sp - 2u), 1000u, a);
+                    }
+                    else
+                    {
+                        if (((at % 2u) != 0u) || (at < 2u)) { continue; }   /* first bar lost, speck in a bar */
+                        m = split_at(&w[2], (uint16_t)(n - 2u), (uint16_t)(at - 2u), 1000u, a);
+                    }
+                    ktotal++;
+                    if (code39_decode_one_best(a, m, &ch, &b_rev) == CODE39_OK)
+                    {
+                        if (ch == k_data_chars[c]) { kgood++; } else { wrong++;
+                            printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n", kind, k_data_chars[c], (unsigned)at, d, ch); }
+                    }
+                }
+            }
+        }
+        printf("best match, %s: %d / %d decoded\n",
+               (kind == 0) ? "split bar" : (kind == 1) ? "merged thin pair" : (kind == 2) ? "split + merge" : "end lost + split",
+               kgood, ktotal);
+        CHECK("S3-H20", (kgood * 100) >= (ktotal * ((kind == 0) || (kind == 3) ? 95 : ((kind == 1) ? 70 : 60))));
+        good += kgood; total += ktotal;
+    }
+    printf("best match: %d / %d decoded, %d wrong\n", good, total, wrong);
+    CHECK("S3-H20", wrong == 0);
+
+    /* random widths and heavier damage: never accepted as a wrong letter */
+    {
+        int r, accepted = 0, bad = 0, tries = 0;
+
+        for (r = 0; r < 20000; r++)
+        {
+            uint32_t w[60];
+            uint16_t n = (uint16_t)(25u + 2u * (rnd() % 5u)), e;
+            char     ch;
+            bool     b_rev;
+
+            for (e = 0u; e < n; e++) { w[e] = 1500u + (uint32_t)(rnd() % 9000u); }
+            tries++;
+            if (code39_decode_one_best(w, n, &ch, &b_rev) == CODE39_OK) { accepted++; }
+        }
+        for (c = 0u; c < (sizeof(k_data_chars) - 1u); c++)
+        {
+            for (r = 0; r < 40; r++)
+            {
+                uint32_t w[29], a[60], b[60];
+                uint16_t n = make_code(k_data_chars[c], 3000u, 2.5, 0.08, w), m, q, e;
+                char     ch;
+                bool     b_rev;
+
+                /* three random merges or splits: more than it may repair */
+                m = n;
+                for (e = 0u; e < 29u; e++) { a[e] = w[e]; }
+                for (q = 0u; q < 3u; q++)
+                {
+                    uint16_t const at = (uint16_t)(1u + (rnd() % (m - 4u)));
+                    uint16_t       x;
+
+                    m = ((rnd() & 1u) != 0u) ? merge_at(a, m, at, b) : split_at(a, m, at, 900u, b);
+                    for (x = 0u; x < m; x++) { a[x] = b[x]; }
+                }
+                tries++;
+                if ((code39_decode_one_best(a, m, &ch, &b_rev) == CODE39_OK) && (ch != k_data_chars[c])) { bad++; }
+            }
+        }
+        printf("best match: random widths accepted %d / 20000, over-damaged codes wrong %d\n", accepted, bad);
+        CHECK("S3-H20", (accepted == 0) && (bad == 0));
+        (void)tries;
+    }
+
+    /* the slide samples through the whole capture with a speck in a wide bar */
+    {
+        int s2, d2, g2 = 0, t2 = 0, w2n = 0, p3 = 0;
+
+        g_spot_um = 300u;               /* sharp enough that the speck reads as a gap */
+
+        for (s2 = 0; s2 < N_SLIDES; s2++)
+        {
+            for (d2 = 0; d2 < 2; d2++)
+            {
+                uint32_t w[29], a[31], wmin = 0xFFFFFFFFu;
+                uint16_t k, at = 0u;
+                bc_out_t out;
+                bc_result_t rr;
+
+                for (k = 0u; k < 29u; k++) { wmin = (k_slides[s2].p_w[k] < wmin) ? k_slides[s2].p_w[k] : wmin; }
+                for (k = 0u; k < 29u; k++) { w[k] = (k_slides[s2].p_w[k] * 3000u) / wmin; }
+                if (d2) { reverse(w, 29); }
+                for (k = 10u; k < 19u; k += 2u) { at = (w[k] > w[at]) ? k : at; }   /* widest bar of X */
+                (void)split_at(w, 29, at, 1200u, a);
+                memset(&out, 0, sizeof(out));
+                rr = run_pass(a, 31, 150u, 0, &out);
+                t2++;
+                if ((rr == BC_VALID) && (out.ch == k_slides[s2].ch)) { g2++; p3 += (g_last_pass == 3u) ? 1 : 0; }
+                else if (rr == BC_VALID) { w2n++; }
+                else { printf("  speck slide %d dir %d: result %d reason %d, %u elements\n", k_slides[s2].slide, d2,
+                              (int)rr, (int)out.reason, (unsigned)out.elements); }
+            }
+        }
+        g_spot_um = 1500u;
+        printf("capture with a speck in a wide bar: %d / %d decoded (%d by best match), %d wrong\n", g2, t2, p3, w2n);
+        CHECK("S3-H20", (w2n == 0) && ((g2 * 100) >= (t2 * 90)) && (p3 > 0));
+    }
+}
+
 int main(void)
 {
     test_table();
@@ -791,6 +999,7 @@ int main(void)
     test_synthetic();
     test_rejects();
     test_capture();
+    test_best();
     test_track();
     test_slip();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
