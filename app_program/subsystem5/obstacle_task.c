@@ -436,8 +436,13 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.back_mm += OBST_SECOND_LOOK_MM;
         send_step((uint8_t)OBST_STEP_MOVE, -OBST_SECOND_LOOK_MM, p_odom);
     }
-    else if ((g_prof.plan == (uint8_t)OBST_PLAN_LEFT) || (g_prof.plan == (uint8_t)OBST_PLAN_RIGHT))
+    else if ((g_prof.plan == (uint8_t)OBST_PLAN_LEFT) || (g_prof.plan == (uint8_t)OBST_PLAN_RIGHT) ||
+             ((OBST_SINGLE_SWEEP != 0) && g_prof.b_valid && (g_prof.plan == (uint8_t)OBST_PLAN_BLOCKED)))
     {
+        /* 9 Nov: with one sweep a "blocked" plan (no side clear enough by
+           this scan's clearances) does not back off and sweep again: the
+           side comes from the edges alone (the smaller step-out) and the
+           step-out leg pings the face live */
         g_o.b_blocked     = false;
 #if OBST_SINGLE_SWEEP
         /* 9 Nov: plan from this sweep, by the same side rule as the edge

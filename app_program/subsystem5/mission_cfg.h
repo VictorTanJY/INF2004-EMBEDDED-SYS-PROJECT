@@ -85,7 +85,8 @@
    7 s).  An unsure sweep already plans as for an OBST_WIDTH_MAX object
    around what it saw, and the step-out leg pings the face live and
    goes on until the car is past the edge, so clearance does not rest
-   on the width.  0 = the earlier sequence (OBST_WIDTH_PROBE / edge scan). */
+   on the width.  A "blocked" sweep also plans at once (9 Nov 03:38: it
+   backed off and swept a second time).  0 = the earlier sequence (OBST_WIDTH_PROBE / edge scan). */
 #define OBST_SINGLE_SWEEP           1
 #define OBST_PROBE_FACE_MM          250     /* face this far from the sensor first */
 /* 9 Nov: the straight-ahead ping before the width probe is the face only
