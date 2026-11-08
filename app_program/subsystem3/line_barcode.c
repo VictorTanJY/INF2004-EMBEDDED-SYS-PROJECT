@@ -245,10 +245,11 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
         return 0u;
     }
     span = (uint16_t)(dark - white);
-    if (k == 3u)
+    if (k >= 3u)
     {
+        uint32_t const pct   = (k == 3u) ? BC_ADAPT_PCT : ((k == 4u) ? BC_ADAPT_PCT2 : BC_ADAPT_PCT3);
         uint32_t const noise = (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
-        uint32_t       delta = ((uint32_t)span * BC_ADAPT_PCT) / 100u;
+        uint32_t       delta = ((uint32_t)span * pct) / 100u;
 
         delta = (delta < (noise * BC_ADAPT_NOISE_X)) ? (noise * BC_ADAPT_NOISE_X) : delta;
         delta = (delta < BC_ADAPT_MIN) ? BC_ADAPT_MIN : delta;
@@ -269,7 +270,9 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
    mid-way and then low for faint thin bars; each reading may also be
    repaired for a bar lost at either end.
    9 Nov: then by swing over the darkness record, the swing sized to this
-   code's own contrast and noise (a light print); pass 3.
+   code's own contrast and noise (a light print): 20, 15 then 10 % of it,
+   never under 4 x the noise; pass 3.  Exact decodes only (with the end
+   repair); the best match below uses the 20 % reading only.
    8 Nov: if none decodes exactly, the best match (code39_decode_one_best:
    a bar split by a speck, or two thin elements run together) is tried on
    the same readings in the same order; pass 4 says so. */
@@ -284,7 +287,7 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
     p_out->peak_norm = p_bc->peak;
     p_bc->pass       = 0u;
     r = code39_decode_one_repair(p_bc->widths, p_bc->n, BC_RATIO_MIN_X10, &p_out->ch, &p_out->b_reversed);
-    for (k = 1u; (k <= 3u) && (r != CODE39_OK); k++)
+    for (k = 1u; (k <= 5u) && (r != CODE39_OK); k++)
     {
         uint16_t const n2 = prof_read(p_bc, k, w2);
         char           ch;
@@ -295,7 +298,7 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
             p_out->ch         = ch;
             p_out->b_reversed = b_rev;
             p_out->elements   = n2;
-            p_bc->pass        = k;
+            p_bc->pass        = (k > 3u) ? 3u : k;
             r = CODE39_OK;
         }
     }

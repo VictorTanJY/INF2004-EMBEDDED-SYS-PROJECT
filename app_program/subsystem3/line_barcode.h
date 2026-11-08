@@ -80,8 +80,9 @@ uint16_t    bc_prof_elements(uint16_t const * p_prof, uint16_t n_bins, uint16_t 
 uint16_t    bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
                           uint32_t * p_widths, uint16_t max);
 /* The widths of one reading of the capture just ended (for the log):
-   reading 0 swing, 1 mid, 2 low, 3 adaptive swing; returns the count. */
-#define BC_READINGS                 4u
+   reading 0 swing, 1 mid, 2 low, 3 / 4 / 5 adaptive swing at
+   BC_ADAPT_PCT / PCT2 / PCT3 (0 if not tried); returns the count. */
+#define BC_READINGS                 6u
 uint16_t    bc_reading(bc_capture_t const * p_bc, uint8_t reading, uint32_t * p_widths);
 /* Light / dark levels of a profile (percentiles BC_PROF_WHITE_PCT / DARK_PCT). */
 void        bc_prof_levels(uint16_t const * p_prof, uint16_t n_bins, uint16_t * p_white, uint16_t * p_dark);

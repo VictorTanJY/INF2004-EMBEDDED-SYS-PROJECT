@@ -43,10 +43,11 @@
    lightest white << 10 | darkest bar.  For choosing BC_DELTA. */
 #define LINE_LOG_BC_LEVELS      73u
 /* 9 Nov, after a rejected read: 76 = elements found by each reading,
-   swing << 24 | mid << 16 | low << 8 | adaptive swing; then 75 = every
-   width of the swing and adaptive readings, three per record: reading
-   << 30 | index of the first << 24 | three widths of 8 bits in 0.2 mm
-   (255 = 51 mm or more, 0 = none). */
+   swing << 24 | low threshold << 16 | adaptive 20 % << 8 | adaptive 10 %;
+   then 75 = every width of the swing and the adaptive 10 % readings,
+   three per record: reading (0 swing, 3 adaptive) << 30 | index of the
+   first << 24 | three widths of 8 bits in 0.2 mm (255 = 51 mm or more,
+   0 = none). */
 #define LINE_LOG_BC_ELEM        75u
 #define LINE_LOG_BC_COUNTS      76u
 #define LINE_LOG_ELEM_MAX       45u     /* widths logged per reading (15 records) */
@@ -94,22 +95,27 @@ static void bc_widths_log(bc_capture_t const * p_bc)
     uint32_t        counts = 0u;
     uint8_t         rd;
 
-    for (rd = 0u; rd < BC_READINGS; rd++)
     {
-        uint16_t const n = bc_reading(p_bc, rd, w);
+        static uint8_t const k_count_rd[4] = { 0u, 2u, 3u, 5u };
+        uint8_t              j;
 
-        counts |= (uint32_t)app_min_i32(n, 255) << (8u * (3u - rd));
+        for (j = 0u; j < 4u; j++)
+        {
+            uint16_t const n = bc_reading(p_bc, k_count_rd[j], w);
+
+            counts |= (uint32_t)app_min_i32(n, 255) << (8u * (3u - j));
+        }
     }
     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_COUNTS,
                            (int32_t)counts);
-    for (rd = 0u; rd < BC_READINGS; rd += 3u)          /* swing (0), adaptive swing (3) */
+    for (rd = 0u; rd < BC_READINGS; rd += 5u)          /* swing (0), adaptive 10 % (5) */
     {
         uint16_t const n = bc_reading(p_bc, rd, w);
         uint16_t       k;
 
         for (k = 0u; (k < n) && (k < LINE_LOG_ELEM_MAX); k += 3u)
         {
-            uint32_t data = ((uint32_t)rd << 30) | ((uint32_t)k << 24);
+            uint32_t data = ((uint32_t)((rd == 0u) ? 0u : 3u) << 30) | ((uint32_t)k << 24);
             uint8_t  j;
 
             for (j = 0u; j < 3u; j++)

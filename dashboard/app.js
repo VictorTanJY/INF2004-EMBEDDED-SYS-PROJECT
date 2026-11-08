@@ -105,10 +105,10 @@ function describe(e) {
     if (p.code === 73) { const d = p.data >>> 0, pass = d >>> 29, nz = (d >>> 20) & 0x1FF, wl = (d >>> 10) & 0x3FF, dk = d & 0x3FF;
       detail = `white ${wl} / 1000, white noise ${nz}, darkest ${dk}` + (pass ? ['', '; decoded from the darkness record (mid threshold)', '; decoded from the darkness record (low threshold, faint bars)', '; decoded by the adaptive swing (light print)', '; decoded by best match (a split or merged bar)', '', '', ''][pass] : '') +
         ` (a bar must rise 250 above white; noise ${nz} leaves ${Math.max(0, 250 - nz)} margin)`; }
-    if (p.code === 76) { const d = p.data >>> 0; detail = `swing ${d >>> 24}, mid threshold ${(d >>> 16) & 0xFF}, low threshold ${(d >>> 8) & 0xFF}, adaptive swing ${d & 0xFF} (a letter has 29)`; }
+    if (p.code === 76) { const d = p.data >>> 0; detail = `swing ${d >>> 24}, low threshold ${(d >>> 16) & 0xFF}, adaptive 20% ${(d >>> 8) & 0xFF}, adaptive 10% ${d & 0xFF} (a letter has 29; 0 = not tried)`; }
     if (p.code === 75) { const d = p.data >>> 0, rd = d >>> 30, k = (d >>> 24) & 0x3F, ws = [(d >>> 16) & 0xFF, (d >>> 8) & 0xFF, d & 0xFF];
       const txt = ws.map((w, j) => w ? `${(k + j) % 2 ? 'gap' : 'bar'} ${(w / 5).toFixed(1)}${w === 255 ? '+' : ''}` : '').filter(Boolean).join(', ');
-      detail = `${['swing', 'mid', 'low', 'adaptive'][rd]} #${k + 1}-${k + 3}: ${txt}`; }
+      detail = `${['swing', 'mid', 'low', 'adaptive 10%'][rd]} #${k + 1}-${k + 3}: ${txt}`; }
     if (p.code === 71 || p.code === 72) { const d = p.data >>> 0, ph = ((d >>> 16) << 16) >> 16, r = d & 0xFFFF;
       detail = d ? `car turned ${(Math.abs(ph) / 100).toFixed(1)}°, echo at ${(r / 10).toFixed(1)} cm` : 'no echo on this side'; }
     if (p.code === 50) { const d = p.data >>> 0, f = d >>> 16, l = d & 0xFFFF; detail = `face straight ahead ${(f / 10).toFixed(1)} cm, first ping on the left ${l === 0xFFFF ? 'no echo' : (l / 10).toFixed(1) + ' cm'}`; }
