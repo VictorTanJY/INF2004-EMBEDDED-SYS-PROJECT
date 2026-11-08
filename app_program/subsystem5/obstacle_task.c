@@ -673,14 +673,15 @@ static void probe_range(uint16_t r, uint32_t now_ms, motion_odom_t const * p_odo
         {
             return;
         }
-        if (rm != OBST_RANGE_NONE)
-        {
-            g_o.edge_face = rm;
-        }
+        /* 9 Nov: only a ping near where the face should be is the face
+           (02:59 the beam passed an off-centre box, hit something 20 cm
+           further, and the approach drove into the box) */
+        g_o.edge_face = obst_probe_face(rm, g_o.edge_face);
         if (!g_o.b_pb_moved && (app_abs_i32((int32_t)g_o.edge_face - OBST_PROBE_FACE_MM) > 15))
         {
             g_o.pb_ph = PB_MOVE;
             send_step((uint8_t)OBST_STEP_MOVE, (int16_t)((int32_t)g_o.edge_face - OBST_PROBE_FACE_MM), p_odom);
+            g_o.edge_face = (uint16_t)OBST_PROBE_FACE_MM;   /* where the face should be after the move */
         }
         else
         {

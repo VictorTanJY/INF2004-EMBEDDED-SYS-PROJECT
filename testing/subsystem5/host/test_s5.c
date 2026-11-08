@@ -484,6 +484,31 @@ static void test_obstacle(void)
         CHECK("S5-H11", prof.plan == OBST_PLAN_LEFT && prof.clr_r_mm < (OBST_ROBOT_WIDTH_MM + 2 * OBST_MARGIN_MM));
     }
     {
+        /* 9 Nov 02:59: a wall right of the track, NEARER than the box on
+           the line; the box was read as the wall (edges 7 to 40 cm right)
+           and the approach drove into the box.  The box in the path is the
+           obstacle; never CONTINUE, edges around the box. */
+        int cx;
+
+        for (cx = -40; cx <= 60; cx += 20)
+        {
+            box_t b[2] = { { 240.0, 150.0, (double)cx }, { 170.0, 300.0, -330.0 } };   /* wall 18-48 cm right */
+
+            scan_box(b, 2, &prof);
+            printf("box at %+d mm, wall right: edges %+d / %+d, closest %u, plan %u\n", cx,
+                   prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.closest_mm, (unsigned)prof.plan);
+            CHECK("S5-H24", prof.b_valid && (prof.plan != OBST_PLAN_CONTINUE) &&
+                            (prof.closest_mm >= 225u) && (prof.closest_mm <= 260u) &&
+                            (prof.right_lat_mm > (cx - 75 - 60)) && (prof.left_lat_mm < (cx + 75 + 60)));
+        }
+    }
+    {
+        /* 9 Nov: the approach ping before the width probe */
+        CHECK("S5-H24", obst_probe_face(470u, 300u) == 300u);               /* passed the box */
+        CHECK("S5-H24", obst_probe_face(OBST_RANGE_NONE, 300u) == 300u);
+        CHECK("S5-H24", obst_probe_face(330u, 300u) == 330u);               /* the face */
+    }
+    {
         box_t b[3] = { { 200.0, 150.0, 0.0 }, { 250.0, 120.0, -200.0 }, { 250.0, 120.0, 200.0 } };
         scan_box(b, 3, &prof);
         CHECK("S5-H11", prof.plan == OBST_PLAN_BLOCKED);

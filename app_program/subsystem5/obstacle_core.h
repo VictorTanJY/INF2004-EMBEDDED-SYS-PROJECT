@@ -195,6 +195,9 @@ typedef struct
     uint8_t off;                /* clear pings in a row                      */
 } obst_probe_t;
 
+/* 9 Nov: the face range to approach: r if it is within
+   OBST_PROBE_FACE_TOL_MM of where the scan put the face, else that. */
+uint16_t obst_probe_face(uint16_t r_mm, uint16_t expect_mm);
 void    obst_probe_start(obst_probe_t * p_p);
 /* Sensor lateral (+ left) when the axle is axle_lat out and the car turned
    theta (0.01 deg, + left) with the servo looking back along the line. */

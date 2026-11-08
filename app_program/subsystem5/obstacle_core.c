@@ -71,19 +71,30 @@ static bool same_object(obst_point_t const * p, uint16_t r_min)
 /* The obstacle = the run of points around the nearest one at its range.
    Consecutive-angle rule (hysteresis): a single point that misses between
    two that hit is a dropout, not an edge; an edge needs 2 misses. */
+static int32_t lateral_mm(int32_t angle_cdeg, uint16_t r_mm);
+
+/* Part of the obstacle grown from the nearest echo: at its range and
+   (9 Nov) within OBST_GROUP_MAX_MM sideways of it. */
+static bool in_group(obst_point_t const * p, uint16_t r_min, int32_t lat0)
+{
+    return same_object(p, r_min) &&
+           (app_abs_i32(lateral_mm((int32_t)p->angle_deg * 100, p->r_mm) - lat0) <= OBST_GROUP_MAX_MM);
+}
+
 static void grow(obst_point_t const * p_pts, uint8_t n, uint8_t nearest, uint16_t r_min,
                  uint8_t * p_lo, uint8_t * p_hi)
 {
-    uint8_t lo = nearest;
-    uint8_t hi = nearest;
+    int32_t const lat0 = lateral_mm((int32_t)p_pts[nearest].angle_deg * 100, p_pts[nearest].r_mm);
+    uint8_t       lo   = nearest;
+    uint8_t       hi   = nearest;
 
     for (;;)
     {
-        if ((lo > 0u) && same_object(&p_pts[lo - 1u], r_min))
+        if ((lo > 0u) && in_group(&p_pts[lo - 1u], r_min, lat0))
         {
             lo--;
         }
-        else if ((lo > 1u) && same_object(&p_pts[lo - 2u], r_min))
+        else if ((lo > 1u) && in_group(&p_pts[lo - 2u], r_min, lat0))
         {
             lo = (uint8_t)(lo - 2u);
         }
@@ -94,11 +105,11 @@ static void grow(obst_point_t const * p_pts, uint8_t n, uint8_t nearest, uint16_
     }
     for (;;)
     {
-        if (((hi + 1u) < n) && same_object(&p_pts[hi + 1u], r_min))
+        if (((hi + 1u) < n) && in_group(&p_pts[hi + 1u], r_min, lat0))
         {
             hi++;
         }
-        else if (((hi + 2u) < n) && same_object(&p_pts[hi + 2u], r_min))
+        else if (((hi + 2u) < n) && in_group(&p_pts[hi + 2u], r_min, lat0))
         {
             hi = (uint8_t)(hi + 2u);
         }
@@ -146,12 +157,28 @@ static void profile_core(obst_point_t const * p_fine, uint8_t n_fine,
     p_out->plan_l_mm    = 0;
     p_out->plan_r_mm    = 0;
 
+    /* 9 Nov: the nearest echo in the car's path first; a wall beside the
+       track can be nearer than the box on the line (02:59 run). */
     for (i = 0u; i < n_fine; i++)
     {
-        if (usable(&p_fine[i]) && (p_fine[i].r_mm < r_min))
+        if (usable(&p_fine[i]) && (p_fine[i].r_mm < r_min) &&
+            (app_abs_i32(lateral_mm((int32_t)p_fine[i].angle_deg * 100, p_fine[i].r_mm)) <=
+             ((OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM)))
         {
             r_min   = p_fine[i].r_mm;
             nearest = i;
+        }
+    }
+    if (r_min == OBST_RANGE_NONE)
+    {
+        /* nothing in the path: the nearest echo anywhere (may be CONTINUE) */
+        for (i = 0u; i < n_fine; i++)
+        {
+            if (usable(&p_fine[i]) && (p_fine[i].r_mm < r_min))
+            {
+                r_min   = p_fine[i].r_mm;
+                nearest = i;
+            }
         }
     }
     if (r_min == OBST_RANGE_NONE)
@@ -818,6 +845,16 @@ bool obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg)
     int32_t const corner = (int32_t)(((int64_t)(OBST_ROBOT_WIDTH_MM / 2) * app_sin_q15(theta_cdeg)) / 32768);
 
     return obst_out_expect_mm(face_mm, axle_fwd_mm, theta_cdeg) <= (OBST_MARGIN_MM + corner);
+}
+
+uint16_t obst_probe_face(uint16_t r_mm, uint16_t expect_mm)
+{
+    if ((r_mm == OBST_RANGE_NONE) ||
+        (app_abs_i32((int32_t)r_mm - (int32_t)expect_mm) > OBST_PROBE_FACE_TOL_MM))
+    {
+        return expect_mm;
+    }
+    return r_mm;
 }
 
 void obst_probe_start(obst_probe_t * p_p)

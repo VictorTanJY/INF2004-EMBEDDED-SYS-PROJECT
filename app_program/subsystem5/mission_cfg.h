@@ -80,6 +80,11 @@
    turning edge scan when 1.                                            */
 #define OBST_WIDTH_PROBE            1
 #define OBST_PROBE_FACE_MM          250     /* face this far from the sensor first */
+/* 9 Nov: the straight-ahead ping before the width probe is the face only
+   within this of where the scan put it; otherwise (the beam passed an
+   off-centre box: 02:59 the car drove 20 cm into it) the scan's range is
+   used, and the approach never drives further than that range allows. */
+#define OBST_PROBE_FACE_TOL_MM      80
 #define OBST_PROBE_DDEG             650     /* car turn: the servo reaches +-70 */
 #define OBST_PROBE_SPEED_MM_S       60
 #define OBST_PROBE_MAX_MM           250     /* axle sideways, each side        */
@@ -105,6 +110,12 @@
      wide around its nearest point (instructor: obstacles 10-20 cm).     */
 #define OBST_WIDTH_MIN_MM           80
 #define OBST_WIDTH_MAX_MM           200
+/* 9 Nov (02:59 run, a wall right of the track): the obstacle is the
+   nearest echo IN THE CAR'S PATH (|lateral| <= half the car + margin),
+   not the nearest echo anywhere; only if nothing is in the path is the
+   nearest echo used.  Grouping also stops OBST_GROUP_MAX_MM sideways
+   from that echo (the wall was read as part of the box: 42 cm wide).  */
+#define OBST_GROUP_MAX_MM           300
 #define OBST_SECOND_LOOK_MM         60      /* back-off before the second scan */
 #define OBST_SCAN_PINGS             3       /* median of this many pings per angle */
 /* 3 Nov guard: an echo within +-10 deg of straight ahead nearer than
