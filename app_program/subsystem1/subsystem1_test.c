@@ -37,7 +37,7 @@ static bool s1_parse(char const * p_text, comms_cmd_t * p_cmd, comms_err_t * p_e
 
 EXPORT void subsystem1_test(void)
 {
-    static char    buf[320];
+    static char    buf[384];
     T_RMBF         rmbf;
     comms_cmd_t    cmd;
     comms_err_t    err;
@@ -61,11 +61,11 @@ EXPORT void subsystem1_test(void)
     t.v_l_mm_s = -32768;  t.v_r_mm_s = -32768;
     t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
     t.line_err = -1000;  t.b_line_lost = true;  t.barcode = 'Z';
-    t.pitch_cdeg = -32768;  t.hump_max_mm = 65535u;
+    t.pitch_cdeg = -32768;  t.roll_cdeg = -32768;  t.hump_max_mm = 65535u;
     t.obst_d_mm = 65534u;  t.b_obst_valid = true;
     t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
     len = comms_build_telemetry(&t, buf, (uint16_t)sizeof(buf));
-    TEST_CHECK("S1-U02", len > 0u, "worst-case telemetry fits the 320 B TX buffer");
+    TEST_CHECK("S1-U02", len > 0u, "worst-case telemetry fits the 384 B TX buffer");
 
     /* S1-U03: valid commands parse; invalid ones are rejected with a reason. */
     TEST_CHECK("S1-U03",

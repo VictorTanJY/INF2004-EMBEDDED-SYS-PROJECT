@@ -1,16 +1,13 @@
 /*
  *  subsystem3.c
- *  Subsystem 3 -- Line following and barcode.  Owner: Buddy 3.
- *
- *  STATUS: shared-base stub (line snapshot only).
- *  TODO (owner): drv_adc (round-robin ADC0-ADC2, 3 kHz total, CLKDIV =
- *  48 MHz / 3 kHz - 1 = 15999; DMA channel from dma_claim_unused_channel,
- *  because the radio already claims two), adc_dma_isr registered with
- *  tk_def_int on core 1, LineBarcodeTask, calibration, Code 39 decoder.
- *  (DEVCNF_USE_ADC is set to 0 in config/config_device.h.)
+ *  Subsystem 3 -- Line following and barcode: objects and the line
+ *  snapshot.  Owner: Buddy 3.  The task is in line_task.c; the pure logic
+ *  in line_track.c, line_barcode.c and code39.c; the driver in drv_adc.c.
  */
 
 #include "subsystem3.h"
+
+EXPORT ID g_tid_line;
 
 static app_lock_t   g_line_lock;
 static line_snap_t  g_line_snap;
@@ -23,8 +20,8 @@ EXPORT ER subsystem3_init(void)
 
 EXPORT ER subsystem3_start(void)
 {
-    /* TODO (owner): app_start_task(line_task, S3_PRI_LINE, S3_CORE_LINE, "line"); */
-    return E_OK;
+    g_tid_line = app_start_task((FP)line_task, S3_PRI_LINE, S3_CORE_LINE, "line");
+    return (g_tid_line < E_OK) ? g_tid_line : E_OK;
 }
 
 EXPORT void line_get_snap(line_snap_t * p_out)
