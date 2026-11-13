@@ -20,6 +20,8 @@
 /* line_snap_t.sens: this sensor is not fully white (sees the line) */
 #define LINE_SENS_L             0x01u
 #define LINE_SENS_R             0x02u
+#define LINE_SENS_ALL_BLACK     0x04u       /* 14 Nov: all three IR sensors black now (floor may be gone) */
+#define LINE_SENS_NO_FLOOR      0x08u       /* all three black for LINE_NOFLOOR_UM: lifted              */
 
 /* line_snap_t.bc_state */
 typedef enum

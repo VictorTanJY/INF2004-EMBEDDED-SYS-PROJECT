@@ -40,6 +40,37 @@ void imu_core_new_run(imu_core_t * p_ic)
     p_ic->side_peak_cdeg = 0;
     p_ic->rise_peak_mg   = 0;
     p_ic->rise_max_mg    = 0;
+    p_ic->b_hump_saved   = false;
+}
+
+/* ---- hump results while the floor may have gone (14 Nov) ----------------- */
+static void hump_reset(imu_core_t * p_ic);
+static void side_reset(imu_core_t * p_ic);
+
+void imu_core_hump_save(imu_core_t * p_ic)
+{
+    p_ic->saved_hump_max_mm  = p_ic->hump_max_mm;
+    p_ic->saved_last_hump_mm = p_ic->last_hump_mm;
+    p_ic->saved_humps        = p_ic->humps;
+    p_ic->b_hump_saved       = true;
+}
+
+void imu_core_hump_drop(imu_core_t * p_ic)
+{
+    p_ic->b_hump_saved = false;
+}
+
+void imu_core_hump_restore(imu_core_t * p_ic)
+{
+    if (p_ic->b_hump_saved)
+    {
+        p_ic->hump_max_mm  = p_ic->saved_hump_max_mm;
+        p_ic->last_hump_mm = p_ic->saved_last_hump_mm;
+        p_ic->humps        = p_ic->saved_humps;
+        p_ic->b_hump_saved = false;
+    }
+    hump_reset(p_ic);
+    side_reset(p_ic);
 }
 
 /* ---- calibration ------------------------------------------------------ */

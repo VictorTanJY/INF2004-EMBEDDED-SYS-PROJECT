@@ -52,6 +52,7 @@
 #define LINE_LOG_BC_COUNTS      76u
 #define LINE_LOG_ELEM_MAX       45u     /* widths logged per reading (15 records) */
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
+#define LINE_LOG_NO_FLOOR       79u     /* 14 Nov, lifted: raw_l << 20 | raw_r << 10 | raw_bc */
 #define LINE_LOG_TURN_GAIN      38u
 /* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
 #define LINE_LOG_SLIP_DIAG      45u
@@ -178,6 +179,9 @@ EXPORT void line_task(INT stacd, void * p_exinf)
     uint32_t       last_seq = 0u;
     bool           b_hw_ok;
     bool           b_cal_active = false;
+    bool           b_all_black = false;    /* 14 Nov: all three IR sensors black now   */
+    bool           b_no_floor  = false;    /* ...for LINE_NOFLOOR_UM: lifted           */
+    uint32_t       nofloor_um  = 0u;
     uint8_t        drive_seq = 0u;
 
     (void)stacd;
@@ -361,6 +365,29 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             }
         }
 
+        /* ---- 4b. no floor: lifted (14 Nov, see LINE_NOFLOOR_*) ------- */
+        /* Published in the snapshot (LINE_SENS_NO_FLOOR); ImuTask undoes the
+           humps measured in the air and then sets SAFETY_FLT_LIFT. */
+        if (g_cal.b_valid && !b_cal_active && (snap.raw_l >= LINE_NOFLOOR_NORM) &&
+            (snap.raw_r >= LINE_NOFLOOR_NORM) && (snap.raw_bc >= LINE_NOFLOOR_NORM))
+        {
+            b_all_black   = true;
+            nofloor_um   += (uint32_t)app_abs_i32(odom.v_mm_s) * 10u;   /* um per 10 ms block */
+            if (!b_no_floor && (nofloor_um >= LINE_NOFLOOR_UM))
+            {
+                b_no_floor = true;
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_NO_FLOOR,
+                                       (int32_t)(((uint32_t)snap.raw_l << 20) | ((uint32_t)snap.raw_r << 10) |
+                                                 (uint32_t)snap.raw_bc));
+            }
+        }
+        else
+        {
+            b_all_black = false;
+            b_no_floor  = false;
+            nofloor_um  = 0u;
+        }
+
         /* ---- 5. steering command ------------------------------------ */
         if ((odom.auth == (uint8_t)MOTION_SRC_LINE) &&
             (ms.state == (uint8_t)MISSION_ST_LINE_FOLLOW) && g_cal.b_valid)
@@ -384,7 +411,9 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         snap.err          = (int16_t)g_trk.err;
         snap.omega_mrad_s = (int16_t)g_trk.omega;
         snap.bc_state     = g_bc.state;
-        snap.sens         = (uint8_t)((g_trk.b_white_l ? 0u : LINE_SENS_L) | (g_trk.b_white_r ? 0u : LINE_SENS_R));
+        snap.sens         = (uint8_t)((g_trk.b_white_l ? 0u : LINE_SENS_L) | (g_trk.b_white_r ? 0u : LINE_SENS_R) |
+                                      (b_all_black ? LINE_SENS_ALL_BLACK : 0u) |
+                                      (b_no_floor ? LINE_SENS_NO_FLOOR : 0u));
         snap.flags        = (uint8_t)((g_cal.b_valid ? LINE_FLAG_CALIBRATED : 0u) |
                                       (g_trk.b_lost ? LINE_FLAG_LOST : 0u) |
                                       (g_trk.b_junction ? LINE_FLAG_JUNCTION : 0u) |
