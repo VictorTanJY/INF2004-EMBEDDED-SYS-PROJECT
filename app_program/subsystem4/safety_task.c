@@ -13,20 +13,19 @@
  *      HEARTBEAT_TIMEOUT, handled like a brake cause;
  *    - feed the watchdog (the only feeder; 200 ms).
  *  REQ_RESET (operator reset via MissionTask): the latch is cleared only
- *  if no cause is still present (obstacle < 8 cm, missed heartbeat).
+ *  if no cause is still present (obstacle < 8 cm, missed heartbeat, robot
+ *  still tilted beyond 30 deg).
  *
- *  imu_int1_isr (GP19 rising edge, core 1) sets REQ_IMPACT_CHK.  SafetyTask
- *  then brakes and latches IMPACT only if ImuTask's software check also saw
- *  an impact within IMU_IMPACT_AGREE_MS of the edge (it polls every 10 ms
- *  for at most that long); otherwise it logs LOG 43 (peak jolt, mg).  2 Nov:
- *  search-sweep wheel reversals fired INT1 with no jolt in the readings.
+ *  14 Nov (instructor, course forum): IMU collision detection is removed.
+ *  The INT1 impact path (imu_int1_isr on GP19, LOG 43) is gone; GP19 is
+ *  left at its reset state (input, pull-down) and the INT1 wire can be
+ *  unplugged.  Instead ImuTask sets LIFT or TILT while a run is active.
  */
 
 #include "subsystem4.h"
 #include "safety_core.h"
 #include "imu_cfg.h"
 #include "drv_watchdog.h"
-#include "../app_gpio_irq.h"
 #include "../app_types.h"
 #include "../subsystem1/subsystem1.h"
 #include "../subsystem2/subsystem2.h"
@@ -35,36 +34,12 @@
 #define SAFETY_WD_TIMEOUT_MS    200u
 #define SAFETY_TOO_CLOSE_MM     80u
 #define SAFETY_LOG_HB_MISSED    41u     /* comms_rec_t code: data = missed-task mask */
-#define SAFETY_LOG_IMPACT_UNCONF 43u    /* INT1 without a software impact: data = peak jolt, mg */
-#define SAFETY_CHK_PERIOD_MS    10u     /* poll period while an INT1 edge is checked */
 
 IMPORT volatile uint32_t g_safety_latched;   /* subsystem4.c */
 
 static volatile bool g_b_tick_ok;
 static volatile bool g_b_tick_checked;
 EXPORT volatile UW   g_safety_tick_us;  /* measured us per 100 ms of kernel time */
-
-/* imu_int1_isr: high-g impact from the GY-511 INT1 pin. */
-static void imu_int1_isr(uint32_t pin, uint32_t events, uint32_t t_us)
-{
-    (void)pin;
-    (void)events;
-    (void)t_us;
-    (void)tk_set_flg(g_flg_safety, SAFETY_REQ_IMPACT_CHK);
-}
-
-/* Did ImuTask's software check see an impact within IMU_IMPACT_AGREE_MS
-   of the INT1 edge at edge_ms (both app_time_ms_hw)? */
-static bool impact_confirmed(uint32_t edge_ms)
-{
-    imu_snap_t imu;
-    int32_t    dt;
-
-    imu_get_snap(&imu);
-    dt = (int32_t)(imu.impact_ms - edge_ms);
-    return (imu.impacts != 0u) && (dt >= -(int32_t)IMU_IMPACT_AGREE_MS) &&
-           (dt <= (int32_t)IMU_IMPACT_AGREE_MS);
-}
 
 EXPORT bool safety_timer_tick_ok(void)
 {
@@ -110,6 +85,10 @@ static uint32_t live_causes(safety_hb_state_t * p_hb, uint32_t now_ms)
     if ((obst.d_mm != OBST_RANGE_NONE) && (obst.d_mm < SAFETY_TOO_CLOSE_MM))
     {
         live |= SAFETY_FLT_TOO_CLOSE;
+    }
+    if (imu.tilt != 0u)
+    {
+        live |= SAFETY_FLT_TILT;
     }
     if (safety_hb_check(p_hb, counts, now_ms) != 0u)
     {
@@ -186,19 +165,9 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
     safety_hb_state_t hb = {0};
     uint32_t          counts[SAFETY_HB_COUNT];
     uint32_t          missed_logged = 0u;
-    bool              b_chk = false;    /* an INT1 edge is being confirmed */
-    uint32_t          chk_edge_ms = 0u;
 
     (void)stacd;
     (void)p_exinf;
-
-    /* GP19: input, rising edge on core 1.  Pull-down (2 Nov): with no pull
-       a loose INT1 wire floated and motor noise gave false impacts; INT1
-       is push-pull, so a real high still overrides the ~50 k pull-down. */
-    out_w(GPIO_OE_CLR, 1uL << S4_PIN_IMU_INT1);
-    out_w(GPIO(S4_PIN_IMU_INT1), GPIO_IE | GPIO_SHEMITT | GPIO_PDE);
-    out_w(GPIO_CTRL(S4_PIN_IMU_INT1), GPIO_CTRL_FUNCSEL_SIO);
-    (void)app_gpio_irq_attach(S4_PIN_IMU_INT1, APP_GPIO_EDGE_RISE, imu_int1_isr);
 
     check_timer_tick();
     if (drv_watchdog_caused_reboot())
@@ -218,9 +187,8 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
         uint32_t missed;
 
         er = tk_wai_flg(g_flg_safety,
-                        SAFETY_BRAKE_MASK | SAFETY_REQ_RESET | SAFETY_REQ_IMPACT_CHK,
-                        TWF_ORW | TWF_BITCLR, &ptn,
-                        b_chk ? SAFETY_CHK_PERIOD_MS : S4_SAFETY_PERIOD_MS);
+                        SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
+                        TWF_ORW | TWF_BITCLR, &ptn, S4_SAFETY_PERIOD_MS);
         drv_watchdog_feed();
         now_ms = (uint32_t)app_time_ms();
 
@@ -228,35 +196,6 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
         {
             motor_estop();                          /* NFR8: brake first */
             latch(ptn & SAFETY_BRAKE_MASK, now_ms);
-        }
-
-        /* INT1 edge: brake only when the readings agree (see the header). */
-        if ((er == E_OK) && ((ptn & SAFETY_REQ_IMPACT_CHK) != 0u) && !b_chk)
-        {
-            b_chk       = true;
-            chk_edge_ms = (uint32_t)app_time_ms_hw();
-        }
-        if (b_chk)
-        {
-            if (impact_confirmed(chk_edge_ms))
-            {
-                b_chk = false;
-                motor_estop();
-                latch(SAFETY_FLT_IMPACT, now_ms);
-            }
-            else if (app_elapsed_ms((uint32_t)app_time_ms_hw(), chk_edge_ms) >= IMU_IMPACT_AGREE_MS)
-            {
-                imu_snap_t imu;
-
-                b_chk = false;
-                imu_get_snap(&imu);
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
-                                       SAFETY_LOG_IMPACT_UNCONF, (int32_t)imu.jolt_peak_mg);
-            }
-            else
-            {
-                /* keep waiting, at most IMU_IMPACT_AGREE_MS */
-            }
         }
 
         read_heartbeats(counts);

@@ -21,7 +21,7 @@
 
 #define S4_PIN_IMU_SDA          2u          /* I2C1 */
 #define S4_PIN_IMU_SCL          3u
-#define S4_PIN_IMU_INT1         19u         /* high-g interrupt, bank-0 IRQ on core 1 */
+#define S4_PIN_IMU_INT1         19u         /* not used since 14 Nov (IMU collision detection removed) */
 
 #define S4_SAFETY_PERIOD_MS     20          /* SafetyTask wait timeout */
 #define S4_IMU_PERIOD_MS        10          /* imu_cyc */

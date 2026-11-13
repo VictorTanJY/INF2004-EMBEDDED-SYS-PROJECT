@@ -18,6 +18,7 @@
 #include "mission_core.h"
 #include "mission_cfg.h"
 #include "../app_config.h"
+#include "../subsystem4/imu_types.h"   /* SAFETY_FLT_LIFT */
 
 /* APP_SRC_* of the calibrating subsystems (app.h is kernel-side). */
 #define SRC_LINE            3u
@@ -391,6 +392,13 @@ void mission_core_event(mission_core_t * p_mc, mission_evt_t const * p_ev, uint3
         case MISSION_EV_FAULT:
             if (p_ev->data != 0)
             {
+                /* 14 Nov: lifting the robot ends the run in the demo; it is
+                   braked and latched like any fault, and the run summary
+                   (highest hump) is published as on STOP. */
+                if (is_active(st) && (((uint32_t)p_ev->data & SAFETY_FLT_LIFT) != 0u))
+                {
+                    log_act(p_out, MISSION_LOG_SUMMARY, (int16_t)p_mc->snap.runs, 0);
+                }
                 enter_fault(p_mc, (uint8_t)MISSION_CAUSE_SAFETY, (uint32_t)p_ev->data, now_ms, p_out);
             }
             break;

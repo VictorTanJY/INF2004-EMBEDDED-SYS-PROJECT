@@ -26,6 +26,8 @@
 #define IMU_LOG_TILT_OFF    56u
 #define IMU_LOG_LVL_N       57u     /* level calibration: samples (needs >= 50)          */
 #define IMU_LOG_LVL_SPREAD  58u     /* level calibration: largest axis spread, mg (<= 60) */
+#define IMU_LOG_LIFT        77u     /* lift seen: data = up-axis rise above level, mg (14 Nov) */
+#define IMU_LOG_RISE_MAX    78u     /* largest up-axis rise while driving this run, mg      */
 #define IMU_LOG_LVL_UP      59u     /* level calibration: up-axis mean, mg (>= 500)       */     /* back below IMU_TILT_OFF_CDEG                          */
 
 static imu_core_t g_ic;
@@ -103,6 +105,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
     uint8_t errors = 0u;
     uint8_t good = 0u;
     uint8_t prev_phase = (uint8_t)MISSION_CAL_PH_NONE;
+    bool    b_tilt_sent = false;    /* SAFETY_FLT_TILT set for this tilt (14 Nov) */
     uint32_t still_ms = 0u;            /* start of the stand-still phase */
     uint16_t prev_runs = 0u;
     uint32_t cycle = 0u;
@@ -334,7 +337,34 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
                 0u, (int32_t)g_ic.last_hump_mm);
         }
 
-        /* Tilt is report-only: a warning to telemetry, no brake, no FAULT. */
+        /* 14 Nov: tilt (overturned) and lift brake the motors while a run
+           is active (SafetyTask latches the fault); idle, they are only
+           logged, so handling the robot does not latch a fault. */
+        {
+            bool const b_run = (ms.state >= (uint8_t)MISSION_ST_LINE_FOLLOW) &&
+                               (ms.state <= (uint8_t)MISSION_ST_LINE_SEARCH);
+
+            if (b_run && g_ic.b_tilt && !b_tilt_sent)
+            {
+                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_TILT);
+            }
+            b_tilt_sent = b_run && g_ic.b_tilt;
+            if (b_run && ((ev & IMU_EV_LIFT) != 0u))
+            {
+                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_LIFT);
+            }
+        }
+        if ((ev & IMU_EV_LIFT) != 0u)
+        {
+            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                                   IMU_LOG_LIFT, g_ic.lift_rise_mg);
+        }
+        if ((ev & IMU_EV_RISE_MAX) != 0u)
+        {
+            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                                   IMU_LOG_RISE_MAX, g_ic.rise_max_mg);
+        }
+
         if ((ev & IMU_EV_TILT_ON) != 0u)
         {
             (void)comms_telem_post(
@@ -377,9 +407,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
         snap.turn_rate_cdeg_s = odom.yaw_rate_cdeg_s;
         snap.accel_mg =
             (int16_t)(g_ic.prev_mag_mg - 1000);
-        snap.impacts = g_ic.impacts;
-        snap.jolt_peak_mg = (uint16_t)app_min_i32((int32_t)g_ic.jolt_peak_mg, 65535);
-        snap.impact_ms = g_ic.impact_ms;
+        snap.tilt = g_ic.b_tilt ? 1u : 0u;
         snap.hump_max_mm = g_ic.hump_max_mm;
         snap.last_hump_mm = g_ic.last_hump_mm;
         snap.humps = g_ic.humps;

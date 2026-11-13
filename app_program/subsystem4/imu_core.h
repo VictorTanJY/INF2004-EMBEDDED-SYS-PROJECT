@@ -3,7 +3,7 @@
  *  Subsystem 4 -- ImuTask logic as pure functions (Week 6 Section 6.3):
  *  pitch / roll, level and hard-iron calibration, the hump sequence with
  *  height = sum(sin(theta) x ds) over ENCODER distance, motion
- *  classification, tilt and impact.  Owner: Buddy 4.  Host-tested.
+ *  classification, tilt and lift.  Owner: Buddy 4.  Host-tested.
  */
 
 #ifndef IMU_CORE_H
@@ -18,9 +18,10 @@
 #define IMU_EV_HUMP_END         0x02u   /* imu_core_t.last_hump_mm valid */
 #define IMU_EV_TILT_ON          0x04u
 #define IMU_EV_TILT_OFF         0x08u
-#define IMU_EV_IMPACT           0x10u
+#define IMU_EV_LIFT             0x10u   /* imu_core_t.lift_rise_mg valid */
 #define IMU_EV_MOTION           0x20u   /* imu_core_t.motion changed     */
 #define IMU_EV_RAMP             0x40u   /* a climb > 600 mm was a ramp   */
+#define IMU_EV_RISE_MAX         0x80u   /* imu_core_t.rise_max_mg is a new run maximum */
 
 typedef struct
 {
@@ -72,11 +73,12 @@ typedef struct
     bool     b_tilt;
     bool     b_tilt_over;       /* beyond the limit, waiting for IMU_TILT_HOLD_MS */
     uint32_t tilt_since_ms;
-    uint32_t impact_ms;
-    bool     b_impact;
-    uint16_t impacts;           /* software impacts since boot (wraps) */
-    uint32_t jolt_peak_mg;      /* largest |a| jump in the last IMU_JOLT_WINDOW_MS */
-    uint32_t jolt_peak_ms;
+    bool     b_lift;            /* lift seen, not yet back below IMU_LIFT_REARM_MG */
+    bool     b_lift_over;       /* above IMU_LIFT_RISE_MG, waiting for IMU_LIFT_HOLD_MS */
+    uint32_t lift_since_ms;
+    int32_t  lift_rise_mg;      /* rise at the last lift */
+    int32_t  rise_peak_mg;      /* largest rise of the current excursion while driving */
+    int32_t  rise_max_mg;       /* largest rise this run while driving on the flat */
     uint8_t  motion;            /* imu_motion_t */
     uint32_t motion_ms;
 } imu_core_t;

@@ -70,7 +70,7 @@ fixed.
 | GP16 | S2 | ENC_R_A, PIO0 SM1, Grove 4 |
 | GP17 | S2 | ENC_R_B, PIO0 SM1 (= A + 1), Grove 4 |
 | GP18 | spare | **wired on the Robo Pico to the NeoPixel LED**: leave as input |
-| GP19 | S4 | IMU_INT1, edge IRQ (imu_int1_isr, same bank-0 handler as GP1, core 1) |
+| GP19 | S4 | IMU_INT1: not used since 14 Nov (IMU collision detection removed by the instructor); left at reset (input, pull-down), wire may be unplugged |
 | GP20 | S1 | BTN_START, on-board button, pull-up, pressed = LOW (check S1-M01) |
 | GP21 | S1 | BTN_MODE, on-board button; long press 2 s = fault reset |
 | GP22 | spare | **wired on the Robo Pico to the piezo buzzer**: leave as input |
@@ -116,7 +116,7 @@ the drivers have no locking to stop it.
 | PWM slices 4, 5 | S2 | MotionTask | GP8–GP11; `drv_motor.c`, 20 kHz (TOP 6249). The PWM block is held in reset at boot: `app_reset_release()` releases it and never re-asserts it (S5 shares the block) |
 | PWM slice 7 | S5 | ObstacleTask | GP15; `drv_servo.c`, 50 Hz, 1 us resolution |
 | PIO0 SM0, SM1 | S2 | MotionTask | GP4/5, GP16/17; `drv_encoder.c`: pico-examples quadrature program (24 instr.) at offset 0; refuses to start if SM0/SM1 already run. The radio takes PIO1 first (SDK 2.2.0) |
-| IO_IRQ_BANK0 (core 1) | shared base | `app_gpio_irq.c`: one handler, per-pin callbacks (echo_isr S5, imu_int1_isr S4), registered in usermain, enabled by each owner on core 1 | GP1, GP19 |
+| IO_IRQ_BANK0 (core 1) | shared base | `app_gpio_irq.c`: one handler, per-pin callbacks (echo_isr S5), registered in usermain, enabled by each owner on core 1 | GP1 |
 | RP2040 watchdog + timer tick | S4 | SafetyTask | – `drv_watchdog.c`: tick = 12 cycles first thing in `subsystem4_init()` (else the 1 us timer runs 42.7 × slow after a cold power-on); 200 ms timeout, load 2 × 200 000 (erratum RP2040-E1); boot self-test S4-U04 compares the timer with clk_sys |
 | TIMER (read only) | – | any | – the 1 us counter is read by every subsystem (`app_time_us()`); nobody writes it |
 | WiFi radio, TCP/IP, MQTT | *kernel* + S1 | `cyw43_utk_task` (built in) = CommsTask | GP23–25, GP29; PIO1 + 2 DMA channels |

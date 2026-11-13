@@ -56,6 +56,17 @@ static void step(double theta, double phi, double a_lin, int32_t v, int32_t ds_u
     g_ev |= imu_core_step(&g_ic, a, NULL, ds_um, v, yaw, 10u, g_now);
 }
 
+/* Level chassis with an extra up acceleration (mg), e.g. a hand lift. */
+static void step_up(int32_t extra_up_mg, int32_t v, int32_t ds_um)
+{
+    int32_t a[3];
+
+    accel_for(0.0, 0.0, 0.0, a);
+    a[IMU_AXIS_UP] += extra_up_mg * IMU_SIGN_UP;
+    g_now += 10u;
+    g_ev |= imu_core_step(&g_ic, a, NULL, ds_um, v, 0, 10u, g_now);
+}
+
 static double z_of(double x, double start, double len, double h)
 {
     if ((x < start) || (x > start + len)) { return 0.0; }
@@ -241,20 +252,58 @@ int main(void)
     { int k; for (k = 0; k < 30; k++) { step(0.0, 0.0, 0.0, 400, 4000, 0); } }
     CHECK("S4-H04b", (g_ev & IMU_EV_TILT_ON) == 0u && !g_ic.b_tilt);
 
-    /* S4-H05: impact = a jump of more than 1.5 g between samples */
+    /* S4-H05 (14 Nov): lift.  IMU collision detection is removed; a lift
+       is the up axis IMU_LIFT_RISE_MG above level (filtered) for
+       IMU_LIFT_HOLD_MS on flat ground. */
     imu_core_init(&g_ic);
     g_now = 0u;
     g_ev = 0u;
-    { int k; for (k = 0; k < 10; k++) { step(0.0, 0.0, 0.0, 200, 2000, 0); } }
-    CHECK("S4-H05", (g_ev & IMU_EV_IMPACT) == 0u);
-    {
-        int32_t a[3] = { 0, 0, 0 };
-        a[IMU_AXIS_FWD] = -2600 * IMU_SIGN_FWD;     /* front collision */
-        a[IMU_AXIS_UP]  = 1000 * IMU_SIGN_UP;
-        g_now += 10u;
-        g_ev = imu_core_step(&g_ic, a, NULL, 2000, 200, 0, 10u, g_now);
-    }
-    CHECK("S4-H05", (g_ev & IMU_EV_IMPACT) != 0u && g_ic.motion == IMU_MOTION_IMPACT);
+    { int k; for (k = 0; k < 20; k++) { step_up(0, 200, 2000); } }
+    CHECK("S4-H05", (g_ev & IMU_EV_LIFT) == 0u);
+    { int k; for (k = 0; k < 15; k++) { step_up(400, 0, 0); } }     /* hand lifts it: +0.4 g, 150 ms */
+    CHECK("S4-H05", (g_ev & IMU_EV_LIFT) != 0u && g_ic.lift_rise_mg > IMU_LIFT_RISE_MG);
+    printf("lift: rise %d mg\n", (int)g_ic.lift_rise_mg);
+    /* held still in the air: no second event; set down and lifted again: a new one */
+    g_ev = 0u;
+    { int k; for (k = 0; k < 30; k++) { step_up(0, 0, 0); } }
+    CHECK("S4-H05", (g_ev & IMU_EV_LIFT) == 0u && !g_ic.b_lift);
+    { int k; for (k = 0; k < 15; k++) { step_up(400, 0, 0); } }
+    CHECK("S4-H05", (g_ev & IMU_EV_LIFT) != 0u);
+
+    /* S4-H05b: the robot's own jolts do not lift it: one 10 ms sample of
+       +1.5 g, two of +1 g, and +0.2 g for 200 ms while driving */
+    imu_core_init(&g_ic);
+    g_now = 0u;
+    g_ev = 0u;
+    { int k; for (k = 0; k < 20; k++) { step_up(0, 200, 2000); } }
+    step_up(1500, 200, 2000);
+    { int k; for (k = 0; k < 10; k++) { step_up(0, 200, 2000); } }
+    step_up(1000, 200, 2000); step_up(1000, 200, 2000);
+    { int k; for (k = 0; k < 10; k++) { step_up(0, 200, 2000); } }
+    { int k; for (k = 0; k < 20; k++) { step_up(200, 200, 2000); } }
+    { int k; for (k = 0; k < 10; k++) { step_up(0, 200, 2000); } }
+    CHECK("S4-H05b", (g_ev & IMU_EV_LIFT) == 0u);
+    /* ...and the largest rise while driving (filtered) is reported for tuning (LOG 78) */
+    CHECK("S4-H05b", (g_ev & IMU_EV_RISE_MAX) != 0u && g_ic.rise_max_mg >= 400);   /* the two +1 g samples */
+    printf("largest rise while driving: %d mg\n", (int)g_ic.rise_max_mg);
+
+    /* S4-H05c: on a hump the up push is not a lift */
+    imu_core_init(&g_ic);
+    g_now = 0u;
+    g_ev = 0u;
+    { int k; for (k = 0; k < 10; k++) { step_up(0, 200, 2000); } }
+    g_ic.hump_state = (uint8_t)IMU_HUMP_CLIMBING;
+    { int k; for (k = 0; k < 15; k++) { step_up(400, 200, 2000); } }
+    CHECK("S4-H05c", (g_ev & IMU_EV_LIFT) == 0u);
+
+    /* S4-H05d: the base is the level calibration's up-axis mean (the
+       robot read ~890 mg level on 8-9 Nov, not 1000) */
+    imu_core_init(&g_ic);
+    g_now = 0u;
+    g_ev = 0u;
+    g_ic.lvl_up_mg = 890;
+    { int k; for (k = 0; k < 15; k++) { step_up(-110 + 300, 0, 0); } }   /* 1190 mg: +300 over level */
+    CHECK("S4-H05d", (g_ev & IMU_EV_LIFT) != 0u);
 
     /* S4-H06: level calibration removes a 3 deg mounting offset */
     imu_core_init(&g_ic);

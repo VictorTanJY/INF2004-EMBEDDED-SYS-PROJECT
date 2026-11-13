@@ -38,6 +38,8 @@ void imu_core_new_run(imu_core_t * p_ic)
     p_ic->side_state   = 0u;
     p_ic->side_um      = 0u;
     p_ic->side_peak_cdeg = 0;
+    p_ic->rise_peak_mg   = 0;
+    p_ic->rise_max_mg    = 0;
 }
 
 /* ---- calibration ------------------------------------------------------ */
@@ -345,6 +347,64 @@ static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um)
     return ev;
 }
 
+/* ---- lift (14 Nov) ------------------------------------------------------ */
+/* up_mg: low-pass filtered up axis.  A lift is the up axis staying
+   IMU_LIFT_RISE_MG above the level calibration's mean for
+   IMU_LIFT_HOLD_MS on flat ground (a hump also pushes the robot up).
+   While driving, the largest rise of each excursion is kept, and a new
+   run maximum is reported (IMU_EV_RISE_MAX), so the threshold can be
+   checked against the robot's own bumps.  Returns IMU_EV_* bits. */
+static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s, uint32_t now_ms)
+{
+    uint8_t       ev     = 0u;
+    int32_t const base   = (p_ic->lvl_up_mg > 0) ? p_ic->lvl_up_mg : 1000;
+    int32_t const rise   = up_mg - base;
+    bool const    b_flat = (p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && (p_ic->side_state == 0u);
+
+    if (b_flat && (rise > IMU_LIFT_RISE_MG))
+    {
+        if (!p_ic->b_lift_over)
+        {
+            p_ic->b_lift_over   = true;
+            p_ic->lift_since_ms = now_ms;
+        }
+        else if (!p_ic->b_lift && (app_elapsed_ms(now_ms, p_ic->lift_since_ms) >= IMU_LIFT_HOLD_MS))
+        {
+            p_ic->b_lift       = true;
+            p_ic->lift_rise_mg = rise;
+            ev |= IMU_EV_LIFT;
+        }
+        else
+        {
+            /* waiting, or already reported */
+        }
+    }
+    else
+    {
+        p_ic->b_lift_over = false;
+        if (p_ic->b_lift && (rise < IMU_LIFT_REARM_MG))
+        {
+            p_ic->b_lift = false;
+        }
+    }
+
+    /* largest rise while driving on the flat, per excursion (LOG 78) */
+    if (b_flat && !p_ic->b_lift && (app_abs_i32(v_mm_s) > IMU_STATIONARY_MM_S))
+    {
+        p_ic->rise_peak_mg = app_max_i32(p_ic->rise_peak_mg, rise);
+    }
+    if ((rise < IMU_RISE_END_MG) && (p_ic->rise_peak_mg > 0))
+    {
+        if ((p_ic->rise_peak_mg > IMU_RISE_LOG_MG) && (p_ic->rise_peak_mg > p_ic->rise_max_mg))
+        {
+            p_ic->rise_max_mg = p_ic->rise_peak_mg;
+            ev |= IMU_EV_RISE_MAX;
+        }
+        p_ic->rise_peak_mg = 0;
+    }
+    return ev;
+}
+
 /* ---- classification ------------------------------------------------------ */
 static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cdeg_s)
 {
@@ -352,10 +412,6 @@ static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cde
        is accelerating, slowing down while reversing is decelerating. */
     int32_t const a_speed = (v_mm_s < 0) ? -p_ic->accel_mm_s2 : p_ic->accel_mm_s2;
 
-    if (p_ic->b_impact)
-    {
-        return (uint8_t)IMU_MOTION_IMPACT;
-    }
     if (p_ic->side_state == 1u)
     {
         return (uint8_t)IMU_MOTION_CLIMBING;
@@ -420,37 +476,10 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
         a[k] = p_ic->acc_f[k] / 16;
     }
 
-    /* Impact: a jump of |a| between samples (unfiltered). */
+    /* |a| for the snapshot (14 Nov: no longer an impact check). */
     mag_mg = (int32_t)app_isqrt64((uint64_t)((int64_t)acc_mg[0] * acc_mg[0] +
                                              (int64_t)acc_mg[1] * acc_mg[1] +
                                              (int64_t)acc_mg[2] * acc_mg[2]));
-    if (p_ic->b_have_acc)
-    {
-        uint32_t const jolt = (uint32_t)app_abs_i32(mag_mg - p_ic->prev_mag_mg);
-
-        /* largest jump in the last IMU_JOLT_WINDOW_MS (impact diagnosis) */
-        if ((jolt >= p_ic->jolt_peak_mg) ||
-            (app_elapsed_ms(now_ms, p_ic->jolt_peak_ms) > IMU_JOLT_WINDOW_MS))
-        {
-            p_ic->jolt_peak_mg = jolt;
-            p_ic->jolt_peak_ms = now_ms;
-        }
-    }
-    if (p_ic->b_have_acc && (app_abs_i32(mag_mg - p_ic->prev_mag_mg) > IMU_IMPACT_MG))
-    {
-        p_ic->b_impact  = true;
-        p_ic->impact_ms = now_ms;
-        p_ic->impacts++;
-        ev |= IMU_EV_IMPACT;
-    }
-    else if (p_ic->b_impact && (app_elapsed_ms(now_ms, p_ic->impact_ms) >= IMU_IMPACT_HOLD_MS))
-    {
-        p_ic->b_impact = false;
-    }
-    else
-    {
-        /* no change */
-    }
     p_ic->prev_mag_mg = mag_mg;
     p_ic->b_have_acc  = true;
 
@@ -540,9 +569,10 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
         }
     }
 
+    ev |= lift_step(p_ic, up, v_mm_s, now_ms);
+
     cls = classify(p_ic, v_mm_s, yaw_cdeg_s);
-    if ((cls != p_ic->motion) &&
-        ((app_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS) || (cls == (uint8_t)IMU_MOTION_IMPACT)))
+    if ((cls != p_ic->motion) && (app_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
     {
         p_ic->motion    = cls;
         p_ic->motion_ms = now_ms;

@@ -14,15 +14,15 @@ const BYPASS_STATES = ['OBSTACLE_HANDLING', 'AVOIDING', 'LINE_RECOVERY'];
 const MOVES = ['Left', 'Right', 'Straight', 'U-turn'];
 const REJECT = {2: 'wrong element count', 3: 'bad wide/narrow ratio', 4: 'unknown pattern', 5: 'no start/stop *', 6: 'wrong length', 7: 'too long'};
 const MOTION = ['stationary', 'accelerating', 'turning', 'climbing', 'descending', 'impact', 'cruising', 'decelerating'];
-const FAULTS = [[1, 'Impact', 'Acceleration exceeded the impact threshold.'], [2, 'Obstacle too close', 'Obstacle closer than 8 cm.'],
-  [4, 'Motor stall', 'High motor effort with no wheel movement.'], [8, 'Excessive tilt', 'Not used: tilt is now a warning (LOG 55), not a fault.'],
+const FAULTS = [[1, 'Lifted', 'The robot was lifted during a run: run ended, motors braked.'], [2, 'Obstacle too close', 'Obstacle closer than 8 cm.'],
+  [4, 'Motor stall', 'High motor effort with no wheel movement.'], [8, 'Overturned / tilted', 'Tilted more than 30° for 0.2 s during a run: motors braked.'],
   [16, 'Emergency stop', 'An E-stop was requested.'], [32, 'Heartbeat timeout', 'A monitored task stopped responding.'],
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
 const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)', 71: 'Edge scan: last left echo', 72: 'Edge scan: last right echo', 73: 'Barcode sensor levels', 74: 'Width probe (side-step): edges', 75: 'Barcode widths (mm)', 76: 'Barcode: elements found by each reading',
-  41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 43: 'Impact not confirmed (peak jolt, mg)', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
-  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared',
+  41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
+  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared', 77: 'Lift seen (up axis rose, mg)', 78: 'Largest up-axis rise while driving this run (mg)',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
   64: 'Barcode not in the map', 65: 'Map stored', 66: 'Map refused', 67: 'Run summary', 68: 'Parameter set',
   69: 'Mission queue full', 70: 'Motion queue full', 90: 'IMU bus start', 91: 'IMU identity read', 92: 'IMU identity value',

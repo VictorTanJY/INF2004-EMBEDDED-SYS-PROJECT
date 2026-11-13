@@ -54,36 +54,38 @@
 #define IMU_SIDE_LEVER_MM           76          /* 2 Nov: 117 read a 10 mm hump as 14-16 mm (5 passes, mean 15.4): 117 x 10 / 15.4 */
 
 /* ---- Safety ---------------------------------------------------------- */
-#define IMU_TILT_ON_CDEG            3000        /* > 30 deg: tilt warning    */
+#define IMU_TILT_ON_CDEG            3000        /* > 30 deg: tilted / overturned */
 #define IMU_TILT_OFF_CDEG           2500
-/* Tilt is REPORT-ONLY (LOG 55 on, LOG 56 off): no brake, no FAULT.
-   The angle must stay beyond IMU_TILT_ON_CDEG this long before the
-   warning is sent, so a start or stop of the wheels (the encoder
-   acceleration in the pitch estimate, below) does not raise it.         */
+/* 14 Nov (instructor, course forum): IMU collision detection is removed;
+   instead lifting or overturning the robot stops the motors, and lifting
+   it ends the run in the demo.  Tilt (LOG 55 on, LOG 56 off) brakes the
+   motors (SAFETY_FLT_TILT) while a run is active; when idle it is only
+   logged, so handling the robot does not latch a fault.
+   The angle must stay beyond IMU_TILT_ON_CDEG this long, so a start or
+   stop of the wheels (the encoder acceleration in the pitch estimate,
+   below) does not raise it.                                            */
 #define IMU_TILT_HOLD_MS            200
 /* The forward acceleration measured by the encoders is subtracted from the
    accelerometer before pitch is taken (so braking is not seen as a hill).
    Clamp it: with uncalibrated encoder counts, or wheels spinning in the
    air on the bench, it can be far larger than anything the chassis does. */
 #define IMU_ACC_COMP_MAX_MM_S2      3000        /* ~0.3 g */
-#define IMU_IMPACT_MG               1500        /* |delta a| > 1.5 g         */
-#define IMU_IMPACT_HOLD_MS          300
+/* Lift (14 Nov): a level lift shows only while the hand accelerates the
+   robot upward: the up axis reads more than the level reading.  The low-
+   pass filtered up axis (IMU_ACC_LPF_SHIFT, ~35 ms) must stay this far
+   above the level calibration's mean for IMU_LIFT_HOLD_MS, on flat ground
+   only (no hump or one-wheel hump in progress).  It brakes the motors
+   (SAFETY_FLT_LIFT) while a run is active; LOG 77 reports every lift seen,
+   idle too, and LOG 78 the largest rise while driving, to set these on
+   the robot (MEASURE: lift it a few times, drive over the humps).       */
+#define IMU_LIFT_RISE_MG            250
+#define IMU_LIFT_HOLD_MS            40
+#define IMU_LIFT_REARM_MG           100         /* below this again: armed for the next lift */
+#define IMU_RISE_LOG_MG             100         /* LOG 78 only for rises above this */
+#define IMU_RISE_END_MG             50          /* a rise has ended below this */
 #define IMU_I2C_FAULT_COUNT         3           /* consecutive errors        */
 #define IMU_RECOVER_SAMPLES         10          /* good samples before pitch_valid */
 
-/* INT1 high-g interrupt threshold, high-pass filtered, 32 mg per LSB at
-   +-4 g full scale.  2 Nov: 1.5 g (47) faulted on flat ground from the
-   car's own jolts (wheel stick-slip on curves, starts): now 2.5 g, and
-   it must last IMU_INT1_DUR samples (10 ms each at 100 Hz).            */
-#define IMU_INT1_THS                78          /* 2500 / 32 */
-#define IMU_INT1_DUR                2           /* 20 ms */
-/* 2 Nov: INT1 still fired with no jolt in the readings (search-sweep wheel
-   reversals ring the chassis for a few ms).  SafetyTask now brakes only if
-   the software check (IMU_IMPACT_MG between 10 ms samples) also saw an
-   impact within IMU_IMPACT_AGREE_MS of the INT1 edge; it waits at most that
-   long after the edge.  Otherwise it logs LOG 43 with the peak jolt.     */
-#define IMU_IMPACT_AGREE_MS         50
-#define IMU_JOLT_WINDOW_MS          100         /* peak-jolt window for LOG 43 */
 
 /* ---- Motion classification (FR8) -------------------------------------- */
 #define IMU_STATIONARY_MM_S         10

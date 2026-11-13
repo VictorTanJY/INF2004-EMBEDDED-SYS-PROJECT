@@ -18,17 +18,14 @@ typedef struct
 
 static reg_init_t const k_init[] =
 {
-    {0x22u, 0x00u}, /* Disconnect INT1 while configuring. */
-    {0x30u, 0x00u}, /* Disable interrupt generator during setup. */
-    {0x1Fu, 0x02u}, /* High-pass filter for interrupt generator 1 only. */
+    {0x22u, 0x00u}, /* Nothing routed to INT1 (14 Nov: impact interrupt removed). */
+    {0x30u, 0x00u}, /* Interrupt generator 1 off. */
+    {0x1Fu, 0x00u}, /* CTRL0: no high-pass filter, FIFO off. */
     {0x21u, 0x08u}, /* Acceleration +/-4 g, 16-bit, self-test off. */
     {0x23u, 0x00u}, /* No routes to INT2. */
     {0x24u, 0x70u}, /* Magnetic high resolution, 50 Hz; IRQ not latched. */
     {0x25u, 0x20u}, /* Magnetic +/-4 gauss. */
     {0x26u, 0x00u}, /* Continuous magnetic conversion; unfiltered accel output. */
-    {0x12u, 0x08u}, /* Push-pull, active-high interrupt pins. */
-    {0x32u, (uint8_t)IMU_INT1_THS},
-    {0x33u, (uint8_t)IMU_INT1_DUR}, /* Minimum duration, samples at 100 Hz. */
     {0x20u, 0x6Fu}  /* Acceleration 100 Hz, XYZ on, block data update. */
 };
 
@@ -80,7 +77,6 @@ static void wait_ms(uint32_t ms)
 static ER init_once(void)
 {
     uint8_t id = 0u;
-    uint8_t reference[3];
     int32_t acc[3];
     uint32_t i;
     ER er;
@@ -117,22 +113,6 @@ static ER init_once(void)
         if (check != k_init[i].value)
             return init_result(4u, E_IO, id);
     }
-
-    /* Reset high-pass references before enabling INT1. */
-    er = drv_i2c1_read(
-        SENSOR_ADDR, (uint8_t)(0x1Cu | AUTO_INC), reference, 3u);
-    if (er != E_OK)
-        return init_result(4u, er, id);
-
-    /* OR-of-positive-axis high-g interrupt. */
-    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x30u, 0x2Au);
-    if (er != E_OK)
-        return init_result(4u, er, id);
-
-    /* Route interrupt generator 1 to INT1. */
-    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x22u, 0x20u);
-    if (er != E_OK)
-        return init_result(4u, er, id);
 
     /* First readings: an axis at full scale means the output is stuck. */
     wait_ms(FIRST_DATA_WAIT_MS);
