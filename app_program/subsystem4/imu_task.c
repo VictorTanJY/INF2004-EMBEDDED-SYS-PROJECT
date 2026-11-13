@@ -14,6 +14,7 @@
 #include "drv_lsm303.h"
 #include "../subsystem1/subsystem1.h"
 #include "../subsystem2/subsystem2.h"
+#include "../subsystem3/subsystem3.h"
 #include "../subsystem5/subsystem5.h"
 #include "../app_types.h"
 
@@ -106,6 +107,10 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
     uint8_t good = 0u;
     uint8_t prev_phase = (uint8_t)MISSION_CAL_PH_NONE;
     bool    b_tilt_sent = false;    /* SAFETY_FLT_TILT set for this tilt (14 Nov) */
+    bool    b_was_black = false;    /* line snapshot: all IR black last cycle     */
+    bool    b_was_air   = false;    /* line snapshot: no floor last cycle         */
+    bool    b_air_start = false;    /* the IR sensors just found no floor         */
+    UINT    safety_bits = 0u;       /* flg_safety bits to set after the snapshot  */
     uint32_t still_ms = 0u;            /* start of the stand-still phase */
     uint16_t prev_runs = 0u;
     uint32_t cycle = 0u;
@@ -308,6 +313,42 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
             imu_cal_mag_sample(&g_ic, mag);
         }
 
+        /* ---- 14 Nov: humps while the floor may have gone ---- */
+        b_air_start = false;
+        safety_bits = 0u;
+        /* All three IR sensors black: the robot may be in the air (wheels
+           spinning, chassis tipped: read as humps).  Keep the hump results
+           as they are; if it turns out lifted, undo every hump since and
+           stop measuring humps until it is back on the floor. */
+        {
+            line_snap_t ls;
+            bool        b_black;
+            bool        b_air;
+
+            line_get_snap(&ls);
+            b_black = (ls.sens & LINE_SENS_ALL_BLACK) != 0u;
+            b_air   = (ls.sens & LINE_SENS_NO_FLOOR) != 0u;
+            if (b_black && !b_was_black)
+            {
+                imu_core_hump_save(&g_ic);
+            }
+            if (b_air && !b_was_air)
+            {
+                imu_core_hump_restore(&g_ic);
+                b_air_start = true;
+            }
+            if (!b_black && b_was_black && !b_was_air)
+            {
+                imu_core_hump_drop(&g_ic);
+            }
+            b_was_black = b_black;
+            b_was_air   = b_air;
+            if (b_air)
+            {
+                ds_um = 0;              /* no hump progress in the air */
+            }
+        }
+
         /* ---- IMU processing ---- */
         ev = imu_core_step(
             &g_ic,
@@ -339,19 +380,21 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
 
         /* 14 Nov: tilt (overturned) and lift brake the motors while a run
            is active (SafetyTask latches the fault); idle, they are only
-           logged, so handling the robot does not latch a fault. */
+           logged, so handling the robot does not latch a fault.  The bits
+           are set after the snapshot below, so the run summary (MissionTask,
+           core 1) reads the humps as corrected for a lift. */
         {
             bool const b_run = (ms.state >= (uint8_t)MISSION_ST_LINE_FOLLOW) &&
                                (ms.state <= (uint8_t)MISSION_ST_LINE_SEARCH);
 
             if (b_run && g_ic.b_tilt && !b_tilt_sent)
             {
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_TILT);
+                safety_bits |= SAFETY_FLT_TILT;
             }
             b_tilt_sent = b_run && g_ic.b_tilt;
-            if (b_run && ((ev & IMU_EV_LIFT) != 0u))
+            if (b_run && (((ev & IMU_EV_LIFT) != 0u) || b_air_start))
             {
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_LIFT);
+                safety_bits |= SAFETY_FLT_LIFT;  /* IMU lift, or no floor under the IR sensors */
             }
         }
         if ((ev & IMU_EV_LIFT) != 0u)
@@ -455,5 +498,9 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
 #endif
 
         imu_put_snap(&snap);
+        if (safety_bits != 0u)
+        {
+            (void)tk_set_flg(g_flg_safety, safety_bits);
+        }
     }
 }

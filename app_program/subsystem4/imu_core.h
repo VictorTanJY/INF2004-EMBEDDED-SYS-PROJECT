@@ -79,6 +79,12 @@ typedef struct
     int32_t  lift_rise_mg;      /* rise at the last lift */
     int32_t  rise_peak_mg;      /* largest rise of the current excursion while driving */
     int32_t  rise_max_mg;       /* largest rise this run while driving on the flat */
+
+    /* hump results saved when the floor may have gone (14 Nov) */
+    bool     b_hump_saved;
+    uint16_t saved_hump_max_mm;
+    uint16_t saved_last_hump_mm;
+    uint16_t saved_humps;
     uint8_t  motion;            /* imu_motion_t */
     uint32_t motion_ms;
 } imu_core_t;
@@ -103,6 +109,15 @@ bool    imu_cal_mag_finish(imu_core_t * p_ic);
 uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const * p_mag,
                       int32_t ds_um, int32_t v_mm_s, int32_t yaw_cdeg_s,
                       uint32_t dt_ms, uint32_t now_ms);
+
+/* 14 Nov: the robot may be off the floor (all IR sensors black): keep the
+   hump results as they are now.  Drop: back on the floor, keep any hump
+   measured since.  Restore: it was lifted: undo every hump measured since
+   the save (wheels spinning in the air with the robot tipped read as
+   humps) and end the hump in progress without a result. */
+void    imu_core_hump_save(imu_core_t * p_ic);
+void    imu_core_hump_drop(imu_core_t * p_ic);
+void    imu_core_hump_restore(imu_core_t * p_ic);
 
 /* New run: clear the run's hump maximum and count (MissionTask start). */
 void    imu_core_new_run(imu_core_t * p_ic);

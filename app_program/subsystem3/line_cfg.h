@@ -165,4 +165,17 @@
 #define LINE_BC_OMEGA_MAX           1000        /* mrad/s while reading      */
 #define LINE_BC_HOLD_ERR            400         /* |err| above this: no limit */
 
+/* ---- lift: no floor under the IR sensors (14 Nov) ----------------------
+   Lifted, nothing reflects the IR back, so all three sensors read black.
+   On the track the barcode sensor, 45 mm from the line, is black only over
+   a bar (<= 9 mm) or a crossing line (18 mm) while both line sensors are on
+   the line; so all three black for LINE_NOFLOOR_UM of the robot's forward
+   travel (mean of both wheels, which keep turning in the air; a spin in
+   place does not count) means it was lifted.  While a run is active
+   ImuTask then sets SAFETY_FLT_LIFT (as for its own lift check), after
+   undoing the humps measured in the air.  MEASURE: the line
+   sensors' reading in the air (LOG 79 logs all three at the lift).       */
+#define LINE_NOFLOOR_NORM           900u        /* normalised, 1000 = calibrated black */
+#define LINE_NOFLOOR_UM             40000u      /* 40 mm */
+
 #endif /* LINE_CFG_H */

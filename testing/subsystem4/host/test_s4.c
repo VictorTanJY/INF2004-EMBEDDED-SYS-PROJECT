@@ -305,6 +305,37 @@ int main(void)
     { int k; for (k = 0; k < 15; k++) { step_up(-110 + 300, 0, 0); } }   /* 1190 mg: +300 over level */
     CHECK("S4-H05d", (g_ev & IMU_EV_LIFT) != 0u);
 
+    /* S4-H05e (14 Nov run 02:44): held in the air, nose up 10 deg with
+       the wheels spinning, the hump check read humps of 12-41 mm.  Saved
+       when all IR went black, restored when the lift was confirmed: the
+       run keeps its real humps only; a real hump while all black briefly
+       (a crossing line) is kept. */
+    {
+        int s0, e0;
+        uint16_t real_max;
+
+        (void)run_hump(20.0, 150.0, &s0, &e0);              /* one real hump */
+        real_max = g_ic.hump_max_mm;
+        CHECK("S4-H05e", real_max >= 10u && g_ic.humps == 1u);
+        imu_core_hump_save(&g_ic);                           /* all IR black */
+        g_ev = 0u;
+        { int k; for (k = 0; k < 60; k++) { step(10.0, 0.0, 0.0, 300, 3000, 0); } }   /* nose up in the air */
+        { int k; for (k = 0; k < 60; k++) { step(-10.0, 0.0, 0.0, 300, 3000, 0); } }
+        { int k; for (k = 0; k < 30; k++) { step(0.0, 0.0, 0.0, 300, 3000, 0); } }
+        printf("in the air: %u fake hump(s), max %u mm (real %u)\n", (unsigned)(g_ic.humps - 1u),
+               (unsigned)g_ic.hump_max_mm, (unsigned)real_max);
+        CHECK("S4-H05e", (g_ev & IMU_EV_HUMP_END) != 0u && g_ic.hump_max_mm > real_max);   /* the bug */
+        imu_core_hump_restore(&g_ic);                        /* lift confirmed */
+        CHECK("S4-H05e", g_ic.hump_max_mm == real_max && g_ic.humps == 1u &&
+                         g_ic.hump_state == (uint8_t)IMU_HUMP_FLAT);
+
+        imu_core_hump_save(&g_ic);                           /* crossing line */
+        g_ic.hump_max_mm = (uint16_t)(real_max + 5u);        /* a hump measured meanwhile */
+        imu_core_hump_drop(&g_ic);                           /* floor again */
+        imu_core_hump_restore(&g_ic);                        /* nothing saved: keeps it */
+        CHECK("S4-H05e", g_ic.hump_max_mm == real_max + 5u);
+    }
+
     /* S4-H06: level calibration removes a 3 deg mounting offset */
     imu_core_init(&g_ic);
     g_now = 0u;
