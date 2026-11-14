@@ -1,0 +1,229 @@
+k status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+---- Closed serial port COM4 due to disconnection from the machine ----
+---- Opened the serial port COM4 ----
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+---- Closed the serial port COM4 ----
+---- Opened the serial port COM4 ----
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+wifi: joining "your-network-name" ...
+wifi: link status -> joined AP, waiting for IP (1)
+wifi: link status -> FAILED: SSID not found (out of range, wrong name, or 5GHz-only network -- this chip is 2.4GHz only) (-2)
+---- Closed serial port COM4 due to disconnection from the machine ----
+---- Opened the serial port COM4 ----
+[INFO] S2-U08 settle 260 ms (within +-20 mm/s), peak 213 mm/s, overshoot 6 %
+[INFO] S2-U08 distance 296 mm (asked 300), encoders L 3648 R 3465 counts
+[TEST] S2-U08 PASS  speed step 0 -> 200 mm/s settles in 500 ms; MOVE 300 mm ends within 3 %
+[INFO] S2-U09 mean |vL - vR| 9 mm/s over 31 samples; encoders L 2390 R 2336 counts/s at 200 mm/s
+[TEST] S2-U09 PASS  left and right wheels match within 10 % at 200 mm/s
+[INFO] S2-U10 distance -302 mm, encoders L -3666 R -3610 counts
+[TEST] S2-U10 PASS  MOVE backward 300 mm: both encoders count down, ends within 3 %
+[INFO] S2-U11 encoders L -1045 R 1051 counts
+[TEST] S2-U11 PASS  TURN left 90 deg: left wheel back, right wheel forward
+[TEST] subsystem2 SUMMARY 10 passed, 0 failed, 0 skipped
+[TEST] S3-U02 PASS  LineBarcodeTask publishes its snapshot
+[TEST] S3-U03 PASS  ADC + DMA deliver ~10 blocks per 100 ms (1 kHz per channel)
+[TEST] S3-U04 PASS  Code 39 *F* decodes on target
+[INFO] S3-U05 blocks 100 in 1 s, lost 0; IR now L 0 R 0 barcode 0 (0..1000, 1000 = black)
+[TEST] S3-U05 PASS  100 ADC blocks per second, none lost; readings in 0..1000
+[INFO] S3-U07 result 1 char 'A' pass 0; worst sample 259 us, mean 4 us over 12000 samples
+[TEST] S3-U07 PASS  barcode *A* decodes once through bc_sample; slowest call fits a 10 ms block
+[TEST] subsystem3 SUMMARY 5 passed, 0 failed, 0 skipped
+[TEST] S4-U01 PASS  flg_safety exists
+[TEST] S4-U02 PASS  MotionTask heartbeat advances
+[TEST] S4-U04 PASS  ImuTask publishes its snapshot
+[TEST] S4-U05 PASS  1 us timer ticks at 1 MHz (watchdog tick = 12)
+[INFO] timer: 100200 us per 100 ms of CPU clock
+[TEST] S4-U06 PASS  watchdog enabled and being fed
+[INFO] S4-U07 pitch 381 cdeg, roll 129 cdeg, |a|-1g -114 mg, I2C errors 0 in 1 s, cal 0x0
+[TEST] S4-U07 PASS  IMU reads level (pitch, roll within 5 deg), no I2C errors in 1 s
+[INFO] S4-U08 fault flag -> motor_estop() 107 us (limit 20000 us)
+[TEST] S4-U08 PASS  fault flag brakes both motors within 20 ms (GP8-11 SIO, LOW; latched)
+[INFO] S4-U09 cleared after 0 ms; mission state 1 (was 1), brake 0, latched 0x0
+[TEST] S4-U09 PASS  Reset clears the latch, PWM reconnected, mission back to IDLE (if it was IDLE)
+[TEST] subsystem4 SUMMARY 8 passed, 0 failed, 0 skipped
+[TEST] S5-U01 PASS  mbf_mission exists
+[TEST] S5-U02 PASS  mbf_scan exists
+[TEST] S5-U03 PASS  flg_obst exists
+[TEST] S5-U05 PASS  mission snapshot valid; no barcode map until MQTT sends one
+[TEST] S5-U06 PASS  ObstacleTask runs (range_cyc / 100 ms wait)
+[TEST] S5-U07 PASS  echo conversion and median on target
+[INFO] S5-U08 20 pings in 1200 ms (expected 20)
+[TEST] S5-U08 PASS  ultrasonic pings every 60 ms
+[INFO] S5-U09 range 673 mm (median of 3); compare with a tape measure
+[TEST] S5-U09 PASS  ultrasonic echo received, range within 2 cm .. 4 m
+[TEST] subsystem5 SUMMARY 8 passed, 0 failed, 0 skipped
+[TEST] === test run end ===
+---- Closed serial port COM4 due to disconnection from the machine ----
+---- Opened the serial port COM4 ----
+---- Closed the serial port COM4 ----
+---- Opened the serial port COM4 ----
+[INFO] S2-U08 settle 1000 ms (within +-20 mm/s), peak 273 mm/s, overshoot 36 %
+[INFO] S2-U08 distance 300 mm (asked 300), encoders L 3577 R 3620 counts
+[TEST] S2-U08 FAIL  speed step 0 -> 200 mm/s settles in 500 ms; MOVE 300 mm ends within 3 %   (../app_program/subsystem2/subsystem2_test.c:226)
+[INFO] S2-U09 mean |vL - vR| 57 mm/s over 31 samples; encoders L 2483 R 3111 counts/s at 200 mm/s
+[TEST] S2-U09 FAIL  left and right wheels match within 10 % at 200 mm/s   (../app_program/subsystem2/subsystem2_test.c:241)
+[INFO] S2-U10 distance -300 mm, encoders L -3581 R -3594 counts
+[TEST] S2-U10 PASS  MOVE backward 300 mm: both encoders count down, ends within 3 %
+[INFO] S2-U11 encoders L -1044 R 1046 counts
+[TEST] S2-U11 PASS  TURN left 90 deg: left wheel back, right wheel forward
+[TEST] subsystem2 SUMMARY 8 passed, 2 failed, 0 skipped
+[TEST] S3-U02 PASS  LineBarcodeTask publishes its snapshot
+[TEST] S3-U03 PASS  ADC + DMA deliver ~10 blocks per 100 ms (1 kHz per channel)
+[TEST] S3-U04 PASS  Code 39 *F* decodes on target
+[INFO] S3-U05 blocks 100 in 1 s, lost 0; IR now L 0 R 0 barcode 0 (0..1000, 1000 = black)
+[TEST] S3-U05 PASS  100 ADC blocks per second, none lost; readings in 0..1000
+[INFO] S3-U07 result 1 char 'A' pass 0; worst sample 278 us, mean 4 us over 12000 samples
+[TEST] S3-U07 PASS  barcode *A* decodes once through bc_sample; slowest call fits a 10 ms block
+[TEST] subsystem3 SUMMARY 5 passed, 0 failed, 0 skipped
+[TEST] S4-U01 PASS  flg_safety exists
+[TEST] S4-U02 PASS  MotionTask heartbeat advances
+[TEST] S4-U04 PASS  ImuTask publishes its snapshot
+[TEST] S4-U05 PASS  1 us timer ticks at 1 MHz (watchdog tick = 12)
+[INFO] timer: 100200 us per 100 ms of CPU clock
+[TEST] S4-U06 PASS  watchdog enabled and being fed
+[INFO] S4-U07 pitch 186 cdeg, roll 565 cdeg, |a|-1g -108 mg, I2C errors 0 in 1 s, cal 0x0
+[TEST] S4-U07 FAIL  IMU reads level (pitch, roll within 5 deg), no I2C errors in 1 s   (../app_program/subsystem4/subsystem4_test.c:83)
+[INFO] S4-U08 fault flag -> motor_estop() 115 us (limit 20000 us)
+[TEST] S4-U08 PASS  fault flag brakes both motors within 20 ms (GP8-11 SIO, LOW; latched)
+[INFO] S4-U09 cleared after 0 ms; mission state 1 (was 1), brake 0, latched 0x0
+[TEST] S4-U09 PASS  Reset clears the latch, PWM reconnected, mission back to IDLE (if it was IDLE)
+[TEST] subsystem4 SUMMARY 7 passed, 1 failed, 0 skipped
+[TEST] S5-U01 PASS  mbf_mission exists
+[TEST] S5-U02 PASS  mbf_scan exists
+[TEST] S5-U03 PASS  flg_obst exists
+[TEST] S5-U05 PASS  mission snapshot valid; no barcode map until MQTT sends one
+[TEST] S5-U06 PASS  ObstacleTask runs (range_cyc / 100 ms wait)
+[TEST] S5-U07 PASS  echo conversion and median on target
+[INFO] S5-U08 20 pings in 1200 ms (expected 20)
+[TEST] S5-U08 PASS  ultrasonic pings every 60 ms
+[INFO] S5-U09 range 709 mm (median of 3); compare with a tape measure
+[TEST] S5-U09 PASS  ultrasonic echo received, range within 2 cm .. 4 m
+[TEST] subsystem5 SUMMARY 8 passed, 0 failed, 0 skipped
+[TEST] === test run end ===
