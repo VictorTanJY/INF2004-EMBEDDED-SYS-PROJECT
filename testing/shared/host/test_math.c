@@ -1,6 +1,7 @@
 /*
  *  test_math.c
- *  Host unit tests for the shared integer maths (app_program/app_math.c).
+ *  Host unit tests for the shared integer maths (app_program/app_math.c)
+ *  and the minimum-bit packing helpers (app_program/app_pack.h, SH-H05).
  *  Build and run:  make -C testing/shared/host
  */
 
@@ -8,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "app_math.h"
+#include "app_pack.h"
 
 static int g_pass;
 static int g_fail;
@@ -16,12 +18,89 @@ static int g_fail;
     do { if (cond) { g_pass++; } else { g_fail++; \
         printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); } } while (0)
 
+/* SH-H05: app_pack.h, every width the firmware uses */
+static void test_pack(void)
+{
+    static uint8_t const widths[] = { 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 16u, 20u, 24u, 32u };
+    unsigned i;
+    int      ok = 1;
+
+    for (i = 0u; i < sizeof(widths); i++)
+    {
+        uint8_t const w    = widths[i];
+        int64_t const half = (int64_t)1 << (w - 1u);
+        int64_t       v;
+
+        /* signed: exact inside the range, saturated outside it */
+        for (v = -half - 3; v <= half + 3; v += (w <= 12u) ? 1 : (half / 7 + 1))
+        {
+            int32_t const in  = (int32_t)((v < INT32_MIN) ? INT32_MIN : ((v > INT32_MAX) ? INT32_MAX : v));
+            int64_t const exp = (in < -half) ? -half : ((in > half - 1) ? half - 1 : in);
+            uint32_t const f  = pk_off_s(in, w);
+
+            if ((f > pk_mask(w)) || (pk_unoff_s(f, w) != exp)) { ok = 0; }
+        }
+        /* unsigned: saturates at the field maximum */
+        if ((pk_sat_u(pk_mask(w), w) != pk_mask(w)) || ((w < 32u) && (pk_sat_u(pk_mask(w) + 1u, w) != pk_mask(w)))) { ok = 0; }
+        /* wrapping counters: modular difference within +-half */
+        if ((w >= 8u) && ((pk_wrap_diff(2u, pk_mask(w) - 1u, w) != 4) || (pk_wrap_diff(pk_mask(w) - 1u, 2u, w) != -4))) { ok = 0; }
+    }
+    CHECK("SH-H05", ok);
+    CHECK("SH-H05", pk_off_s(INT32_MIN, 32u) == 0u && pk_off_s(INT32_MAX, 32u) == 0xFFFFFFFFu);
+    CHECK("SH-H05", pk_unoff_s(0u, 32u) == INT32_MIN && pk_unoff_s(0xFFFFFFFFu, 32u) == INT32_MAX);
+
+    /* fields in a word: set one without touching its neighbours */
+    {
+        uint32_t wd = 0xFFFFFFFFu;
+
+        wd = pk_set(wd, 5u, 7u, 0u);
+        CHECK("SH-H05", wd == 0xFFFFF01Fu && pk_get(wd, 5u, 7u) == 0u && pk_get(wd, 0u, 5u) == 0x1Fu);
+        wd = pk_set(wd, 5u, 7u, 0x55u);
+        CHECK("SH-H05", pk_get(wd, 5u, 7u) == 0x55u && pk_get(wd, 12u, 20u) == 0xFFFFFu);
+        CHECK("SH-H05", pk_set(0u, 0u, 32u, 0x12345678u) == 0x12345678u && pk_get(0x80000000u, 31u, 1u) == 1u);
+    }
+
+    /* streams: random widths and values round-trip; overflow is reported */
+    {
+        uint8_t     buf[64];
+        uint32_t    vals[100];
+        uint8_t     ws[100];
+        pk_writer_t wr;
+        pk_reader_t rd;
+        unsigned    n = 0u;
+        unsigned    k;
+        int         rt = 1;
+
+        srand(77);
+        pk_writer_init(&wr, buf, sizeof(buf));
+        while (n < 100u)
+        {
+            ws[n]   = (uint8_t)(1 + (rand() % 32));
+            vals[n] = ((uint32_t)rand() << 16 ^ (uint32_t)rand()) & pk_mask(ws[n]);
+            if ((unsigned)wr.bits + ws[n] > sizeof(buf) * 8u) { break; }
+            pk_put(&wr, vals[n], ws[n]);
+            n++;
+        }
+        pk_reader_init(&rd, buf, pk_writer_len(&wr));
+        for (k = 0u; k < n; k++)
+        {
+            if (pk_take(&rd, ws[k]) != vals[k]) { rt = 0; }
+        }
+        CHECK("SH-H05", rt && !rd.b_short && n > 10u);
+        pk_put(&wr, 0xFFFFFFFFu, 32u);
+        pk_put(&wr, 0u, 33u);
+        CHECK("SH-H05", wr.b_overflow && pk_writer_len(&wr) == 0u);
+    }
+}
+
 int main(void)
 {
     int32_t a;
     int     worst_sin = 0;
     double  worst_atan = 0.0;
     uint32_t x;
+
+    test_pack();
 
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
     for (a = -72000; a <= 72000; a += 7)

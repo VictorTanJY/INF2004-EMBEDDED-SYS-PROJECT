@@ -60,3 +60,9 @@ Do not rely on MQTT Stop if the link is down: switch off motor power.
 Closing the launcher does NOT stop the robot. A command's "accepted" means
 the firmware took it, not that the wheels have stopped: watch the robot.
 Do manual moves on a stand with the wheels clear.
+
+The robot's MQTT payloads are binary bit-field frames (minimum-bit data,
+Change Requirement 1). dashboard.py reads them in hex from mosquitto_sub
+and decodes them with picocar_codec.py; commands are encoded the same way
+and sent with mosquitto_pub -f. To watch the raw topics without the page:
+  mosquitto_sub -h <broker> -t "picocar/is23/#" -F "%t %x" | python picocar_codec.py

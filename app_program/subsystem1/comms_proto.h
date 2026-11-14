@@ -7,17 +7,33 @@
  *  into the firmware and into the host unit tests
  *  (testing/subsystem1/host/).  Nothing here touches shared state.
  *
- *  Payloads (base topic COMMS_TOPIC_BASE, e.g. "picocar/is23"):
- *    telemetry  {seq,t_ms,state,v_mm_s:[l,r],enc:[l,r],dist_mm,
- *                line:{err,lost},barcode,pitch_deg,roll_deg,hump_max_mm,
- *                obstacle:{d_cm,w_cm,w_mm,clr_l_cm,clr_r_cm},nav}  QoS 0, 5 Hz
- *    event      {seq,t_ms,type,data,src}                      QoS 1
- *    status     {online,uptime_s,rssi,drops,map}       QoS 1, retained, 1 Hz
- *    cmd (in)   {id,cmd:"start"|"stop"|"reset"|"set",param,value}
- *               {id,cmd:"map",left:"A",right:"F",straight:"Z",uturn:"W"}
- *               (barcode character -> movement, sent by the laptop just
- *               before the demo; instructor, course forum 24 Oct)
- *    ack        {id,ok,err}                                   QoS 1
+ *  Change Requirement 1 (minimum-bit data): every MQTT payload is a binary
+ *  frame of bit fields, each only as wide as its valid range, written LSB
+ *  first with app_pack.h (explicit masks and shifts, never a C struct).
+ *  The laptop decodes them with dashboard/picocar_codec.py.  Field order
+ *  and widths are listed below; "off" = offset-binary (signed), "sat" =
+ *  saturates at its largest value, "wrap" = low bits of a counter.
+ *
+ *  Every frame starts with one byte: type (5 bits) + version (3 bits).
+ *
+ *  telemetry (type 1, QoS 0, 5 Hz), 210 bits = 27 bytes:
+ *    seq 8 wrap | t 24 (10 ms units, wrap) | state 4 | v_l 10 off |
+ *    v_r 10 off (mm/s) | enc_l 16 wrap | enc_r 16 wrap | dist 16 wrap (mm) |
+ *    line_err 11 off | lost 1 | line_bc 10 sat (0..1000) | barcode 6 |
+ *    nav 6 (Code 39 symbol: 0 none, 1..43) | pitch 11 off | roll 12 off
+ *    (0.1 deg) | hump_max 8 sat (mm) | d 9 (cm, 511 none) | w 10 (mm,
+ *    1023 none) | clr_l 7 | clr_r 7 (cm, 127 none)
+ *  event (type 2, QoS 1), 54 bits + data = 7..11 bytes:
+ *    seq 8 wrap | t 24 | kind 2 (kind - 1) | src 3 | code 7 | dlen 2 |
+ *    data 0 / 8 / 16 / 32 bits (two's complement; dlen 0 means data 0)
+ *  status (type 3, QoS 1, retained, 1 Hz), 41 or 65 bits = 6 or 9 bytes:
+ *    uptime 17 sat (s) | rssi 7 sat (-dBm) | drops 8 sat | has_map 1 |
+ *    [left 6 | right 6 | straight 6 | uturn 6]
+ *    The Last Will is the header byte alone: 1 byte = offline.
+ *  ack (type 4, QoS 1), 21 bits = 3 bytes:
+ *    has_id 1 | id 8 | err 4 (0 = accepted, else comms_err_t)
+ *  cmd (type 5, in), 19 / 39 / 43 bits = 3 / 5 / 6 bytes:
+ *    id 8 | cmd 3 | SET: param 4 (index) value 16 off | MAP: 4 x 6
  */
 
 #ifndef COMMS_PROTO_H
@@ -28,7 +44,11 @@
 #include "../app_config.h"
 
 /* ---------------------------------------------------------------------
- *  Telemetry record posted by any task to mbf_telem (IF-12).  12 bytes.
+ *  Telemetry record posted by any task to mbf_telem (IF-12).  8 bytes:
+ *  word 0 = kind-1 (2 bits) | src (3) | code (7) | sender time in 10 ms
+ *  units (20 bits, wraps every 2.9 h); word 1 = data (all 32 bits: LOG
+ *  records carry packed values).  CommsTask rebuilds the full time from
+ *  its own clock, as a record is never older than a few seconds.
  * --------------------------------------------------------------------- */
 typedef enum
 {
@@ -38,34 +58,57 @@ typedef enum
     COMMS_KIND_LOG   = 4        /* code, data: free use by the sender     */
 } comms_kind_t;
 
+#define COMMS_REC_KIND_SHIFT    0u
+#define COMMS_REC_KIND_BITS     2u
+#define COMMS_REC_SRC_SHIFT     2u
+#define COMMS_REC_SRC_BITS      3u
+#define COMMS_REC_CODE_SHIFT    5u
+#define COMMS_REC_CODE_BITS     7u
+#define COMMS_REC_T_SHIFT       12u
+#define COMMS_REC_T_BITS        20u
+
+typedef struct
+{
+    uint32_t hdr;               /* kind, src, code, time: see above       */
+    int32_t  data;
+} comms_rec_t;
+
+/* Unpacked view of a record (task-local, never shared). */
 typedef struct
 {
     uint8_t  kind;              /* comms_kind_t                           */
     uint8_t  src;               /* APP_SRC_* (subsystem number)           */
     uint16_t code;
     int32_t  data;
-    uint32_t t_ms;              /* sender's app_time_ms()                 */
-} comms_rec_t;
+    uint32_t t_ms;
+} comms_event_t;
+
+void comms_rec_pack(comms_rec_t * p_rec, uint8_t kind, uint8_t src, uint16_t code,
+                    int32_t data, uint32_t now_ms);
+void comms_rec_unpack(comms_rec_t const * p_rec, uint32_t now_ms, comms_event_t * p_ev);
 
 /* ---------------------------------------------------------------------
- *  Bounded JSON writer.  Never writes past cap; on overflow the result
- *  is discarded (jw_finish returns 0).
+ *  Frames
  * --------------------------------------------------------------------- */
-typedef struct
-{
-    char    *p_buf;
-    uint16_t cap;
-    uint16_t len;
-    bool     b_overflow;
-} jw_t;
+#define COMMS_FRAME_VERSION     1u
+#define COMMS_FRAME_MAX         32u     /* largest frame: telemetry, 27 B */
 
-void     jw_init(jw_t * p_jw, char * p_buf, uint16_t cap);
-void     jw_raw(jw_t * p_jw, char const * p_text);
-void     jw_int(jw_t * p_jw, int32_t value);
-void     jw_uint(jw_t * p_jw, uint32_t value);
-void     jw_fixed1(jw_t * p_jw, int32_t tenths);   /* -12 -> "-1.2" */
-void     jw_str(jw_t * p_jw, char const * p_text); /* quoted, escaped */
-uint16_t jw_finish(jw_t * p_jw);                   /* length, 0 on overflow */
+typedef enum
+{
+    COMMS_FT_TELEMETRY = 1,
+    COMMS_FT_EVENT     = 2,
+    COMMS_FT_STATUS    = 3,
+    COMMS_FT_ACK       = 4,
+    COMMS_FT_CMD       = 5
+} comms_frame_type_t;
+
+/* Last Will on the status topic: the status header byte alone (0x23). */
+#define COMMS_WILL_MSG          "\x23"
+
+/* Code 39 data symbols, index 1..43 (0 = none). */
+#define COMMS_SYMBOL_COUNT      43u
+uint8_t comms_symbol_index(char c);     /* 0 if c is not a data symbol */
+char    comms_symbol_char(uint8_t index); /* '\0' for 0 or out of range */
 
 /* ---------------------------------------------------------------------
  *  Telemetry (built by CommsTask from the status snapshots).
@@ -97,17 +140,16 @@ typedef struct
     uint16_t clr_r_mm;
 } comms_telem_t;
 
-uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t cap);
-uint16_t comms_build_event(comms_rec_t const * p_rec, uint32_t seq, char * p_buf, uint16_t cap);
+/* Each builder returns the frame length in bytes, 0 if cap is too small. */
+uint16_t comms_build_telemetry(comms_telem_t const * p_t, uint8_t * p_buf, uint16_t cap);
+uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p_buf, uint16_t cap);
 /* p_map: the 4 mapped characters (left, right, straight, U-turn) or NULL. */
-uint16_t comms_build_status(bool b_online, uint32_t uptime_s, int32_t rssi,
-                            uint32_t drops, char const * p_map, char * p_buf, uint16_t cap);
+uint16_t comms_build_status(uint32_t uptime_s, int32_t rssi, uint32_t drops,
+                            char const * p_map, uint8_t * p_buf, uint16_t cap);
 
-/* Names used in the JSON.  Index = mission_state_t / mission_ev_t. */
-#define COMMS_STATE_NAME_COUNT  11u
-#define COMMS_EVENT_NAME_COUNT  29u
-char const * comms_state_name(uint8_t state);
-char const * comms_event_name(uint16_t event);
+/* Field widths the other subsystems' enums must fit (checked at build). */
+#define COMMS_STATE_BITS        4u      /* mission_state_t                */
+#define COMMS_SRC_BITS          3u      /* APP_SRC_*                      */
 
 /* ---------------------------------------------------------------------
  *  Remote commands.
@@ -125,11 +167,11 @@ typedef enum
 typedef enum
 {
     COMMS_ERR_NONE      = 0,
-    COMMS_ERR_BAD_JSON  = 1,    /* not a flat JSON object                  */
-    COMMS_ERR_NO_ID     = 2,    /* "id" missing or not 0..2^31-1           */
-    COMMS_ERR_BAD_CMD   = 3,    /* "cmd" missing or unknown                */
-    COMMS_ERR_BAD_PARAM = 4,    /* set: "param" missing or not whitelisted */
-    COMMS_ERR_RANGE     = 5,    /* set: "value" missing or out of range    */
+    COMMS_ERR_BAD_FRAME = 1,    /* wrong header, or wrong length for the command */
+    COMMS_ERR_NO_ID     = 2,    /* frame too short to hold an id           */
+    COMMS_ERR_BAD_CMD   = 3,    /* unknown command code                    */
+    COMMS_ERR_BAD_PARAM = 4,    /* set: parameter index not whitelisted    */
+    COMMS_ERR_RANGE     = 5,    /* set: value out of the parameter's range */
     COMMS_ERR_BUSY      = 6,    /* start/set outside IDLE (FR14)           */
     COMMS_ERR_FULL      = 7,    /* mbf_mission full                        */
     COMMS_ERR_REUSED    = 8,    /* id seen recently with a different command */
@@ -139,16 +181,23 @@ typedef enum
     COMMS_ERR_COUNT     = 11
 } comms_err_t;
 
+#define COMMS_ID_BITS           8u      /* command id, wraps (see dedup)  */
+#define COMMS_CMD_BITS          3u
+#define COMMS_PARAM_BITS        4u      /* index into the whitelist       */
+#define COMMS_VALUE_BITS        16u     /* set value, offset-binary       */
+#define COMMS_ERR_BITS          4u
+
+/* Unpacked command (task-local). */
 typedef struct
 {
-    uint32_t id;
+    uint8_t  id;
     bool     b_has_id;
     uint8_t  cmd;               /* comms_cmd_code_t                       */
-    uint8_t  param_id;          /* set only                               */
-    int32_t  value;             /* set only                               */
+    uint8_t  param_id;          /* set only: comms_param_t.id             */
+    int32_t  value;             /* set: value; map: 4 packed chars        */
 } comms_cmd_t;
 
-/* Parse one command payload (not NUL-terminated; len is authoritative). */
+/* Parse one binary command frame (len is authoritative). */
 comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd);
 
 /* State rule (FR14): START, SET and MAP only in IDLE.  b_idle = mission IDLE. */
@@ -161,8 +210,7 @@ comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated);
 bool        comms_map_char_ok(char c);
 
 uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
-                         char * p_buf, uint16_t cap);
-char const * comms_err_name(comms_err_t err);
+                         uint8_t * p_buf, uint16_t cap);
 
 /* Whitelisted parameters for "set".  PROPOSED: the owning buddy confirms
    each range before Week 10 (TEAM.md IF-11). */
@@ -179,7 +227,7 @@ typedef struct
 #else
 #define COMMS_PARAM_COUNT       5u
 #endif
-comms_param_t const * comms_param_by_name(char const * p_name, uint16_t name_len);
+comms_param_t const * comms_param_by_index(uint8_t index);  /* frame index */
 comms_param_t const * comms_param_by_id(uint8_t id);
 
 /* ---------------------------------------------------------------------
@@ -191,17 +239,18 @@ comms_param_t const * comms_param_by_id(uint8_t id);
  *    - same id, same command  -> acknowledged again, not executed again;
  *    - same id, other command -> rejected with COMMS_ERR_REUSED;
  *    - STOP is always executed (repeating it is safe).
- *  The cache is RAM only and empty after a reboot, so the laptop must not
- *  reuse an id within one robot session (e.g. start ids from the time).
+ *  The cache is RAM only and empty after a reboot.  Ids are 8 bits and
+ *  wrap; the laptop counts them up, so an id comes back only after 256
+ *  further commands, far outside the 60 s window.
  * --------------------------------------------------------------------- */
 #define COMMS_DEDUP_LEN         8u
 #define COMMS_DEDUP_WINDOW_MS   60000u
 
 typedef struct
 {
-    uint32_t id;
     uint32_t t_ms;
     int32_t  value;
+    uint8_t  id;
     uint8_t  cmd;
     uint8_t  param_id;
 } comms_dedup_entry_t;
@@ -235,15 +284,15 @@ void                 comms_dedup_add(comms_dedup_t * p_dd,
 
 typedef struct
 {
-    comms_rec_t rec[COMMS_RING_LEN];
-    uint32_t    seq[COMMS_RING_LEN];
+    comms_rec_t rec[COMMS_RING_LEN];    /* packed, 8 B each              */
+    uint8_t     seq[COMMS_RING_LEN];    /* event seq (8 bits on the wire) */
     uint8_t     head;           /* index of the oldest entry */
     uint8_t     count;
 } comms_ring_t;
 
 void comms_ring_init(comms_ring_t * p_ring);
-bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint32_t seq); /* true = oldest overwritten */
-bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint32_t * p_seq);
+bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint8_t seq); /* true = oldest overwritten */
+bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint8_t * p_seq);
 void comms_ring_pop(comms_ring_t * p_ring);
 
 #endif /* COMMS_PROTO_H */

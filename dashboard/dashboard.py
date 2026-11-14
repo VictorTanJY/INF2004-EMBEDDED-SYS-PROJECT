@@ -3,10 +3,14 @@
 Reads every picocar/is23/* message through mosquitto_sub, keeps the latest
 telemetry and status, a 120 s telemetry history (5 Hz), the event log and
 the last obstacle bypass, and serves them to the page at 127.0.0.1:8765.
-Commands are published with mosquitto_pub on picocar/is23/cmd in the
-firmware's JSON format and matched to their ack by id.
+The firmware's payloads are binary bit-field frames (Change Requirement 1):
+mosquitto_sub prints them in hex and picocar_codec.py decodes them into the
+fields the page shows.  Commands are encoded the same way, published with
+mosquitto_pub on picocar/is23/cmd and matched to their ack by id.
 """
-import atexit, collections, http.server, json, os, pathlib, secrets, shutil, socket, subprocess, threading, time, webbrowser
+import atexit, collections, http.server, json, os, pathlib, secrets, shutil, socket, subprocess, tempfile, threading, time, webbrowser
+
+import picocar_codec as codec
 
 ROOT = pathlib.Path(__file__).resolve().parent
 LOCK = threading.RLock()
@@ -29,7 +33,8 @@ DATA = {'broker': False, 'host': '127.0.0.1', 'telemetry': None, 'status': None,
 SUB = None
 BROKER = None
 GEN = 0
-LAST_ID = int(time.time()) % 2000000000
+DECODER = codec.Decoder()
+LAST_ID = int(time.time()) % 256      # 8-bit command ids, counted up
 
 
 def executable(name):
@@ -115,12 +120,13 @@ def ingest(line):
         topic, raw = line.strip().split(' ', 1)
         if not topic.startswith('picocar/is23/'):
             return
-        p = json.loads(raw)
-        if not isinstance(p, dict):
-            return
+        data = bytes.fromhex(raw)
     except (ValueError, TypeError):
         return
     with LOCK:
+        p = DECODER.decode(data)
+        if not isinstance(p, dict):
+            return
         now = time.time()
         if topic.endswith('/telemetry'):
             DATA['telemetry'] = p
@@ -163,8 +169,10 @@ def connect(host):
     with LOCK:
         stop_sub()
         DATA.update(host=host, error='', received=0, telemetry=None, status=None, history=[])
+        DECODER.reset()
+        # -F '%t %x': topic, then the binary payload in hex, one line each.
         args = [executable('mosquitto_sub'), '-h', host, '-p', '1883', '-i', 'dashboard-' + secrets.token_hex(5),
-                '-t', 'picocar/is23/#', '-v', '-R']
+                '-t', 'picocar/is23/#', '-F', '%t %x', '-R']
         SUB = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                encoding='utf-8', errors='replace', bufsize=1)
         proc, generation = SUB, GEN
@@ -237,15 +245,23 @@ def command(cmd, args):
         if not DATA['broker']:
             raise ValueError('No messages received from the broker yet.')
         body, label = build_command(cmd, args if isinstance(args, dict) else {})
-        LAST_ID = (LAST_ID + 1) % 2147483647
+        LAST_ID = (LAST_ID + 1) % 256
         record = {'id': LAST_ID, 'cmd': cmd, 'label': label, 'time': time.time(), 'result': 'pending'}
         DATA['commands'].append(record)
         DATA['commands'] = DATA['commands'][-30:]
         host = DATA['host']
-        payload = json.dumps(dict({'id': LAST_ID}, **body), separators=(',', ':'))
+        payload = codec.encode_command(LAST_ID, body)
+        record['frame'] = payload.hex()
     try:
-        r = subprocess.run([executable('mosquitto_pub'), '-h', host, '-p', '1883', '-t', 'picocar/is23/cmd',
-                            '-q', '1', '-l'], input=payload + '\n', text=True, capture_output=True, timeout=4)
+        # Binary payload: written to a file and sent with -f (stdin may be text mode on Windows).
+        fd, path = tempfile.mkstemp(prefix='picocar_cmd_')
+        try:
+            with os.fdopen(fd, 'wb') as f:
+                f.write(payload)
+            r = subprocess.run([executable('mosquitto_pub'), '-h', host, '-p', '1883', '-t', 'picocar/is23/cmd',
+                                '-q', '1', '-f', path], capture_output=True, text=True, timeout=4)
+        finally:
+            os.remove(path)
         if r.returncode:
             raise RuntimeError(r.stderr.strip() or 'Publish failed')
     except Exception as e:

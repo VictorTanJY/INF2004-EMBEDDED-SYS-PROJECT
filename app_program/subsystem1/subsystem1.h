@@ -35,8 +35,11 @@
 #define HMI_PERIOD_MS           20u     /* sample period = debounce time */
 #define HMI_LONG_PRESS_MS       2000u   /* BTN_MODE long press = fault reset */
 
-/* mbf_telem: 1 KB = 64 records of 12 B (+4 B header each). */
-#define S1_MBF_TELEM_BYTES      1024u
+/* mbf_telem: 64 records of 8 B (+4 B header each) = 768 B.  The record
+   is packed (comms_rec_t), so the same depth takes 256 B less than the
+   12 B record did. */
+#define S1_MBF_TELEM_RECORDS    64u
+#define S1_MBF_TELEM_BYTES      (S1_MBF_TELEM_RECORDS * (4u + 8u))
 
 IMPORT ID g_mbf_telem;          /* mbf_telem in the design documents */
 

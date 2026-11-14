@@ -13,31 +13,38 @@
 
 #if APP_TEST
 
-static bool s1_str_eq(char const * p_a, char const * p_b)
+static bool s1_bytes_eq(uint8_t const * p_a, uint8_t const * p_b, uint16_t n)
 {
-    while ((*p_a != '\0') && (*p_a == *p_b))
+    uint16_t i;
+
+    for (i = 0u; i < n; i++)
     {
-        p_a++;
-        p_b++;
+        if (p_a[i] != p_b[i])
+        {
+            return false;
+        }
     }
-    return (*p_a == *p_b);
+    return true;
 }
 
-static bool s1_parse(char const * p_text, comms_cmd_t * p_cmd, comms_err_t * p_err)
+static bool s1_parse(uint8_t const * p_frame, uint16_t n, comms_cmd_t * p_cmd, comms_err_t * p_err)
 {
-    uint16_t n = 0u;
-
-    while (p_text[n] != '\0')
-    {
-        n++;
-    }
-    *p_err = comms_parse_cmd((uint8_t const *)p_text, n, p_cmd);
+    *p_err = comms_parse_cmd(p_frame, n, p_cmd);
     return (*p_err == COMMS_ERR_NONE);
 }
 
+/* Command frames (comms_proto.h): header 0x25 = type 5, version 1. */
+static uint8_t const k_start_7[3]  = { 0x25u, 0x07u, 0x01u };              /* START, id 7  */
+static uint8_t const k_start_9[3]  = { 0x25u, 0x09u, 0x01u };              /* START, id 9  */
+static uint8_t const k_start_11[3] = { 0x25u, 0x0Bu, 0x01u };              /* START, id 11 */
+static uint8_t const k_reset_11[3] = { 0x25u, 0x0Bu, 0x04u };              /* RESET, id 11 */
+static uint8_t const k_set_99[5]   = { 0x25u, 0x08u, 0x95u, 0x31u, 0x40u };/* SET stop_cm 99, id 8 */
+static uint8_t const k_no_id[1]    = { 0x25u };                            /* header only  */
+static uint8_t const k_ack_busy[3] = { 0x24u, 0x13u, 0x0Cu };              /* id 9, err busy */
+
 EXPORT void subsystem1_test(void)
 {
-    static char    buf[384];
+    static uint8_t buf[COMMS_FRAME_MAX];
     T_RMBF         rmbf;
     comms_cmd_t    cmd;
     comms_err_t    err;
@@ -56,7 +63,7 @@ EXPORT void subsystem1_test(void)
                comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_COMMS, 1u, 42),
                "mbf_telem accepts a record with TMO_POL");
 
-    /* S1-U02: worst-case telemetry fits the TX buffer (and the 1 KB MQTT ring). */
+    /* S1-U02: worst-case telemetry is one 27-byte binary frame. */
     t.seq = 4294967295u;  t.t_ms = 4294967295u;  t.state = 5u;
     t.v_l_mm_s = -32768;  t.v_r_mm_s = -32768;
     t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
@@ -65,28 +72,27 @@ EXPORT void subsystem1_test(void)
     t.obst_d_mm = 65534u;  t.b_obst_valid = true;
     t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
     len = comms_build_telemetry(&t, buf, (uint16_t)sizeof(buf));
-    TEST_CHECK("S1-U02", len > 0u, "worst-case telemetry fits the 384 B TX buffer");
+    TEST_CHECK("S1-U02", len == 27u, "worst-case telemetry is a 27-byte binary frame");
 
     /* S1-U03: valid commands parse; invalid ones are rejected with a reason. */
     TEST_CHECK("S1-U03",
-               s1_parse("{\"id\":7,\"cmd\":\"start\"}", &cmd, &err) &&
+               s1_parse(k_start_7, 3u, &cmd, &err) &&
                (cmd.id == 7u) && (cmd.cmd == (uint8_t)COMMS_CMD_START) &&
-               !s1_parse("{\"id\":8,\"cmd\":\"set\",\"param\":\"stop_cm\",\"value\":99}", &cmd, &err) &&
-               (err == COMMS_ERR_RANGE) &&
-               !s1_parse("{\"cmd\":\"stop\"}", &cmd, &err) && (err == COMMS_ERR_NO_ID),
-               "command parser accepts valid and rejects invalid input");
+               !s1_parse(k_set_99, 5u, &cmd, &err) && (err == COMMS_ERR_RANGE) &&
+               !s1_parse(k_no_id, 1u, &cmd, &err) && (err == COMMS_ERR_NO_ID),
+               "binary command parser accepts valid and rejects invalid frames");
 
     /* S1-U04: START is refused outside IDLE (FR14), STOP is not. */
-    (void)s1_parse("{\"id\":9,\"cmd\":\"start\"}", &cmd, &err);
+    (void)s1_parse(k_start_9, 3u, &cmd, &err);
     TEST_CHECK("S1-U04",
                (comms_check_cmd(&cmd, false) == COMMS_ERR_BUSY) &&
                (comms_check_cmd(&cmd, true) == COMMS_ERR_NONE),
                "start accepted only in IDLE");
 
-    /* S1-U05: ack format. */
+    /* S1-U05: ack frame. */
     len = comms_build_ack(&cmd, COMMS_ERR_BUSY, buf, (uint16_t)sizeof(buf));
-    TEST_CHECK("S1-U05", (len > 0u) && s1_str_eq(buf, "{\"id\":9,\"ok\":false,\"err\":\"busy\"}"),
-               "ack JSON");
+    TEST_CHECK("S1-U05", (len == 3u) && s1_bytes_eq(buf, k_ack_busy, 3u),
+               "ack frame: 3 bytes, id 9, err busy");
 
     /* S1-U06: a 10 ms bounce is ignored; a 2 s hold gives one LONG, no SHORT. */
     hmi_btn_init(&btn);
@@ -110,9 +116,9 @@ EXPORT void subsystem1_test(void)
         comms_cmd_t   again;
 
         comms_dedup_init(&dd);
-        (void)s1_parse("{\"id\":11,\"cmd\":\"start\"}", &cmd, &err);
+        (void)s1_parse(k_start_11, 3u, &cmd, &err);
         comms_dedup_add(&dd, &cmd, 100u);
-        (void)s1_parse("{\"id\":11,\"cmd\":\"reset\"}", &again, &err);
+        (void)s1_parse(k_reset_11, 3u, &again, &err);
         TEST_CHECK("S1-U07",
                    (comms_dedup_check(&dd, &cmd, 5000u) == COMMS_DEDUP_REPEAT) &&
                    (comms_dedup_check(&dd, &again, 5000u) == COMMS_DEDUP_CONFLICT),

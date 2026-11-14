@@ -34,27 +34,28 @@
 #include "../subsystem4/subsystem4.h"
 #include "../subsystem5/subsystem5.h"
 
-/* The JSON name tables must match subsystem 5's enums. */
-typedef char s1_check_state_names[(COMMS_STATE_NAME_COUNT == (uint32_t)MISSION_ST_COUNT) ? 1 : -1];
-typedef char s1_check_event_names[(COMMS_EVENT_NAME_COUNT == (uint32_t)MISSION_EV_COUNT) ? 1 : -1];
-typedef char s1_check_rec_size[(sizeof(comms_rec_t) == 12u) ? 1 : -1];
+/* The frame fields must hold subsystem 5's enums (Change Requirement 1). */
+typedef char s1_check_states[((uint32_t)MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
+typedef char s1_check_events[((uint32_t)MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1 : -1];
+typedef char s1_check_src[(APP_SRC_OBST_MISSION < (1uL << COMMS_SRC_BITS)) ? 1 : -1];
+typedef char s1_check_rec_size[(sizeof(comms_rec_t) == 8u) ? 1 : -1];
 
 #define COMMS_DRAIN_MAX         8u      /* records per poll                     */
-#define COMMS_TX_BUF_SIZE       384u    /* largest payload (telemetry ~330 B)   */
+#define COMMS_TX_BUF_SIZE       COMMS_FRAME_MAX     /* largest frame: 27 B      */
 
 static T_MQTT_UTK_CFG const k_mqtt_cfg =
 {
     COMMS_TOPIC_CMD,  1u,               /* subscribe: commands, QoS 1           */
     COMMS_TOPIC_STATUS,                 /* Last Will on the retained status     */
-    "{\"online\":false}",
+    COMMS_WILL_MSG,                     /* header byte alone = offline          */
     1u,                                 /* will QoS 1                           */
     1u                                  /* will retained                        */
 };
 
 /* All state is zero-initialised and touched only by the WiFi task. */
 static comms_ring_t g_ring;
-static uint32_t     g_telem_seq;
-static uint32_t     g_event_seq;
+static uint8_t      g_telem_seq;        /* 8 bits on the wire, wraps            */
+static uint8_t      g_event_seq;
 static uint32_t     g_next_telem_ms;
 static uint32_t     g_next_status_ms;
 static bool         g_b_online;
@@ -62,7 +63,7 @@ static bool         g_b_flag_synced;    /* WIFI_LOSS bit set once at start-up   
 static comms_dedup_t g_dedup;           /* recently accepted commands (gap 9)   */
 static uint32_t     g_ring_lost;        /* events overwritten while offline     */
 static uint32_t     g_pub_errors;       /* mqtt_publish() refused (ERR_MEM ...) */
-static char         g_tx[COMMS_TX_BUF_SIZE];
+static uint8_t      g_tx[COMMS_TX_BUF_SIZE];
 
 static ID comms_telem_id(void)
 {
@@ -102,7 +103,7 @@ static bool comms_publish(char const * p_topic, uint16_t len, uint8_t qos, uint8
         g_pub_errors++;                 /* did not fit COMMS_TX_BUF_SIZE        */
         return true;                    /* nothing to retry                     */
     }
-    if (mqtt_utk_publish(p_topic, (uint8_t const *)g_tx, len, qos, retain) != 0)
+    if (mqtt_utk_publish(p_topic, g_tx, len, qos, retain) != 0)
     {
         g_pub_errors++;
         return false;
@@ -110,10 +111,13 @@ static bool comms_publish(char const * p_topic, uint16_t len, uint8_t qos, uint8
     return true;
 }
 
-static bool comms_publish_event(comms_rec_t const * p_rec, uint32_t seq)
+static bool comms_publish_event(comms_rec_t const * p_rec, uint8_t seq)
 {
-    uint16_t len = comms_build_event(p_rec, seq, g_tx, (uint16_t)sizeof(g_tx));
+    comms_event_t ev;
+    uint16_t      len;
 
+    comms_rec_unpack(p_rec, (uint32_t)app_time_ms(), &ev);
+    len = comms_build_event(&ev, seq, g_tx, (uint16_t)sizeof(g_tx));
     return comms_publish(COMMS_TOPIC_EVENT, len, 1u, 0u);
 }
 
@@ -125,7 +129,7 @@ static void comms_publish_status(uint32_t now_ms)
     uint16_t       len;
 
     mission_get_snap(&ms);
-    len = comms_build_status(true, now_ms / 1000u, cyw43_utk_get_rssi(), drops,
+    len = comms_build_status(now_ms / 1000u, cyw43_utk_get_rssi(), drops,
                              ms.nav_map, g_tx, (uint16_t)sizeof(g_tx));
 
     (void)comms_publish(COMMS_TOPIC_STATUS, len, 1u, 1u);
@@ -219,7 +223,7 @@ void mqtt_utk_app_poll(void)
     ID          mbf = comms_telem_id();
     uint32_t    now_ms;
     comms_rec_t rec;
-    uint32_t    seq;
+    uint8_t     seq;
     uint32_t    n;
 
     if (mbf <= 0)

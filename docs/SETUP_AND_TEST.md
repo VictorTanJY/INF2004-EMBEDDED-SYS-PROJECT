@@ -215,21 +215,30 @@ everything the robot does.
 
 **C3. Expected within ~10 s of boot:**
 - broker log: `New client connected ... as picocar-is23`;
-- `picocar/is23/status` (retained, 1 Hz): `{"online":true,...,"map":null}` (**S1-M02**);
+- `picocar/is23/status` (retained, 1 Hz): online, `"map": null` (**S1-M02**);
 - `picocar/is23/event`: `STATE` `IDLE`; `picocar/is23/telemetry` at 5 Hz.
+
+The payloads are **binary frames** (Change Requirement 1, layouts in
+`app_program/subsystem1/comms_proto.h`), so `mosquitto_sub` alone shows
+unreadable bytes. The dashboard decodes them. Without it, print them in hex
+and decode with the codec:
+```sh
+mosquitto_sub -h localhost -t 'picocar/is23/#' -F '%t %x' | python3 dashboard/picocar_codec.py
+```
 
 **C4. Nothing arrives?** Read the serial console. WiFi join failed → SSID,
 password, or a 5 GHz-only network. WiFi up but MQTT never connects → broker
 IP, firewall, broker on localhost only (A7), or client isolation (hotspot).
 
 **C5. Barcode map**, the way the instructor will do it (**S1-M07**, **S5-M07**):
+the dashboard's map panel, or by hand:
 ```sh
-mosquitto_pub -h localhost -q 1 -t picocar/is23/cmd \
-  -m '{"id":1,"cmd":"map","left":"A","right":"F","straight":"Z","uturn":"W"}'
+python3 dashboard/picocar_codec.py cmd 1 map A F Z W > cmd.bin
+mosquitto_pub -h localhost -q 1 -t picocar/is23/cmd -f cmd.bin
 ```
-Expect `{"id":1,"ok":true}` on `picocar/is23/ack` and `status.map` showing
-the four letters. A missing movement, a letter used twice or `*` is
-answered with `"err":"bad_map"`. The map is only accepted in IDLE and is
+Expect `{"id": 1, "ok": true}` on `picocar/is23/ack` (decoded as above) and
+`status.map` showing the four letters. A letter used twice or `*` is
+answered with `"err": "bad_map"`. The map is only accepted in IDLE and is
 **lost at reboot** — send it again after every power cycle.
 
 **C6. Buttons (S1-M01):** GP20 press → `BTN_START_STOP` event; GP21 tap →
@@ -239,15 +248,17 @@ answered with `"err":"bad_map"`. The map is only accepted in IDLE and is
 `online:false`), S1-M04 (stop / start the broker: the Pico reconnects by
 itself), S1-M05 (each command and error below), S1-M06 (10-minute soak).
 
-Commands (all need `"id"`; use a new id each time):
+Commands: the dashboard buttons, or `python3 dashboard/picocar_codec.py
+cmd <id> ... > cmd.bin` then `mosquitto_pub -h localhost -q 1 -t
+picocar/is23/cmd -f cmd.bin`. Ids are 0–255; use a new one each time.
 
-| Purpose | Payload on `picocar/is23/cmd` |
+| Purpose | `picocar_codec.py` arguments |
 |---|---|
-| start a run | `{"id":2,"cmd":"start"}` (refused with `not_calibrated` until the phase F calibration) |
-| stop | `{"id":3,"cmd":"stop"}` |
-| reset after a fault | `{"id":5,"cmd":"reset"}` |
-| run parameter (IDLE) | `{"id":6,"cmd":"set","param":"speed_mm_s","value":200}` — also `slow_cm`, `stop_cm`, `lost_mm`, `junction_mm` |
-| bench (APP_BENCH=1, IDLE) | `{"id":7,"cmd":"set","param":"bench_move","value":300}` — also `bench_turn` (0.1 deg), `bench_speed` (mm/s), `bench_servo` (deg) |
+| start a run | `cmd 2 start` (refused with `not_calibrated` until the phase F calibration) |
+| stop | `cmd 3 stop` |
+| reset after a fault | `cmd 5 reset` |
+| run parameter (IDLE) | `cmd 6 set speed_mm_s 200`: also `slow_cm`, `stop_cm`, `lost_mm`, `junction_mm` |
+| bench (APP_BENCH=1, IDLE) | `cmd 7 set bench_move 300`: also `bench_turn` (0.1 deg), `bench_speed` (mm/s), `bench_servo` (deg) |
 
 ---
 
@@ -270,7 +281,8 @@ count goes **down** when the wheel turns forward, flip `MOTION_ENC_SIGN_L/_R`.
 
 **D4. Direction:**
 ```sh
-mosquitto_pub -h localhost -t picocar/is23/cmd -m '{"id":10,"cmd":"set","param":"bench_move","value":200}'
+python3 dashboard/picocar_codec.py cmd 10 set bench_move 200 > cmd.bin
+mosquitto_pub -h localhost -t picocar/is23/cmd -f cmd.bin
 ```
 Both wheels must turn forward. If one runs backwards, flip its
 `MOTION_MOT_SIGN_*`. If a wheel runs away (speed keeps rising, then a STALL
@@ -296,7 +308,7 @@ within 300 ms with < 10 % error.
 
 **D9. Stall (S2-M06):** during a `bench_move` 2000, hold one wheel: a
 `FAULT` event with data 4 (STALL) after 300–400 ms, motors braked. Reset
-with GP21 held 2 s or `{"cmd":"reset"}`.
+with GP21 held 2 s or the `reset` command.
 
 **D10. Timing (S2-M07):** `APP_TIMING_PINS 1`, analyser on GP6 for 60 s
 while telemetry runs: every edge 10 ms ± 1 ms (NFR1). If not, see A2 (pace
@@ -381,7 +393,7 @@ none, the module reads lower over black: set `LINE_BLACK_IS_HIGH 0`. Tune
 none on curves or 50 mm gaps (NFR11). `junction_mm` defaults to **12 mm**, not
 FR2's 20 mm: a crossing line is only 18 mm wide, so both sensors are fully
 black for less than 20 mm. Tune it with
-`{"cmd":"set","param":"junction_mm",...}`.
+`cmd <id> set junction_mm <value>`.
 
 **F6. Barcodes (S3-M05, NFR3):** send the map, start, drive over each
 sheet. `event` shows `BARCODE` with the character (data `"A"` etc.). Every
@@ -462,17 +474,17 @@ matches `MQTT_BROKER_IP` (A8) and the broker is running (A7).
 **H2. Demo procedure** (instructor, forum 24 Oct):
 1. Power on. `status` shows `online:true`, `map:null`; state `IDLE`.
 2. The instructor names four characters. Send them:
-   `{"id":<n>,"cmd":"map","left":"?","right":"?","straight":"?","uturn":"?"}`
+   `map` command (dashboard map panel, or `cmd <id> map <left> <right> <straight> <uturn>`)
    and check the ack and `status.map`.
 3. Put the robot on the line, GP21 tap: calibration spin; wait for `IDLE`.
-4. GP20 press or `{"cmd":"start"}`. The robot follows the line; each barcode
+4. GP20 press or the `start` command. The robot follows the line; each barcode
    (either direction) is decoded and latched (`nav` in telemetry), and the
    mapped movement is done at the **next cross-junction**; then it carries on.
-5. Stop with GP20 or `{"cmd":"stop"}`: `MISSION_COMPLETE`, run summary
+5. Stop with GP20 or the `stop` command: `MISSION_COMPLETE`, run summary
    (`LOG 67` = highest hump).
 
 **H3. After any FAULT:** remove the cause, GP21 held 2 s or
-`{"cmd":"reset"}` → `BOOT` → `IDLE`; calibrate again before the next run,
+the `reset` command → `BOOT` → `IDLE`; calibrate again before the next run,
 and **send the map again** if the board rebooted.
 
 Integration tests T1–T7 are run at this phase; log them in
