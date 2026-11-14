@@ -281,17 +281,6 @@ static comms_err_t comms_execute(comms_cmd_t const * p_cmd)
 
     switch (p_cmd->cmd)
     {
-        case COMMS_CMD_ESTOP:
-            /* Straight to SafetyTask (NFR8: E-stop received -> brake <= 20 ms). */
-            if (g_flg_safety <= 0)
-            {
-                return COMMS_ERR_FULL;
-            }
-            (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ESTOP);
-            (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT, (uint8_t)APP_SRC_COMMS,
-                                   0u, (int32_t)SAFETY_FLT_ESTOP);
-            return COMMS_ERR_NONE;
-
         case COMMS_CMD_START:
             ev = MISSION_EV_REMOTE_START;
             break;

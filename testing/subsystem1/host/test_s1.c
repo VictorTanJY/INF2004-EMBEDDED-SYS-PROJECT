@@ -163,7 +163,7 @@ static void test_parser(void)
 
     CHECK("S1-H09", parse("{\"id\":1,\"cmd\":\"start\"}", &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_START);
     CHECK("S1-H09", parse(" { \"cmd\" : \"stop\" , \"id\" : 2 } ", &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_STOP && cmd.id == 2u);
-    CHECK("S1-H09", parse("{\"id\":3,\"cmd\":\"estop\"}", &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_ESTOP);
+    CHECK("S1-H09", parse("{\"id\":3,\"cmd\":\"estop\"}", &cmd) == COMMS_ERR_BAD_CMD);   /* removed 14 Nov */
     CHECK("S1-H09", parse("{\"id\":4,\"cmd\":\"reset\",\"x\":[1]}", &cmd) == COMMS_ERR_BAD_JSON);
     CHECK("S1-H09", parse("{\"id\":4,\"cmd\":\"reset\",\"note\":\"hi \\\"there\\\"\"}", &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_RESET);
     CHECK("S1-H09", parse("{\"id\":5,\"cmd\":\"set\",\"param\":\"stop_cm\",\"value\":25}", &cmd) == COMMS_ERR_NONE
@@ -223,7 +223,7 @@ static void test_parser(void)
     (void)parse("{\"id\":1,\"cmd\":\"set\",\"param\":\"stop_cm\",\"value\":20}", &cmd);
     CHECK("S1-H13", comms_check_cmd(&cmd, false) == COMMS_ERR_BUSY);
     CHECK("S1-H13", comms_check_cmd(&cmd, true) == COMMS_ERR_NONE);
-    (void)parse("{\"id\":1,\"cmd\":\"estop\"}", &cmd);
+    (void)parse("{\"id\":1,\"cmd\":\"stop\"}", &cmd);
     CHECK("S1-H13", comms_check_cmd(&cmd, false) == COMMS_ERR_NONE);
 
     /* Robustness: random bytes and every truncation never crash (ASan/UBSan). */
@@ -373,7 +373,7 @@ static void test_dedup(void)
     }
     CHECK("S1-H18", comms_dedup_check(&dd, &a, 100u) == COMMS_DEDUP_NEW);
     CHECK("S1-H18", dd.count == COMMS_DEDUP_LEN);
-    /* STOP and ESTOP are always safe to repeat */
+    /* STOP is always safe to repeat */
     CHECK("S1-H18", comms_cmd_repeat_safe(stop.cmd) && !comms_cmd_repeat_safe(a.cmd));
 }
 

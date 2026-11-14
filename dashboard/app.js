@@ -16,7 +16,7 @@ const REJECT = {2: 'wrong element count', 3: 'bad wide/narrow ratio', 4: 'unknow
 const MOTION = ['stationary', 'accelerating', 'turning', 'climbing', 'descending', 'impact', 'cruising', 'decelerating'];
 const FAULTS = [[1, 'Lifted', 'The robot was lifted during a run: run ended, motors braked.'], [2, 'Obstacle too close', 'Obstacle closer than 8 cm.'],
   [4, 'Motor stall', 'High motor effort with no wheel movement.'], [8, 'Overturned / tilted', 'Tilted more than 30° for 0.2 s during a run: motors braked.'],
-  [16, 'Emergency stop', 'An E-stop was requested.'], [32, 'Heartbeat timeout', 'A monitored task stopped responding.'],
+[32, 'Heartbeat timeout', 'A monitored task stopped responding.'],
   [64, 'Encoder warning', 'Encoder counts jumped. Report-only.'], [128, 'IMU warning', 'IMU reads failed. Report-only after start-up.'],
   [256, 'No echo', 'No ultrasonic echo. Report-only.'], [512, 'Wi-Fi loss', 'Wi-Fi loss reported. Report-only.'],
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
@@ -269,14 +269,14 @@ function render() {
   $('wheelR').setAttribute('fill', isNum(vr) && Math.abs(vr) > 5 ? '#4f7a63' : '#293e35');
 
   /* controls */
-  $('estop').disabled = !controls; $('stop').disabled = !controls;
+  $('stop').disabled = !controls;
   $('reset').disabled = !(controls && fresh);
   $('start').disabled = !(controls && fresh && idle);
   $('mapSend').disabled = !(controls && fresh && idle);
   document.querySelectorAll('[data-bench]').forEach(b => b.disabled = !(controls && fresh && idle));
   const cmds = snap.commands || [], c = cmds[cmds.length - 1];
   $('commandStatus').textContent = c ? `${c.label} #${c.id} · ${c.result}${c.ack?.err ? ' (' + c.ack.err + ')' : ''}${c.error ? ' · ' + c.error : ''}`
-    : controls ? (idle ? 'Ready. Start, map and bench moves need IDLE and fresh telemetry.' : 'E-stop and stop are always available.')
+    : controls ? (idle ? 'Ready. Start, map and bench moves need IDLE and fresh telemetry.' : 'Stop is always available.')
     : mode === 'local' ? 'Waiting for MQTT messages; controls are unavailable.' : 'Controls unlock in the connected local dashboard.';
   $('commandList').innerHTML = cmds.length ? cmds.slice(-8).reverse().map(x => {
     const tone = x.result === 'accepted' ? 'ok' : x.result === 'pending' ? '' : 'bad';
@@ -465,7 +465,6 @@ document.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
 });
 $('applyConnect').onclick = async () => { try { await api('/api/connect', {host: $('brokerHost').value.trim()}); $('setupError').textContent = ''; $('setup').close(); await poll(); } catch (e) { $('setupError').textContent = e.message; } };
 $('disconnect').onclick = async () => { try { await api('/api/disconnect', {}); await poll(); toast('Disconnected. The broker and robot keep running.'); } catch (e) { toast(e.message); } };
-$('estop').onclick = () => send('estop');
 $('stop').onclick = () => send('stop');
 $('reset').onclick = () => $('resetDialog').showModal();
 $('cancelReset').onclick = () => $('resetDialog').close();
@@ -491,7 +490,6 @@ $('trueWidth').addEventListener('input', render);
 document.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { filter = b.dataset.filter; document.querySelectorAll('[data-filter]').forEach(x => x.classList.toggle('active', x === b)); lastEventSig = ''; renderEvents(); });
 document.addEventListener('keydown', e => {
   if (e.repeat || e.ctrlKey || e.altKey || e.metaKey || ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName) || document.querySelector('dialog[open]')) return;
-  if (e.key.toLowerCase() === 'e' && !$('estop').disabled) { e.preventDefault(); send('estop'); }
   if (e.key === ' ' && !$('stop').disabled) { e.preventDefault(); send('stop'); }
 });
 setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}); if (mode === 'local') render(); }, 1000);

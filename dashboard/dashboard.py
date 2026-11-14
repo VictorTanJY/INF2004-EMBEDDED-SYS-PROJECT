@@ -164,7 +164,7 @@ def build_command(cmd, args):
     t = DATA['telemetry'] or {}
     fresh = time.time() - DATA['received'] <= FRESH_S
     state = t.get('state')
-    if cmd in ('estop', 'stop'):
+    if cmd == 'stop':
         return {'cmd': cmd}, cmd.upper()
     if not fresh:
         raise ValueError('This command needs fresh telemetry. Check the robot connection first.')

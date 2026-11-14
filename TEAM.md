@@ -185,7 +185,7 @@ sends to it or waits on it. Agree on the data format before coding.
 | IF-08 | S4 → all | snapshot + spinlock | `imu_get_snap()` | `imu_snap_t`: pitch/roll, hump state and maxima, motion class, `ok`, `pitch_valid` (obstacle hump mask) | implemented; S4 to review |
 | IF-09 | S5 (Mission → Obstacle) | message buffer + event flag (owned by S5) | `g_mbf_scan`, `g_flg_obst` | `scan_req_t` via `scan_request()` (sets `OBST_FLG_REQ`) | implemented |
 | IF-10 | S5 → all | snapshots + spinlocks | `mission_get_snap()`, `obst_get_snap()` | `mission_snap_t` (state, calibration phase, run parameters, speed cap, barcode map, latched command), `obst_snap_t` (range, width, edges, clearances, plan) | implemented; S5 to review |
-| IF-11 | S1 ↔ laptop | MQTT (template client extended, A14) | topics `picocar/is23/{telemetry,event,status,cmd,ack}` | JSON, see `comms_proto.h`. Commands: start, stop, estop, reset, set, **map** (barcode character → left / right / straight / U-turn, sent before the demo: instructor, 24 Oct). Status shows the map | **instructor agreement needed** (A14); ranges: S2, S3, S5 |
+| IF-11 | S1 ↔ laptop | MQTT (template client extended, A14) | topics `picocar/is23/{telemetry,event,status,cmd,ack}` | JSON, see `comms_proto.h`. Commands: start, stop, reset, set, **map** (barcode character → left / right / straight / U-turn, sent before the demo: instructor, 24 Oct). Status shows the map | **instructor agreement needed** (A14); ranges: S2, S3, S5 |
 | IF-12 | all → S1 | message buffer (owned by S1), `TMO_POL` | `g_mbf_telem` (mbf_telem, 1 KB) | `comms_rec_t` (12 B) via `comms_telem_post()` | pending: all |
 
 "pending" = written into the headers by the shared base; the named owners

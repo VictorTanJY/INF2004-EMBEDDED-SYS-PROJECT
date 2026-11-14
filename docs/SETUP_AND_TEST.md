@@ -235,7 +235,6 @@ Commands (all need `"id"`; use a new id each time):
 |---|---|
 | start a run | `{"id":2,"cmd":"start"}` (refused with `not_calibrated` until the phase F calibration) |
 | stop | `{"id":3,"cmd":"stop"}` |
-| emergency stop | `{"id":4,"cmd":"estop"}` |
 | reset after a fault | `{"id":5,"cmd":"reset"}` |
 | run parameter (IDLE) | `{"id":6,"cmd":"set","param":"speed_mm_s","value":200}` — also `slow_cm`, `stop_cm`, `lost_mm`, `junction_mm` |
 | bench (APP_BENCH=1, IDLE) | `{"id":7,"cmd":"set","param":"bench_move","value":300}` — also `bench_turn` (0.1 deg), `bench_speed` (mm/s), `bench_servo` (deg) |
@@ -317,13 +316,13 @@ fix `IMU_AXIS_*` / `IMU_SIGN_*` in `subsystem4/imu_cfg.h`.
 **E5. Pitch noise (S4-M03):** with `bench_move` over the flat track, pitch
 stays within ±1°.
 
-**E6. Safety (S4-M05 to S4-M08):** tilt > 30° for 200 ms → **warning only**
-(LOG 55 "Tilt warning", LOG 56 when back below 25°); the motors keep
-running and there is no FAULT. A firm tap on the chassis (INT1) brakes the
-motors. An MQTT `estop` brakes them. With the analyser, time detection →
-GP8–GP11 LOW: **≤ 20 ms** (NFR8). A `FAULT` event's data is the fault bit
-mask (1 impact, 2 too close, 4 stall, 16 E-stop, 32 heartbeat; 8 tilt is no
-longer raised).
+**E6. Safety (S4-M05, S4-M06, S4-M08):** during a run, tilting the robot
+past 30° for 200 ms brakes the motors (FAULT "Overturned / tilted"), and
+lifting it brakes them and ends the run (FAULT "Lifted", run summary
+published). With the analyser, time detection → GP8–GP11 LOW: **≤ 20 ms**
+(NFR8). A `FAULT` event's data is the fault bit mask (1 lifted, 2 too
+close, 4 stall, 8 overturned, 32 heartbeat). There is no remote E-stop
+(removed 14 Nov): MQTT `stop` ramps the robot down to IDLE.
 
 **E7. Power (S4-M09, A10):** scope V+ and 3V3 while starting the motors
 with the servo sweeping (`bench_servo`): no resets.

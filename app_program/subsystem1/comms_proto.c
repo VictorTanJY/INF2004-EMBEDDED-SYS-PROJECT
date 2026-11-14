@@ -782,10 +782,6 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
     {
         p_cmd->cmd = (uint8_t)COMMS_CMD_STOP;
     }
-    else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "estop"))
-    {
-        p_cmd->cmd = (uint8_t)COMMS_CMD_ESTOP;
-    }
     else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "reset"))
     {
         p_cmd->cmd = (uint8_t)COMMS_CMD_RESET;
@@ -898,7 +894,7 @@ void comms_dedup_init(comms_dedup_t * p_dd)
 
 bool comms_cmd_repeat_safe(uint8_t cmd)
 {
-    return (cmd == (uint8_t)COMMS_CMD_STOP) || (cmd == (uint8_t)COMMS_CMD_ESTOP);
+    return (cmd == (uint8_t)COMMS_CMD_STOP);
 }
 
 comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,

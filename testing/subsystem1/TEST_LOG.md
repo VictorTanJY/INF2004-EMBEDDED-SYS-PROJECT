@@ -24,7 +24,7 @@ Define a test here before running it. Test IDs never change.
 | S1-M02 | 1 Hz retained status, 5 Hz telemetry | NFR9 | manual | `mosquitto_sub -v -t 'picocar/is23/#'` for 60 s | 60 ± 1 status, 300 ± 3 telemetry, seq without gaps |
 | S1-M03 | Last Will | FR14 | manual | Power the robot off while subscribed | `{"online":false}` on `status` within ~15 s (1.5 × 10 s keep-alive) |
 | S1-M04 | reconnect back-off | FR14, NFR9 | manual | Stop the broker; read the console | retries after 1, 2, 4, 8, 16, 16 s; after restart, connected and delay reset |
-| S1-M05 | commands and acks | FR14 | manual | Publish start/stop/estop/reset/set and bad payloads on `cmd` (QoS 1) | one ack per command with the right `err`; a repeated id is re-acked, not re-executed |
+| S1-M05 | commands and acks | FR14 | manual | Publish start/stop/reset/set and bad payloads (`estop` was removed on 14 Nov and is now answered `bad_cmd`) on `cmd` (QoS 1) | one ack per command with the right `err`; a repeated id is re-acked, not re-executed |
 | S1-M06 | 10-minute soak at 5 Hz | A1, A14, NFR9 | manual | Run 10 min near the track | no telemetry seq gaps while connected; `drops` stays 0 |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;

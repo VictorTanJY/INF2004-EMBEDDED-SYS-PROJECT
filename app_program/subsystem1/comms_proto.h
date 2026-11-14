@@ -13,7 +13,7 @@
  *                obstacle:{d_cm,w_cm,w_mm,clr_l_cm,clr_r_cm},nav}  QoS 0, 5 Hz
  *    event      {seq,t_ms,type,data,src}                      QoS 1
  *    status     {online,uptime_s,rssi,drops,map}       QoS 1, retained, 1 Hz
- *    cmd (in)   {id,cmd:"start"|"stop"|"estop"|"reset"|"set",param,value}
+ *    cmd (in)   {id,cmd:"start"|"stop"|"reset"|"set",param,value}
  *               {id,cmd:"map",left:"A",right:"F",straight:"Z",uturn:"W"}
  *               (barcode character -> movement, sent by the laptop just
  *               before the demo; instructor, course forum 24 Oct)
@@ -116,8 +116,7 @@ typedef enum
 {
     COMMS_CMD_NONE  = 0,
     COMMS_CMD_START = 1,
-    COMMS_CMD_STOP  = 2,
-    COMMS_CMD_ESTOP = 3,
+    COMMS_CMD_STOP  = 2,        /* 3 unused: the remote E-stop was removed (14 Nov) */
     COMMS_CMD_RESET = 4,
     COMMS_CMD_SET   = 5,
     COMMS_CMD_MAP   = 6         /* value = 4 packed chars: left, right, straight, U-turn */
@@ -191,7 +190,7 @@ comms_param_t const * comms_param_by_id(uint8_t id);
  *  accepted commands are kept for COMMS_DEDUP_WINDOW_MS:
  *    - same id, same command  -> acknowledged again, not executed again;
  *    - same id, other command -> rejected with COMMS_ERR_REUSED;
- *    - STOP and ESTOP are always executed (repeating them is safe).
+ *    - STOP is always executed (repeating it is safe).
  *  The cache is RAM only and empty after a reboot, so the laptop must not
  *  reuse an id within one robot session (e.g. start ids from the time).
  * --------------------------------------------------------------------- */

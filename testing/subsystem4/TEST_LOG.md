@@ -24,9 +24,9 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S4-M03 | pitch noise while driving on flat ground | A8 | manual | log pitch at 0.3 m/s | within +-1 deg; else re-check mounting, consider lowering `IMU_HUMP_ON_CDEG` only after this |
 | S4-M04 | hump height, 10 passes each on 10 / 20 / 30 mm humps | FR7, NFR7, A9 | manual | `HUMP_END` data vs measured height | within +-20 % or +-5 mm |
 | S4-M04b | one-wheel hump height, 5 passes each on 1 cm and 2 cm humps under the right wheel | FR7, NFR7 | manual | line-follow over the hump; read Humps table (peak, max roll) | HUMP_END peak within +-5 mm; if all readings are off by the same factor, scale `IMU_SIDE_LEVER_MM` by real / reported |
-| S4-M05 | tilt > 30 deg -> warning only | FR15 (revised) | manual | tilt the robot by hand past 30 deg for > 0.2 s, then level | LOG 55 "Tilt warning", no FAULT, motors not braked; LOG 56 when back below 25 deg |
-| S4-M06 | impact -> both motors braked <= 20 ms | NFR8 | manual | logic analyser GP19 (INT1) -> GP8–GP11 | <= 20 ms |
-| S4-M07 | remote E-stop -> brake <= 20 ms with WiFi publishing | NFR8, FR14 | manual | publish estop; analyser on GP8–GP11 + a GPIO toggled on receipt | <= 20 ms |
+| S4-M05 | overturned during a run -> brake | FR15 (revised 14 Nov) | manual | during a run, tilt the robot by hand past 30 deg for > 0.2 s | FAULT "Overturned / tilted" (code 8), motors braked; stays stopped until reset |
+| S4-M06 | lifted during a run -> brake, run ended | FR15 (revised 14 Nov) | manual | during a run, lift the robot level (IMU) and also lift it so the IR sensors see no floor | FAULT "Lifted" (code 1), motors braked, run summary published; humps measured in the air not counted |
+| S4-M07 | withdrawn 14 Nov: the remote E-stop command was removed (MQTT `stop` and the lift / overturn stops remain) | — | — | — | — |
 | S4-M08 | missed heartbeat -> FAULT | FR15 | manual | debug build that suspends one task | HEARTBEAT fault, log code 41 names the task |
 | S4-M09 | power: motor start + servo sweep, 10 runs, 5 min idle | A10 | manual | scope V+ and 3V3 | no brown-out resets, no power-bank auto-off |
 

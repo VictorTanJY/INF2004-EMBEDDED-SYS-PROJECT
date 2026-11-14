@@ -21,7 +21,7 @@
 #define SAFETY_FLT_TOO_CLOSE    0x0002u     /* ObstacleTask, d < 8 cm         */
 #define SAFETY_FLT_STALL        0x0004u     /* MotionTask                     */
 #define SAFETY_FLT_TILT         0x0008u     /* ImuTask: > 30 deg (overturned) while running */
-#define SAFETY_FLT_ESTOP        0x0010u     /* CommsTask, remote E-stop       */
+/* 0x0010 unused: the remote E-stop was removed (14 Nov) */
 #define SAFETY_FLT_HEARTBEAT    0x0020u     /* SafetyTask itself (latched only) */
 #define SAFETY_FLT_ENC_FAULT    0x0040u     /* report-only: MotionTask        */
 #define SAFETY_FLT_IMU_FAULT    0x0080u     /* report-only: ImuTask           */
@@ -31,7 +31,7 @@
 #define SAFETY_REQ_RESET        0x8000u     /* MissionTask -> SafetyTask      */
 
 #define SAFETY_BRAKE_MASK       (SAFETY_FLT_LIFT  | SAFETY_FLT_TOO_CLOSE | \
-                                 SAFETY_FLT_STALL | SAFETY_FLT_TILT | SAFETY_FLT_ESTOP)
+                                 SAFETY_FLT_STALL | SAFETY_FLT_TILT)
 
 /* ---------------------------------------------------------------------
  *  IF-07  Heartbeats: monitored tasks and their timeouts (Week 6 Sec. 3).

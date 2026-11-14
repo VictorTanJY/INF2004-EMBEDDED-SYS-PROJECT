@@ -17,7 +17,8 @@ Wi-Fi IPv4 address as MQTT_BROKER_IP.
 What it does
 ------------
 Controls (all over MQTT, each command waits for the robot's ack):
-- Emergency stop (key E) and Stop (Space): always available.
+- Stop (Space): always available. Lifting or overturning the robot during
+  a run also stops it.
 - Reset fault (with a confirm step): needs fresh telemetry.
 - Start run (with a confirm step that shows the map): IDLE only. The robot
   refuses a start until it is calibrated (tap GP21 on the robot).
@@ -46,8 +47,8 @@ Readings:
 - Humps (peak height, max pitch and max roll seen, duration) and the run's
   highest hump.
 - Event history (filters: faults, state, mission, commands, diagnostics)
-  and the command log. Fault codes: 1 impact, 2 too close, 4 stall,
-  8 tilt, 16 E-stop, 32 heartbeat, 64 encoder, 128 IMU, 256 no echo,
+  and the command log. Fault codes: 1 lifted, 2 too close, 4 stall,
+  8 overturned, 32 heartbeat, 64 encoder, 128 IMU, 256 no echo,
   512 Wi-Fi loss, 1024 start-up self-test; codes can combine.
 
 "Try demo" plays a simulated run (barcode, junction turn, obstacle
@@ -55,7 +56,7 @@ bypass, hump) without sending anything to a robot.
 
 Safety notes
 ------------
-Do not rely on MQTT E-stop if the link is down: switch off motor power.
+Do not rely on MQTT Stop if the link is down: switch off motor power.
 Closing the launcher does NOT stop the robot. A command's "accepted" means
 the firmware took it, not that the wheels have stopped: watch the robot.
 Do manual moves on a stand with the wheels clear.

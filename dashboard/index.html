@@ -54,14 +54,13 @@
 
   <article class="controls card">
     <div class="card-top"><h2>Controls</h2><span class="small-label">MQTT</span></div>
-    <button id="estop" class="estop" disabled><span>■</span> Emergency stop <span class="key">E</span></button>
     <div class="control-row">
       <button class="button primary" id="start" disabled>▶ Start run</button>
       <button class="button secondary" id="stop" disabled>Stop <span class="key soft">Space</span></button>
     </div>
     <div class="control-row"><button class="button secondary" id="reset" disabled>↻ Reset fault</button></div>
     <div id="commandStatus" class="command-status">Controls unlock in the connected local dashboard.</div>
-    <small>Start needs IDLE, a calibration (tap GP21 on the robot) and normally a barcode map. E-stop requests braking over MQTT; if the link fails, switch off motor power.</small>
+    <small>Start needs IDLE, a calibration (tap GP21 on the robot) and normally a barcode map. Stop is sent over MQTT; if the link fails, switch off motor power. Lifting or overturning the robot stops it on its own.</small>
   </article>
 </section>
 
