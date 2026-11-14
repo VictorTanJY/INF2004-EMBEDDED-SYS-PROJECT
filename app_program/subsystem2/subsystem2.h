@@ -68,6 +68,24 @@ IMPORT void motion_put_odom(motion_odom_t const * p_in); /* MotionTask only */
 IMPORT void motor_estop(void);
 IMPORT bool motion_estop_latched(void);
 
+#if APP_TEST
+/* make TEST=1 only (S2-U07): MotionTask period and run time, since the
+   last restart.  per_min_us = 0xFFFFFFFF until two cycles have run. */
+typedef struct
+{
+    uint32_t per_min_us;
+    uint32_t per_max_us;
+    uint32_t exec_max_us;       /* wake-up to end of the cycle's work */
+    uint32_t cycles;
+} motion_test_timing_t;
+
+IMPORT void motion_test_timing_restart(void);
+IMPORT void motion_test_timing(motion_test_timing_t * p_out);
+
+/* Time of the last motor_estop() call, us (app_time_us); S4-U07. */
+IMPORT volatile uint32_t g_estop_test_us;
+#endif
+
 /* Private to subsystem 2 */
 IMPORT void motion_task(INT stacd, void * p_exinf);
 IMPORT bool motion_estop_clear_and_reconnect(void);   /* MotionTask only */

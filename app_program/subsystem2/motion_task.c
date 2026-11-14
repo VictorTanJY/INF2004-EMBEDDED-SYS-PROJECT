@@ -66,6 +66,70 @@ static void rec_step(void)
 }
 #endif
 
+#if APP_TEST
+/* make TEST=1 only: loop timing for S2-U07.  Written by MotionTask
+   (core 1) only; the test task reads each 32-bit word, which is one
+   indivisible load on the M0+.  The test asks for a restart through
+   g_tt_restart (a byte it sets and MotionTask clears), so the counters
+   have a single writer and no read-modify-write is shared. */
+static volatile uint32_t g_tt_per_min_us;
+static volatile uint32_t g_tt_per_max_us;
+static volatile uint32_t g_tt_exec_max_us;
+static volatile uint32_t g_tt_cycles;
+static volatile uint8_t  g_tt_restart = 1u;
+static uint32_t          g_tt_prev_us;
+
+static void tt_wake(uint32_t now_us)
+{
+    if (g_tt_restart != 0u)
+    {
+        g_tt_per_min_us  = 0xFFFFFFFFu;
+        g_tt_per_max_us  = 0u;
+        g_tt_exec_max_us = 0u;
+        g_tt_cycles      = 0u;
+        g_tt_restart     = 0u;
+    }
+    else
+    {
+        uint32_t const per = now_us - g_tt_prev_us;
+
+        if (per < g_tt_per_min_us)
+        {
+            g_tt_per_min_us = per;
+        }
+        if (per > g_tt_per_max_us)
+        {
+            g_tt_per_max_us = per;
+        }
+        g_tt_cycles = g_tt_cycles + 1u;
+    }
+    g_tt_prev_us = now_us;
+}
+
+static void tt_done(uint32_t wake_us)
+{
+    uint32_t const exec = (uint32_t)app_time_us() - wake_us;
+
+    if (exec > g_tt_exec_max_us)
+    {
+        g_tt_exec_max_us = exec;
+    }
+}
+
+EXPORT void motion_test_timing_restart(void)
+{
+    g_tt_restart = 1u;
+}
+
+EXPORT void motion_test_timing(motion_test_timing_t * p_out)
+{
+    p_out->per_min_us  = g_tt_per_min_us;
+    p_out->per_max_us  = g_tt_per_max_us;
+    p_out->exec_max_us = g_tt_exec_max_us;
+    p_out->cycles      = g_tt_cycles;
+}
+#endif /* APP_TEST */
+
 static void timing_pin_init(void)
 {
 #if APP_TIMING_PINS
@@ -165,8 +229,15 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
         uint32_t now_ms;
         int32_t  enc_l;
         int32_t  enc_r;
+#if APP_TEST
+        uint32_t wake_us;
+#endif
 
         (void)tk_slp_tsk(MOTION_WAKE_TIMEOUT_MS);
+#if APP_TEST
+        wake_us = (uint32_t)app_time_us();
+        tt_wake(wake_us);
+#endif
         timing_pin_toggle();
         safety_heartbeat(SAFETY_HB_MOTION);
 
@@ -205,5 +276,8 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
         motion_put_odom(&odom);
 
         report_events();
+#if APP_TEST
+        tt_done(wake_us);
+#endif
     }
 }

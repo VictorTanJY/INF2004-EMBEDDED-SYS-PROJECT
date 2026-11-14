@@ -23,6 +23,10 @@ static ID               g_cyc_motion;
    writers run inside DI/EI on the same core, so no update is lost. */
 static volatile uint8_t g_estop_latch;
 
+#if APP_TEST
+EXPORT volatile uint32_t g_estop_test_us;   /* written here only (core 1) */
+#endif
+
 /* motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
 static void motion_cyc_handler(void * p_exinf)
 {
@@ -106,6 +110,9 @@ EXPORT void motor_estop(void)
 
     DI(intsts);
     g_estop_latch = 1u;
+#if APP_TEST
+    g_estop_test_us = (uint32_t)app_time_us();
+#endif
     out_w(GPIO_OUT_CLR, mask);      /* LOW first, so no glitch HIGH  */
     out_w(GPIO_OE_SET, mask);       /* drive the pins                 */
     out_w(GPIO_CTRL(S2_PIN_MOT_L_A), GPIO_CTRL_FUNCSEL_SIO);
