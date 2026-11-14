@@ -122,4 +122,11 @@ void    imu_core_hump_restore(imu_core_t * p_ic);
 /* New run: clear the run's hump maximum and count (MissionTask start). */
 void    imu_core_new_run(imu_core_t * p_ic);
 
+/* Change Requirement 1: the IMU snapshot (IF-08) as stored between tasks. */
+#define IMU_SNAP_BITS           164u    /* sum of the layout widths      */
+#define IMU_SNAP_WORDS          6u      /* 24 B instead of 32 B          */
+void     imu_snap_pack(imu_snap_t const * p_snap, uint32_t * p_words);
+void     imu_snap_unpack(uint32_t const * p_words, imu_snap_t * p_snap);
+uint32_t imu_snap_layout_bits(void);
+
 #endif /* IMU_CORE_H */

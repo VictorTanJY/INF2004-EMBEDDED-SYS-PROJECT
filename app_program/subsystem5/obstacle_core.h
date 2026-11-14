@@ -232,4 +232,11 @@ typedef struct
 bool     obst_hump_mask(obst_mask_t * p_m, bool b_pitch_valid, int32_t pitch_cdeg,
                         int32_t dist_mm, uint32_t now_ms);
 
+/* Change Requirement 1: the obstacle snapshot as stored between tasks. */
+#define OBST_SNAP_BITS          166u    /* sum of the layout widths      */
+#define OBST_SNAP_WORDS         6u      /* 24 B instead of 28 B          */
+void     obst_snap_pack(obst_snap_t const * p_snap, uint32_t * p_words);
+void     obst_snap_unpack(uint32_t const * p_words, obst_snap_t * p_snap);
+uint32_t obst_snap_layout_bits(void);
+
 #endif /* OBSTACLE_CORE_H */

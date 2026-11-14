@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "app_pack.h"
 #include <math.h>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -1093,6 +1094,38 @@ static void test_light_print(void)
     CHECK("S3-H21", (wrong == 0) && (by_adapt > 0));
 }
 
+/* S3-H22: Change Requirement 1, the packed line snapshot */
+static void test_pack_s3(void)
+{
+    line_snap_t s;
+    line_snap_t r;
+    uint32_t    w[LINE_SNAP_WORDS];
+
+    CHECK("S3-H22", line_snap_layout_bits() == LINE_SNAP_BITS && PK_WORDS(LINE_SNAP_BITS) == LINE_SNAP_WORDS &&
+                    sizeof(w) < sizeof(s));
+    memset(&s, 0, sizeof(s));
+    s.t_ms = 123456u; s.blocks = 4000000000u; s.missed_blocks = 3u; s.err = -1000; s.omega_mrad_s = 2000;
+    s.raw_l = 1000u; s.raw_r = 0u; s.raw_bc = 512u; s.barcode_ok = 7u; s.barcode_err = 65535u;
+    s.contrast_x10 = 31u; s.flags = 0x7Fu; s.bc_state = 3u; s.last_barcode = 'Z'; s.last_reject = 8u;
+    s.turn_gain_pm = 1180u; s.sens = 7u;
+    line_snap_pack(&s, w);
+    memset(&r, 0x5A, sizeof(r));                /* every field must be written */
+    line_snap_unpack(w, &r);
+    {
+        uint32_t w2[LINE_SNAP_WORDS];
+
+        line_snap_pack(&r, w2);
+        CHECK("S3-H22", memcmp(w, w2, sizeof(w)) == 0);
+    }
+    memset(&r, 0, sizeof(r));                   /* same padding as s */
+    line_snap_unpack(w, &r);
+    CHECK("S3-H22", memcmp(&s, &r, sizeof(s)) == 0);
+    s.last_barcode = '\0'; s.contrast_x10 = 5000u; s.omega_mrad_s = -6000;
+    line_snap_pack(&s, w);
+    line_snap_unpack(w, &r);
+    CHECK("S3-H22", r.last_barcode == '\0' && r.contrast_x10 == 1023u && r.omega_mrad_s == -2048);
+}
+
 int main(void)
 {
     test_table();
@@ -1104,6 +1137,7 @@ int main(void)
     test_light_print();
     test_track();
     test_slip();
+    test_pack_s3();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

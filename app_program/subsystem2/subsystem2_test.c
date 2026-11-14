@@ -38,7 +38,7 @@
 #define T_WIN_LO_MS         400             /* cruise window, before the decel */
 #define T_WIN_HI_MS         1000
 #define T_NO_TURN_MS        400             /* no counts by then: wheels idle  */
-#define T_SEQ               0xE0u           /* not used by MissionTask         */
+#define T_SEQ               20u             /* 5-bit seq, not one MissionTask is waiting for */
 
 static int32_t iabs(int32_t v)
 {

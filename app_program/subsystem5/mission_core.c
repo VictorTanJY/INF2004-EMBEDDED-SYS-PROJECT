@@ -19,6 +19,7 @@
 #include "mission_cfg.h"
 #include "../app_config.h"
 #include "../subsystem4/imu_types.h"   /* SAFETY_FLT_LIFT */
+#include "../app_pack.h"
 
 /* APP_SRC_* of the calibrating subsystems (app.h is kernel-side). */
 #define SRC_LINE            3u
@@ -48,7 +49,7 @@ static void motion(mission_core_t * p_mc, mission_out_t * p_out, uint8_t cmd, in
 
     if ((cmd == (uint8_t)MOTION_CMD_MOVE) || (cmd == (uint8_t)MOTION_CMD_TURN))
     {
-        p_mc->motion_seq++;
+        p_mc->motion_seq = motion_seq_next(p_mc->motion_seq);   /* 5 bits (CR1) */
         seq            = p_mc->motion_seq;
         p_mc->wait_seq = seq;
         p_mc->b_waiting = true;
@@ -785,4 +786,130 @@ void mission_core_tick(mission_core_t * p_mc, mission_inputs_t const * p_in, uin
         default:
             break;
     }
+}
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: packed messages and snapshot (see mission_core.h)
+ * --------------------------------------------------------------------- */
+#define EVT_TYPE_SHIFT  0u
+#define EVT_TYPE_BITS   5u
+#define EVT_SRC_SHIFT   5u
+#define EVT_SRC_BITS    3u
+#define EVT_A_SHIFT     8u
+#define EVT_DATA_SHIFT  15u
+#define EVT_SYM_BITS    6u
+
+uint32_t mission_evt_pack(mission_evt_t const * p_ev)
+{
+    uint32_t w = 0u;
+
+    w = pk_set(w, EVT_TYPE_SHIFT, EVT_TYPE_BITS, pk_sat_u(p_ev->type, EVT_TYPE_BITS));
+    w = pk_set(w, EVT_SRC_SHIFT, EVT_SRC_BITS, pk_sat_u(p_ev->src, EVT_SRC_BITS));
+    if (p_ev->type == (uint8_t)MISSION_EV_REMOTE_MAP)
+    {
+        uint32_t const packed = (uint32_t)p_ev->data;
+        uint32_t       k;
+
+        for (k = 0u; k < (uint32_t)MISSION_NAV_COUNT; k++)
+        {
+            w = pk_set(w, (uint8_t)(EVT_A_SHIFT + (k * EVT_SYM_BITS)), EVT_SYM_BITS,
+                       pk_sym_index((char)(uint8_t)(packed >> (8u * k))));
+        }
+    }
+    else
+    {
+        w = pk_set(w, EVT_A_SHIFT, MISSION_EVT_A_BITS, pk_sat_u(p_ev->a, MISSION_EVT_A_BITS));
+        w = pk_set(w, EVT_DATA_SHIFT, MISSION_EVT_DATA_BITS, pk_off_s(p_ev->data, MISSION_EVT_DATA_BITS));
+    }
+    return w;
+}
+
+void mission_evt_unpack(uint32_t word, mission_evt_t * p_ev)
+{
+    p_ev->type = (uint8_t)pk_get(word, EVT_TYPE_SHIFT, EVT_TYPE_BITS);
+    p_ev->src  = (uint8_t)pk_get(word, EVT_SRC_SHIFT, EVT_SRC_BITS);
+    if (p_ev->type == (uint8_t)MISSION_EV_REMOTE_MAP)
+    {
+        uint32_t packed = 0u;
+        uint32_t k;
+
+        for (k = 0u; k < (uint32_t)MISSION_NAV_COUNT; k++)
+        {
+            uint8_t const sym = (uint8_t)pk_get(word, (uint8_t)(EVT_A_SHIFT + (k * EVT_SYM_BITS)), EVT_SYM_BITS);
+
+            packed |= ((uint32_t)(uint8_t)pk_sym_char(sym)) << (8u * k);
+        }
+        p_ev->a    = 0u;
+        p_ev->data = (int32_t)packed;
+    }
+    else
+    {
+        p_ev->a    = (uint16_t)pk_get(word, EVT_A_SHIFT, MISSION_EVT_A_BITS);
+        p_ev->data = pk_unoff_s(pk_get(word, EVT_DATA_SHIFT, MISSION_EVT_DATA_BITS), MISSION_EVT_DATA_BITS);
+    }
+}
+
+#define REQ_TYPE_BITS   3u
+#define REQ_SEQ_BITS    5u
+#define REQ_PARAM_BITS  8u
+
+uint16_t scan_req_pack(scan_req_t const * p_req)
+{
+    uint32_t w = 0u;
+
+    w = pk_set(w, 0u, REQ_TYPE_BITS, pk_sat_u(p_req->type, REQ_TYPE_BITS));
+    w = pk_set(w, REQ_TYPE_BITS, REQ_SEQ_BITS, (uint32_t)p_req->seq & pk_mask(REQ_SEQ_BITS));
+    w = pk_set(w, REQ_TYPE_BITS + REQ_SEQ_BITS, REQ_PARAM_BITS,
+               pk_sat_u((p_req->param < 0) ? 0u : (uint32_t)p_req->param, REQ_PARAM_BITS));
+    return (uint16_t)w;
+}
+
+void scan_req_unpack(uint16_t word, scan_req_t * p_req)
+{
+    p_req->type  = (uint8_t)pk_get(word, 0u, REQ_TYPE_BITS);
+    p_req->seq   = (uint8_t)pk_get(word, REQ_TYPE_BITS, REQ_SEQ_BITS);
+    p_req->param = (int16_t)pk_get(word, REQ_TYPE_BITS + REQ_SEQ_BITS, REQ_PARAM_BITS);
+}
+
+/* Data representation of IF-10 (mission part). */
+static pk_field_t const k_mission_layout[] =
+{
+    PK_FIELD(mission_snap_t, t_ms,           32u, PK_W),
+    PK_FIELD(mission_snap_t, fault_bits,     20u, PK_U),   /* SAFETY_FLT_* (16) + self-test mask << 16 */
+    PK_FIELD(mission_snap_t, cruise_mm_s,     9u, PK_U),   /* <= 450                    */
+    PK_FIELD(mission_snap_t, speed_cap_mm_s,  9u, PK_U),
+    PK_FIELD(mission_snap_t, slow_mm,        10u, PK_U),   /* <= 600 (slow_cm 25..60)   */
+    PK_FIELD(mission_snap_t, stop_mm,         9u, PK_U),   /* <= 400 (stop_cm 15..40)   */
+    PK_FIELD(mission_snap_t, lost_mm,         8u, PK_U),   /* <= 150                    */
+    PK_FIELD(mission_snap_t, junction_mm,     6u, PK_U),   /* <= 40                     */
+    PK_FIELD(mission_snap_t, runs,           16u, PK_W),   /* counter                   */
+    PK_FIELD(mission_snap_t, state,           4u, PK_U),   /* 11 states                 */
+    PK_FIELD(mission_snap_t, auth,            2u, PK_U),   /* 3 sources                 */
+    PK_FIELD(mission_snap_t, pending_nav,     3u, PK_UN),  /* 0..3, NONE (0xFF)         */
+    PK_FIELD(mission_snap_t, pending_char,    6u, PK_SYM), /* Code 39 symbol or none    */
+    PK_FIELD(mission_snap_t, nav_map[0],      6u, PK_SYM),
+    PK_FIELD(mission_snap_t, nav_map[1],      6u, PK_SYM),
+    PK_FIELD(mission_snap_t, nav_map[2],      6u, PK_SYM),
+    PK_FIELD(mission_snap_t, nav_map[3],      6u, PK_SYM),
+    PK_FIELD(mission_snap_t, calibrated,      2u, PK_U),   /* MISSION_CAL_IR | _IMU     */
+    PK_FIELD(mission_snap_t, cal_phase,       2u, PK_U),   /* 4 phases                  */
+    PK_FIELD(mission_snap_t, cause,           3u, PK_U)    /* 7 causes                  */
+};
+
+#define MISSION_FIELDS  ((uint16_t)(sizeof(k_mission_layout) / sizeof(k_mission_layout[0])))
+
+void mission_snap_pack(mission_snap_t const * p_snap, uint32_t * p_words)
+{
+    pk_pack_rec(k_mission_layout, MISSION_FIELDS, p_snap, p_words, MISSION_SNAP_WORDS);
+}
+
+void mission_snap_unpack(uint32_t const * p_words, mission_snap_t * p_snap)
+{
+    p_snap->reserved = 0u;
+    pk_unpack_rec(k_mission_layout, MISSION_FIELDS, p_words, p_snap);
+}
+
+uint32_t mission_snap_layout_bits(void)
+{
+    return pk_layout_bits(k_mission_layout, MISSION_FIELDS);
 }

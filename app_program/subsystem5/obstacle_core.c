@@ -4,6 +4,7 @@
  */
 
 #include "obstacle_core.h"
+#include "../app_pack.h"
 #include "mission_cfg.h"
 #include "../app_types.h"
 #include "../app_math.h"
@@ -962,4 +963,42 @@ bool obst_hump_mask(obst_mask_t * p_m, bool b_pitch_valid, int32_t pitch_cdeg,
         p_m->b_active = false;          /* lapsed: stays off until level again */
     }
     return p_m->b_active;
+}
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: data representation of IF-10 (obstacle part).
+ * --------------------------------------------------------------------- */
+static pk_field_t const k_obst_layout[] =
+{
+    PK_FIELD(obst_snap_t, t_ms,         32u, PK_W),
+    PK_FIELD(obst_snap_t, pings,        32u, PK_W),    /* counter since boot              */
+    PK_FIELD(obst_snap_t, d_mm,         12u, PK_UN),   /* 0..4094 mm, NONE (0xFFFF)       */
+    PK_FIELD(obst_snap_t, w_mm,         11u, PK_U),    /* 0..2047 mm                      */
+    PK_FIELD(obst_snap_t, closest_mm,   12u, PK_UN),
+    PK_FIELD(obst_snap_t, clr_l_mm,     12u, PK_UN),
+    PK_FIELD(obst_snap_t, clr_r_mm,     12u, PK_UN),
+    PK_FIELD(obst_snap_t, left_lat_mm,  12u, PK_S),    /* +-2047 mm                       */
+    PK_FIELD(obst_snap_t, right_lat_mm, 12u, PK_S),
+    PK_FIELD(obst_snap_t, no_echo,       8u, PK_U),    /* consecutive, saturates at 255   */
+    PK_FIELD(obst_snap_t, valid,         1u, PK_U),
+    PK_FIELD(obst_snap_t, plan,          3u, PK_U),    /* 5 plans                         */
+    PK_FIELD(obst_snap_t, state,         4u, PK_U),    /* 13 states                       */
+    PK_FIELD(obst_snap_t, retries,       3u, PK_U)
+};
+
+#define OBST_FIELDS     ((uint16_t)(sizeof(k_obst_layout) / sizeof(k_obst_layout[0])))
+
+void obst_snap_pack(obst_snap_t const * p_snap, uint32_t * p_words)
+{
+    pk_pack_rec(k_obst_layout, OBST_FIELDS, p_snap, p_words, OBST_SNAP_WORDS);
+}
+
+void obst_snap_unpack(uint32_t const * p_words, obst_snap_t * p_snap)
+{
+    pk_unpack_rec(k_obst_layout, OBST_FIELDS, p_words, p_snap);
+}
+
+uint32_t obst_snap_layout_bits(void)
+{
+    return pk_layout_bits(k_obst_layout, OBST_FIELDS);
 }

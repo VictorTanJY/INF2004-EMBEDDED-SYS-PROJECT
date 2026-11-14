@@ -121,6 +121,7 @@ static void run_actions(mission_out_t const * p_out)
 EXPORT void mission_task(INT stacd, void * p_exinf)
 {
     mission_evt_t    ev;
+    uint32_t         ev_word;       /* mbf_mission: one packed word (CR1) */
     mission_out_t    out;
     mission_inputs_t in;
     motion_odom_t    odom;
@@ -136,15 +137,16 @@ EXPORT void mission_task(INT stacd, void * p_exinf)
 
     for (;;)
     {
-        INT      n = tk_rcv_mbf(g_mbf_mission, &ev, S5_MISSION_TICK_MS);
+        INT      n = tk_rcv_mbf(g_mbf_mission, &ev_word, S5_MISSION_TICK_MS);
         uint32_t now_ms;
 
         safety_heartbeat(SAFETY_HB_MISSION);
         now_ms = (uint32_t)app_time_ms();
 
         out.n = 0u;
-        if (n == (INT)sizeof(ev))
+        if (n == (INT)sizeof(ev_word))
         {
+            mission_evt_unpack(ev_word, &ev);
             /* the laptop's event log: every event MissionTask decides on */
             (void)comms_telem_post((uint8_t)COMMS_KIND_EVENT, ev.src, (uint16_t)ev.type, ev.data);
             mission_core_event(&g_mc, &ev, now_ms, &out);

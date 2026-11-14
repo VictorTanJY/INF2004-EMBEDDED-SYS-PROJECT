@@ -4,6 +4,7 @@
  */
 
 #include "line_track.h"
+#include "../app_pack.h"
 #include "../app_types.h"
 
 /* ------------------------------------------------------------------ */
@@ -385,4 +386,45 @@ uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal, uint3
     }
     gain = ((((c_l + c_r) / 2) * 1000) + 900) / 1800;
     return ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM)) ? (uint16_t)gain : 0u;
+}
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: data representation of IF-04 (line snapshot).
+ * --------------------------------------------------------------------- */
+static pk_field_t const k_line_layout[] =
+{
+    PK_FIELD(line_snap_t, t_ms,          32u, PK_W),
+    PK_FIELD(line_snap_t, blocks,        32u, PK_W),   /* counter since boot              */
+    PK_FIELD(line_snap_t, missed_blocks, 16u, PK_W),   /* counter, readers take differences */
+    PK_FIELD(line_snap_t, err,           11u, PK_S),   /* -1000..1000                     */
+    PK_FIELD(line_snap_t, omega_mrad_s,  12u, PK_S),   /* +-2047 (LINE_OMEGA_MAX 2000)    */
+    PK_FIELD(line_snap_t, raw_l,         10u, PK_U),   /* 0..1000                         */
+    PK_FIELD(line_snap_t, raw_r,         10u, PK_U),
+    PK_FIELD(line_snap_t, raw_bc,        10u, PK_U),
+    PK_FIELD(line_snap_t, barcode_ok,    16u, PK_W),   /* counters                        */
+    PK_FIELD(line_snap_t, barcode_err,   16u, PK_W),
+    PK_FIELD(line_snap_t, contrast_x10,  10u, PK_U),   /* saturates at 102.3 : 1          */
+    PK_FIELD(line_snap_t, flags,          7u, PK_U),   /* LINE_FLAG_* (7 bits)            */
+    PK_FIELD(line_snap_t, bc_state,       2u, PK_U),   /* 4 states                        */
+    PK_FIELD(line_snap_t, last_barcode,   6u, PK_SYM), /* Code 39 symbol or none          */
+    PK_FIELD(line_snap_t, last_reject,    4u, PK_U),   /* code39_result_t 0..8            */
+    PK_FIELD(line_snap_t, turn_gain_pm,  11u, PK_U),   /* 0..2047 permille                */
+    PK_FIELD(line_snap_t, sens,           3u, PK_U)    /* LINE_SENS_* (3 bits)            */
+};
+
+#define LINE_FIELDS     ((uint16_t)(sizeof(k_line_layout) / sizeof(k_line_layout[0])))
+
+void line_snap_pack(line_snap_t const * p_snap, uint32_t * p_words)
+{
+    pk_pack_rec(k_line_layout, LINE_FIELDS, p_snap, p_words, LINE_SNAP_WORDS);
+}
+
+void line_snap_unpack(uint32_t const * p_words, line_snap_t * p_snap)
+{
+    pk_unpack_rec(k_line_layout, LINE_FIELDS, p_words, p_snap);
+}
+
+uint32_t line_snap_layout_bits(void)
+{
+    return pk_layout_bits(k_line_layout, LINE_FIELDS);
 }

@@ -9,6 +9,7 @@
 #include "motion_cfg.h"
 #include "../app_types.h"
 #include "../app_math.h"
+#include "../app_pack.h"
 
 #define PI_E6               3141593         /* pi x 10^6 */
 #define DT_DEFAULT_MS       10u
@@ -610,4 +611,142 @@ bool motion_core_pop_event(motion_core_t * p_mc, motion_event_t * p_ev)
     }
     p_mc->ev_count--;
     return true;
+}
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: the command word (layout in motion_types.h)
+ * --------------------------------------------------------------------- */
+#define CMD_SRC_SHIFT   0u
+#define CMD_SRC_BITS    2u
+#define CMD_CMD_SHIFT   2u
+#define CMD_CMD_BITS    3u
+#define CMD_SEQ_SHIFT   5u
+#define CMD_P0_SHIFT    10u
+#define DRIVE_V_BITS    10u
+#define DRIVE_W_BITS    12u
+#define AMOUNT_BITS     13u     /* MOVE mm, TURN 0.1 deg   */
+#define RATE_BITS       9u      /* MOVE mm/s, TURN deg/s   */
+
+static uint8_t p0_bits(uint8_t cmd)
+{
+    if (cmd == (uint8_t)MOTION_CMD_DRIVE)
+    {
+        return DRIVE_V_BITS;
+    }
+    if ((cmd == (uint8_t)MOTION_CMD_MOVE) || (cmd == (uint8_t)MOTION_CMD_TURN))
+    {
+        return AMOUNT_BITS;
+    }
+    return (cmd == (uint8_t)MOTION_CMD_SET_AUTH) ? CMD_SRC_BITS : 0u;
+}
+
+uint32_t motion_cmd_pack(motion_cmd_t const * p_cmd)
+{
+    uint8_t const cmd = p_cmd->cmd;
+    uint8_t const b0  = p0_bits(cmd);
+    uint32_t      w   = 0u;
+
+    w = pk_set(w, CMD_SRC_SHIFT, CMD_SRC_BITS, pk_sat_u(p_cmd->src, CMD_SRC_BITS));
+    w = pk_set(w, CMD_CMD_SHIFT, CMD_CMD_BITS, pk_sat_u(cmd, CMD_CMD_BITS));
+    w = pk_set(w, CMD_SEQ_SHIFT, MOTION_SEQ_BITS, (uint32_t)p_cmd->seq & MOTION_SEQ_MASK);
+    if (cmd == (uint8_t)MOTION_CMD_DRIVE)
+    {
+        w = pk_set(w, CMD_P0_SHIFT, DRIVE_V_BITS, pk_off_s(p_cmd->p0, DRIVE_V_BITS));
+        w = pk_set(w, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS, pk_off_s(p_cmd->p1, DRIVE_W_BITS));
+    }
+    else if (b0 == AMOUNT_BITS)
+    {
+        w = pk_set(w, CMD_P0_SHIFT, AMOUNT_BITS, pk_off_s(p_cmd->p0, AMOUNT_BITS));
+        w = pk_set(w, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS,
+                   pk_sat_u((p_cmd->p1 < 0) ? 0u : (uint32_t)p_cmd->p1, RATE_BITS));
+    }
+    else if (b0 > 0u)
+    {
+        w = pk_set(w, CMD_P0_SHIFT, b0, pk_sat_u((p_cmd->p0 < 0) ? 0u : (uint32_t)p_cmd->p0, b0));
+    }
+    else
+    {
+        /* STOP, CLEAR_ESTOP: no payload */
+    }
+    return w;
+}
+
+void motion_cmd_unpack(uint32_t word, motion_cmd_t * p_cmd)
+{
+    uint8_t const cmd = (uint8_t)pk_get(word, CMD_CMD_SHIFT, CMD_CMD_BITS);
+    uint8_t const b0  = p0_bits(cmd);
+
+    p_cmd->src      = (uint8_t)pk_get(word, CMD_SRC_SHIFT, CMD_SRC_BITS);
+    p_cmd->cmd      = cmd;
+    p_cmd->seq      = (uint8_t)pk_get(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS);
+    p_cmd->reserved = 0u;
+    p_cmd->p0       = 0;
+    p_cmd->p1       = 0;
+    if (cmd == (uint8_t)MOTION_CMD_DRIVE)
+    {
+        p_cmd->p0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, DRIVE_V_BITS), DRIVE_V_BITS);
+        p_cmd->p1 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS), DRIVE_W_BITS);
+    }
+    else if (b0 == AMOUNT_BITS)
+    {
+        p_cmd->p0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, AMOUNT_BITS), AMOUNT_BITS);
+        p_cmd->p1 = (int16_t)pk_get(word, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS);
+    }
+    else if (b0 > 0u)
+    {
+        p_cmd->p0 = (int16_t)pk_get(word, CMD_P0_SHIFT, b0);
+    }
+    else
+    {
+        /* no payload */
+    }
+}
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: the shared odometry snapshot.  This table is the
+ *  data representation of IF-02: bits stored per field and why.
+ * --------------------------------------------------------------------- */
+static pk_field_t const k_odom_layout[] =
+{
+    PK_FIELD(motion_odom_t, t_ms,            32u, PK_W),  /* ms since boot, wraps          */
+    PK_FIELD(motion_odom_t, enc_l,           32u, PK_W),  /* running count since power-on  */
+    PK_FIELD(motion_odom_t, enc_r,           32u, PK_W),
+    PK_FIELD(motion_odom_t, dist_mm,         32u, PK_W),  /* running, readers take differences */
+    PK_FIELD(motion_odom_t, x_mm,            24u, PK_S),  /* +-8.3 km                      */
+    PK_FIELD(motion_odom_t, y_mm,            24u, PK_S),
+    PK_FIELD(motion_odom_t, heading_cdeg,    32u, PK_W),  /* accumulated, never wrapped    */
+    PK_FIELD(motion_odom_t, v_l_mm_s,        10u, PK_S),  /* +-511 (set-points clamp at 450) */
+    PK_FIELD(motion_odom_t, v_r_mm_s,        10u, PK_S),
+    PK_FIELD(motion_odom_t, v_mm_s,          10u, PK_S),
+    PK_FIELD(motion_odom_t, yaw_rate_cdeg_s, 16u, PK_S),  /* the int16_t range, +-327 deg/s */
+    PK_FIELD(motion_odom_t, duty_l,          11u, PK_S),  /* +-1000 per mille              */
+    PK_FIELD(motion_odom_t, duty_r,          11u, PK_S),
+    PK_FIELD(motion_odom_t, rejected,        16u, PK_W),  /* counter                       */
+    PK_FIELD(motion_odom_t, state,            3u, PK_U),  /* 5 states                      */
+    PK_FIELD(motion_odom_t, phase,            3u, PK_U),  /* 5 phases                      */
+    PK_FIELD(motion_odom_t, auth,             2u, PK_U),  /* 3 sources                     */
+    PK_FIELD(motion_odom_t, last_done_seq,    5u, PK_W),  /* MOTION_SEQ_BITS               */
+    PK_FIELD(motion_odom_t, last_done_src,    2u, PK_U),
+    PK_FIELD(motion_odom_t, last_fail_seq,    5u, PK_W),
+    PK_FIELD(motion_odom_t, done_count,       8u, PK_W),  /* counters, readers compare     */
+    PK_FIELD(motion_odom_t, fail_count,       8u, PK_W),
+    PK_FIELD(motion_odom_t, hw_ok,            1u, PK_U)
+};
+
+#define ODOM_FIELDS     ((uint16_t)(sizeof(k_odom_layout) / sizeof(k_odom_layout[0])))
+
+void motion_odom_pack(motion_odom_t const * p_odom, uint32_t * p_words)
+{
+    pk_pack_rec(k_odom_layout, ODOM_FIELDS, p_odom, p_words, MOTION_ODOM_WORDS);
+}
+
+void motion_odom_unpack(uint32_t const * p_words, motion_odom_t * p_odom)
+{
+    p_odom->reserved = 0u;
+    pk_unpack_rec(k_odom_layout, ODOM_FIELDS, p_words, p_odom);
+}
+
+uint32_t motion_odom_layout_bits(void)
+{
+    return pk_layout_bits(k_odom_layout, ODOM_FIELDS);
 }

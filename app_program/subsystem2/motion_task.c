@@ -201,6 +201,7 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
 {
     motion_odom_t odom = {0};
     motion_cmd_t  cmd;
+    uint32_t      cmd_word;                 /* mbf_motion: one packed word (CR1) */
     bool          b_hw_ok;
     UINT          intsts;
 
@@ -245,8 +246,9 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
         enc_l  = drv_encoder_read(DRV_ENC_LEFT);
         enc_r  = drv_encoder_read(DRV_ENC_RIGHT);
 
-        while (tk_rcv_mbf(g_mbf_motion, &cmd, TMO_POL) == (INT)sizeof(cmd))
+        while (tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL) == (INT)sizeof(cmd_word))
         {
+            motion_cmd_unpack(cmd_word, &cmd);
             motion_result_t const res = motion_core_command(&g_core, &cmd, now_ms);
 
             if (res == MOTION_RES_CLEAR_ESTOP)

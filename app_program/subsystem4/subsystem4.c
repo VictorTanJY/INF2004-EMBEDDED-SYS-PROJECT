@@ -6,6 +6,7 @@
  */
 
 #include "subsystem4.h"
+#include "imu_core.h"
 #include "drv_watchdog.h"
 
 EXPORT ID g_flg_safety;
@@ -14,9 +15,15 @@ EXPORT ID g_tid_imu;
 /* Written only by SafetyTask (one writer, aligned word: indivisible). */
 EXPORT volatile uint32_t g_safety_latched;
 
-static volatile uint32_t g_hb[SAFETY_HB_COUNT];
+/* Heartbeat counters: one byte per task (Change Requirement 1).  Each
+   task stores only its own byte (STRB, indivisible on the M0+), so no
+   counter shares a read-modify-write with another; SafetyTask only reads
+   and compares for a change (an 8-bit counter cannot come back to the
+   same value within the 20 ms check: MotionTask beats twice in it). */
+static volatile uint8_t  g_hb[SAFETY_HB_COUNT];
+/* IMU snapshot stored packed; whole records copied under the lock. */
 static app_lock_t        g_imu_lock;
-static imu_snap_t        g_imu_snap;
+static uint32_t          g_imu_snap[IMU_SNAP_WORDS];
 static ID                g_cyc_imu;
 
 static void imu_cyc_handler(void * p_exinf)
@@ -33,6 +40,11 @@ EXPORT ER subsystem4_init(void)
     /* First of all: the 1 us timer and the watchdog need the 1 MHz tick. */
     drv_watchdog_tick_init();
     app_lock_init(&g_imu_lock);
+    {
+        imu_snap_t const zero = {0};
+
+        imu_snap_pack(&zero, g_imu_snap);      /* packed zero (offset-binary fields) */
+    }
 
     /* TA_WMUL: a stray second waiter gets queued instead of E_OBJ.  By
        rule only SafetyTask waits (see subsystem4.h). */
@@ -83,7 +95,7 @@ EXPORT void safety_heartbeat(safety_hb_t task)
 {
     if ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT)
     {
-        g_hb[task]++;           /* single writer per word */
+        g_hb[task] = (uint8_t)(g_hb[task] + 1u);    /* single writer per byte */
     }
 }
 
@@ -94,16 +106,29 @@ EXPORT uint32_t safety_heartbeat_count(safety_hb_t task)
 
 EXPORT void imu_get_snap(imu_snap_t * p_out)
 {
-    UINT sts = app_lock(&g_imu_lock);
+    uint32_t w[IMU_SNAP_WORDS];
+    uint32_t i;
+    UINT     sts = app_lock(&g_imu_lock);
 
-    *p_out = g_imu_snap;
+    for (i = 0u; i < IMU_SNAP_WORDS; i++)
+    {
+        w[i] = g_imu_snap[i];
+    }
     app_unlock(&g_imu_lock, sts);
+    imu_snap_unpack(w, p_out);
 }
 
 EXPORT void imu_put_snap(imu_snap_t const * p_in)
 {
-    UINT sts = app_lock(&g_imu_lock);
+    uint32_t w[IMU_SNAP_WORDS];
+    uint32_t i;
+    UINT     sts;
 
-    g_imu_snap = *p_in;
+    imu_snap_pack(p_in, w);
+    sts = app_lock(&g_imu_lock);
+    for (i = 0u; i < IMU_SNAP_WORDS; i++)
+    {
+        g_imu_snap[i] = w[i];
+    }
     app_unlock(&g_imu_lock, sts);
 }

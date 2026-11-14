@@ -56,8 +56,8 @@ EXPORT void subsystem4_test(void)
 
     before = safety_heartbeat_count(SAFETY_HB_MOTION);
     (void)tk_dly_tsk(50);
-    TEST_CHECK("S4-U02", safety_heartbeat_count(SAFETY_HB_MOTION) >= (before + 3u),
-               "MotionTask heartbeat advances");
+    TEST_CHECK("S4-U02", ((safety_heartbeat_count(SAFETY_HB_MOTION) - before) & 0xFFu) >= 3u,
+               "MotionTask heartbeat advances (8-bit counter, modular)");
 
     imu_get_snap(&a);
     (void)tk_dly_tsk(100);

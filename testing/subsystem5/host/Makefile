@@ -9,7 +9,7 @@ SAN     := -fsanitize=address,undefined -fno-omit-frame-pointer
 # (motion_cfg.h, line_cfg.h, ...) are #defines compiled into the tests.
 HDRS    := $(wildcard ../../../app_program/*.h ../../../app_program/*/*.h)
 test_s5 test_s5_bench: $(HDRS)
-SRCS    := $(SRC_DIR)/subsystem5/mission_core.c $(SRC_DIR)/subsystem5/obstacle_core.c $(SRC_DIR)/app_math.c
+SRCS    := $(SRC_DIR)/subsystem5/mission_core.c $(SRC_DIR)/subsystem5/obstacle_core.c $(SRC_DIR)/app_math.c $(SRC_DIR)/app_pack.c
 
 test_s5: test_s5.c $(SRCS)
 	$(CC) $(CFLAGS) $(SAN) -o $@ test_s5.c $(SRCS) -lm

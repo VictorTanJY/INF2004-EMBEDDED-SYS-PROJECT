@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "app_pack.h"
 #include "imu_core.h"
 #include "imu_cfg.h"
 #include "safety_core.h"
@@ -121,6 +122,37 @@ static int run_side_hump(double h_mm, double len_mm, int side, int * p_starts, i
         if (g_ev & IMU_EV_HUMP_END) { (*p_ends)++; }
     }
     return (int)g_ic.last_hump_mm;
+}
+
+/* S4-H11: Change Requirement 1, the packed IMU snapshot */
+static void test_pack_s4(void)
+{
+    imu_snap_t s;
+    imu_snap_t r;
+    uint32_t   w[IMU_SNAP_WORDS];
+
+    CHECK("S4-H11", imu_snap_layout_bits() == IMU_SNAP_BITS && PK_WORDS(IMU_SNAP_BITS) == IMU_SNAP_WORDS &&
+                    sizeof(w) < sizeof(s));
+    memset(&s, 0, sizeof(s));
+    s.t_ms = 99u; s.pitch_cdeg = -9000; s.roll_cdeg = 18000; s.heading_cdeg = 35999; s.turn_rate_cdeg_s = -32768;
+    s.accel_mg = -16000; s.hump_max_mm = 31u; s.last_hump_mm = 1023u; s.humps = 3u; s.i2c_errors = 65535u;
+    s.hump_state = 3u; s.motion = 7u; s.ok = 1u; s.cal = 3u; s.pitch_valid = 1u; s.tilt = 1u;
+    imu_snap_pack(&s, w);
+    memset(&r, 0x5A, sizeof(r));                /* every field must be written */
+    imu_snap_unpack(w, &r);
+    {
+        uint32_t w2[IMU_SNAP_WORDS];
+
+        imu_snap_pack(&r, w2);
+        CHECK("S4-H11", memcmp(w, w2, sizeof(w)) == 0);
+    }
+    memset(&r, 0, sizeof(r));                   /* same padding as s */
+    imu_snap_unpack(w, &r);
+    CHECK("S4-H11", memcmp(&s, &r, sizeof(s)) == 0);
+    s.humps = 300u; s.hump_max_mm = 5000u;                                   /* saturate */
+    imu_snap_pack(&s, w);
+    imu_snap_unpack(w, &r);
+    CHECK("S4-H11", r.humps == 255u && r.hump_max_mm == 1023u);
 }
 
 int main(void)
@@ -444,6 +476,7 @@ int main(void)
         CHECK("S4-H09", safety_hb_check(&st, c, 0x00000010u) == 0u);
     }
 
+    test_pack_s4();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

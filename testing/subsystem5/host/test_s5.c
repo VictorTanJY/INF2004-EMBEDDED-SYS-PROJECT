@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "app_pack.h"
 #include "mission_core.h"
 #include "mission_cfg.h"
 #include "obstacle_core.h"
@@ -992,11 +993,95 @@ static void test_bench(void)
 #endif
 }
 
+/* S5-H26: Change Requirement 1, packed mbf_mission / mbf_scan and snapshots */
+static void test_pack_s5(void)
+{
+    mission_evt_t  e;
+    mission_evt_t  d;
+    scan_req_t     q;
+    scan_req_t     qd;
+    mission_snap_t m;
+    mission_snap_t mr;
+    obst_snap_t    o;
+    obst_snap_t    orr;
+    uint32_t       wm[MISSION_SNAP_WORDS];
+    uint32_t       wo[OBST_SNAP_WORDS];
+    static int32_t const datas[] = { 0, -1, 65535, -65536, 'F', 3600, -3600, 0x07FF };
+    unsigned       k;
+    int            ok = 1;
+
+    for (k = 0u; k < sizeof(datas) / sizeof(datas[0]); k++)
+    {
+        e.type = (uint8_t)MISSION_EV_REMOTE_SET; e.src = 5u; e.a = (uint16_t)(k * 15u); e.data = datas[k];
+        mission_evt_unpack(mission_evt_pack(&e), &d);
+        if ((d.type != e.type) || (d.src != e.src) || (d.a != e.a) || (d.data != e.data)) { ok = 0; }
+    }
+    CHECK("S5-H26", ok);
+    e.type = (uint8_t)MISSION_EV_OBSTACLE; e.a = 200u; e.data = 100000;      /* saturate */
+    mission_evt_unpack(mission_evt_pack(&e), &d);
+    CHECK("S5-H26", d.a == 127u && d.data == 65535);
+    e.type = (uint8_t)MISSION_EV_REMOTE_MAP; e.src = 1u; e.a = 0u;
+    e.data = (int32_t)((uint32_t)'A' | ((uint32_t)'F' << 8) | ((uint32_t)'Z' << 16) | ((uint32_t)'%' << 24));
+    mission_evt_unpack(mission_evt_pack(&e), &d);
+    CHECK("S5-H26", d.type == MISSION_EV_REMOTE_MAP && d.data == e.data && d.src == 1u);
+    CHECK("S5-H26", (uint32_t)MISSION_EV_COUNT <= 32u);
+    q.type = (uint8_t)SCAN_REQ_BENCH_SERVO; q.seq = 37u; q.param = 180;
+    scan_req_unpack(scan_req_pack(&q), &qd);
+    CHECK("S5-H26", qd.type == q.type && qd.seq == 5u && qd.param == 180);
+
+    CHECK("S5-H26", mission_snap_layout_bits() == MISSION_SNAP_BITS && PK_WORDS(MISSION_SNAP_BITS) == MISSION_SNAP_WORDS &&
+                    obst_snap_layout_bits() == OBST_SNAP_BITS && PK_WORDS(OBST_SNAP_BITS) == OBST_SNAP_WORDS);
+    memset(&m, 0, sizeof(m));
+    m.t_ms = 777u; m.fault_bits = 0x0400u | (0xFu << 16); m.cruise_mm_s = 350u; m.speed_cap_mm_s = 150u;
+    m.slow_mm = 600u; m.stop_mm = 400u; m.lost_mm = 150u; m.junction_mm = 40u; m.runs = 12u;
+    m.state = 10u; m.auth = 2u; m.pending_nav = (uint8_t)MISSION_NAV_NONE; m.pending_char = '\0';
+    m.nav_map[0] = 'A'; m.nav_map[1] = 'F'; m.nav_map[2] = 'Z'; m.nav_map[3] = 'W';
+    m.calibrated = 3u; m.cal_phase = 3u; m.cause = 6u;
+    mission_snap_pack(&m, wm);
+    memset(&mr, 0x5A, sizeof(mr));              /* every field must be written */
+    mission_snap_unpack(wm, &mr);
+    {
+        uint32_t w2[MISSION_SNAP_WORDS];
+
+        mission_snap_pack(&mr, w2);
+        CHECK("S5-H26", memcmp(wm, w2, sizeof(wm)) == 0);
+    }
+    memset(&mr, 0, sizeof(mr));                 /* same padding as m */
+    mission_snap_unpack(wm, &mr);
+    CHECK("S5-H26", memcmp(&m, &mr, sizeof(m)) == 0);
+    m.pending_nav = 2u; m.pending_char = 'Q';
+    mission_snap_pack(&m, wm);
+    mission_snap_unpack(wm, &mr);
+    CHECK("S5-H26", mr.pending_nav == 2u && mr.pending_char == 'Q');
+
+    memset(&o, 0, sizeof(o));
+    o.t_ms = 5u; o.pings = 4000000000u; o.d_mm = OBST_RANGE_NONE; o.w_mm = 1600u; o.closest_mm = 4094u;
+    o.clr_l_mm = OBST_RANGE_NONE; o.clr_r_mm = 500u; o.left_lat_mm = -2047; o.right_lat_mm = 812;
+    o.no_echo = 255u; o.valid = 1u; o.plan = 4u; o.state = 12u; o.retries = 2u;
+    obst_snap_pack(&o, wo);
+    memset(&orr, 0x5A, sizeof(orr));            /* every field must be written */
+    obst_snap_unpack(wo, &orr);
+    {
+        uint32_t w2[OBST_SNAP_WORDS];
+
+        obst_snap_pack(&orr, w2);
+        CHECK("S5-H26", memcmp(wo, w2, sizeof(wo)) == 0);
+    }
+    memset(&orr, 0, sizeof(orr));               /* same padding as o */
+    obst_snap_unpack(wo, &orr);
+    CHECK("S5-H26", memcmp(&o, &orr, sizeof(o)) == 0);
+    o.d_mm = 4095u; o.no_echo = 1000u;            /* 4095 is not "none": saturates below it */
+    obst_snap_pack(&o, wo);
+    obst_snap_unpack(wo, &orr);
+    CHECK("S5-H26", orr.d_mm == 4094u && orr.no_echo == 255u);
+}
+
 int main(void)
 {
     test_mission();
     test_bench();
     test_obstacle();
+    test_pack_s5();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

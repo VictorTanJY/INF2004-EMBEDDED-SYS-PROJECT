@@ -97,4 +97,25 @@ bool mission_map_unpack(int32_t packed, char map[MISSION_NAV_COUNT]);
 int32_t mission_map_pack(char const map[MISSION_NAV_COUNT]);
 uint8_t mission_nav_for(mission_snap_t const * p_snap, char c);
 
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1 (minimum-bit data): mbf_mission events, mbf_scan
+ *  requests and the mission snapshot as stored between tasks.
+ *
+ *  Event word: type 5 | src 3 | a 7 | data 17 (offset-binary, +-65535);
+ *  REMOTE_MAP: type 5 | src 3 | four 6-bit Code 39 symbols (left, right,
+ *  straight, U-turn).  Scan request: type 3 | seq 5 | param 8 (0..255).
+ * --------------------------------------------------------------------- */
+#define MISSION_EVT_A_BITS      7u
+#define MISSION_EVT_DATA_BITS   17u
+uint32_t mission_evt_pack(mission_evt_t const * p_ev);
+void     mission_evt_unpack(uint32_t word, mission_evt_t * p_ev);
+uint16_t scan_req_pack(scan_req_t const * p_req);
+void     scan_req_unpack(uint16_t word, scan_req_t * p_req);
+
+#define MISSION_SNAP_BITS       165u    /* sum of the layout widths      */
+#define MISSION_SNAP_WORDS      6u      /* 24 B instead of 36 B          */
+void     mission_snap_pack(mission_snap_t const * p_snap, uint32_t * p_words);
+void     mission_snap_unpack(uint32_t const * p_words, mission_snap_t * p_snap);
+uint32_t mission_snap_layout_bits(void);
+
 #endif /* MISSION_CORE_H */

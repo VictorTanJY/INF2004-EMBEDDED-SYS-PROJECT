@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "app_pack.h"
 #include "motion_core.h"
 #include "motion_cfg.h"
 #include "motion_api.h"
@@ -138,6 +139,70 @@ static uint32_t run_until_event(int code, uint32_t max_ms)
         t += 10u;
     }
     return t;
+}
+
+/* S2-H16: Change Requirement 1, the packed mbf_motion word and odometry */
+static void test_pack_s2(void)
+{
+    motion_cmd_t  c;
+    motion_cmd_t  u;
+    motion_odom_t o;
+    motion_odom_t r;
+    uint32_t      w[MOTION_ODOM_WORDS];
+    int           ok = 1;
+    int           k;
+    static int16_t const drive[][2] = { { 0, 0 }, { 450, -2000 }, { -511, 2047 }, { 300, 1500 } };
+    static int16_t const move[][2]  = { { 1000, 200 }, { -4095, 511 }, { 4095, 1 }, { 0, 90 } };
+
+    memset(&c, 0, sizeof(c));
+    for (k = 0; k < 4; k++)
+    {
+        c.src = 1u; c.seq = (uint8_t)(k * 9); c.cmd = (uint8_t)MOTION_CMD_DRIVE;
+        c.p0 = drive[k][0]; c.p1 = drive[k][1];
+        motion_cmd_unpack(motion_cmd_pack(&c), &u);
+        if ((u.src != c.src) || (u.seq != c.seq) || (u.cmd != c.cmd) || (u.p0 != c.p0) || (u.p1 != c.p1)) { ok = 0; }
+        c.src = 0u; c.cmd = (uint8_t)((k & 1) ? MOTION_CMD_TURN : MOTION_CMD_MOVE);
+        c.p0 = move[k][0]; c.p1 = move[k][1];
+        motion_cmd_unpack(motion_cmd_pack(&c), &u);
+        if ((u.cmd != c.cmd) || (u.p0 != c.p0) || (u.p1 != c.p1)) { ok = 0; }
+    }
+    CHECK("S2-H16", ok);
+    c.cmd = (uint8_t)MOTION_CMD_SET_AUTH; c.p0 = 2; c.p1 = 0; c.seq = 31u; c.src = 0u;
+    motion_cmd_unpack(motion_cmd_pack(&c), &u);
+    CHECK("S2-H16", u.cmd == MOTION_CMD_SET_AUTH && u.p0 == 2 && u.seq == 31u);
+    c.cmd = (uint8_t)MOTION_CMD_DRIVE; c.p0 = 600; c.p1 = -6000; c.seq = 33u;   /* saturate, seq 5 bits */
+    motion_cmd_unpack(motion_cmd_pack(&c), &u);
+    CHECK("S2-H16", u.p0 == 511 && u.p1 == -2048 && u.seq == 1u);
+    CHECK("S2-H16", motion_seq_next(31u) == 0u && motion_seq_next(5u) == 6u);
+    /* the named API refuses what the word cannot carry */
+    CHECK("S2-H16", motion_move_forward(0u, 1u, 4096u, 200u) == MOTION_API_E_PAR &&
+                    motion_turn_left(0u, 1u, 900u, 512u) == MOTION_API_E_PAR);
+
+    /* odometry: the layout fills MOTION_ODOM_WORDS; values in range come back exactly */
+    CHECK("S2-H16", motion_odom_layout_bits() == MOTION_ODOM_BITS &&
+                    PK_WORDS(MOTION_ODOM_BITS) == MOTION_ODOM_WORDS && sizeof(w) < sizeof(o));
+    memset(&o, 0, sizeof(o));
+    o.t_ms = 0xDEADBEEFu; o.enc_l = -123456789; o.enc_r = 2000000000; o.dist_mm = -42;
+    o.x_mm = -8388608; o.y_mm = 8388607; o.heading_cdeg = -720000; o.v_l_mm_s = -511; o.v_r_mm_s = 450;
+    o.v_mm_s = -30; o.yaw_rate_cdeg_s = -32768; o.duty_l = -1000; o.duty_r = 1000; o.rejected = 65535u;
+    o.state = 4u; o.phase = 4u; o.auth = 2u; o.last_done_seq = 31u; o.last_done_src = 2u;
+    o.last_fail_seq = 17u; o.done_count = 255u; o.fail_count = 1u; o.hw_ok = 1u;
+    motion_odom_pack(&o, w);
+    memset(&r, 0x5A, sizeof(r));                /* every field must be written */
+    motion_odom_unpack(w, &r);
+    {
+        uint32_t w2[MOTION_ODOM_WORDS];
+
+        motion_odom_pack(&r, w2);
+        CHECK("S2-H16", memcmp(w, w2, sizeof(w)) == 0);
+    }
+    memset(&r, 0, sizeof(r));                   /* same padding as o */
+    motion_odom_unpack(w, &r);
+    CHECK("S2-H16", memcmp(&o, &r, sizeof(o)) == 0);
+    o.v_l_mm_s = 32767; o.duty_r = -32768; o.x_mm = 100000000;              /* out of range: saturate */
+    motion_odom_pack(&o, w);
+    motion_odom_unpack(w, &r);
+    CHECK("S2-H16", r.v_l_mm_s == 511 && r.duty_r == -1024 && r.x_mm == 8388607);
 }
 
 int main(void)
@@ -368,6 +433,7 @@ int main(void)
         CHECK("S2-H15", rec.n == 1u && !motion_rec_peek(&rec, &code, &data));
     }
 
+    test_pack_s2();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;
 }

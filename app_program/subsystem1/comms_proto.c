@@ -12,10 +12,7 @@
 #include "comms_proto.h"
 #include "../app_pack.h"
 
-/* Code 39 data symbols; index in a frame = position here + 1. */
-static char const k_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
-
-typedef char comms_check_symbols[((sizeof(k_map_chars) - 1u) == COMMS_SYMBOL_COUNT) ? 1 : -1];
+typedef char comms_check_symbols[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
 
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
 static comms_param_t const k_params[COMMS_PARAM_COUNT] =
@@ -45,21 +42,12 @@ static comms_param_t const k_params[COMMS_PARAM_COUNT] =
  * --------------------------------------------------------------------- */
 uint8_t comms_symbol_index(char c)
 {
-    uint8_t i;
-
-    for (i = 0u; i < COMMS_SYMBOL_COUNT; i++)
-    {
-        if (k_map_chars[i] == c)
-        {
-            return (uint8_t)(i + 1u);
-        }
-    }
-    return 0u;
+    return pk_sym_index(c);
 }
 
 char comms_symbol_char(uint8_t index)
 {
-    return ((index >= 1u) && (index <= COMMS_SYMBOL_COUNT)) ? k_map_chars[index - 1u] : '\0';
+    return pk_sym_char(index);
 }
 
 static void put_header(pk_writer_t * p_w, comms_frame_type_t type)
@@ -360,16 +348,7 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
 
 bool comms_map_char_ok(char c)
 {
-    uint8_t i;
-
-    for (i = 0u; i < (uint8_t)(sizeof(k_map_chars) - 1u); i++)
-    {
-        if (k_map_chars[i] == c)
-        {
-            return true;
-        }
-    }
-    return false;
+    return (pk_sym_index(c) != 0u);
 }
 
 comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)

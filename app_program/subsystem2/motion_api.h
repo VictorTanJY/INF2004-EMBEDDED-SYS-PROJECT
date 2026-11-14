@@ -27,8 +27,9 @@
 #include "motion_types.h"
 
 #define MOTION_API_E_PAR        (-17)       /* same value as the kernel's E_PAR */
-#define MOTION_API_MAX_MM       32767       /* one MOVE: up to 32.7 m           */
-#define MOTION_API_MAX_DDEG     32767       /* one TURN: up to 3276.7 deg       */
+#define MOTION_API_MAX_MM       4095        /* one MOVE: up to 4.09 m (13-bit field) */
+#define MOTION_API_MAX_DDEG     4095        /* one TURN: up to 409.5 deg (13-bit field) */
+#define MOTION_API_MAX_RATE     511         /* mm/s or deg/s (9-bit field)          */
 
 /* Posts one raw command (subsystem2.c on the robot). */
 int motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1);

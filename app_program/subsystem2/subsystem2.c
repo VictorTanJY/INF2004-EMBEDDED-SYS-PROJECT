@@ -9,12 +9,13 @@
 
 #include "subsystem2.h"
 #include "drv_motor.h"
+#include "motion_core.h"
 #include "../subsystem4/subsystem4.h"
 
 EXPORT ID g_mbf_motion;
 
 static app_lock_t       g_odom_lock;
-static motion_odom_t    g_odom;
+static uint32_t         g_odom[MOTION_ODOM_WORDS];  /* packed (CR1), under g_odom_lock */
 static ID               g_tid_motion;
 static ID               g_cyc_motion;
 
@@ -40,10 +41,15 @@ EXPORT ER subsystem2_init(void)
     T_CCYC  ccyc = {0};
 
     app_lock_init(&g_odom_lock);
+    {
+        motion_odom_t const zero = {0};
+
+        motion_odom_pack(&zero, g_odom);    /* packed zero (offset-binary fields) */
+    }
 
     cmbf.mbfatr = TA_TFIFO;
-    cmbf.bufsz  = S2_MBF_MOTION_DEPTH * (sizeof(INT) + sizeof(motion_cmd_t));
-    cmbf.maxmsz = sizeof(motion_cmd_t);
+    cmbf.bufsz  = S2_MBF_MOTION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
+    cmbf.maxmsz = sizeof(uint32_t);         /* one packed command word (CR1) */
     g_mbf_motion = tk_cre_mbf(&cmbf);
     if (g_mbf_motion < E_OK)
     {
@@ -70,7 +76,9 @@ EXPORT ER subsystem2_start(void)
 
 EXPORT ER motion_send(motion_cmd_t const * p_cmd)
 {
-    return tk_snd_mbf(g_mbf_motion, (void *)p_cmd, sizeof(*p_cmd), TMO_POL);
+    uint32_t word = motion_cmd_pack(p_cmd);
+
+    return tk_snd_mbf(g_mbf_motion, &word, sizeof(word), TMO_POL);
 }
 
 EXPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1)
@@ -86,19 +94,35 @@ EXPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t
     return motion_send(&c);
 }
 
+/* The snapshot is stored packed (MOTION_ODOM_WORDS words).  Writer and
+   readers pack / unpack in their own task and copy the whole record under
+   the lock, so no task ever does a read-modify-write on the shared words. */
 EXPORT void motion_get_odom(motion_odom_t * p_out)
 {
-    UINT sts = app_lock(&g_odom_lock);
+    uint32_t w[MOTION_ODOM_WORDS];
+    UINT     sts = app_lock(&g_odom_lock);
+    uint32_t i;
 
-    *p_out = g_odom;
+    for (i = 0u; i < MOTION_ODOM_WORDS; i++)
+    {
+        w[i] = g_odom[i];
+    }
     app_unlock(&g_odom_lock, sts);
+    motion_odom_unpack(w, p_out);
 }
 
 EXPORT void motion_put_odom(motion_odom_t const * p_in)
 {
-    UINT sts = app_lock(&g_odom_lock);
+    uint32_t w[MOTION_ODOM_WORDS];
+    UINT     sts;
+    uint32_t i;
 
-    g_odom = *p_in;
+    motion_odom_pack(p_in, w);
+    sts = app_lock(&g_odom_lock);
+    for (i = 0u; i < MOTION_ODOM_WORDS; i++)
+    {
+        g_odom[i] = w[i];
+    }
     app_unlock(&g_odom_lock, sts);
 }
 

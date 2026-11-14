@@ -36,6 +36,7 @@
 #include "subsystem5.h"
 #include "mission_cfg.h"
 #include "obstacle_core.h"
+#include "mission_core.h"         /* scan_req_unpack (CR1) */
 #include "drv_servo.h"
 #include "drv_ultrasonic.h"
 #include "../app_types.h"
@@ -265,7 +266,7 @@ static void drive(int32_t v, int32_t target_h, motion_odom_t const * p_odom)
     int32_t const err = target_h - p_odom->heading_cdeg;
     int32_t const w   = app_clamp_i32(err * OBST_HOLD_K, -OBST_HOLD_MAX, OBST_HOLD_MAX);
 
-    g_o.drive_seq++;
+    g_o.drive_seq = motion_seq_next(g_o.drive_seq);
     (void)motion_drive((uint8_t)MOTION_SRC_AVOID, g_o.drive_seq, (int16_t)v, (int16_t)w);
 }
 
@@ -278,7 +279,7 @@ static void send_step(uint8_t kind, int16_t value, motion_odom_t const * p_odom)
 {
     uint16_t const amount = (uint16_t)app_abs_i32(value);
 
-    g_o.seq++;
+    g_o.seq = motion_seq_next(g_o.seq);           /* 5-bit seq (CR1) */
     g_o.wait_fail_count = p_odom->fail_count;
     g_o.b_wait_motion   = true;
     if (kind == (uint8_t)OBST_STEP_TURN)
@@ -352,7 +353,7 @@ static void send_turn(int16_t ddeg, uint16_t rate_deg_s, motion_odom_t const * p
 {
     uint16_t const amount = (uint16_t)app_abs_i32(ddeg);
 
-    g_o.seq++;
+    g_o.seq = motion_seq_next(g_o.seq);           /* 5-bit seq (CR1) */
     g_o.wait_fail_count = p_odom->fail_count;
     g_o.b_wait_motion   = true;
     if (ddeg >= 0)
@@ -1613,6 +1614,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
 EXPORT void obstacle_task(INT stacd, void * p_exinf)
 {
     scan_req_t    req;
+    uint16_t      req_word;                 /* mbf_scan: one packed half-word (CR1) */
     motion_odom_t odom;
     obst_snap_t   snap;
 
@@ -1640,8 +1642,9 @@ EXPORT void obstacle_task(INT stacd, void * p_exinf)
 
         if ((ptn & OBST_FLG_REQ) != 0u)
         {
-            while (tk_rcv_mbf(g_mbf_scan, &req, TMO_POL) == (INT)sizeof(req))
+            while (tk_rcv_mbf(g_mbf_scan, &req_word, TMO_POL) == (INT)sizeof(req_word))
             {
+                scan_req_unpack(req_word, &req);
                 handle_request(&req, now_ms, &odom);
             }
         }

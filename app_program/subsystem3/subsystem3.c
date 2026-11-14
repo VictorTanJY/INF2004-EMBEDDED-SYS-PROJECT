@@ -6,15 +6,23 @@
  */
 
 #include "subsystem3.h"
+#include "line_track.h"
 
 EXPORT ID g_tid_line;
 
+/* Stored packed (Change Requirement 1); whole records copied under the
+   lock, packing and unpacking done in the writer's / reader's own task. */
 static app_lock_t   g_line_lock;
-static line_snap_t  g_line_snap;
+static uint32_t     g_line_snap[LINE_SNAP_WORDS];
 
 EXPORT ER subsystem3_init(void)
 {
     app_lock_init(&g_line_lock);
+    {
+        line_snap_t const zero = {0};
+
+        line_snap_pack(&zero, g_line_snap);    /* packed zero (offset-binary fields) */
+    }
     return E_OK;
 }
 
@@ -26,16 +34,29 @@ EXPORT ER subsystem3_start(void)
 
 EXPORT void line_get_snap(line_snap_t * p_out)
 {
-    UINT sts = app_lock(&g_line_lock);
+    uint32_t w[LINE_SNAP_WORDS];
+    uint32_t i;
+    UINT     sts = app_lock(&g_line_lock);
 
-    *p_out = g_line_snap;
+    for (i = 0u; i < LINE_SNAP_WORDS; i++)
+    {
+        w[i] = g_line_snap[i];
+    }
     app_unlock(&g_line_lock, sts);
+    line_snap_unpack(w, p_out);
 }
 
 EXPORT void line_put_snap(line_snap_t const * p_in)
 {
-    UINT sts = app_lock(&g_line_lock);
+    uint32_t w[LINE_SNAP_WORDS];
+    uint32_t i;
+    UINT     sts;
 
-    g_line_snap = *p_in;
+    line_snap_pack(p_in, w);
+    sts = app_lock(&g_line_lock);
+    for (i = 0u; i < LINE_SNAP_WORDS; i++)
+    {
+        g_line_snap[i] = w[i];
+    }
     app_unlock(&g_line_lock, sts);
 }

@@ -35,7 +35,7 @@
  *  Senders: MissionTask (S5), LineBarcodeTask (S3), ObstacleTask (S5).
  *  Always sent with TMO_POL; MotionTask drains it every 10 ms cycle.
  * --------------------------------------------------------------------- */
-#define S2_MBF_MOTION_DEPTH     8u  /* commands; 12 B each in the buffer */
+#define S2_MBF_MOTION_DEPTH     8u  /* commands; 8 B each in the buffer (4 B word + header) */
 
 IMPORT ID g_mbf_motion;         /* mbf_motion in the design documents */
 

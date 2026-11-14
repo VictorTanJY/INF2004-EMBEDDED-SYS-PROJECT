@@ -6,15 +6,20 @@
  */
 
 #include "subsystem5.h"
+#include "mission_core.h"
+#include "obstacle_core.h"
 
 EXPORT ID g_mbf_mission;
 EXPORT ID g_mbf_scan;
 EXPORT ID g_flg_obst;
 
+/* Snapshots are stored packed (Change Requirement 1).  The writer packs
+   and the readers unpack in their own task; only whole records are copied
+   under the lock, so nobody read-modify-writes the shared words. */
 static app_lock_t       g_mission_lock;
-static mission_snap_t   g_mission_snap;
+static uint32_t         g_mission_snap[MISSION_SNAP_WORDS];
 static app_lock_t       g_obst_lock;
-static obst_snap_t      g_obst_snap;
+static uint32_t         g_obst_snap[OBST_SNAP_WORDS];
 static UW               g_drops;
 static ID               g_cyc_range;
 
@@ -33,21 +38,30 @@ EXPORT ER subsystem5_init(void)
 
     app_lock_init(&g_mission_lock);
     app_lock_init(&g_obst_lock);
-    g_mission_snap.state       = (uint8_t)MISSION_ST_BOOT;
-    g_mission_snap.pending_nav = (uint8_t)MISSION_NAV_NONE;
-    g_obst_snap.d_mm           = OBST_RANGE_NONE;
+    {
+        mission_snap_t ms = {0};
+        obst_snap_t    os = {0};
 
+        ms.state       = (uint8_t)MISSION_ST_BOOT;
+        ms.pending_nav = (uint8_t)MISSION_NAV_NONE;
+        os.d_mm        = OBST_RANGE_NONE;
+        mission_snap_pack(&ms, g_mission_snap);
+        obst_snap_pack(&os, g_obst_snap);
+    }
+
+    /* Messages are one packed word each (CR1); the kernel adds a 4-byte
+       header and rounds the message up to 4 bytes (messagebuf.h). */
     cmbf.mbfatr  = TA_TFIFO;
-    cmbf.bufsz   = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(mission_evt_t));
-    cmbf.maxmsz  = sizeof(mission_evt_t);
+    cmbf.bufsz   = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
+    cmbf.maxmsz  = sizeof(uint32_t);
     g_mbf_mission = tk_cre_mbf(&cmbf);
     if (g_mbf_mission < E_OK)
     {
         return g_mbf_mission;
     }
 
-    cmbf.bufsz  = S5_MBF_SCAN_DEPTH * (sizeof(INT) + sizeof(scan_req_t));
-    cmbf.maxmsz = sizeof(scan_req_t);
+    cmbf.bufsz  = S5_MBF_SCAN_DEPTH * (sizeof(INT) + sizeof(INT));   /* 2 B rounded to 4 */
+    cmbf.maxmsz = sizeof(uint16_t);
     g_mbf_scan  = tk_cre_mbf(&cmbf);
     if (g_mbf_scan < E_OK)
     {
@@ -90,13 +104,15 @@ EXPORT ER subsystem5_start(void)
 EXPORT ER mission_post(uint8_t type, uint8_t src, uint16_t a, int32_t data)
 {
     mission_evt_t evt;
+    uint32_t      word;
     ER            er;
 
     evt.type = type;
     evt.src  = src;
     evt.a    = a;
     evt.data = data;
-    er = tk_snd_mbf(g_mbf_mission, &evt, sizeof(evt), TMO_POL);
+    word = mission_evt_pack(&evt);
+    er = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
     if (er != E_OK)
     {
         app_atomic_inc(&g_drops);       /* senders on both cores */
@@ -112,44 +128,72 @@ EXPORT uint32_t mission_post_drops(void)
 EXPORT ER scan_request(uint8_t type, uint8_t seq, int16_t param)
 {
     scan_req_t req;
+    uint16_t   word;
     ER         er;
 
     req.type  = type;
     req.seq   = seq;
     req.param = param;
-    er = tk_snd_mbf(g_mbf_scan, &req, sizeof(req), TMO_POL);
+    word = scan_req_pack(&req);
+    er = tk_snd_mbf(g_mbf_scan, &word, sizeof(word), TMO_POL);
     (void)tk_set_flg(g_flg_obst, OBST_FLG_REQ);
     return er;
 }
 
 EXPORT void mission_get_snap(mission_snap_t * p_out)
 {
-    UINT sts = app_lock(&g_mission_lock);
+    uint32_t w[MISSION_SNAP_WORDS];
+    uint32_t i;
+    UINT     sts = app_lock(&g_mission_lock);
 
-    *p_out = g_mission_snap;
+    for (i = 0u; i < MISSION_SNAP_WORDS; i++)
+    {
+        w[i] = g_mission_snap[i];
+    }
     app_unlock(&g_mission_lock, sts);
+    mission_snap_unpack(w, p_out);
 }
 
 EXPORT void mission_put_snap(mission_snap_t const * p_in)
 {
-    UINT sts = app_lock(&g_mission_lock);
+    uint32_t w[MISSION_SNAP_WORDS];
+    UINT     sts;
+    uint32_t i;
 
-    g_mission_snap = *p_in;
+    mission_snap_pack(p_in, w);
+    sts = app_lock(&g_mission_lock);
+    for (i = 0u; i < MISSION_SNAP_WORDS; i++)
+    {
+        g_mission_snap[i] = w[i];
+    }
     app_unlock(&g_mission_lock, sts);
 }
 
 EXPORT void obst_get_snap(obst_snap_t * p_out)
 {
-    UINT sts = app_lock(&g_obst_lock);
+    uint32_t w[OBST_SNAP_WORDS];
+    uint32_t i;
+    UINT     sts = app_lock(&g_obst_lock);
 
-    *p_out = g_obst_snap;
+    for (i = 0u; i < OBST_SNAP_WORDS; i++)
+    {
+        w[i] = g_obst_snap[i];
+    }
     app_unlock(&g_obst_lock, sts);
+    obst_snap_unpack(w, p_out);
 }
 
 EXPORT void obst_put_snap(obst_snap_t const * p_in)
 {
-    UINT sts = app_lock(&g_obst_lock);
+    uint32_t w[OBST_SNAP_WORDS];
+    UINT     sts;
+    uint32_t i;
 
-    g_obst_snap = *p_in;
+    obst_snap_pack(p_in, w);
+    sts = app_lock(&g_obst_lock);
+    for (i = 0u; i < OBST_SNAP_WORDS; i++)
+    {
+        g_obst_snap[i] = w[i];
+    }
     app_unlock(&g_obst_lock, sts);
 }

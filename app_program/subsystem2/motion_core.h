@@ -150,4 +150,17 @@ bool            motion_core_pop_event(motion_core_t * p_mc, motion_event_t * p_e
 /* Expected duration of a manoeuvre (ms), used for its timeout. */
 uint32_t        motion_core_expected_ms(int64_t distance_um, int32_t vmax_mm_s);
 
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1 (minimum-bit data): the command word and the
+ *  shared odometry snapshot as stored between tasks.
+ * --------------------------------------------------------------------- */
+uint32_t motion_cmd_pack(motion_cmd_t const * p_cmd);
+void     motion_cmd_unpack(uint32_t word, motion_cmd_t * p_cmd);
+
+#define MOTION_ODOM_BITS        329u    /* sum of the layout widths      */
+#define MOTION_ODOM_WORDS       11u     /* 44 B instead of 52 B          */
+void     motion_odom_pack(motion_odom_t const * p_odom, uint32_t * p_words);
+void     motion_odom_unpack(uint32_t const * p_words, motion_odom_t * p_odom);
+uint32_t motion_odom_layout_bits(void);
+
 #endif /* MOTION_CORE_H */

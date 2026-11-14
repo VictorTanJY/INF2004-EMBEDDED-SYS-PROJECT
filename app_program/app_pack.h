@@ -17,9 +17,14 @@
  *	    sequence numbers, timestamps) keep their low bits and WRAP; the
  *	    reader takes modular differences (pk_wrap_diff).
  *
- *	Two forms:
- *	  - words in RAM (messages, snapshots): pk_set() / pk_get() place a
- *	    field at a fixed bit position of a uint32_t with masks and shifts;
+ *	Three forms:
+ *	  - words in RAM (messages): pk_set() / pk_get() place a field at a
+ *	    fixed bit position of a uint32_t with masks and shifts;
+ *	  - records in RAM (shared snapshots): a layout table (pk_field_t)
+ *	    lists each field of the task-local struct with its width and kind;
+ *	    pk_pack_rec() / pk_unpack_rec() move the fields into / out of an
+ *	    array of words, one after the other.  The table is also the data
+ *	    representation table of that record;
  *	  - byte streams (MQTT payloads): pk_writer_t / pk_reader_t append
  *	    fields LSB first, so bit 0 of the stream is bit 0 of byte 0 and the
  *	    layout does not depend on the compiler or the CPU's byte order.
@@ -31,6 +36,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 /* Mask of the low width bits (width 1..32). */
 static inline uint32_t pk_mask(uint8_t width)
@@ -116,74 +122,48 @@ typedef struct
 	bool           b_short; /* read past the end: the frame is invalid  */
 } pk_reader_t;
 
-static inline void pk_writer_init(pk_writer_t *p_w, uint8_t *p_buf, uint16_t cap)
+void     pk_writer_init(pk_writer_t *p_w, uint8_t *p_buf, uint16_t cap);
+void     pk_put(pk_writer_t *p_w, uint32_t value, uint8_t width);  /* low width bits, 1..32 */
+uint16_t pk_writer_len(pk_writer_t const *p_w);                     /* bytes, 0 if overflowed */
+void     pk_reader_init(pk_reader_t *p_r, uint8_t const *p_buf, uint16_t len);
+uint32_t pk_take(pk_reader_t *p_r, uint8_t width);                  /* 0 and b_short past the end */
+
+/* ---- Code 39 data character in 6 bits (index 1..43, 0 = none) ------- */
+#define PK_SYM_COUNT	43u
+uint8_t  pk_sym_index(char c);
+char     pk_sym_char(uint8_t index);
+
+/* ---- Records: table-driven packing of a struct into words ------------ */
+typedef enum
 {
-	uint16_t i;
+	PK_U   = 0,		/* unsigned, saturates at the field maximum          */
+	PK_S   = 1,		/* signed, offset-binary, saturates at both ends     */
+	PK_W   = 2,		/* counter / time: low bits, wraps (32 = whole)      */
+	PK_UN  = 3,		/* unsigned with a "none" value: the C type's maximum
+				   (0xFF, 0xFFFF, ...) <-> the field's all-ones;
+				   other values saturate one below it              */
+	PK_SYM = 4		/* char: Code 39 symbol index, 6 bits                */
+} pk_kind_t;
 
-	for (i = 0u; i < cap; i++)
-	{
-		p_buf[i] = 0u;
-	}
-	p_w->p_buf      = p_buf;
-	p_w->cap        = cap;
-	p_w->bits       = 0u;
-	p_w->b_overflow = false;
-}
-
-/* Append the low width bits (1..32) of value. */
-static inline void pk_put(pk_writer_t *p_w, uint32_t value, uint8_t width)
+typedef struct
 {
-	uint8_t i;
+	uint16_t offset;	/* offsetof() the member                      */
+	uint8_t  size;		/* sizeof() the member: 1, 2 or 4             */
+	uint8_t  width;		/* bits stored, 1..32                          */
+	uint8_t  kind;		/* pk_kind_t                                   */
+} pk_field_t;
 
-	if ((width > 32u) || (((uint32_t)p_w->bits + width) > ((uint32_t)p_w->cap * 8u)))
-	{
-		p_w->b_overflow = true;
-		return;
-	}
-	for (i = 0u; i < width; i++)
-	{
-		if (((value >> i) & 1u) != 0u)
-		{
-			p_w->p_buf[p_w->bits >> 3] |= (uint8_t)(1u << (p_w->bits & 7u));
-		}
-		p_w->bits++;
-	}
-}
+#define PK_FIELD(type, member, width, kind) \
+	{ (uint16_t)offsetof(type, member), (uint8_t)sizeof(((type *)0)->member), (uint8_t)(width), (uint8_t)(kind) }
 
-/* Frame length in whole bytes, 0 if anything overflowed. */
-static inline uint16_t pk_writer_len(pk_writer_t const *p_w)
-{
-	return p_w->b_overflow ? 0u : (uint16_t)((p_w->bits + 7u) >> 3);
-}
+/* Words needed for a number of bits. */
+#define PK_WORDS(bits)	(((bits) + 31u) / 32u)
 
-static inline void pk_reader_init(pk_reader_t *p_r, uint8_t const *p_buf, uint16_t len)
-{
-	p_r->p_buf   = p_buf;
-	p_r->len     = len;
-	p_r->bits    = 0u;
-	p_r->b_short = false;
-}
-
-/* Read the next width bits (1..32); 0 and b_short once past the end. */
-static inline uint32_t pk_take(pk_reader_t *p_r, uint8_t width)
-{
-	uint32_t value = 0u;
-	uint8_t  i;
-
-	if ((width > 32u) || (((uint32_t)p_r->bits + width) > ((uint32_t)p_r->len * 8u)))
-	{
-		p_r->b_short = true;
-		return 0u;
-	}
-	for (i = 0u; i < width; i++)
-	{
-		if ((p_r->p_buf[p_r->bits >> 3] & (uint8_t)(1u << (p_r->bits & 7u))) != 0u)
-		{
-			value |= (1uL << i);
-		}
-		p_r->bits++;
-	}
-	return value;
-}
+uint32_t pk_layout_bits(pk_field_t const *p_f, uint16_t n);
+/* Pack every field of p_rec into p_words (nwords, cleared first). */
+void     pk_pack_rec(pk_field_t const *p_f, uint16_t n, void const *p_rec,
+		     uint32_t *p_words, uint16_t nwords);
+/* Unpack p_words into the fields of p_rec (other bytes are left as they are). */
+void     pk_unpack_rec(pk_field_t const *p_f, uint16_t n, uint32_t const *p_words, void *p_rec);
 
 #endif /* APP_PACK_H */

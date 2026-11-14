@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "line_cfg.h"
+#include "line_types.h"
 
 /* ---- Calibration (CALIBRATING: 360 deg spin, Week 6 Section 5) ------- */
 typedef struct
@@ -98,5 +99,12 @@ void     line_slip_sample(line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_
    line sensors cross the line again; 0 if not found or implausible.
    *p_diag = dark runs seen by L << 24 | by R << 16 | encoder deg spun. */
 uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal, uint32_t * p_diag);
+
+/* Change Requirement 1: the line snapshot (IF-04) as stored between tasks. */
+#define LINE_SNAP_BITS          208u    /* sum of the layout widths      */
+#define LINE_SNAP_WORDS         7u      /* 28 B instead of 36 B          */
+void     line_snap_pack(line_snap_t const * p_snap, uint32_t * p_words);
+void     line_snap_unpack(uint32_t const * p_words, line_snap_t * p_snap);
+uint32_t line_snap_layout_bits(void);
 
 #endif /* LINE_TRACK_H */

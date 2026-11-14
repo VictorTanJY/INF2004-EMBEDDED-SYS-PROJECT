@@ -41,15 +41,33 @@ typedef enum
     MOTION_CMD_CLEAR_ESTOP = 6  /* MISSION only, after an operator reset           */
 } motion_cmd_code_t;
 
+/* Unpacked command (task-local).  Through mbf_motion it travels as ONE
+   32-bit word (Change Requirement 1, motion_cmd_pack()):
+     src 2 | cmd 3 | seq 5 | payload 22, the payload by command:
+     DRIVE  v 10 (+-511 mm/s) | omega 12 (+-2047 mrad/s), offset-binary
+     MOVE   distance 13 (+-4095 mm) | speed 9 (0..511 mm/s)
+     TURN   angle 13 (+-4095 x 0.1 deg) | rate 9 (0..511 deg/s)
+     SET_AUTH  authority 2;  STOP, CLEAR_ESTOP: none
+   Values outside a field saturate; the named API (motion_api.c) rejects
+   them before they get here. */
+#define MOTION_SEQ_BITS         5u
+#define MOTION_SEQ_MASK         0x1Fu
+
 typedef struct
 {
     uint8_t src;                /* motion_src_t                          */
-    uint8_t seq;                /* sender's sequence number (wraps)      */
+    uint8_t seq;                /* sender's sequence number, 5 bits, wraps */
     uint8_t cmd;                /* motion_cmd_code_t                     */
     uint8_t reserved;           /* 0                                     */
     int16_t p0;                 /* see motion_cmd_code_t                 */
     int16_t p1;
-} motion_cmd_t;                 /* 8 bytes */
+} motion_cmd_t;
+
+/* Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */
+static inline uint8_t motion_seq_next(uint8_t seq)
+{
+    return (uint8_t)((seq + 1u) & MOTION_SEQ_MASK);
+}
 
 /* ---------------------------------------------------------------------
  *  IF-02  Odometry snapshot (written by MotionTask every 10 ms).

@@ -411,7 +411,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             {
                 omega = app_clamp_i32(omega, -LINE_BC_OMEGA_MAX, LINE_BC_OMEGA_MAX);
             }
-            drive_seq++;
+            drive_seq = motion_seq_next(drive_seq);
             (void)motion_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
                                (int16_t)g_trk.v, (int16_t)omega);
         }

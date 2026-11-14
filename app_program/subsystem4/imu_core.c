@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 #include "imu_core.h"
+#include "../app_pack.h"
 #include "imu_cfg.h"
 #include "../app_types.h"
 #include "../app_math.h"
@@ -610,4 +611,46 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
         ev |= IMU_EV_MOTION;
     }
     return ev;
+}
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: data representation of IF-08 (IMU snapshot).
+ * --------------------------------------------------------------------- */
+static pk_field_t const k_imu_layout[] =
+{
+    PK_FIELD(imu_snap_t, t_ms,             32u, PK_W),
+    PK_FIELD(imu_snap_t, pitch_cdeg,       15u, PK_S),   /* +-163.83 deg (pitch is +-90)  */
+    PK_FIELD(imu_snap_t, roll_cdeg,        16u, PK_S),   /* +-327.67 deg (roll is +-180)  */
+    PK_FIELD(imu_snap_t, heading_cdeg,     16u, PK_U),   /* 0..35999                      */
+    PK_FIELD(imu_snap_t, turn_rate_cdeg_s, 16u, PK_S),   /* the int16_t range, +-327 deg/s */
+    PK_FIELD(imu_snap_t, accel_mg,         15u, PK_S),   /* +-16 g (sensor range)         */
+    PK_FIELD(imu_snap_t, hump_max_mm,      10u, PK_U),   /* 0..1023 mm                    */
+    PK_FIELD(imu_snap_t, last_hump_mm,     10u, PK_U),
+    PK_FIELD(imu_snap_t, humps,             8u, PK_U),   /* per run, saturates at 255     */
+    PK_FIELD(imu_snap_t, i2c_errors,       16u, PK_W),   /* counter                       */
+    PK_FIELD(imu_snap_t, hump_state,        2u, PK_U),   /* 4 states                      */
+    PK_FIELD(imu_snap_t, motion,            3u, PK_U),   /* 8 classes                     */
+    PK_FIELD(imu_snap_t, ok,                1u, PK_U),
+    PK_FIELD(imu_snap_t, cal,               2u, PK_U),   /* IMU_CAL_LEVEL | IMU_CAL_MAG   */
+    PK_FIELD(imu_snap_t, pitch_valid,       1u, PK_U),
+    PK_FIELD(imu_snap_t, tilt,              1u, PK_U)
+};
+
+#define IMU_FIELDS      ((uint16_t)(sizeof(k_imu_layout) / sizeof(k_imu_layout[0])))
+
+void imu_snap_pack(imu_snap_t const * p_snap, uint32_t * p_words)
+{
+    pk_pack_rec(k_imu_layout, IMU_FIELDS, p_snap, p_words, IMU_SNAP_WORDS);
+}
+
+void imu_snap_unpack(uint32_t const * p_words, imu_snap_t * p_snap)
+{
+    p_snap->reserved[0] = 0u;
+    p_snap->reserved[1] = 0u;
+    pk_unpack_rec(k_imu_layout, IMU_FIELDS, p_words, p_snap);
+}
+
+uint32_t imu_snap_layout_bits(void)
+{
+    return pk_layout_bits(k_imu_layout, IMU_FIELDS);
 }

@@ -10,7 +10,7 @@ SAN     := -fsanitize=address,undefined -fno-omit-frame-pointer
 HDRS    := $(wildcard ../../../app_program/*.h ../../../app_program/*/*.h)
 test_shared: $(HDRS)
 
-test_shared: test_math.c $(SRC_DIR)/app_math.c
+test_shared: test_math.c $(SRC_DIR)/app_math.c $(SRC_DIR)/app_pack.c
 	$(CC) $(CFLAGS) $(SAN) -o $@ $(filter %.c,$^) -lm
 
 run: test_shared
