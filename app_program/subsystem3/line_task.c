@@ -39,7 +39,7 @@
 #define LINE_LOG_BC_SHORT       37u
 /* 73 (7 Nov) = barcode sensor levels after every capture, 0..1000 each:
    decoded by pass << 29 (0 swing, 1 mid, 2 low, 3 adaptive swing, 4 best
-   match) | white noise (darkest - lightest white, max 511) << 20 |
+   match, 5 exact without an end speck, 6 best match without one) | white noise (darkest - lightest white, max 511) << 20 |
    lightest white << 10 | darkest bar.  For choosing BC_DELTA. */
 #define LINE_LOG_BC_LEVELS      73u
 /* 9 Nov, after a rejected read: 76 = elements found by each reading,
@@ -53,6 +53,9 @@
 #define LINE_LOG_ELEM_MAX       45u     /* widths logged per reading (15 records) */
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
 #define LINE_LOG_NO_FLOOR       79u     /* 14 Nov, lifted: raw_l << 20 | raw_r << 10 | raw_bc */
+/* 14 Nov: 80 = how long the decode at the end of a capture took, us
+   (the line task's heartbeat allows 50 ms; best match took longer). */
+#define LINE_LOG_BC_DECODE_US   80u
 #define LINE_LOG_TURN_GAIN      38u
 /* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
 #define LINE_LOG_SLIP_DIAG      45u
@@ -291,6 +294,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             bc_out_t         out;
             bc_result_t      r;
             bool             bc_was_capturing;
+            uint32_t         t0_us;
 
             sum[LINE_CH_L]  += p_s[LINE_CH_L];
             sum[LINE_CH_R]  += p_s[LINE_CH_R];
@@ -300,7 +304,13 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 continue;
             }
             bc_was_capturing = (g_bc.state == (uint8_t)LINE_BC_CAPTURING);
+            t0_us = bc_was_capturing ? (uint32_t)app_time_us() : 0u;
             r = bc_sample(&g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]), step_um, &out);
+            if (bc_was_capturing && ((r == BC_VALID) || (r == BC_REJECT)))
+            {
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_DECODE_US,
+                                       (int32_t)((uint32_t)app_time_us() - t0_us));
+            }
             if (r == BC_VALID)
             {
                 snap.barcode_ok++;

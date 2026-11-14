@@ -128,6 +128,11 @@
 #define BC_MAX_ELEMENTS             59          /* 6 characters              */
 #define BC_COOLDOWN_UM              100000      /* 100 mm after a read       */
 #define BC_RATIO_MIN_X10            15          /* wide >= 1.5 x narrow      */
+/* 14 Nov: an end bar thinner than this % of the read's median bar is a
+   speck before the start or after the stop (a crease, a hair, a tape
+   edge): 1.4 mm on the car beside 2.0-3.6 mm narrow bars.  It is dropped
+   with the space beside it if the read does not decode as it is.      */
+#define BC_SPECK_PCT                67
 /* 7 Nov second try: the capture keeps the darkest reading of every
    BC_PROF_BIN_UM of travel; if the swing reading does not decode, bars
    are found again from that profile against this code's own levels

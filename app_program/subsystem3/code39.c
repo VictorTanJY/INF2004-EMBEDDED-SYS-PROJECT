@@ -372,6 +372,7 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, 
 #define BEST_MARGIN_X10 20u         /* runner-up must cost >= 2 x best   */
 #define BEST_SPECK_PCT  50u         /* speck: under half a narrow       */
 #define BEST_INF        0x3FFFFFFFu
+#define BEST_BOUND_MAX  (((BEST_ELEM_MAX * BEST_T) * BEST_MARGIN_X10) / 10u)
 
 static uint32_t median_of(uint32_t * p_v, uint16_t n)
 {
@@ -460,12 +461,16 @@ static bool is_speck(uint32_t w, uint16_t i, uint32_t const * p_lv)
 }
 
 /* Cost of lining p_w up with the printed widths p_e (BEST_T of them);
-   p_lv: this read's narrow / wide levels, p_wide: printed element wide. */
+   p_wide: printed element wide; p_speck: measured element is a speck.
+   14 Nov: gives up (BEST_INF) once every open path costs bound or more:
+   such a fit can change neither the best nor the runner-up (a car read
+   took over 50 ms and tripped the line task's heartbeat). */
 static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e, bool const * p_wide,
-                         uint32_t const * p_lv, uint32_t inv)
+                         bool const * p_speck, uint32_t inv, uint32_t bound)
 {
     static uint32_t dp[BEST_N_MAX + 1u][BEST_T + 1u];
     static uint8_t  ed[BEST_N_MAX + 1u][BEST_T + 1u];
+    static uint32_t rmin[BEST_N_MAX + 1u];     /* smallest cost in each row */
     uint32_t        best;
     uint16_t        i;
     uint16_t        j;
@@ -479,12 +484,25 @@ static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e,
             dp[i][j] = BEST_INF;
             ed[i][j] = 0u;
         }
+        rmin[i] = BEST_INF;
     }
     dp[0][0] = 0u;
+    rmin[0]  = 0u;
     dp[0][2] = BEST_EDIT;               /* first bar and space lost */
     ed[0][2] = 1u;
     for (i = 0u; i < n; i++)
     {
+        /* Every path to the end passes a filled cell of row i, i + 1 or
+           i + 2 (a step moves on 1 or 3 measured elements, and rows
+           before i are done); costs only grow along a path. */
+        uint32_t c_open = rmin[i];
+
+        c_open = (((i + 1u) <= n) && (rmin[i + 1u] < c_open)) ? rmin[i + 1u] : c_open;
+        c_open = (((i + 2u) <= n) && (rmin[i + 2u] < c_open)) ? rmin[i + 2u] : c_open;
+        if (c_open >= bound)
+        {
+            return BEST_INF;
+        }
         for (j = (i > BEST_BAND) ? (uint16_t)(i - BEST_BAND) : 0u; (j < BEST_T) && (j <= (i + BEST_BAND)); j++)
         {
             uint32_t const c0 = dp[i][j];
@@ -494,18 +512,19 @@ static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e,
             {
                 continue;
             }
-            if (!is_speck(p_w[i], i, p_lv))
+            if (!p_speck[i])
             {   /* 1 : 1 */
                 uint32_t const c = c0 + sq_err(p_w[i], p_e[j], inv);
 
                 if (c < dp[i + 1u][j + 1u])
                 {
                     dp[i + 1u][j + 1u] = c;
+                    rmin[i + 1u] = (c < rmin[i + 1u]) ? c : rmin[i + 1u];
                     ed[i + 1u][j + 1u] = e0;
                 }
             }
             if ((e0 < BEST_MAX_EDITS) && ((i + 3u) <= n) && in_band((uint16_t)(i + 3u), (uint16_t)(j + 1u)) &&
-                is_speck(p_w[i + 1u], (uint16_t)(i + 1u), p_lv))
+                p_speck[i + 1u])
             {   /* 3 measured : 1 printed */
                 uint32_t const c = c0 + BEST_EDIT +
                                    sq_err(p_w[i] + p_w[i + 1u] + p_w[i + 2u], p_e[j], inv);
@@ -513,6 +532,7 @@ static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e,
                 if (c < dp[i + 3u][j + 1u])
                 {
                     dp[i + 3u][j + 1u] = c;
+                    rmin[i + 3u] = (c < rmin[i + 3u]) ? c : rmin[i + 3u];
                     ed[i + 3u][j + 1u] = (uint8_t)(e0 + 1u);
                 }
             }
@@ -525,6 +545,7 @@ static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e,
                 if (c < dp[i + 1u][j + 3u])
                 {
                     dp[i + 1u][j + 3u] = c;
+                    rmin[i + 1u] = (c < rmin[i + 1u]) ? c : rmin[i + 1u];
                     ed[i + 1u][j + 3u] = (uint8_t)(e0 + 1u);
                 }
             }
@@ -546,6 +567,7 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n,
     uint32_t       lv[4];               /* bar n, bar W, space n, space W */
     uint32_t       e[BEST_T];
     bool           wd[BEST_T];
+    bool           sp[BEST_N_MAX];      /* measured element is a speck */
     uint16_t const star = code39_pattern('*');
     uint32_t       nar;
     uint32_t       inv;
@@ -573,6 +595,10 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n,
         return CODE39_ERR_RATIO;
     }
     inv = (100u << 16) / nar;
+    for (t = 0u; t < n; t++)
+    {
+        sp[t] = is_speck(p_widths[t], (uint16_t)t, lv);
+    }
     for (t = 0u; t < TABLE_LEN; t++)
     {
         uint16_t const pat = bits_of(k_table[t].p_bits);
@@ -610,7 +636,10 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n,
                     wd[BEST_T - 1u - k] = bx;
                 }
             }
-            cost = best_fit(p_widths, n, e, wd, lv, inv);
+            /* A fit costing c2 or more changes neither result, and the
+               runner-up only matters below the margin times the largest
+               best that is accepted. */
+            cost = best_fit(p_widths, n, e, wd, sp, inv, (c2 < BEST_BOUND_MAX) ? c2 : BEST_BOUND_MAX);
             if (cost < c1)
             {
                 if (k_table[t].c != ch1)

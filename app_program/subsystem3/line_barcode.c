@@ -264,6 +264,74 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
                             p_w, (uint16_t)BC_MAX_ELEMENTS);
 }
 
+/* 14 Nov: a speck before the start or after the stop adds a bar and a
+   space at that end, so the read has 31 or 33 elements and decodes as
+   nothing (two car reads of "*A*" on 14 Nov, both with a 1.4 mm bar
+   outside the code).  An end bar under BC_SPECK_PCT % of the read's
+   median inner bar is dropped with the space beside it; *p_first is
+   where the rest starts, and the count of the rest is returned (n if
+   nothing was dropped).  Most bars are narrow, so the median is one. */
+static uint16_t trim_specks(uint32_t const * p_w, uint16_t n, uint16_t * p_first)
+{
+    static uint32_t s[(BC_MAX_ELEMENTS / 2u) + 1u];
+    uint16_t        m = 0u;
+    uint16_t        i;
+    uint16_t        j;
+    uint16_t        last = n;
+    uint32_t        med;
+
+    *p_first = 0u;
+    if ((n < 11u) || ((n % 2u) == 0u))
+    {
+        return n;                       /* a read starts and ends with a bar */
+    }
+    for (i = 2u; (i + 2u) < n; i += 2u)  /* inner bars, insertion sort */
+    {
+        uint32_t const v = p_w[i];
+
+        for (j = m; (j > 0u) && (s[j - 1u] > v); j--)
+        {
+            s[j] = s[j - 1u];
+        }
+        s[j] = v;
+        m++;
+    }
+    med = s[m / 2u];
+    if (((uint64_t)p_w[0] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
+    {
+        *p_first = 2u;
+    }
+    if (((uint64_t)p_w[n - 1u] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
+    {
+        last = (uint16_t)(n - 2u);
+    }
+    return (uint16_t)(last - *p_first);
+}
+
+/* Exact decode (with the end repair) of one reading; if it fails, again
+   without an end speck.  *p_b_trim says the second one decoded.  The
+   first result is returned on failure (NOT_BARCODE must stay itself). */
+static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n, char * p_ch, bool * p_b_rev,
+                                    bool * p_b_trim)
+{
+    code39_result_t r = code39_decode_one_repair(p_w, n, BC_RATIO_MIN_X10, p_ch, p_b_rev);
+
+    *p_b_trim = false;
+    if ((r != CODE39_OK) && (r != CODE39_NOT_BARCODE))
+    {
+        uint16_t       first;
+        uint16_t const n2 = trim_specks(p_w, n, &first);
+
+        if ((n2 != n) &&
+            (code39_decode_one_repair(&p_w[first], n2, BC_RATIO_MIN_X10, p_ch, p_b_rev) == CODE39_OK))
+        {
+            *p_b_trim = true;
+            r = CODE39_OK;
+        }
+    }
+    return r;
+}
+
 /* The trailing white run ended the code: decode what was captured.
    7 Nov: the swing reading first; if it does not decode, bars found
    again from the darkness profile against this code's own levels, at
@@ -271,52 +339,78 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
    repaired for a bar lost at either end.
    9 Nov: then by swing over the darkness record, the swing sized to this
    code's own contrast and noise (a light print): 20, 15 then 10 % of it,
-   never under 4 x the noise; pass 3.  Exact decodes only (with the end
-   repair); the best match below uses the 20 % reading only.
+   never under 4 x the noise; pass 3.
    8 Nov: if none decodes exactly, the best match (code39_decode_one_best:
-   a bar split by a speck, or two thin elements run together) is tried on
-   the same readings in the same order; pass 4 says so. */
+   a bar split by a speck, or two thin elements run together); pass 4.
+   14 Nov: every exact decode is tried again without an end speck (pass
+   5).  The best match runs on ONE reading only, the one whose count
+   (without end specks) is nearest the 29 of a code (pass 4, or 6 when a
+   speck was dropped): on the car it ran on up to four, took over 50 ms
+   and tripped the line task's heartbeat (SafetyTask stopped the car,
+   once right after reading the A). */
 static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
 {
     static uint32_t w2[BC_MAX_ELEMENTS + 1u];
     code39_result_t r;
     uint8_t         k;
+    bool            b_trim;
 
     p_out->elements  = p_bc->n;
     p_out->length_um = p_bc->total_um - p_bc->run_um;   /* without the trailing white */
     p_out->peak_norm = p_bc->peak;
     p_bc->pass       = 0u;
-    r = code39_decode_one_repair(p_bc->widths, p_bc->n, BC_RATIO_MIN_X10, &p_out->ch, &p_out->b_reversed);
+    r = decode_exact(p_bc->widths, p_bc->n, &p_out->ch, &p_out->b_reversed, &b_trim);
+    if (b_trim)
+    {
+        p_bc->pass = 5u;
+    }
     for (k = 1u; (k <= 5u) && (r != CODE39_OK); k++)
     {
         uint16_t const n2 = prof_read(p_bc, k, w2);
         char           ch;
         bool           b_rev;
 
-        if ((n2 > 0u) && (code39_decode_one_repair(w2, n2, BC_RATIO_MIN_X10, &ch, &b_rev) == CODE39_OK))
+        if ((n2 > 0u) && (decode_exact(w2, n2, &ch, &b_rev, &b_trim) == CODE39_OK))
         {
             p_out->ch         = ch;
             p_out->b_reversed = b_rev;
             p_out->elements   = n2;
-            p_bc->pass        = (k > 3u) ? 3u : k;
+            p_bc->pass        = b_trim ? 5u : ((k > 3u) ? 3u : k);
             r = CODE39_OK;
         }
     }
     if ((r != CODE39_OK) && (r != CODE39_NOT_BARCODE))
     {
-        for (k = 0u; (k <= 3u) && (r != CODE39_OK); k++)
+        uint8_t  k_pick = BC_READINGS;
+        uint16_t d_pick = 0xFFFFu;
+
+        for (k = 0u; k < BC_READINGS; k++)
         {
-            uint16_t const n2 = (k == 0u) ? p_bc->n : prof_read(p_bc, k, w2);
+            uint16_t       first;
+            uint16_t const n2 = bc_reading(p_bc, k, w2);
+            uint16_t const nt = trim_specks(w2, n2, &first);
+            uint16_t const d  = (nt > 29u) ? (uint16_t)(nt - 29u) : (uint16_t)(29u - nt);
+
+            if ((nt >= 25u) && (nt <= 33u) && ((nt % 2u) != 0u) && (d < d_pick))
+            {
+                d_pick = d;
+                k_pick = k;
+            }
+        }
+        if (k_pick < BC_READINGS)
+        {
+            uint16_t       first;
+            uint16_t const n2 = bc_reading(p_bc, k_pick, w2);
+            uint16_t const nt = trim_specks(w2, n2, &first);
             char           ch;
             bool           b_rev;
 
-            if ((n2 > 0u) &&
-                (code39_decode_one_best((k == 0u) ? p_bc->widths : w2, n2, &ch, &b_rev) == CODE39_OK))
+            if (code39_decode_one_best(&w2[first], nt, &ch, &b_rev) == CODE39_OK)
             {
                 p_out->ch         = ch;
                 p_out->b_reversed = b_rev;
-                p_out->elements   = n2;
-                p_bc->pass        = 4u;
+                p_out->elements   = nt;
+                p_bc->pass        = (nt != n2) ? 6u : 4u;
                 r = CODE39_OK;
             }
         }

@@ -539,6 +539,49 @@ static void test_capture(void)
         CHECK("S3-H19", (wrong == 0) && (good == total));
     }
 
+    /* S3-H20 (14 Nov car runs, 1 mm slit on the sensor, 3 mm "*A*"): two
+       reads with a 1.4 mm speck outside the code, one after the stop
+       (31 elements) and one before the start with a wide bar split by a
+       1 mm white speck (33).  Both were rejected for their count, and the
+       best match that ran on four readings took over 50 ms and tripped
+       the line task's heartbeat.  Widths as logged (LOG 75, 0.2 mm). */
+    {
+        static uint32_t const k_r1[31] = {
+            2400u, 9000u, 3400u, 3400u, 8000u, 4000u, 9000u, 3600u, 2600u, 3400u, 8000u, 4600u, 2600u,
+            4200u, 2000u, 10200u, 2000u, 4200u, 8000u, 4200u, 2400u, 9600u, 2400u, 3400u, 7600u,
+            4200u, 8000u, 4200u, 2600u, 8200u, 1400u };
+        static uint32_t const k_r2[33] = {
+            1400u, 2600u, 3000u, 8600u, 3400u, 2400u, 10000u, 2000u, 2400u, 1000u, 9600u, 2400u, 2600u,
+            2000u, 10000u, 3000u, 2400u, 3400u, 3600u, 9600u, 2400u, 3600u, 8200u, 3600u, 2400u,
+            9600u, 3000u, 3400u, 8600u, 3400u, 9000u, 3400u, 3400u };
+        int d, noise, good = 0, total = 0, wrong = 0;
+
+        g_spot_um = 1000u;  g_white = 25u;  g_black = 1000u;
+        for (noise = 0; noise <= 30; noise += 30)
+        {
+            for (d = 0; d < 4; d++)
+            {
+                uint32_t       w[33];
+                uint16_t const n = (d < 2) ? 31u : 33u;
+                bc_out_t       out;
+                bc_result_t    r;
+
+                memcpy(w, (d < 2) ? k_r1 : k_r2, n * sizeof(uint32_t));
+                if ((d % 2) != 0) { reverse(w, n); }
+                memset(&out, 0, sizeof(out));
+                r = run_pass(w, n, 90u, noise, &out);
+                total++;
+                if ((r == BC_VALID) && (out.ch == 'A') && (out.b_reversed == ((d % 2) != 0))) { good++; }
+                else if (r == BC_VALID) { wrong++; }
+                else { printf("  14 Nov read %d dir %d noise %d: result %d reason %u, %u elements\n", d / 2 + 1, d % 2,
+                              noise, (int)r, (unsigned)out.reason, (unsigned)out.elements); }
+            }
+        }
+        g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;
+        printf("end specks (car 14 Nov): A %d / %d decoded, %d wrong\n", good, total, wrong);
+        CHECK("S3-H20", (wrong == 0) && (good == total));
+    }
+
     /* S3-H06: a crossing line (18 mm black) is not a barcode and not an error */
     {
         uint32_t w[1] = { 18000u };
