@@ -150,8 +150,8 @@
    Now it spins slowly toward the line's direction and stops where the
    line is centred between the two line sensors (measured, not assumed:
    the line may curve there); up to the turn-out angle + this.          */
-#define OBST_LINESCAN_DEG_S         60      /* 6 Nov: 30 (~29 mm/s a wheel) stalled; ~58 mm/s, the reference robot spins at ~61 deg/s */
-/* 4 Nov edge scan (as the reference robot measures its bypass): after the
+#define OBST_LINESCAN_DEG_S         60      /* 6 Nov: 30 (~29 mm/s a wheel) stalled; ~58 mm/s */
+/* 4 Nov edge scan: after the
    servo scan, the sensor looks straight ahead and the CAR turns in steps
    to each side until the echo leaves the obstacle's face; the edge comes
    from the car's heading (encoders / turn slip), so it does not depend on
@@ -161,8 +161,8 @@
 #define OBST_EDGE_TURN_DEG_S        60      /* 6 Nov: 30 stalled, as the line scan */
 #define OBST_EDGE_SETTLE_MS         150     /* after each step, before the pings */
 /* 4 Nov: 40 let something beside the box, ~28 mm behind its face, count
-   as the face (right edge read 20 cm right of the line).  25 as the
-   reference robot measured it (80 too loose, 35 cut faces at 25-30 deg). */
+   as the face (right edge read 20 cm right of the line).  25: 80 is too
+   loose, 35 cut faces at 25-30 deg. */
 #define OBST_EDGE_BAND_MM           25      /* echo within this behind the face plane = face */
 #define OBST_EDGE_MISSES            2u      /* clear readings in a row that end a side */
 /* 7 Nov: after a side ends, halve the gap between the last echo and the

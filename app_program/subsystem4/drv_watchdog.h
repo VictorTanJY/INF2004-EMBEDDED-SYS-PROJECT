@@ -5,8 +5,8 @@
  *
  *  - drv_watchdog_tick_init(): the 1 us timer and the watchdog both count
  *    the watchdog tick, which must be clk_ref / 12 (XOSC 12 MHz).  After a
- *    cold power-on it is not set, and the timer runs 42.7 x slow (found by
- *    team IS07); usermain() calls this first (subsystem4_init).
+ *    cold power-on it is not set, and the timer runs 42.7 x slow;
+ *    usermain() calls this first (subsystem4_init).
  *  - erratum RP2040-E1: the watchdog counts down 2 per tick, so a 200 ms
  *    timeout needs LOAD = 2 x 200 000.
  *  - Only SafetyTask feeds it.

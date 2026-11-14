@@ -79,7 +79,7 @@ int32_t obst_edge_lat(int32_t phi_cdeg);
    together to tell the sides apart). */
 int32_t obst_edge_wide_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
 /* That edge is further out from the line than an OBST_WIDTH_MAX obstacle's
-   could be on this side (as the reference robot's "past max"): it is
+   could be on this side: it is
    something else, the side's edge is not known. */
 bool    obst_edge_past_max(int32_t lat_mm, int32_t side);
 /* Reported width (7 Nov) from the last echo on each side (heading phi,

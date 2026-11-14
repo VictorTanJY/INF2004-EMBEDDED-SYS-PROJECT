@@ -137,7 +137,7 @@ Inline UW app_time_ms(void)
 
 /* RP2040 1 us system timer, low 32 bits (wraps every 71.6 min).  Correct
    only after the watchdog tick is set to 12 cycles (drv_watchdog, S4):
-   from a cold power-on it otherwise runs 42.7 x slow (IS07 finding). */
+   from a cold power-on it otherwise runs 42.7 x slow. */
 Inline UW app_time_us(void)
 {
 	return in_w(TIMER_TIMERAWL);

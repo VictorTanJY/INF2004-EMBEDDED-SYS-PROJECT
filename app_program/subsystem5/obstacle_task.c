@@ -1329,7 +1329,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             }
             else if (p_st->kind == (uint8_t)OBST_STEP_LINESCAN)
             {
-                /* 6 Nov, as the reference robot: spin toward value's side
+                /* 6 Nov: spin toward value's side
                    noting the heading where each line sensor goes on to
                    and off the line; once both have crossed it the line
                    runs midway between those four headings: stop, settle,
