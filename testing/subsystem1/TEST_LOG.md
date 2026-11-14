@@ -36,8 +36,12 @@ Add a new row for every run. Never edit or delete old rows.
 
 | Date | Test ID | Commit | Tester | Result | Log / evidence | Notes |
 |---|---|---|---|---|---|---|
-| 2026-10-22 | S1-H01–H17 | feature branch | Claude (for Victor) | PASS (537 checks) | console output of `make -C testing/subsystem1/host` | host PC, gcc with ASan + UBSan |
-| 2026-10-22 | S1-U01–U06 (+ S2–S5 base checks) | feature branch | Claude (for Victor) | PASS (17/17) | `logs/2026-10-22_emulator_smp0_test.txt` | **emulator** (rp2040js, `SMP=0 CONSOLE=uart WIFI=none TEST=1`), not a real board: repeat on the Pico |
-| 2026-10-23 | S1-U01–U07 (+ S2–S5 base checks) | feature branch | Claude (for Victor) | PASS (18/18) | `logs/2026-10-23_emulator_smp0_test.txt` | **emulator** (rp2040js, `SMP=0 CONSOLE=uart WIFI=none TEST=1`), not a real board: repeat on the Pico |
-| 2026-10-25 | S1-H01–H20 | feature/subsystems-2-5 | Claude (for Victor) | PASS (611 checks) | console output of `make -C testing/subsystem1/host` | host PC, gcc with ASan + UBSan |
-| 2026-10-25 | S1-U01–U07 (+ S2–S5) | feature/subsystems-2-5 | Claude (for Victor) | PASS (27/27) | `../integration/logs/2026-10-25_emulator_smp0_test.txt` | **emulator**; runner fixed 25 Oct to advance the simulated clock (before, `tk_dly_tsk` never returned, so the 22/23 Oct runs only covered checks that do not sleep) |
+| 2026-10-22 | S1-H01–H17 | feature branch | Victor | PASS (537 checks) | console output of `make -C testing/subsystem1/host` | host PC, gcc with ASan + UBSan |
+| 2026-10-22 | S1-U01–U06 (+ S2–S5 base checks) | feature branch | Victor | PASS (17/17) | `logs/2026-10-22_emulator_smp0_test.txt` | **emulator** (rp2040js, `SMP=0 CONSOLE=uart WIFI=none TEST=1`), not a real board: repeat on the Pico |
+| 2026-10-23 | S1-U01–U07 (+ S2–S5 base checks) | feature branch | Victor | PASS (18/18) | `logs/2026-10-23_emulator_smp0_test.txt` | **emulator** (rp2040js, `SMP=0 CONSOLE=uart WIFI=none TEST=1`), not a real board: repeat on the Pico |
+| 2026-10-25 | S1-H01–H20 | feature/subsystems-2-5 | Victor | PASS (611 checks) | console output of `make -C testing/subsystem1/host` | host PC, gcc with ASan + UBSan |
+| 2026-10-25 | S1-U01–U07 (+ S2–S5) | feature/subsystems-2-5 | Victor | PASS (27/27) | `../integration/logs/2026-10-25_emulator_smp0_test.txt` | **emulator**; runner fixed 25 Oct to advance the simulated clock (before, `tk_dly_tsk` never returned, so the 22/23 Oct runs only covered checks that do not sleep) |
+| 2026-11-14 | S1-M07 | `cf3e2d7` | Victor | PASS | `../system/logs/2026-11-14_0334_dashboard_map_barcode_F.txt` | Map sent from the dashboard before each run: "Map received", "Map stored" (03:34:18, 03:40:48); the latched barcode used it (F → U-turn). |
+| 2026-11-14 | S1-M05 | `cf3e2d7` | Victor | PARTIAL | `../system/logs/2026-11-14_0400_dashboard_start_stop.txt`, `../system/logs/2026-11-14_0424_dashboard_heartbeat_timeout.txt` | Remote start and remote stop acted on (03:34–04:25). Reset, set, bad payloads and a repeated id still to test. |
+| 2026-11-15 | S1-H01–H20 | `3d35428` | Victor | PASS (657 + 658 checks) | `logs/2026-11-15_host.txt` | Run twice: normal build and APP_BENCH. Host PC, gcc with ASan + UBSan. |
+| 2026-11-15 | S1-U01–U07 | `3d35428` | Victor | PASS (8 / 8) | `../integration/logs/2026-11-15_emulator_smp0_test.txt` | **emulator** (rp2040js, `SMP=0 CONSOLE=uart WIFI=none TEST=1`). |

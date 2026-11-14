@@ -1,0 +1,581 @@
+·
+Tilt warning cleared
+Value 0
+02:45:28 AM
+·
+Motion class
+descending
+02:45:28 AM
+↗
+State → FAULT
+Safety stop active
+02:45:28 AM
+!
+Overturned / tilted
+Code 8 · Tilted more than 30° for 0.2 s during a run: motors braked.
+02:45:28 AM
+!
+Overturned / tilted
+Code 8 · Tilted more than 30° for 0.2 s during a run: motors braked.
+02:45:28 AM
+·
+Tilt warning: over 30° (0.01°)
+Value 3119
+02:45:28 AM
+↗
+Hump: climbing
+02:45:28 AM
+·
+Motion class
+cruising
+02:45:27 AM
+↗
+Hump finished
+peak 18 mm
+02:45:27 AM
+↗
+Hump: climbing
+02:45:27 AM
+·
+Motion class
+climbing
+02:45:27 AM
+↗
+Cross-junction
+02:45:26 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 232
+02:45:26 AM
+·
+Motion class
+cruising
+02:45:26 AM
+·
+Motion class
+turning
+02:45:26 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 102
+02:45:26 AM
+·
+Motion class
+accelerating
+02:45:26 AM
+·
+Motion class
+decelerating
+02:45:25 AM
+↗
+Cross-junction
+02:45:24 AM
+·
+Motion class
+cruising
+02:45:24 AM
+·
+Motion class
+accelerating
+02:45:24 AM
+·
+Motion class
+cruising
+02:45:24 AM
+↗
+State → LINE_FOLLOW
+Following the line
+02:45:24 AM
+↗
+Start/stop button
+Value 0
+02:45:24 AM
+↗
+Start/stop button
+Value 0
+02:45:24 AM
+·
+Motion class
+stationary
+02:45:22 AM
+↗
+State → IDLE
+Standing by
+02:45:22 AM
+·
+Calibration / self-test result
+0x00030000
+02:45:22 AM
+↗
+Calibration step done
+ok
+02:45:22 AM
+·
+Turn slip: line crossings seen
+left sensor 1, right sensor 0, spun 360° (encoders)
+02:45:22 AM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+02:45:22 AM
+·
+IR calibration (barcode)
+Value 203423945
+02:45:22 AM
+·
+IR calibration (right)
+Value 184156307
+02:45:22 AM
+·
+IR calibration (left)
+Value 118096021
+02:45:22 AM
+↗
+Calibration step done
+ok
+02:45:22 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 895
+02:45:22 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 10
+02:45:22 AM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+02:45:22 AM
+↗
+Move done
+02:45:22 AM
+·
+Motion class
+cruising
+02:45:22 AM
+·
+Motion class
+turning
+02:45:20 AM
+·
+Motion class
+cruising
+02:45:20 AM
+↗
+State → CALIBRATING
+Calibrating
+02:45:20 AM
+↗
+Calibrate button
+Value 0
+02:45:20 AM
+↗
+Calibrate button
+Value 0
+02:45:20 AM
+↗
+State → IDLE
+Standing by
+02:45:20 AM
+·
+IMU start result
+0x00004900
+02:45:20 AM
+·
+IMU configuration
+Value 0
+02:45:20 AM
+·
+IMU identity value
+Value 73
+02:45:20 AM
+·
+IMU identity read
+Value 0
+02:45:20 AM
+·
+IMU bus start
+Value 0
+02:45:20 AM
+·
+Motion class
+stationary
+02:45:15 AM
+·
+Motion class
+cruising
+02:45:15 AM
+·
+Lift seen (up axis rose, mg)
+Value 327
+02:45:13 AM
+·
+Tilt warning cleared
+Value 0
+02:45:11 AM
+·
+Tilt warning: over 30° (0.01°)
+Value 3077
+02:45:11 AM
+·
+Motion class
+stationary
+02:45:10 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 329
+02:45:10 AM
+↗
+State → FAULT
+Safety stop active
+02:45:10 AM
+·
+Run summary
+Highest hump 0 mm
+02:45:10 AM
+!
+Lifted
+Code 1 · The robot was lifted during a run: run ended, motors braked.
+02:45:10 AM
+!
+Lifted
+Code 1 · The robot was lifted during a run: run ended, motors braked.
+02:45:10 AM
+·
+Lift seen (up axis rose, mg)
+Value 298
+02:45:10 AM
+·
+Motion class
+accelerating
+02:45:10 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 190
+02:45:10 AM
+·
+Motion class
+decelerating
+02:45:10 AM
+·
+Motion class
+accelerating
+02:45:09 AM
+↗
+Cross-junction
+02:45:09 AM
+↗
+Cross-junction
+02:45:08 AM
+·
+Motion class
+cruising
+02:45:07 AM
+↗
+State → LINE_FOLLOW
+Following the line
+02:45:06 AM
+↗
+Start/stop button
+Value 0
+02:45:06 AM
+↗
+Start/stop button
+Value 0
+02:45:06 AM
+·
+Motion class
+stationary
+02:45:05 AM
+↗
+State → IDLE
+Standing by
+02:45:05 AM
+·
+Calibration / self-test result
+0x00030000
+02:45:05 AM
+↗
+Calibration step done
+ok
+02:45:05 AM
+·
+Turn slip: line crossings seen
+left sensor 1, right sensor 0, spun 360° (encoders)
+02:45:05 AM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+02:45:05 AM
+·
+IR calibration (barcode)
+Value 200409287
+02:45:05 AM
+·
+IR calibration (right)
+Value 183042208
+02:45:05 AM
+·
+IR calibration (left)
+Value 136118452
+02:45:05 AM
+↗
+Calibration step done
+ok
+02:45:05 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 908
+02:45:05 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 3
+02:45:05 AM
+·
+IMU level: samples (need ≥ 50)
+Value 102
+02:45:05 AM
+↗
+Move done
+02:45:05 AM
+·
+Motion class
+cruising
+02:45:05 AM
+·
+Motion class
+turning
+02:45:05 AM
+·
+Motion class
+cruising
+02:45:05 AM
+·
+Tilt warning cleared
+Value 0
+02:44:55 AM
+·
+Tilt warning: over 30° (0.01°)
+Value 3888
+02:44:55 AM
+·
+Tilt warning cleared
+Value 0
+02:44:53 AM
+·
+Tilt warning: over 30° (0.01°)
+Value 3974
+02:44:52 AM
+·
+Tilt warning cleared
+Value 0
+02:44:50 AM
+↗
+State → FAULT
+Safety stop active
+02:44:49 AM
+!
+Overturned / tilted
+Code 8 · Tilted more than 30° for 0.2 s during a run: motors braked.
+02:44:49 AM
+!
+Overturned / tilted
+Code 8 · Tilted more than 30° for 0.2 s during a run: motors braked.
+02:44:49 AM
+·
+Tilt warning: over 30° (0.01°)
+Value 3660
+02:44:49 AM
+·
+Motion class
+descending
+02:44:49 AM
+↗
+Hump: climbing
+02:44:49 AM
+·
+Motion class
+climbing
+02:44:49 AM
+↗
+Hump finished
+peak 24 mm
+02:44:49 AM
+·
+Motion class
+cruising
+02:44:49 AM
+·
+Motion class
+descending
+02:44:49 AM
+↗
+Hump: climbing
+02:44:49 AM
+·
+Motion class
+climbing
+02:44:49 AM
+↗
+Hump finished
+peak 41 mm
+02:44:49 AM
+·
+Motion class
+cruising
+02:44:49 AM
+·
+Motion class
+descending
+02:44:45 AM
+↗
+Hump: climbing
+02:44:45 AM
+·
+Motion class
+climbing
+02:44:45 AM
+·
+Barcode: elements found by each reading
+swing 0, low threshold 0, adaptive 20% 0, adaptive 10% 0 (a letter has 29; 0 = not tried)
+02:44:45 AM
+·
+Barcode sensor levels
+white 21 / 1000, white noise 17, darkest 1000 (a bar must rise 250 above white; noise 17 leaves 233 margin)
+02:44:45 AM
+·
+Barcode rejected: bar widths
+narrowest 0.0 mm, widest 0.0 mm
+02:44:45 AM
+·
+Barcode rejected: what the sensor saw
+0 elements (a letter has 29), 420 mm long, darkest 1000 / 1000
+02:44:45 AM
+·
+Barcode rejected
+too long
+02:44:45 AM
+↗
+Hump finished
+peak 35 mm
+02:44:44 AM
+·
+Motion class
+cruising
+02:44:44 AM
+·
+Motion class
+descending
+02:44:44 AM
+↗
+Hump: climbing
+02:44:44 AM
+·
+Motion class
+climbing
+02:44:44 AM
+↗
+Hump finished
+peak 25 mm
+02:44:43 AM
+·
+Motion class
+cruising
+02:44:43 AM
+·
+Motion class
+descending
+02:44:42 AM
+↗
+Hump: climbing
+02:44:42 AM
+·
+Motion class
+climbing
+02:44:42 AM
+↗
+Hump finished
+peak 12 mm
+02:44:42 AM
+↗
+Hump: climbing
+02:44:42 AM
+·
+Motion class
+cruising
+02:44:42 AM
+↗
+Hump finished
+peak 13 mm
+02:44:42 AM
+↗
+Hump: climbing
+02:44:41 AM
+·
+Motion class
+climbing
+02:44:41 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 186
+02:44:41 AM
+↗
+Cross-junction
+02:44:40 AM
+·
+Motion class
+cruising
+02:44:40 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 165
+02:44:40 AM
+·
+Motion class
+turning
+02:44:40 AM
+·
+Motion class
+cruising
+02:44:39 AM
+·
+Motion class
+decelerating
+02:44:39 AM
+·
+Motion class
+cruising
+02:44:39 AM
+↗
+Cross-junction
+02:44:39 AM
+·
+Motion class
+accelerating
+02:44:39 AM
+↗
+Cross-junction
+02:44:33 AM
+↗
+Cross-junction
+02:44:32 AM
+·
+Motion class
+cruising
+02:44:31 AM
+·
+Motion class
+accelerating
+02:44:31 AM
+·
+Motion class
+cruising
+02:44:31 AM
+↗
+State → LINE_FOLLOW
+Following the line
+02:44:31 AM
+↗
+Start/stop button
+Value 0
+02:44:31 A

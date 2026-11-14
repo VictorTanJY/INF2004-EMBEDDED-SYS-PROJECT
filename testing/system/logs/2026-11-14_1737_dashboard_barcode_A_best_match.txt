@@ -1,0 +1,61 @@
+·
+Motion class
+stationary
+05:37:24 PM
+↗
+Barcode 'A' read
+05:37:24 PM
+↗
+State → FAULT
+Safety stop active
+05:37:24 PM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+05:37:24 PM
+·
+Barcode sensor levels
+white 28 / 1000, white noise 47, darkest 1000; decoded by best match (a split or merged bar) (a bar must rise 250 above white; noise 47 leaves 203 margin)
+05:37:24 PM
+·
+Heartbeat missed
+Value 2
+05:37:24 PM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+05:37:24 PM
+·
+Motion class
+cruising
+05:37:24 PM
+·
+Motion class
+accelerating
+05:37:24 PM
+·
+Motion class
+cruising
+05:37:24 PM
+·
+Motion class
+accelerating
+05:37:24 PM
+↗
+Hump finished
+peak 10 mm
+05:37:23 PM
+·
+Motion class
+cruising
+05:37:23 PM
+!
+Move did not complete
+05:37:23 PM
+↗
+State → LINE_FOLLOW
+Following the line
+05:37:23 PM
+↗
+Line found
+05:37:23 PM

@@ -1,0 +1,5 @@
+# host tests, 2026-11-15, commit 3d35428: make -C testing/shared/host (gcc, ASan + UBSan)
+cc -std=c11 -Wall -Wextra -Werror -O1 -g -D_DEFAULT_SOURCE -I../../../app_program -fsanitize=address,undefined -fno-omit-frame-pointer -o test_shared test_math.c ../../../app_program/app_math.c -lm
+./test_shared
+worst sin/cos error 1 LSB, worst atan2 error 0.6 cdeg
+host tests: 13 passed, 0 failed

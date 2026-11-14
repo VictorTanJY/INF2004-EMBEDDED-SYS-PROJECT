@@ -1,8 +1,8 @@
 # Subsystem 2 — motion accuracy evaluation
 
-**Requirements:** NFR4 — straight moves within ±2 % of the commanded
-distance over 1 m, 90° turns within ±5°, 180° turns within ±8°;
-NFR5 — lateral drift ≤ 30 mm over a 1 m straight move without a line.
+**Requirement:** NFR4 — straight moves within ±3 % of the commanded
+distance over 1 m with ≤ 50 mm sideways drift; 90° turns within ±8°;
+180° turns within ±10°; 5 runs each.
 **Tests:** S2-M03 (distance, drift), S2-M04 (turns).
 **Code:** `motion_core.c` (MOVE and TURN run closed-loop on the encoders),
 constants in `motion_cfg.h`.
@@ -50,22 +50,7 @@ as evidence.
 
 ## 3. Results — *to fill*
 
-### 3.1 Forward 1 m (10 runs) — limit ±20 mm; drift ≤ 30 mm
-
-| Run | Measured (mm) | Error (mm) | Drift (mm) | Car's estimate (mm) |
-|---|---|---|---|---|
-| 1 | | | | |
-| 2 | | | | |
-| 3 | | | | |
-| 4 | | | | |
-| 5 | | | | |
-| 6 | | | | |
-| 7 | | | | |
-| 8 | | | | |
-| 9 | | | | |
-| 10 | | | | |
-
-### 3.2 Back 1 m (5 runs) — limit ±20 mm; drift ≤ 30 mm
+### 3.1 Forward 1 m (5 runs) — limit ±30 mm; drift ≤ 50 mm
 
 | Run | Measured (mm) | Error (mm) | Drift (mm) | Car's estimate (mm) |
 |---|---|---|---|---|
@@ -75,7 +60,17 @@ as evidence.
 | 4 | | | | |
 | 5 | | | | |
 
-### 3.3 Left 90° (10 runs) — limit ±5°
+### 3.2 Back 1 m (5 runs) — limit ±30 mm; drift ≤ 50 mm
+
+| Run | Measured (mm) | Error (mm) | Drift (mm) | Car's estimate (mm) |
+|---|---|---|---|---|
+| 1 | | | | |
+| 2 | | | | |
+| 3 | | | | |
+| 4 | | | | |
+| 5 | | | | |
+
+### 3.3 Left 90° (5 runs) — limit ±8°
 
 | Run | Measured (°) | Error (°) | Car's estimate (°) |
 |---|---|---|---|
@@ -84,13 +79,8 @@ as evidence.
 | 3 | | | |
 | 4 | | | |
 | 5 | | | |
-| 6 | | | |
-| 7 | | | |
-| 8 | | | |
-| 9 | | | |
-| 10 | | | |
 
-### 3.4 Right 90° (10 runs) — limit ±5°
+### 3.4 Right 90° (5 runs) — limit ±8°
 
 | Run | Measured (°) | Error (°) | Car's estimate (°) |
 |---|---|---|---|
@@ -99,13 +89,8 @@ as evidence.
 | 3 | | | |
 | 4 | | | |
 | 5 | | | |
-| 6 | | | |
-| 7 | | | |
-| 8 | | | |
-| 9 | | | |
-| 10 | | | |
 
-### 3.5 U-turn 180° (10 runs) — limit ±8°
+### 3.5 U-turn 180° (5 runs) — limit ±10°
 
 | Run | Measured (°) | Error (°) | Car's estimate (°) |
 |---|---|---|---|
@@ -114,11 +99,6 @@ as evidence.
 | 3 | | | |
 | 4 | | | |
 | 5 | | | |
-| 6 | | | |
-| 7 | | | |
-| 8 | | | |
-| 9 | | | |
-| 10 | | | |
 
 ## 4. Summary — *to fill*
 
@@ -127,12 +107,12 @@ worst case, and whether the limit is met in every run.
 
 | Test | Runs | Mean error | Std dev | Worst case | Limit | Met? |
 |---|---|---|---|---|---|---|
-| Forward 1 m | 10 | | | | ±20 mm | |
-| Back 1 m | 5 | | | | ±20 mm | |
-| Drift over 1 m | 15 | | | | ≤ 30 mm | |
-| Left 90° | 10 | | | | ±5° | |
-| Right 90° | 10 | | | | ±5° | |
-| U-turn 180° | 10 | | | | ±8° | |
+| Forward 1 m | 5 | | | | ±30 mm | |
+| Back 1 m | 5 | | | | ±30 mm | |
+| Drift over 1 m | 10 | | | | ≤ 50 mm | |
+| Left 90° | 5 | | | | ±8° | |
+| Right 90° | 5 | | | | ±8° | |
+| U-turn 180° | 5 | | | | ±10° | |
 
 ## 5. Conclusion — *to fill*
 

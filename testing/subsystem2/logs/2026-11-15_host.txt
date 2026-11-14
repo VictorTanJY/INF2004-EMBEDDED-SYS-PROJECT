@@ -1,0 +1,13 @@
+# host tests, 2026-11-15, commit 3d35428: make -C testing/subsystem2/host (gcc, ASan + UBSan)
+cc -std=c11 -Wall -Wextra -Werror -O1 -g -I../../../app_program/subsystem2 -I../../../app_program -fsanitize=address,undefined -fno-omit-frame-pointer -o test_s2 test_s2.c ../../../app_program/subsystem2/motion_core.c ../../../app_program/subsystem2/motion_api.c ../../../app_program/subsystem2/motion_rec.c ../../../app_program/app_math.c
+./test_s2
+MOVE 1000 mm: 1002 mm in 3790 ms (x 1002, y 0)
+FAIL S2-H03  (test_s2.c:180)  g_ev[MOTION_EV_DONE] == 1 && abs(o.heading_cdeg - 9000) <= 100
+TURN +90: heading 9211 cdeg
+TURN -180: heading -9037 cdeg
+DRIVE 250 mm/s: measured 236 mm/s
+STOP ramp from 250 mm/s: braked after 240 ms
+STALL reported 350 ms after the wheel locked
+square leg: x 485 y 502 heading 9202
+host tests: 56 passed, 1 failed
+make: *** [Makefile:17: run] Error 1

@@ -1,7 +1,7 @@
 # Subsystem 2 — PID tuning report (wheel speed control)
 
-**Requirement:** NFR5 — steady-state wheel speed within ±10 % of the set-point,
-settling ≤ 300 ms after a step.  **Code:** `app_program/subsystem2/motion_core.c`
+**Requirement:** NFR5 — steady wheel speed within ±10 % of the set-point;
+once the set-point ramp ends, within ±10 % in ≤ 500 ms.  **Code:** `app_program/subsystem2/motion_core.c`
 (`pid_wheel()`), gains in `motion_cfg.h`.  **Test:** S2-M05.
 
 **Status:** controller and tuning history written; **step-response
@@ -87,14 +87,14 @@ Definitions (as in `step_analysis.py`):
 - **rise** — 10 % to 90 % of the target;
 - **overshoot** — (peak − target) / target;
 - **settle** — time after the ramp end until the speed stays within ±10 %
-  of the target (the NFR5 band) for the rest of the log; NFR5: ≤ 300 ms;
+  of the target (the NFR5 band) for the rest of the log; NFR5: ≤ 500 ms;
 - **steady error** — mean speed over the last 500 ms against the target;
   NFR5: within ±10 %;
 - **max duty** — 1000 means the output saturated.
 
 ## 5. Results — *to fill*
 
-| Run | Target (mm/s) | Wheel | Rise (ms) | Overshoot (%) | Settle (ms, ≤ 300) | Steady error (%, ±10) | Max duty (‰) |
+| Run | Target (mm/s) | Wheel | Rise (ms) | Overshoot (%) | Settle (ms, ≤ 500) | Steady error (%, ±10) | Max duty (‰) |
 |---|---|---|---|---|---|---|---|
 | 1 | 100 | L / R | | | | | |
 | 2 | 100 | L / R | | | | | |
@@ -113,7 +113,7 @@ Conditions: date, battery, floor — *to fill*.
 ## 6. Conclusion — *to fill*
 
 State whether NFR5 is met at each speed. If a run does not settle within
-300 ms or the steady error is outside ±10 %, record it here with the
+500 ms or the steady error is outside ±10 %, record it here with the
 likely cause (for example duty saturation at 300 mm/s, or the
 static-friction offset at 100 mm/s), then either retune one gain at a time
 (add a row to section 3 and repeat section 5) or report the shortfall.

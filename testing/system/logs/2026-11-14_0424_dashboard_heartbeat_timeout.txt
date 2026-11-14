@@ -1,0 +1,593 @@
+Motion class
+stationary
+04:25:22 AM
+·
+Motion class
+decelerating
+04:25:22 AM
+·
+Run summary
+Highest hump 0 mm
+04:25:22 AM
+↗
+State → MISSION_COMPLETE
+Run complete
+04:25:22 AM
+↗
+Remote stop
+Value 0
+04:25:22 AM
+↗
+Remote stop
+Value 0
+04:25:22 AM
+✓
+STOP accepted
+#1794595391
+04:25:22 AM
+·
+Motion class
+cruising
+04:25:22 AM
+·
+Motion class
+turning
+04:25:22 AM
+·
+Motion class
+cruising
+04:25:21 AM
+·
+Motion class
+turning
+04:25:21 AM
+·
+Motion class
+cruising
+04:25:21 AM
+·
+Motion class
+accelerating
+04:25:21 AM
+·
+Motion class
+turning
+04:25:21 AM
+·
+Motion class
+cruising
+04:25:20 AM
+·
+Motion class
+turning
+04:25:20 AM
+↗
+Cross-junction
+04:25:14 AM
+·
+Barcode widths (mm)
+adaptive 10% #13-15: bar 6.6
+04:25:14 AM
+·
+Barcode widths (mm)
+adaptive 10% #10-12: gap 23.2, bar 6.6, gap 5.6
+04:25:14 AM
+·
+Barcode widths (mm)
+adaptive 10% #7-9: bar 7.0, gap 29.8, bar 6.6
+04:25:14 AM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 6.0, bar 1.6, gap 4.0
+04:25:14 AM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 6.2, gap 6.0, bar 7.0
+04:25:14 AM
+·
+Barcode widths (mm)
+swing #10-12: gap 6.0, bar 6.4
+04:25:14 AM
+·
+Barcode widths (mm)
+swing #7-9: bar 6.4, gap 23.4, bar 6.2
+04:25:14 AM
+·
+Barcode widths (mm)
+swing #4-6: gap 12.0, bar 6.4, gap 30.0
+04:25:14 AM
+·
+Barcode widths (mm)
+swing #1-3: bar 6.2, gap 6.2, bar 6.6
+04:25:14 AM
+·
+Barcode: elements found by each reading
+swing 11, low threshold 19, adaptive 20% 13, adaptive 10% 13 (a letter has 29; 0 = not tried)
+04:25:14 AM
+·
+Barcode sensor levels
+white 9 / 1000, white noise 56, darkest 617 (a bar must rise 250 above white; noise 56 leaves 194 margin)
+04:25:14 AM
+·
+Barcode rejected: bar widths
+narrowest 6.0 mm, widest 30.0 mm
+04:25:14 AM
+·
+Barcode rejected: what the sensor saw
+11 elements (a letter has 29), 190 mm long, darkest 616 / 1000
+04:25:14 AM
+·
+Barcode rejected
+wrong element count
+04:25:14 AM
+·
+Motion class
+cruising
+04:25:10 AM
+·
+Motion class
+accelerating
+04:25:10 AM
+·
+Motion class
+cruising
+04:25:10 AM
+↗
+State → LINE_FOLLOW
+Following the line
+04:25:10 AM
+↗
+Start/stop button
+Value 0
+04:25:10 AM
+↗
+Start/stop button
+Value 0
+04:25:10 AM
+·
+Motion class
+stationary
+04:25:09 AM
+↗
+State → IDLE
+Standing by
+04:25:09 AM
+·
+Calibration / self-test result
+0x00030000
+04:25:09 AM
+↗
+Calibration step done
+ok
+04:25:09 AM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 2, spun 360° (encoders)
+04:25:09 AM
+·
+Turn slip (calibration spin)
+turns asked for ×1.02 (encoders count 102% of a real turn)
+04:25:09 AM
+·
+IR calibration (barcode)
+Value 183369872
+04:25:09 AM
+·
+IR calibration (right)
+Value 196149399
+04:25:09 AM
+·
+IR calibration (left)
+Value 152633541
+04:25:09 AM
+↗
+Calibration step done
+ok
+04:25:09 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 920
+04:25:09 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 7
+04:25:09 AM
+·
+IMU level: samples (need ≥ 50)
+Value 90
+04:25:09 AM
+↗
+Move done
+04:25:09 AM
+·
+Motion class
+cruising
+04:25:09 AM
+·
+Motion class
+turning
+04:25:09 AM
+↗
+Calibrate button
+Value 0
+04:25:09 AM
+↗
+Calibrate button
+Value 0
+04:25:09 AM
+↗
+State → IDLE
+Standing by
+04:25:09 AM
+·
+IMU start result
+0x00004900
+04:25:09 AM
+·
+IMU configuration
+Value 0
+04:25:09 AM
+·
+IMU identity value
+Value 73
+04:25:09 AM
+·
+IMU identity read
+Value 0
+04:25:09 AM
+·
+IMU bus start
+Value 0
+04:25:09 AM
+·
+Motion class
+stationary
+04:25:00 AM
+·
+Motion class
+cruising
+04:25:00 AM
+·
+Motion class
+stationary
+04:25:00 AM
+·
+Motion class
+cruising
+04:25:00 AM
+·
+Motion class
+stationary
+04:24:59 AM
+·
+Motion class
+cruising
+04:24:59 AM
+·
+Motion class
+stationary
+04:24:59 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 107
+04:24:59 AM
+·
+Motion class
+cruising
+04:24:58 AM
+·
+Motion class
+stationary
+04:24:48 AM
+↗
+State → FAULT
+Safety stop active
+04:24:48 AM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #25-27: bar 1.4
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #22-24: gap 4.6, bar 7.2, gap 5.0
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #19-21: bar 2.0, gap 4.0, bar 7.6
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #16-18: gap 4.6, bar 2.0, gap 10.0
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #13-15: bar 1.4, gap 5.0, bar 7.0
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #10-12: gap 5.0, bar 1.4, gap 10.8
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #7-9: bar 7.0, gap 5.2, bar 1.4
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 6.0, bar 1.4, gap 4.2
+04:24:48 AM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 6.0, gap 5.6, bar 6.2
+04:24:48 AM
+·
+Barcode widths (mm)
+swing #25-27: bar 1.4
+04:24:48 AM
+·
+Barcode widths (mm)
+swing #22-24: gap 4.6, bar 7.2, gap 5.0
+04:24:48 AM
+·
+Barcode widths (mm)
+swing #19-21: bar 1.6, gap 4.2, bar 7.4
+04:24:48 AM
+·
+Barcode widths (mm)
+swing #16-18: gap 4.8, bar 1.6, gap 10.2
+04:24:48 AM
+·
+Barcode widths (mm)
+swing #13-15: bar 1.0, gap 5.0, bar 7.0
+04:24:48 AM
+·
+Barcode widths (mm)
+swing #7-9: bar 6.6, gap 5.6, bar 0.8
+04:24:48 AM
+·
+Barcode: elements found by each reading
+swing 25, low threshold 25, adaptive 20% 25, adaptive 10% 25 (a letter has 29; 0 = not tried)
+04:24:48 AM
+·
+Barcode sensor levels
+white 9 / 1000, white noise 47, darkest 756 (a bar must rise 250 above white; noise 47 leaves 203 margin)
+04:24:48 AM
+·
+Barcode rejected: bar widths
+narrowest 0.8 mm, widest 11.1 mm
+04:24:48 AM
+·
+Barcode rejected: what the sensor saw
+25 elements (a letter has 29), 161 mm long, darkest 756 / 1000
+04:24:48 AM
+·
+Barcode rejected
+wrong element count
+04:24:48 AM
+·
+Motion class
+decelerating
+04:24:48 AM
+·
+Heartbeat missed
+Value 2
+04:24:48 AM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+04:24:48 AM
+↗
+Cross-junction
+04:24:45 AM
+·
+Motion class
+cruising
+04:24:45 AM
+·
+Motion class
+accelerating
+04:24:44 AM
+·
+Motion class
+cruising
+04:24:44 AM
+↗
+State → LINE_FOLLOW
+Following the line
+04:24:44 AM
+↗
+Remote start
+Value 0
+04:24:44 AM
+↗
+Remote start
+Value 0
+04:24:44 AM
+✓
+START accepted
+#1794595390
+04:24:44 AM
+·
+Map stored
+Value 1128677700
+04:24:42 AM
+↗
+Map received
+04:24:42 AM
+↗
+Map received
+04:24:42 AM
+✓
+MAP FCDA accepted
+#1794595389
+04:24:42 AM
+·
+Motion class
+stationary
+04:24:39 AM
+↗
+State → IDLE
+Standing by
+04:24:39 AM
+·
+Calibration / self-test result
+0x00030000
+04:24:39 AM
+↗
+Calibration step done
+ok
+04:24:39 AM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 0, spun 360° (encoders)
+04:24:39 AM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+04:24:39 AM
+·
+IR calibration (barcode)
+Value 179437685
+04:24:39 AM
+·
+IR calibration (right)
+Value 194052243
+04:24:39 AM
+·
+IR calibration (left)
+Value 147980487
+04:24:39 AM
+↗
+Calibration step done
+ok
+04:24:39 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 922
+04:24:39 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 12
+04:24:39 AM
+·
+IMU level: samples (need ≥ 50)
+Value 102
+04:24:39 AM
+↗
+Move done
+04:24:39 AM
+·
+Motion class
+cruising
+04:24:38 AM
+·
+Motion class
+turning
+04:24:37 AM
+·
+Motion class
+cruising
+04:24:37 AM
+↗
+State → CALIBRATING
+Calibrating
+04:24:37 AM
+↗
+Calibrate button
+Value 0
+04:24:37 AM
+↗
+Calibrate button
+Value 0
+04:24:37 AM
+↗
+State → IDLE
+Standing by
+04:24:37 AM
+·
+IMU start result
+0x00004900
+04:24:37 AM
+·
+IMU configuration
+Value 0
+04:24:37 AM
+·
+IMU identity value
+Value 73
+04:24:37 AM
+·
+IMU identity read
+Value 0
+04:24:37 AM
+·
+IMU bus start
+Value 0
+04:24:37 AM
+·
+Motion class
+stationary
+04:24:27 AM
+·
+Largest up-axis rise while driving this run (mg)
+Value 326
+04:24:27 AM
+·
+Lift seen (up axis rose, mg)
+Value 321
+04:24:26 AM
+·
+Motion class
+cruising
+04:24:26 AM
+·
+Motion class
+stationary
+04:24:26 AM
+·
+Motion class
+cruising
+04:24:26 AM
+·
+Motion class
+stationary
+04:24:20 AM
+·
+Motion class
+decelerating
+04:24:20 AM
+·
+Run summary
+Highest hump 0 mm
+04:24:20 AM
+↗
+State → MISSION_COMPLETE
+Run complete
+04:24:20 AM
+↗
+Remote stop
+Value 0
+04:24:20 AM
+↗
+Remote stop
+Value 0
+04:24:20 AM
+✓
+STOP accepted
+#1794595388
+04:24:20 AM
+·
+Motion class
+cruising
+04:24:19 AM
+·
+Motion class
+turning
+04:24:19 AM
+·
+Motion class
+cruising
+04:24:18 A

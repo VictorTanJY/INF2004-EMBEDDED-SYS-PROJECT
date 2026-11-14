@@ -1,0 +1,36 @@
+# host tests, 2026-11-15, commit 3d35428: make -C testing/subsystem3/host (gcc, ASan + UBSan)
+cc -std=c11 -Wall -Wextra -Werror -O1 -g -I../../../app_program/subsystem3 -I../../../app_program -fsanitize=address,undefined -fno-omit-frame-pointer -o test_s3 test_s3.c ../../../app_program/subsystem3/code39.c ../../../app_program/subsystem3/line_barcode.c ../../../app_program/subsystem3/line_track.c -lm
+./test_s3
+noisy passes: 160 / 160 decoded, 0 wrong
+blurred passes: 96 / 96 decoded, 0 wrong; weak sensor 12 / 12, 0 wrong
+one bar short at an end: 48 / 48 decoded, 0 wrong
+black bleeding 40 %: 26 / 26 decoded, 0 wrong
+5-6 mm spot: 40 / 48 decoded (8 by the second try), 0 wrong
+faint 3 mm bars (robot 7 Nov): Z 12 / 12 decoded, 0 wrong
+end specks (car 14 Nov): A 8 / 8 decoded, 0 wrong
+best match, split bar: 1117 / 1118 decoded
+best match, merged thin pair: 1012 / 1299 decoded
+best match, split + merge: 454 / 657 decoded
+best match, end lost + split: 1116 / 1118 decoded
+best match: 3699 / 4192 decoded, 0 wrong
+best match: random widths accepted 0 / 20000, over-damaged codes wrong 0
+capture with a speck in a wide bar: 24 / 24 decoded (9 by best match), 0 wrong
+light print, thin bars 300, 3 mm spot: 258 / 258 so far (1 by the adaptive swing, 257 by the first three readings)
+light print, thin bars 300, 4 mm spot: 330 / 516 so far (61 by the adaptive swing, 257 by the first three readings)
+light print, thin bars 300, 5 mm spot: 330 / 774 so far (61 by the adaptive swing, 257 by the first three readings)
+light print, thin bars 230, 3 mm spot: 456 / 1032 so far (185 by the adaptive swing, 259 by the first three readings)
+light print, thin bars 230, 4 mm spot: 456 / 1290 so far (185 by the adaptive swing, 259 by the first three readings)
+light print, thin bars 230, 5 mm spot: 456 / 1548 so far (185 by the adaptive swing, 259 by the first three readings)
+light print, thin bars 170, 3 mm spot: 515 / 1806 so far (243 by the adaptive swing, 259 by the first three readings)
+light print, thin bars 170, 4 mm spot: 515 / 2064 so far (243 by the adaptive swing, 259 by the first three readings)
+light print, thin bars 170, 5 mm spot: 515 / 2322 so far (243 by the adaptive swing, 259 by the first three readings)
+light print: 515 / 2322 decoded (243 by the adaptive swing), 0 wrong
+turn slip: real gain 1000 -> measured 1001
+turn slip: real gain 1200 -> measured 1201
+turn slip: real gain 1500 -> measured 1500
+turn slip: real gain 1800 -> measured 1800
+turn slip, wide sensors: real gain 1000 -> measured 999
+turn slip, wide sensors: real gain 1200 -> measured 1199
+turn slip, wide sensors: real gain 1500 -> measured 1499
+turn slip, wide sensors: real gain 1800 -> measured 1799
+host tests: 157 passed, 0 failed

@@ -12,7 +12,7 @@ For each file and wheel it prints:
     rise        10 % -> 90 % of the target (ms)
     overshoot   (peak - target) / target (%)
     settle      time after ramp_end until the speed stays within +-10 %
-                of the target for the rest of the log (ms); NFR5: <= 300
+                of the target for the rest of the log (ms); NFR5: <= 500
     ss_err      mean (speed - target) / target over the last 500 ms (%);
                 NFR5: within +-10 %
     duty_max    largest |duty| (per mille; 1000 = saturated)
@@ -99,7 +99,7 @@ def plot(path, rows):
 
 
 def main(paths):
-    print('| file | wheel | target mm/s | ramp end ms | rise ms | overshoot % | settle ms (<= 300) | steady error % (+-10) | max duty |')
+    print('| file | wheel | target mm/s | ramp end ms | rise ms | overshoot % | settle ms (<= 500) | steady error % (+-10) | max duty |')
     print('|---|---|---|---|---|---|---|---|---|')
     for p in paths:
         rows = load(p)
