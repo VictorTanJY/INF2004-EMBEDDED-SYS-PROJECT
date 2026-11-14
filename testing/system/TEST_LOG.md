@@ -43,6 +43,7 @@ Define a test here before running it. Test IDs never change.
 | SYS-26 | resources | NFR10 | review | Release build: `arm-none-eabi-size`; search for heap calls; check every `mbf_telem` post. | No malloc / free in `app_program`; every telemetry post uses TMO_POL; RAM well inside 264 KB. |
 | SYS-27 | robustness | NFR11 | manual | A run over a 50 mm gap and a tape joint; a run with the access point switched off. | The robot keeps following the line; the run continues without WiFi. |
 | SYS-28 | software quality | NFR12 | auto | Clean release build; all host tests; on-target self-tests (emulator). | 0 warnings in `app_program`; host tests pass; self-tests pass. |
+| SYS-29 | Change Requirement 1: minimum-bit data representation | CR1 | auto + review | (a) Host tests SH-H05, S1-H01–H21, S2-H16, S3-H22, S4-H11, S5-H26. (b) Review against `docs/CR1_MINIMUM_BIT.md` (data representation tables, access rules). (c) Before / after sizes (`arm-none-eabi-size`, `nm`, payload builders). (d) A run with the dashboard: telemetry decoded, commands acknowledged. | (a) PASS. (b) every area 1–8 covered; no shared read-modify-write. (c) payloads and shared data smaller, recorded. (d) dashboard works as before. |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **host** = host tests on a PC; **review** = code or build inspection;
@@ -97,3 +98,5 @@ the test IDs it ran are named in the notes.
 | 2026-11-15 | SYS-18 (a) | `843f105` | Victor | PASS (on the Pico) | as SYS-17 | S3-U03, S3-U05: 100 ADC blocks in 1 s, 0 lost. |
 | 2026-11-15 | SYS-24 (c) | `843f105` | Victor | PASS (on the Pico) | as SYS-17 | S4-U08: fault flag to both motors braked in 107 µs (115 µs in run 2); limit 20 ms. |
 | 2026-11-15 | SYS-28 | `843f105` | Victor | PASS (on the Pico, part) | as SYS-17 | On-target self-tests on the Pico: S2–S5 31 of 31 PASS (subsystem summaries 10/10, 5/5, 8/8, 8/8). S1's 8 checks printed before the serial monitor connected (emulator PASS stands). |
+| 2026-11-15 | SYS-29 | `619b823`, `ee142d8` | Victor | PARTIAL (a–c PASS; d on the robot still to do) | `logs/2026-11-15_cr1_before_after.txt`, `../*/logs/2026-11-15_host_cr1.txt` | (a) all CR1 host tests pass. (c) telemetry 297 → 27 B, `.bss` −548 B, message buffers −352 B, flash −4 492 B, MotionTask +32 µs per cycle (emulator). (d) needs the new dashboard (`picocar_codec.py`) and the robot. |
+| 2026-11-15 | SYS-28 | `ee142d8` | Victor | PARTIAL | `logs/2026-11-15_cr1_before_after.txt`, `../*/logs/2026-11-15_host_cr1.txt`, `../integration/logs/2026-11-15_emulator_smp0_test_cr1.txt` | CR1 image: 0 warnings (release, board test, emulator builds). Host tests 1 265 passed, 1 failed (S2-H03). Emulator self-test 33 PASS, 0 FAIL, 6 SKIP. |

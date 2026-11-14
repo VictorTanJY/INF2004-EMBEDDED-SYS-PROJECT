@@ -1,0 +1,11 @@
+hump 15 mm x 300 mm: reported 13 mm
+hump 20 mm x 300 mm: reported 18 mm
+hump 30 mm x 300 mm: reported 26 mm
+hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - known limit
+one-wheel hump 10 mm x 300 mm: reported 10 mm
+one-wheel hump 20 mm x 300 mm: reported 20 mm
+one-wheel hump 30 mm x 300 mm: reported 30 mm
+lift: rise 359 mg
+largest rise while driving: 449 mg
+in the air: 1 fake hump(s), max 30 mm (real 19)
+host tests: 70 passed, 0 failed

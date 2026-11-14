@@ -12,7 +12,7 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
 | S4-U01 | flg_safety exists | IF-05 | auto | `subsystem4_test.c` | PASS |
-| S4-U02 | heartbeat counter advances (MotionTask's) | IF-07 | auto | `subsystem4_test.c` | PASS |
+| S4-U02 | heartbeat counter advances (MotionTask's; one byte per task since CR1, compared modulo 256) | IF-07 | auto | `subsystem4_test.c` | PASS |
 | S4-U03 | *retired 25 Oct:* IMU snapshot round trip (ImuTask now writes it continuously) | IF-08 | – | – | – |
 | S4-U04 | ImuTask publishes its snapshot | IF-08 | auto | `subsystem4_test.c` | PASS |
 | S4-U05 | 1 us timer runs at 1 MHz against clk_sys (watchdog tick fix) | NFR8 | auto | `subsystem4_test.c` | PASS, `[INFO] timer: 100000 us per 100 ms` |
@@ -22,6 +22,7 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S4-U09 | Reset clears the fault, as the dashboard Reset does | FR14, FR15, IF-06 | auto | `mission_post(REMOTE_RESET)`; wait up to 8 s | latch cleared, PWM reconnected (GP8 back on PWM), MotionTask IDLE_BRAKED, mission back to IDLE if it was IDLE |
 | S4-H01–H09 | humps 15/20/30 mm x 300 mm on a chassis model within NFR7; 10 mm x 300 mm below the 5 deg threshold (known limit, S4-H01b); no hump under +-1.5 m/s^2 accelerate/brake; long ramp is a ramp; tilt on/off with hysteresis, roll too; lift by the up-axis rise, and a 1.5 g jolt while driving is not a lift; level calibration removes a mounting offset and refuses a moving robot; hard-iron offsets and heading; motion classes; heartbeat timeouts per task and across the ms wrap | FR6–FR8, FR15, NFR7, A9 | host | `make -C testing/subsystem4/host` | `host tests: N passed, 0 failed` |
 | S4-H10 | humps under ONE wheel (roll): 10 / 20 / 30 mm x 300 mm, both sides, within NFR7; lifting by hand with the wheels still and a short 10 mm jolt are not humps | FR6, FR7, NFR7 | host | `make -C testing/subsystem4/host` | `host tests: N passed, 0 failed` |
+| S4-H11 | CR1: the IMU snapshot layout (164 bits, 6 words) round-trips exactly; hump count and peak saturate | CR1, IF-08 | auto (host) | `make -C testing/subsystem4/host` | no S4-H11 FAIL line |
 | S4-M01 | IMU found (IRA_REG_M = 0x48), snapshot `ok` = 1 | A3 | manual | boot, telemetry / snapshot | `ok` 1, i2c_errors not rising |
 | S4-M02 | axis orientation and signs | A8 | manual | tilt nose up, then right side up, by hand | pitch and roll go positive (roll + = right side up); else fix `IMU_AXIS_*` / `IMU_SIGN_*` |
 | S4-M03 | pitch noise while driving on flat ground | A8 | manual | log pitch at 0.3 m/s | within +-1 deg; else re-check mounting, consider lowering `IMU_HUMP_ON_CDEG` only after this |
@@ -53,3 +54,5 @@ Add a new row for every run. Never edit or delete old rows.
 | 2026-11-15 | S4-U01, U02, U04–U09 | `843f105` | Victor | PASS (7 / 7), 1 SKIP | `../integration/logs/2026-11-15_emulator_smp0_test_843f105.txt` | **emulator**: fault flag → `motor_estop()` 7 µs (emulated, one core); Reset cleared it at once. S4-U07 SKIP (no IMU). Run on the robot for the dual-core latency. |
 | 2026-11-15 | S4-U01, U02, U04–U09 | `843f105` | Victor | PASS (8 / 8) | `../integration/logs/2026-11-15_board_selftest_843f105.txt`, run 1 (lines 158–170) | **Pico on the car, dual core, image `make SMP=1 CONSOLE=usb_cdc WIFI=none TEST=1`**. U05: 100 200 µs per 100 ms of CPU clock. U07: pitch 3.81°, roll 1.29°, \|a\| − 1 g = −114 mg, 0 I2C errors (no level calibration stored, cal 0x0). U08: fault flag to `motor_estop()` 107 µs on the dual-core build (limit 20 ms). U09: cleared at once, back to IDLE. Run 2 in the same log (lines 187–229) was held by hand, which is not the defined set-up: U07 failed (roll 5.65°, tilted in the hand); U08 115 µs. |
 | 2026-11-15 | S4-M01 | `843f105` | Victor | PASS | `../integration/logs/2026-11-15_board_selftest_843f105.txt`, S4-U07 | IMU answering (`ok` 1, not skipped), 0 I2C errors in 1 s. |
+| 2026-11-15 | S4-H01–H11 | `ee142d8` | Victor | PASS (70 / 70) | `logs/2026-11-15_host_cr1.txt` | Includes S4-H11 (CR1 IMU snapshot). |
+| 2026-11-15 | S4-U01, U02, U04–U09 | `ee142d8` | Victor | PASS (7 / 7), 1 SKIP | `../integration/logs/2026-11-15_emulator_smp0_test_cr1.txt` | **emulator**, CR1 image: 8-bit heartbeat counter advances; fault flag to brake 6 µs (emulated). |
