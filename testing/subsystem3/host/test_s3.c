@@ -638,10 +638,10 @@ static void test_track(void)
     ev = feed(&t, 1000u, 1000u, 30000u);
     CHECK("S3-H08", (ev & LINE_TRK_EV_JUNCTION) == 0u);
 
-    /* S3-H09: 40 mm gap bridged (heading held), 90 mm -> LOST once, then FOUND */
+    /* S3-H09: 50 mm gap bridged (NFR11, heading held), 90 mm -> LOST once, then FOUND */
     line_track_init(&t);
     (void)feed(&t, 500u, 500u, 60000u);
-    ev = feed(&t, 50u, 50u, 40000u);
+    ev = feed(&t, 50u, 50u, 50000u);
     CHECK("S3-H09", (ev & LINE_TRK_EV_LOST) == 0u && t.omega == 0 && t.v == 300);
     (void)feed(&t, 500u, 500u, 30000u);
     ev = feed(&t, 50u, 50u, 90000u);

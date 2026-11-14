@@ -1,7 +1,7 @@
 /*
  *  test_s4.c
  *  Host unit tests for subsystem 4: imu_core.c (pitch, humps, tilt,
- *  impact, classification, calibration) and safety_core.c (heartbeats).
+ *  lift, classification, calibration) and safety_core.c (heartbeats).
  *  Humps are simulated geometrically: the chassis rests on the drive axle
  *  at x and the caster at x + L, so pitch = atan((z(x+L) - z(x)) / L) for
  *  a cosine hump of known height.  This checks the method (A9, NFR7) on a

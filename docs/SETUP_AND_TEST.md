@@ -378,7 +378,7 @@ none, the module reads lower over black: set `LINE_BLACK_IS_HIGH 0`. Tune
 `LINE_KP`, `LINE_KD` (`line_cfg.h`) and `speed_mm_s`. 5 laps without help.
 
 **F5. Junctions and gaps (S3-M04):** one `JUNCTION` event per crossing,
-none on curves or 40 mm gaps. `junction_mm` defaults to **12 mm**, not
+none on curves or 50 mm gaps (NFR11). `junction_mm` defaults to **12 mm**, not
 FR2's 20 mm: a crossing line is only 18 mm wide, so both sensors are fully
 black for less than 20 mm. Tune it with
 `{"cmd":"set","param":"junction_mm",...}`.

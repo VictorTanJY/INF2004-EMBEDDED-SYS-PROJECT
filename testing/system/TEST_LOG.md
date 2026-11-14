@@ -41,7 +41,7 @@ Define a test here before running it. Test IDs never change.
 | SYS-24 | safety response and watchdog | NFR8 | manual + review + auto | (a) The SYS-15 lift and tilt tests. (b) Code review of the watchdog set-up. (c) On-target self-test S4-U08 (`make TEST=1`). | (a) Wheels stop at once, FAULT logged. (b) Watchdog loaded for 200 ms, fed only by SafetyTask; S4-U06 PASS. (c) Fault flag to brake ≤ 20 ms. |
 | SYS-25 | communications timing | NFR9 | manual | 10-minute logged run; switch the broker and the access point off and on during a run. | Telemetry every 200 ms, status every 1 s; reconnects (1–16 s back-off, WiFi re-join 5 s); the run continues throughout. |
 | SYS-26 | resources | NFR10 | review | Release build: `arm-none-eabi-size`; search for heap calls; check every `mbf_telem` post. | No malloc / free in `app_program`; every telemetry post uses TMO_POL; RAM well inside 264 KB. |
-| SYS-27 | robustness | NFR11 | manual | A run over a 40 mm gap and a tape joint; a run with the access point switched off. | The robot keeps following the line; the run continues without WiFi. |
+| SYS-27 | robustness | NFR11 | manual | A run over a 50 mm gap and a tape joint; a run with the access point switched off. | The robot keeps following the line; the run continues without WiFi. |
 | SYS-28 | software quality | NFR12 | auto | Clean release build; all host tests; on-target self-tests (emulator). | 0 warnings in `app_program`; host tests pass; self-tests pass. |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
