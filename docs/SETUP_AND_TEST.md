@@ -172,11 +172,21 @@ on the new COM port (Windows). If you connected too late, press reset or
 re-plug to see the boot.
 
 **B6. Expected:** `all subsystems started`, the `[TEST]` lines, then
-`=== test run end ===`. Every line `PASS`, and
+`=== test run end ===`. Every line `PASS` (see `SKIP` below), and
 `[INFO] timer: 100000 us per 100 ms of CPU clock` (±2 %).
 - **S4-U05** failing means the 1 µs timer is not at 1 MHz — stop and
   investigate: everything timed depends on it.
 - `S4-U04` (ImuTask snapshot) passes even without an IMU; the snapshot just says `ok = 0`.
+- The checks that measure the robot (S2-U07–U11, S3-U05, U07, S4-U07–U09,
+  S5-U08, U09) print their numbers on `[INFO]` lines: copy them into the
+  test logs. For them, the motor battery must be on (S2-U08–U11 turn the
+  wheels: 30 cm forward, 30 cm back, 90° left), the box must be level
+  (S4-U07), and a wall or box should be 30–100 cm in front of the
+  ultrasonic sensor (S5-U09; tape-measure it). Nothing closer than 8 cm.
+- S4-U08 brakes the motors on purpose and S4-U09 resets it: a FAULT then
+  BOOT → IDLE on the dashboard during the test run is expected.
+- A `SKIP` line names what was missing (motor battery off, no IMU, no
+  echo). It is not a pass: fix the set-up and run the test image again.
 
 **B7. Pins (S2-M01):** GP8, GP9, GP10, GP11 LOW (motor driver brake);
 GP15 a 50 Hz pulse of ~1.5 ms (servo centre).
