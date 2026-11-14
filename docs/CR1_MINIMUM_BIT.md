@@ -144,7 +144,8 @@ decoded, commands acknowledged) and the self-test image (S2-U07, S4-U08).
   into a normal struct and computes with it; packing happens where data is
   stored for, or sent to, another task or the laptop. The M0+ has no
   bit-field instructions, so computing on packed fields would cost time in
-  the 10 ms loops for no saving in shared memory.
+  the 10 ms loops for no saving in shared memory. Section 8 gives the range
+  analysis of these values, as the Tribunal 1 Version B promised.
 - **Running totals stay 32 bits** (encoder counts, distance, heading,
   timestamps, `pings`, `blocks`): their valid range is the whole run, and
   readers take differences, which a shorter wrapping field would break.
@@ -156,3 +157,87 @@ decoded, commands acknowledged) and the self-test image (S2-U07, S4-U08).
   TURN up to 409.5 deg, speeds and rates up to 511. Every current caller is
   inside these (the longest are the 360 deg calibration spin and 2 m bench
   moves).
+
+## 8. Range analysis of each task's own working values
+
+The Tribunal 1 Version B said the minimum-bit analysis also covers gains,
+errors, integrators, filters and intermediates, that keeping them on the
+stack or in a task's private memory is no exemption, and that ranges,
+precision and overflow must be derived and justified. This section does that
+for every value a task keeps for itself. "Bits needed" is the smallest field
+that holds the valid range; "kept as" is the C type in the code.
+
+Sizes of each task's private state, release build (`arm-none-eabi-nm -S`):
+MotionTask `g_core` 192 B; LineBarcodeTask `g_trk` 56 B, `g_cal` 28 B,
+`g_bc` 3 272 B, `g_slip` 4 812 B; ImuTask `g_ic` 224 B; MissionTask `g_mc`
+60 B; ObstacleTask `g_o` 292 B, `g_prof` 24 B, `g_steps` 40 B. About 9.0 KB
+in all, 3.4 % of the RP2040's 264 KB.
+
+### 8.1 Gains
+
+| Value | Value / range | Bits needed | Kept as | Why |
+|---|---|---|---|---|
+| Wheel PID `MOTION_KP_MILLI`, `MOTION_KI_MILLI`, `MOTION_KFF_MILLI` | 1040, 6000, 1200 (per mille) | 11, 13, 11 | `#define` | Compile-time constants: they become immediate operands in the code and take no RAM at all. |
+| `MOTION_I_MAX`, `MOTION_MIN_DUTY` | 400, 23 | 9, 5 | `#define` | as above |
+| Line steering `LINE_KP`, `LINE_KD` | 850, 0 | 10, 1 | `#define` | as above |
+| Hold / bypass gains (`OBST_HOLD_K`, ...) | small integers | <= 12 | `#define` | as above |
+
+### 8.2 Integrators and filters
+
+| Value (task) | Valid range | Bits needed | Kept as | Why it stays wider |
+|---|---|---|---|---|
+| `integ_l_um`, `integ_r_um` wheel PID integrators (Motion) | clamped to +-MOTION_I_MAX x 10^6 / KI = +-66 667 | 18 | `int32_t` | The update `integ + e x dt` is formed before the clamp: e up to +-1 022 mm/s times dt (10 ms, more if a cycle is late) must not overflow before it is clamped. |
+| `v_l`, `v_r` filtered wheel speeds (Motion, EMA 1/2) | +-511 mm/s in use | 10 | `int32_t` | The raw speed `dl / dt` before filtering is not bounded (an encoder glitch is reported, not clipped); the filter step `(vraw - v) / 2` needs the headroom. |
+| `yaw_rate_cdeg_s` filtered (Motion) | +-32 767 cdeg/s | 16 | `int32_t` | Same: the raw rate is formed from a 32-bit heading difference times 1 000. |
+| `acc_f[3]` filtered acceleration, mg x 16 (IMU, EMA 1/4) | +-16 000 mg x 16 = +-256 000 | 19 | `int32_t` | x16 keeps the fraction of the filter; 19 bits do not fit 16. |
+| `accel_mm_s2` filtered (IMU) | +-3 000 used (`IMU_ACC_COMP_MAX_MM_S2`) | 13 | `int32_t` | Formed from a speed difference divided by dt before clamping. |
+| `h_um`, `h_peak_um` integrated hump height (IMU) | a hump is < 50 mm = 50 000 um | 17 | `int64_t` | Integrated from `distance x sin(pitch)` products in Q15, which exceed 32 bits before the shift. |
+| `lvl_sum[3]` level calibration sums (IMU) | up to 1 s of samples x +-16 000 mg | about 21 | `int64_t` | Sum of many samples; 64 bits rules out overflow whatever the sample count. |
+
+### 8.3 Errors and set-points
+
+| Value (task) | Valid range | Bits needed | Kept as | Why it stays wider |
+|---|---|---|---|---|
+| `err`, `prev_err`, `line_err`, `exit_err`, `peak_err` (Line) | -1 000..1 000 | 11 | `int32_t` | Multiplied by `LINE_KP` (850): the product needs 21 bits. |
+| `omega`, `v` steering output (Line) | +-2 000 mrad/s, 0..450 mm/s | 12, 9 | `int32_t` | Ramped and clamped after the multiply above. Sent to MotionTask packed (12 + 10 bits). |
+| `sp_v`, `sp_w`, `drive_v`, `drive_w` set-points (Motion) | +-450 mm/s, +-6 000 mrad/s | 10, 14 | `int32_t` | The ramp and braking curve (`v = sqrt(2 x a x remaining)`, remaining in um, a 64-bit product) are computed from and compared with them; 32-bit avoids a widening on every step. |
+| `m_target_um`, `m_start_*_um` manoeuvre (Motion) | MOVE <= 4 095 mm = 4.1 x 10^6 um | 23 | `int64_t` | Compared with the 64-bit wheel distances below. |
+| `dist_l_um`, `dist_r_um`, `x_um`, `y_um` (Motion) | running totals: about 2 km in a long session | 32 | `int64_t` | Heading = `(dist_r - dist_l) x 18 x 10^6 / (pi x track)`: the product needs about 55 bits. |
+| `duty_l`, `duty_r` (Motion) | +-1 000 per mille | 11 | `int16_t` | Smallest C type that holds it. |
+
+### 8.4 Intermediates and buffers
+
+| Value (task) | Valid range | Bits needed | Kept as | Why |
+|---|---|---|---|---|
+| `widths[60]` bar / space widths (Line, barcode) | an element is at most the 420 mm capture guard = 420 000 um | 19 | `uint32_t` | Width ratios (wide / narrow x 10, sums of 9 elements) are computed on them. |
+| `prof[1 411]`, `pre[75]` darkness profile (Line, barcode) | 0..1 000 (normalised) | 10 | `uint16_t` | Indexed and rescanned by up to 7 decoding passes; packed 10-bit entries would need a shift and mask on every access in the decoder. |
+| `raw_l[800]`, `raw_r[800]` calibration-spin record (Line) | 0..4 095 (12-bit ADC) | 12 | `uint16_t` | Hardware width: DMA writes the ADC in 16-bit units (Version B: hardware widths are fixed at acquisition). |
+| `h_ddeg[800]` spin heading record (Line) | +-3 600 x 0.1 deg | 13 | `int16_t` | Smallest C type that holds it. |
+| `min`, `max`, `white`, `black` per channel (Line calibration) | 0..4 095 | 12 | `uint16_t` | ADC hardware width, as above. |
+| distances `*_um` in the line tracker | 0 .. a few metres between events | 22 | `uint32_t` | Only added to and compared; 32-bit add and compare are single instructions. |
+| `pitch_cdeg`, `roll_cdeg`, `heading_cdeg` (IMU) | +-9 000, +-18 000, 0..35 999 | 15, 16, 16 | `int32_t` | Results of 32-bit atan2 / filter arithmetic; stored packed in the snapshot. |
+| `last_count[5]` (Safety) | 8-bit heartbeat counters since CR1 | 8 | `uint32_t` | Compared with the counters for a change; could be 8 bits (saves 15 B). |
+| times `*_ms` (all tasks) | 32-bit ms clock, wraps after 49.7 days | 32 | `uint32_t` | Wrap-safe subtraction needs the full clock width. |
+| states, phases, flags (all tasks) | 2..13 values; true / false | 1..4 | `uint8_t` / `bool` | One byte is the smallest a C object can be addressed as; a bit-field would add a mask and shift to every test in the 10 ms loops. Stored packed (2..4 bits) wherever another task reads them. |
+
+### 8.5 What full narrowing would save, and what it would cost
+
+If every value above were stored in exactly its "bits needed", the private
+state would shrink by about 2.5 KB: 1.1 KB in the darkness profile
+(6 spare bits x 1 486 entries), 1.1 KB in the calibration-spin record
+(3-4 spare bits x 2 400 entries), 0.1 KB in the bar widths and about 0.2 KB
+spread over the rest. That is 0.9 % of the 264 KB SRAM; the current release
+uses 101 KB of static RAM, so memory is not short.
+
+The cost would be time and risk in the control loops: the Cortex-M0+ has no
+bit-field insert or extract instruction, so each packed field costs a shift,
+a mask and (for signed values) a sign extension on every read and write.
+Packing only at the task boundary already measured +32 us per MotionTask
+cycle on the emulator (S2-U07, section 5). Packing every working value was
+not measured; it would apply that cost to every access in the integrators,
+filters and decoder loops instead of once per cycle. The team therefore
+keeps a task's own working values in the smallest convenient C type,
+justified above, and packs everything that is stored for, queued for or
+sent to another task or the laptop. Values that are already exactly
+representable in a smaller C type (`duty_l` / `duty_r`, `h_ddeg`, the ADC
+records) use it.
