@@ -22,7 +22,7 @@ const FAULTS = [[1, 'Lifted', 'The robot was lifted during a run: run ended, mot
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
 const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)', 71: 'Edge scan: last left echo', 72: 'Edge scan: last right echo', 73: 'Barcode sensor levels', 74: 'Width probe (side-step): edges', 75: 'Barcode widths (mm)', 76: 'Barcode: elements found by each reading',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
-  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared', 77: 'Lift seen (up axis rose, mg)', 78: 'Largest up-axis rise while driving this run (mg)', 79: 'No floor under the IR sensors (lifted)', 80: 'Barcode decode time (µs, line task limit 50 000)',
+  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared', 77: 'Lift seen (up axis rose, mg)', 78: 'Largest up-axis rise while driving this run (mg)', 79: 'No floor under the IR sensors (lifted)', 80: 'Barcode decode time (µs, line task limit 50 000)', 84: 'Speed log recorded (10 ms samples of the move start)',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
   64: 'Barcode not in the map', 65: 'Map stored', 66: 'Map refused', 67: 'Run summary', 68: 'Parameter set',
   69: 'Mission queue full', 70: 'Motion queue full', 90: 'IMU bus start', 91: 'IMU identity read', 92: 'IMU identity value',
@@ -274,6 +274,9 @@ function render() {
   $('start').disabled = !(controls && fresh && idle);
   $('mapSend').disabled = !(controls && fresh && idle);
   document.querySelectorAll('[data-bench]').forEach(b => b.disabled = !(controls && fresh && idle));
+  const step = snap.step, stepGot = step ? Object.keys(step.samples || {}).length : 0;
+  $('stepInfo').textContent = step ? `Speed log: ${stepGot} / ${step.n} samples, ${new Date(step.time * 1000).toLocaleTimeString()}` : 'Speed log: none yet';
+  $('stepCsv').disabled = stepGot === 0;
   const cmds = snap.commands || [], c = cmds[cmds.length - 1];
   $('commandStatus').textContent = c ? `${c.label} #${c.id} · ${c.result}${c.ack?.err ? ' (' + c.ack.err + ')' : ''}${c.error ? ' · ' + c.error : ''}`
     : controls ? (idle ? 'Ready. Start, map and bench moves need IDLE and fresh telemetry.' : 'Stop is always available.')
@@ -486,6 +489,20 @@ $('mapForm').onsubmit = e => {
 };
 $('mapForm').querySelectorAll('input').forEach((inp, i, all) => inp.addEventListener('input', () => { inp.value = inp.value.toUpperCase(); if (inp.value && all[i + 1]) all[i + 1].focus(); }));
 document.querySelectorAll('[data-bench]').forEach(b => b.onclick = () => send('bench', {param: b.dataset.bench, value: Number(b.dataset.value)}));
+/* Speed log (APP_BENCH): one row per 10 ms sample from the start of the last move. */
+$('stepCsv').onclick = () => {
+  const st = snap.step; if (!st) return;
+  const cols = ['sp_l', 'v_l', 'duty_l', 'sp_r', 'v_r', 'duty_r'];
+  const rows = ['t_ms,' + cols.join(',')];
+  for (let i = 0; i < st.n; i++) {
+    const r = (st.samples || {})[String(i)] || {};
+    rows.push([i * (st.period_ms || 10), ...cols.map(c => (r[c] ?? ''))].join(','));
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([rows.join('\n') + '\n'], {type: 'text/csv'}));
+  a.download = `speed_log_${new Date(st.time * 1000).toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
 $('trueWidth').addEventListener('input', render);
 document.querySelectorAll('[data-filter]').forEach(b => b.onclick = () => { filter = b.dataset.filter; document.querySelectorAll('[data-filter]').forEach(x => x.classList.toggle('active', x === b)); lastEventSig = ''; renderEvents(); });
 document.addEventListener('keydown', e => {

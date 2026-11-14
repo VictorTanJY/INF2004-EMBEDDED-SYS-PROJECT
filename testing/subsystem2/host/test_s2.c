@@ -15,6 +15,7 @@
 #include "motion_core.h"
 #include "motion_cfg.h"
 #include "motion_api.h"
+#include "motion_rec.h"
 
 static int g_pass;
 static int g_fail;
@@ -313,6 +314,59 @@ int main(void)
     (void)cmd(g_post.src, g_post.seq, g_post.cmd, g_post.p0, g_post.p1);
     (void)run_until_event(MOTION_EV_DONE, 5000u);
     CHECK("S2-H14", g_mc.last_done_seq == 90u);
+
+    /* S2-H15: speed-step recorder (PID tuning report): 150 samples of a
+       MOVE on the motor model, sent as 1 header + 3 records per sample
+       that unpack to the recorded values; a new MOVE restarts it. */
+    {
+        static motion_rec_t rec;
+        motion_rec_sample_t s;
+        uint16_t code;
+        int32_t  data;
+        int      sent = 0, ok = 1, i;
+
+        CHECK("S2-H15", motion_rec_pack(200u, -5, 1000) == (int32_t)((200u << 24) | (0xFFBu << 12) | 1000u));
+        CHECK("S2-H15", motion_rec_pack(1u, 5000, -5000) == (int32_t)((1u << 24) | (0x7FFu << 12) | 0x800u));
+        motion_rec_init(&rec);
+        CHECK("S2-H15", !motion_rec_peek(&rec, &code, &data));
+        reset_all(0.5);
+        (void)cmd(MOTION_SRC_MISSION, 30, MOTION_CMD_MOVE, 1000, 300);
+        motion_rec_start(&rec);
+        for (i = 0; i < 200; i++)
+        {
+            int32_t sp_l, sp_r;
+
+            run_ms(10u, 0);
+            motion_core_wheel_sp(&g_mc, &sp_l, &sp_r);
+            s.sp_l = (int16_t)sp_l;   s.sp_r = (int16_t)sp_r;
+            s.v_l  = (int16_t)g_mc.v_l; s.v_r = (int16_t)g_mc.v_r;
+            s.duty_l = g_mc.duty_l;   s.duty_r = g_mc.duty_r;
+            motion_rec_add(&rec, &s);
+        }
+        CHECK("S2-H15", rec.n == MOTION_REC_N && rec.state == MOTION_REC_SENDING);
+        CHECK("S2-H15", rec.s[MOTION_REC_N - 1u].sp_l == 300 && rec.s[0].sp_l < 300);   /* ramped set-point */
+        while (motion_rec_peek(&rec, &code, &data))
+        {
+            uint32_t const u = (uint32_t)data;
+            int32_t  a = (int32_t)((u >> 12) & 0xFFFu), b = (int32_t)(u & 0xFFFu);
+            uint16_t const k = (uint16_t)(u >> 24);
+
+            a = (a >= 2048) ? a - 4096 : a;
+            b = (b >= 2048) ? b - 4096 : b;
+            if (sent == 0) { ok = ok && (code == MOTION_REC_LOG_HEADER) && ((u & 0xFFFFu) == MOTION_REC_N) && ((u >> 16) == 10u); }
+            else if (code == MOTION_REC_LOG_LEFT)  { ok = ok && (a == rec.s[k].v_l)  && (b == rec.s[k].duty_l); }
+            else if (code == MOTION_REC_LOG_RIGHT) { ok = ok && (a == rec.s[k].v_r)  && (b == rec.s[k].duty_r); }
+            else if (code == MOTION_REC_LOG_SET)   { ok = ok && (a == rec.s[k].sp_l) && (b == rec.s[k].sp_r); }
+            else { ok = 0; }
+            motion_rec_sent(&rec);
+            sent++;
+            if (sent > 1000) { break; }
+        }
+        CHECK("S2-H15", ok && (sent == (int)(1u + 3u * MOTION_REC_N)) && (rec.state == MOTION_REC_IDLE));
+        motion_rec_start(&rec);
+        motion_rec_add(&rec, &s);
+        CHECK("S2-H15", rec.n == 1u && !motion_rec_peek(&rec, &code, &data));
+    }
 
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (g_fail == 0) ? 0 : 1;

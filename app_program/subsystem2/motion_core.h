@@ -125,6 +125,9 @@ void            motion_core_init(motion_core_t * p_mc, uint32_t now_ms);
 motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p_cmd,
                                     uint32_t now_ms);
 
+/* Each wheel's speed set-point (mm/s) for the current sp_v / sp_w, as the
+   wheel controllers use it (the speed-step recorder reads it too). */
+void            motion_core_wheel_sp(motion_core_t const * p_mc, int32_t * p_sp_l, int32_t * p_sp_r);
 /* The task cleared the latch and reconnected PWM: leave ESTOP_LATCHED. */
 void            motion_core_estop_cleared(motion_core_t * p_mc);
 

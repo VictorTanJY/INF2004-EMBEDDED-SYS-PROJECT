@@ -15,6 +15,8 @@
 
 #include "subsystem2.h"
 #include "motion_core.h"
+#include "motion_rec.h"
+#include "../app_types.h"
 #include "drv_motor.h"
 #include "drv_encoder.h"
 #include "../subsystem1/subsystem1.h"
@@ -24,6 +26,45 @@
 #define MOTION_WAKE_TIMEOUT_MS  30      /* still runs (and heartbeats) if motion_cyc stops */
 
 static motion_core_t g_core;
+
+#if APP_BENCH
+/* 15 Nov: speed-step recorder for the PID tuning report (motion_rec.h).
+   Each MOVE records its first 1.5 s at 10 ms; the samples are then posted
+   as log records, at most REC_POSTS_PER_STEP per 10 ms step so mbf_telem
+   (drained 8 per 20 ms by CommsTask) does not fill. */
+#define REC_POSTS_PER_STEP      2u
+static motion_rec_t g_rec;
+
+static void rec_step(void)
+{
+    motion_rec_sample_t s;
+    int32_t             sp_l;
+    int32_t             sp_r;
+    uint16_t            code;
+    int32_t             data;
+    uint16_t            k;
+
+    if (g_rec.state == (uint8_t)MOTION_REC_RECORDING)
+    {
+        motion_core_wheel_sp(&g_core, &sp_l, &sp_r);
+        s.sp_l   = (int16_t)sp_l;
+        s.sp_r   = (int16_t)sp_r;
+        s.v_l    = (int16_t)app_clamp_i32(g_core.v_l, -32768, 32767);
+        s.v_r    = (int16_t)app_clamp_i32(g_core.v_r, -32768, 32767);
+        s.duty_l = g_core.duty_l;
+        s.duty_r = g_core.duty_r;
+        motion_rec_add(&g_rec, &s);
+    }
+    for (k = 0u; (k < REC_POSTS_PER_STEP) && motion_rec_peek(&g_rec, &code, &data); k++)
+    {
+        if (!comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_MOTION, code, data))
+        {
+            break;                      /* full: the same record next step */
+        }
+        motion_rec_sent(&g_rec);
+    }
+}
+#endif
 
 static void timing_pin_init(void)
 {
@@ -115,6 +156,9 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
     EI(intsts);
 
     motion_core_init(&g_core, (uint32_t)app_time_ms_hw());
+#if APP_BENCH
+    motion_rec_init(&g_rec);
+#endif
 
     for (;;)
     {
@@ -132,17 +176,28 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
 
         while (tk_rcv_mbf(g_mbf_motion, &cmd, TMO_POL) == (INT)sizeof(cmd))
         {
-            if (motion_core_command(&g_core, &cmd, now_ms) == MOTION_RES_CLEAR_ESTOP)
+            motion_result_t const res = motion_core_command(&g_core, &cmd, now_ms);
+
+            if (res == MOTION_RES_CLEAR_ESTOP)
             {
                 if (motion_estop_clear_and_reconnect())
                 {
                     motion_core_estop_cleared(&g_core);
                 }
             }
+#if APP_BENCH
+            else if ((res == MOTION_RES_ACCEPTED) && (cmd.cmd == (uint8_t)MOTION_CMD_MOVE))
+            {
+                motion_rec_start(&g_rec);
+            }
+#endif
         }
 
         motion_core_step(&g_core, enc_l, enc_r, motion_estop_latched(), now_ms);
         write_pwm(g_core.duty_l, g_core.duty_r);
+#if APP_BENCH
+        rec_step();
+#endif
 
         motion_core_snapshot(&g_core, &odom);
         odom.t_ms  = (uint32_t)app_time_ms();

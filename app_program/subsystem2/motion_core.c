@@ -552,14 +552,22 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
     if (b_drive)
     {
-        int32_t const half_w = (int32_t)(((int64_t)p_mc->sp_w * MOTION_TRACK_MM) / 2000);
-        int32_t const sp_l   = app_clamp_i32(p_mc->sp_v - half_w, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
-        int32_t const sp_r   = app_clamp_i32(p_mc->sp_v + half_w, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
+        int32_t sp_l;
+        int32_t sp_r;
 
+        motion_core_wheel_sp(p_mc, &sp_l, &sp_r);
         p_mc->duty_l = pid_wheel(sp_l, p_mc->v_l, &p_mc->integ_l_um, &p_mc->dir_l, dt_ms);
         p_mc->duty_r = pid_wheel(sp_r, p_mc->v_r, &p_mc->integ_r_um, &p_mc->dir_r, dt_ms);
     }
     check_stall(p_mc, now_ms);
+}
+
+void motion_core_wheel_sp(motion_core_t const * p_mc, int32_t * p_sp_l, int32_t * p_sp_r)
+{
+    int32_t const half_w = (int32_t)(((int64_t)p_mc->sp_w * MOTION_TRACK_MM) / 2000);
+
+    *p_sp_l = app_clamp_i32(p_mc->sp_v - half_w, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
+    *p_sp_r = app_clamp_i32(p_mc->sp_v + half_w, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
 }
 
 void motion_core_snapshot(motion_core_t const * p_mc, motion_odom_t * p_out)

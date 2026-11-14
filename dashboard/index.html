@@ -92,6 +92,17 @@
       <button class="button secondary" data-bench="bench_turn" data-value="1800">↶ U-turn 180°</button>
       <button class="button secondary" data-bench="bench_turn" data-value="-900">↱ Right 90°</button>
       <span></span><button class="button secondary" data-bench="bench_move" data-value="-200">↓ Back 200 mm</button><span></span>
+      <button class="button secondary" data-bench="bench_move" data-value="1000">↑ Forward 1 m</button>
+      <span></span>
+      <button class="button secondary" data-bench="bench_move" data-value="-1000">↓ Back 1 m</button>
+    </div>
+    <div class="servo-row"><span>Speed step (1 m)</span>
+      <button class="button secondary" data-bench="bench_speed" data-value="100">100 mm/s</button>
+      <button class="button secondary" data-bench="bench_speed" data-value="200">200 mm/s</button>
+      <button class="button secondary" data-bench="bench_speed" data-value="300">300 mm/s</button>
+    </div>
+    <div class="servo-row"><span id="stepInfo">Speed log: none yet</span>
+      <button class="button secondary" id="stepCsv" disabled>Download CSV</button>
     </div>
     <div class="servo-row"><span>Scan servo</span>
       <button class="button secondary" data-bench="bench_servo" data-value="180">Left</button>

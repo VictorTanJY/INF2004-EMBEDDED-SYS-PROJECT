@@ -10,7 +10,7 @@ SAN     := -fsanitize=address,undefined -fno-omit-frame-pointer
 HDRS    := $(wildcard ../../../app_program/*.h ../../../app_program/*/*.h)
 test_s2: $(HDRS)
 
-test_s2: test_s2.c $(SRC_DIR)/subsystem2/motion_core.c $(SRC_DIR)/subsystem2/motion_api.c $(SRC_DIR)/app_math.c
+test_s2: test_s2.c $(SRC_DIR)/subsystem2/motion_core.c $(SRC_DIR)/subsystem2/motion_api.c $(SRC_DIR)/subsystem2/motion_rec.c $(SRC_DIR)/app_math.c
 	$(CC) $(CFLAGS) $(SAN) -o $@ $(filter %.c,$^)
 
 run: test_s2

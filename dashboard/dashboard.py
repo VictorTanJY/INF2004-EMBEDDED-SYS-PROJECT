@@ -19,10 +19,13 @@ BYPASS_STATES = ('OBSTACLE_HANDLING', 'AVOIDING', 'LINE_RECOVERY')
 MAP_CHARS = set('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%')
 MAP_KEYS = ('left', 'right', 'straight', 'uturn')
 # Bench moves: only accepted by firmware built with APP_BENCH=1, in IDLE.
-BENCH = {'bench_move': (-2000, 2000), 'bench_turn': (-3600, 3600), 'bench_servo': (0, 180)}
+BENCH = {'bench_move': (-2000, 2000), 'bench_turn': (-3600, 3600), 'bench_speed': (50, 450), 'bench_servo': (0, 180)}
+# Speed-step recorder (APP_BENCH firmware, motion_rec.h): LOG 84 header,
+# then 81 left (v, duty), 82 right (v, duty), 83 set-points, per 10 ms sample.
+STEP_LOGS = (81, 82, 83, 84)
 
 DATA = {'broker': False, 'host': '127.0.0.1', 'telemetry': None, 'status': None, 'received': 0,
-        'events': [], 'commands': [], 'history': [], 'bypass': None, 'error': '', 'revision': 0, '_prev_sample': None}
+        'events': [], 'commands': [], 'history': [], 'bypass': None, 'step': None, 'error': '', 'revision': 0, '_prev_sample': None}
 SUB = None
 BROKER = None
 GEN = 0
@@ -76,6 +79,37 @@ def track_bypass(t, now):
         ep.update(done=True, end=now, end_state=state)
 
 
+def field12(u, shift):
+    v = (u >> shift) & 0xFFF
+    return v - 4096 if v >= 2048 else v
+
+
+def track_step(p, now):
+    """Collect one speed-step record; True if it was one (kept out of the
+    event list, which would otherwise fill with 450 records per move)."""
+    code = p.get('code')
+    data = num(p.get('data'))
+    if p.get('type') != 'LOG' or code not in STEP_LOGS or data is None:
+        return False
+    u = int(data) & 0xFFFFFFFF
+    if code == 84:
+        DATA['step'] = {'time': now, 'n': u & 0xFFFF, 'period_ms': u >> 16, 'samples': {}}
+        return False                    # the header stays in the event list
+    st = DATA['step']
+    if st is None:
+        return True
+    i = u >> 24
+    row = st['samples'].setdefault(str(i), {})
+    a, b = field12(u, 12), field12(u, 0)
+    if code == 81:
+        row.update(v_l=a, duty_l=b)
+    elif code == 82:
+        row.update(v_r=a, duty_r=b)
+    else:
+        row.update(sp_l=a, sp_r=b)
+    return True
+
+
 def ingest(line):
     try:
         topic, raw = line.strip().split(' ', 1)
@@ -108,7 +142,8 @@ def ingest(line):
                     c['ack'] = p
             add_event(topic, p)
         elif topic.endswith('/event'):
-            add_event(topic, p)
+            if not track_step(p, now):
+                add_event(topic, p)
 
 
 def stop_sub():
