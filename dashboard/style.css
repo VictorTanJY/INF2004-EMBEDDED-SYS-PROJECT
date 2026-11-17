@@ -56,3 +56,4 @@ td.sym{font:750 15px Manrope,sans-serif}
 .command-row small{color:#99a18f;display:block;margin-top:3px}
 @media(max-width:1150px){.mission-grid,.obstacle-grid,.tables-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.map-form{grid-template-columns:repeat(4,1fr)}.map-form .button{grid-column:1/-1}.obstacle-numbers strong{font-size:22px}.accuracy{flex-direction:column;align-items:stretch}.accuracy label{width:auto}.bench-grid .button{padding:10px 6px;font-size:10px}}
+.lift-banner{padding:15px 18px;display:flex;align-items:center;gap:14px;border-radius:8px;margin-bottom:24px;background:var(--red);color:#fff;font-size:12px}.lift-banner[hidden]{display:none}.lift-icon{font-size:18px}.lift-banner b{font-weight:700;letter-spacing:.6px;margin-right:9px}.lift-banner span:not(.lift-icon){opacity:.9}

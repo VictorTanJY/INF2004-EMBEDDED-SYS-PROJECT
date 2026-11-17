@@ -238,6 +238,32 @@ function pathPoints(ep) {
 }
 
 /* ---------- rendering ---------- */
+/* Lift / tilt banner: while the robot is in FAULT, OR the FAULT events
+   (fresh SAFETY_FLT_* bits) since the robot was last in any other state;
+   shown if they hold LIFT (1) or TILT (8).  Leaving FAULT (Reset) hides it. */
+const LIFT_BITS = [[1, 'LIFTED'], [8, 'TILTED / OVERTURNED']];
+function liftBanner(state) {
+  const evs = snap.events || [];
+  let bits = 0, at = null;
+  if (state === 'FAULT') {
+    for (let i = evs.length - 1; i >= 0; i--) {
+      const e = evs[i];
+      if (isType(e, 'STATE') && ev(e).data !== 'FAULT') break;
+      if (isType(e, 'FAULT') && isNum(Number(ev(e).data))) {
+        const b = Number(ev(e).data) & LIFT_BITS.reduce((m, [x]) => m | x, 0);
+        if (b && at === null) at = e.time;
+        bits |= b;
+      }
+    }
+  }
+  const names = LIFT_BITS.filter(([b]) => bits & b).map(([, n]) => n);
+  $('liftBanner').hidden = names.length === 0;
+  if (names.length) {
+    $('liftTitle').textContent = names.join(' + ') + ' – car stopped';
+    $('liftDetail').textContent = `at ${new Date(at * 1000).toLocaleTimeString()}. Motors braked and the run ended. Put the car back on the floor, level, then Reset fault.`;
+  }
+}
+
 function render() {
   const t = snap.telemetry || {}, s = snap.status || {};
   const age = snap.received ? nowS() - snap.received : Infinity;
@@ -248,6 +274,7 @@ function render() {
   /* status */
   $('state').textContent = mode === 'local' && !fresh && reading ? 'STALE · ' + state : state;
   $('state').className = 'state ' + (state === 'FAULT' ? 'bad' : idle || state === 'LINE_FOLLOW' ? 'good' : '');
+  liftBanner(state);
   $('stateTitle').textContent = reading ? (STATE_TITLES[state] || state.replaceAll('_', ' ')) : 'Waiting for connection';
   $('stateDetail').textContent = mode === 'local' && !fresh && reading ? 'Readings are stale. The current robot state is unknown.'
     : state === 'FAULT' ? 'Find the cause in the event history before resetting.'
