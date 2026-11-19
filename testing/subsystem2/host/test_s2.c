@@ -2,7 +2,11 @@
  *  test_s2.c
  *  Host unit tests for motion_core.c (subsystem 2) against a motor model:
  *  per wheel, steady speed = 0.5 mm/s per per-mille of duty above a 100
- *  per-mille deadband, first-order lag tau = 50 ms.  The model is only a
+ *  per-mille deadband, first-order lag tau = 50 ms while driven and 20 ms
+ *  while braked (both motor inputs low short the windings, so a braked
+ *  wheel stops faster than it spins up; on the car the 360 deg
+ *  calibration spins of 19 Nov ended at 360-361 deg by the encoders,
+ *  which a 50 ms coast overshoots by about 2 deg).  The model is only a
  *  stand-in for the real motors: these tests check the controller LOGIC
  *  (authority, profiles, timeouts, faults), not the real tuning, which
  *  must be measured on the robot (NFR4, NFR5).
@@ -71,7 +75,7 @@ static void plant_step(int16_t duty_l, int16_t duty_r)
         if (d > 100.0)       { ss = (d - 100.0) * g_pl.gain; }
         else if (d < -100.0) { ss = (d + 100.0) * g_pl.gain; }
         if ((duty[w] == 0) || g_pl.locked[w]) { ss = 0.0; }     /* brake */
-        g_pl.v[w] += (ss - g_pl.v[w]) * (10.0 / 50.0);
+        g_pl.v[w] += (ss - g_pl.v[w]) * (10.0 / ((duty[w] == 0) ? 20.0 : 50.0));
         if (g_pl.locked[w]) { g_pl.v[w] = 0.0; }
         g_pl.pos_um[w] += g_pl.v[w] * 10.0;                    /* mm/s * 10 ms = um */
     }
