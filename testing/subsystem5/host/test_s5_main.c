@@ -155,7 +155,7 @@ static int32_t find (uint8_t kind, uint8_t cmd)
     {
         if ((g_out.act[idx].kind == kind) && (g_out.act[idx].cmd == cmd))
         {
-            return (int32_t)idx;
+            return idx;
         }
     }
     return -1;
@@ -1138,8 +1138,8 @@ static void test_obstacle_h23 (void)
                 {
                     printf("probe: %3.0f mm box at %+3.0f, run-on %2.0f -> "
                            "edges %+4d / %+4d, width %3d (%.1f %%)\n",
-                           omega, coef, run, (int32_t)left, (int32_t)ret,
-                           (int32_t)(left - ret), elem * 100.0);
+                           omega, coef, run, left, ret, (left - ret),
+                           elem * 100.0);
                 }
                 CHECK("S5-H23",
                       (fabs(left - (coef + (omega / 2.0))) <= 15.0)

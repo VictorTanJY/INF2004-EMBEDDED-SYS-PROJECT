@@ -135,10 +135,10 @@ static void test_pipeline (test_report_t * p_report)
     for (x_val = 0u; x_val < T_TRACK_UM; x_val += T_STEP_UM)
     {
         line_barcode_out_t    out     = {0};
-        uint32_t const        t_start = (uint32_t)app_time_us();
+        uint32_t const        t_start = app_time_us();
         line_barcode_result_t result  = line_barcode_sample(
             &g_t_bc, level_at(widths, n_widths, x_val), T_STEP_UM, &out);
-        uint32_t const elapsed = (uint32_t)app_time_us() - t_start;
+        uint32_t const elapsed = app_time_us() - t_start;
 
         total_us += elapsed;
         samples++;
@@ -158,7 +158,7 @@ static void test_pipeline (test_report_t * p_report)
     }
     tm_printf((UB *)"[INFO] S3-U07 result %d char '%c' pass %d; worst "
                     "sample %d us, mean %d us over %d samples\n",
-              (INT)found, (INT)((out_ok.chr != '\0') ? out_ok.chr : '?'),
+              (INT)found, ((out_ok.chr != '\0') ? out_ok.chr : '?'),
               (INT)g_t_bc.pass, (INT)worst_us, (INT)(total_us / samples),
               (INT)samples);
     TEST_CHECK(p_report, "S3-U07",
@@ -205,11 +205,11 @@ static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
     {
         if ((x_um >= pos) && (x_um < (pos + p_w[elem])))
         {
-            return (0u == (elem % 2u)) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
+            return (0u == (elem % 2u)) ? T_BLACK : T_WHITE;
         }
         pos += p_w[elem];
     }
-    return (uint16_t)T_WHITE;
+    return T_WHITE;
 }
 
 #endif

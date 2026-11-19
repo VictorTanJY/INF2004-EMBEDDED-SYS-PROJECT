@@ -90,13 +90,12 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
     check_timer_tick();
     if (drv_watchdog_caused_reboot())
     {
-        (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
-                                    42u, 1);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 42u, 1);
     }
     drv_watchdog_enable(SAFETY_WD_TIMEOUT_MS);
 
     read_heartbeats(counts);
-    safety_core_hb_start(&hb_state, counts, (uint32_t)app_time_ms());
+    safety_core_hb_start(&hb_state, counts, app_time_ms());
 
     for (;;)
     {
@@ -109,7 +108,7 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
                          SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
                          TWF_ORW | TWF_BITCLR, &ptn, S4_SAFETY_PERIOD_MS);
         drv_watchdog_feed();
-        now_ms = (uint32_t)app_time_ms();
+        now_ms = app_time_ms();
 
         if ((E_OK == err) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
         {
@@ -126,9 +125,9 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
             if (missed != missed_logged)
             {
                 missed_logged = missed;
-                (void)subsystem1_telem_post(
-                    COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
-                    SAFETY_LOG_HB_MISSED, (int32_t)missed);
+                (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                            SAFETY_LOG_HB_MISSED,
+                                            (int32_t)missed);
             }
         }
 
@@ -142,15 +141,15 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
                 missed_logged    = 0u;
                 read_heartbeats(counts);
                 safety_core_hb_start(&hb_state, counts, now_ms);
-                (void)subsystem5_mission_post(
-                    MISSION_EV_SAFETY_OK, (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
+                (void)subsystem5_mission_post(MISSION_EV_SAFETY_OK,
+                                              APP_SRC_SAFETY_IMU, 0u, 0);
             }
             else
             {
                 /* still present: stay latched and say why */
                 g_safety_latched |= live;
                 (void)subsystem5_mission_post(MISSION_EV_FAULT,
-                                              (uint8_t)APP_SRC_SAFETY_IMU, 1u,
+                                              APP_SRC_SAFETY_IMU, 1u,
                                               (int32_t)g_safety_latched);
             }
         }
@@ -178,7 +177,7 @@ static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
 
     for (kdx = 0u; kdx < SAFETY_HB_COUNT; kdx++)
     {
-        counts[kdx] = subsystem4_heartbeat_count((imu_types_safety_hb_t)kdx);
+        counts[kdx] = subsystem4_heartbeat_count(kdx);
     }
 }
 
@@ -192,11 +191,10 @@ static void latch (uint32_t bits, uint32_t now_ms)
     g_safety_latched |= bits;
     if (fresh != 0u)
     {
-        (void)subsystem5_mission_post(MISSION_EV_FAULT,
-                                      (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+        (void)subsystem5_mission_post(MISSION_EV_FAULT, APP_SRC_SAFETY_IMU, 0u,
                                       (int32_t)g_safety_latched);
-        (void)subsystem1_telem_post(
-            COMMS_KIND_FAULT, (uint8_t)APP_SRC_SAFETY_IMU, 0u, (int32_t)fresh);
+        (void)subsystem1_telem_post(COMMS_KIND_FAULT, APP_SRC_SAFETY_IMU, 0u,
+                                    (int32_t)fresh);
     }
 }
 

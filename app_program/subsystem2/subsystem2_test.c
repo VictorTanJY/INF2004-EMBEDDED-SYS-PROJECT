@@ -184,8 +184,8 @@ static void test_wheels (test_report_t * p_report)
                          "TURN left: wheels turn opposite ways",
                          "wheels did not turn");
         /* A stall fault may have latched meanwhile: clear it for S3..S5. */
-        (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
-                                      (uint8_t)APP_SRC_MOTION, 0u, 0);
+        (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET, APP_SRC_MOTION,
+                                      0u, 0);
         (void)wait_idle(8000u);
     }
     else
@@ -203,17 +203,17 @@ static void step_measure (step_rec_t * p_rec)
     uint32_t t_start;
 
     subsystem2_get_odom(&p_rec->odom_start);
-    t_start       = (uint32_t)app_time_ms();
+    t_start       = app_time_ms();
     p_rec->b_turn = true;
-    (void)motion_api_move_forward(MOTION_SRC_MISSION, T_SEQ,
-                                  (uint16_t)T_DIST_MM, (uint16_t)T_SPEED_MM_S);
+    (void)motion_api_move_forward(MOTION_SRC_MISSION, T_SEQ, T_DIST_MM,
+                                  T_SPEED_MM_S);
     for (;;)
     {
         int32_t elapsed;
 
         (void)tk_dly_tsk(10);
         subsystem2_get_odom(&p_rec->odom);
-        elapsed = (int32_t)((uint32_t)app_time_ms() - t_start);
+        elapsed = (int32_t)(app_time_ms() - t_start);
         step_sample(p_rec, elapsed);
         if ((elapsed >= T_NO_TURN_MS)
             && (p_rec->odom.enc_l == p_rec->odom_start.enc_l)
@@ -279,12 +279,12 @@ static void test_step_result (test_report_t *    p_report,
 
     tm_printf((UB *)"[INFO] S2-U08 settle %d ms (within +-%d mm/s), "
                     "peak %d mm/s, overshoot %d %%\n",
-              (INT)p_rec->settle, (INT)T_BAND_MM_S, (INT)p_rec->peak,
-              (INT)((over > 0) ? over : 0));
+              (INT)p_rec->settle, T_BAND_MM_S, (INT)p_rec->peak,
+              ((over > 0) ? over : 0));
     tm_printf((UB *)"[INFO] S2-U08 distance %d mm (asked %d), encoders "
                     "L %d R %d counts\n",
-              (INT)dist, (INT)T_DIST_MM, (INT)(p_odom->enc_l - p_start->enc_l),
-              (INT)(p_odom->enc_r - p_start->enc_r));
+              (INT)dist, (INT)T_DIST_MM, (p_odom->enc_l - p_start->enc_l),
+              (p_odom->enc_r - p_start->enc_r));
     TEST_CHECK(
         p_report, "S2-U08",
         p_rec->b_done && (p_rec->settle <= T_SETTLE_MAX_MS)
@@ -304,8 +304,8 @@ static void test_step_result (test_report_t *    p_report,
                   "samples; "
                   "encoders L %d R %d counts/s at 200 mm/s\n",
             (INT)diff, (INT)p_rec->n_win,
-            (INT)(((p_rec->o_hi.enc_l - p_rec->o_lo.enc_l) * 1000) / delta_ms),
-            (INT)(((p_rec->o_hi.enc_r - p_rec->o_lo.enc_r) * 1000) / delta_ms));
+            (((p_rec->o_hi.enc_l - p_rec->o_lo.enc_l) * 1000) / delta_ms),
+            (((p_rec->o_hi.enc_r - p_rec->o_lo.enc_r) * 1000) / delta_ms));
         TEST_CHECK(p_report, "S2-U09", diff <= T_BAND_MM_S,
                    "left and right wheels match within 10 % at 200 mm/s");
     }
@@ -324,15 +324,13 @@ static void test_reverse (test_report_t * p_report)
     bool                b_done;
 
     subsystem2_get_odom(&odom_start);
-    (void)motion_api_move_backward(MOTION_SRC_MISSION, (uint8_t)(T_SEQ + 1u),
-                                   (uint16_t)T_DIST_MM,
-                                   (uint16_t)T_BACK_SPEED_MM_S);
+    (void)motion_api_move_backward(MOTION_SRC_MISSION, (T_SEQ + 1u), T_DIST_MM,
+                                   T_BACK_SPEED_MM_S);
     b_done = wait_done(&odom_start, 5000u, &odom);
     tm_printf((UB *)"[INFO] S2-U10 distance %d mm, encoders L %d R %d "
                     "counts\n",
-              (INT)(odom.dist_mm - odom_start.dist_mm),
-              (INT)(odom.enc_l - odom_start.enc_l),
-              (INT)(odom.enc_r - odom_start.enc_r));
+              (odom.dist_mm - odom_start.dist_mm),
+              (odom.enc_l - odom_start.enc_l), (odom.enc_r - odom_start.enc_r));
     TEST_CHECK(
         p_report, "S2-U10",
         b_done && (odom.enc_l < odom_start.enc_l)
@@ -351,13 +349,11 @@ static void test_spin (test_report_t * p_report)
     bool                b_done;
 
     subsystem2_get_odom(&odom_start);
-    (void)motion_api_turn_left(MOTION_SRC_MISSION, (uint8_t)(T_SEQ + 2u),
-                               (uint16_t)T_TURN_DDEG,
-                               (uint16_t)T_TURN_RATE_DEG_S);
+    (void)motion_api_turn_left(MOTION_SRC_MISSION, (T_SEQ + 2u), T_TURN_DDEG,
+                               T_TURN_RATE_DEG_S);
     b_done = wait_done(&odom_start, 6000u, &odom);
     tm_printf((UB *)"[INFO] S2-U11 encoders L %d R %d counts\n",
-              (INT)(odom.enc_l - odom_start.enc_l),
-              (INT)(odom.enc_r - odom_start.enc_r));
+              (odom.enc_l - odom_start.enc_l), (odom.enc_r - odom_start.enc_r));
     TEST_CHECK(p_report, "S2-U11",
                b_done && (odom.enc_l < odom_start.enc_l)
                    && (odom.enc_r > odom_start.enc_r),

@@ -46,8 +46,7 @@ uint32_t safety_core_hb_check (safety_core_hb_state_t * p_st,
             p_st->last_count[kdx]   = counts[kdx];
             p_st->last_seen_ms[kdx] = now_ms;
         }
-        else if ((uint32_t)(now_ms - p_st->last_seen_ms[kdx])
-                 > g_timeout_ms[kdx])
+        else if ((now_ms - p_st->last_seen_ms[kdx]) > g_timeout_ms[kdx])
         {
             missed |= (1uL << kdx);
         }

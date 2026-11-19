@@ -355,7 +355,7 @@ uint32_t mission_core_evt_pack (mission_types_evt_t const * p_ev)
             word = app_pack_set(
                 word, (uint8_t)(EVT_A_SHIFT + (kdx * EVT_SYM_BITS)),
                 EVT_SYM_BITS,
-                app_pack_sym_index((char)(uint8_t)(packed >> (8u * kdx))));
+                app_pack_sym_index((uint8_t)(packed >> (8u * kdx))));
         }
     }
     else
@@ -547,7 +547,7 @@ static void tick_calibrating (mission_core_t * p_mc, uint32_t now_ms,
                  || (phase_age >= MISSION_CAL_DONE_TIMEOUT_MS)))
     {
         p_mc->snap.calibrated = p_mc->cal_ok;
-        log_act(p_out, MISSION_LOG_CAL_RESULT, (int16_t)p_mc->cal_ok, 0);
+        log_act(p_out, MISSION_LOG_CAL_RESULT, p_mc->cal_ok, 0);
         enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
     }
     else
@@ -804,13 +804,12 @@ static void mission_core_ev_line (mission_core_t *            p_mc,
                     /* latched until the next junction (FR4) */
                     p_mc->snap.pending_nav  = nav;
                     p_mc->snap.pending_char = chr;
-                    log_act(p_out, MISSION_LOG_NAV_LATCHED, (int16_t)nav,
-                            (int16_t)chr);
+                    log_act(p_out, MISSION_LOG_NAV_LATCHED, nav, chr);
                 }
                 else
                 {
                     log_act(p_out, MISSION_LOG_NAV_UNMAPPED, 0,
-                            (int16_t)chr); /* reported, never acted on */
+                            chr); /* reported, never acted on */
                 }
             }
         break;
@@ -957,7 +956,7 @@ static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
     p_mc->phase_ms   = now_ms;
     p_mc->step       = 0u;
     p_mc->b_waiting  = false;
-    push(p_out, MISSION_ACT_STATE, 0u, 0u, (int16_t)state, 0);
+    push(p_out, MISSION_ACT_STATE, 0u, 0u, state, 0);
 
     switch (state)
     {
@@ -1043,8 +1042,7 @@ static void start_run (mission_core_t * p_mc, uint32_t now_ms,
 {
     if ((p_mc->snap.calibrated & MISSION_CAL_ALL) != MISSION_CAL_ALL)
     {
-        log_act(p_out, MISSION_LOG_NOT_CALIBRATED,
-                (int16_t)p_mc->snap.calibrated, 0);
+        log_act(p_out, MISSION_LOG_NOT_CALIBRATED, p_mc->snap.calibrated, 0);
         return;
     }
     p_mc->snap.runs++;
@@ -1148,7 +1146,7 @@ static void motion (mission_core_t * p_mc, mission_core_out_t * p_out,
 static void set_auth (mission_core_t * p_mc, mission_core_out_t * p_out,
                       uint8_t src)
 {
-    motion(p_mc, p_out, MOTION_CMD_SET_AUTH, (int16_t)src, 0);
+    motion(p_mc, p_out, MOTION_CMD_SET_AUTH, src, 0);
     p_mc->snap.auth = src;
 }
 

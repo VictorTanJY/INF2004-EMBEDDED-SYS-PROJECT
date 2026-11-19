@@ -146,7 +146,7 @@ Inline uint32_t app_time_ms (void)
     SYSTIM tim;
 
     (void)tk_get_otm(&tim);
-    return (uint32_t)tim.lo;
+    return tim.lo;
 }
 
 /** RP2040 1 us system timer, low 32 bits (wraps every 71.6 min).  Correct

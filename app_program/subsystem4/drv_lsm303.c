@@ -71,7 +71,7 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
     uint8_t kdx;
     ER      err;
 
-    err = drv_i2c1_read(SENSOR_ADDR, (uint8_t)(0x28u | AUTO_INC), raw, 6u);
+    err = drv_i2c1_read(SENSOR_ADDR, (0x28u | AUTO_INC), raw, 6u);
     if (err != E_OK)
     {
         return err;
@@ -93,7 +93,7 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
     uint8_t kdx;
     ER      err;
 
-    err = drv_i2c1_read(SENSOR_ADDR, (uint8_t)(0x08u | AUTO_INC), raw, 6u);
+    err = drv_i2c1_read(SENSOR_ADDR, (0x08u | AUTO_INC), raw, 6u);
     if (err != E_OK)
     {
         return err;
@@ -212,8 +212,7 @@ static int16_t le16 (uint8_t low, uint8_t high)
     uint16_t const word = (uint16_t)((uint16_t)low | ((uint16_t)high << 8));
 
     /* Avoid implementation-defined unsigned-to-signed overflow. */
-    return (int16_t)((word & 0x8000u) ? ((int32_t)word - 65536)
-                                      : (int32_t)word);
+    return (int16_t)((word & 0x8000u) ? ((int32_t)word - 65536) : word);
 }
 
 /*** end of file ***/

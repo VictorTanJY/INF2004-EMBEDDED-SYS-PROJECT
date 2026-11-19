@@ -63,10 +63,9 @@ char comms_proto_symbol_char (uint8_t sym_index)
 void comms_proto_rec_pack (comms_proto_rec_t * p_rec, uint8_t kind, uint8_t src,
                            uint16_t code, int32_t data, uint32_t now_ms)
 {
-    uint32_t       word     = 0u;
-    uint32_t const kind_idx = ((kind >= 1u) && (kind <= 4u))
-                                  ? (uint32_t)(kind - 1u)
-                                  : 3u; /* unknown -> LOG */
+    uint32_t       word = 0u;
+    uint32_t const kind_idx =
+        ((kind >= 1u) && (kind <= 4u)) ? (kind - 1u) : 3u; /* unknown -> LOG */
 
     word =
         app_pack_set(word, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS, kind_idx);
@@ -176,9 +175,8 @@ uint16_t comms_proto_build_event (comms_proto_event_t const * p_ev,
     app_pack_put(&writer, seq, 8u);
     app_pack_put(&writer, p_ev->t_ms / 10u, T10_BITS);
     app_pack_put(&writer,
-                 ((p_ev->kind >= 1u) && (p_ev->kind <= 4u))
-                     ? (uint32_t)(p_ev->kind - 1u)
-                     : 3u,
+                 ((p_ev->kind >= 1u) && (p_ev->kind <= 4u)) ? (p_ev->kind - 1u)
+                                                            : 3u,
                  2u);
     app_pack_put(&writer, app_pack_sat_u(p_ev->src, COMMS_SRC_BITS),
                  COMMS_SRC_BITS);
@@ -228,8 +226,7 @@ uint16_t comms_proto_build_ack (comms_proto_cmd_t const * p_cmd,
     put_header(&writer, COMMS_FT_ACK);
     app_pack_put(&writer, p_cmd->b_has_id ? 1u : 0u, 1u);
     app_pack_put(&writer, p_cmd->b_has_id ? p_cmd->cmd_id : 0u, COMMS_ID_BITS);
-    app_pack_put(&writer, app_pack_sat_u((uint32_t)err, COMMS_ERR_BITS),
-                 COMMS_ERR_BITS);
+    app_pack_put(&writer, app_pack_sat_u(err, COMMS_ERR_BITS), COMMS_ERR_BITS);
     return app_pack_writer_len(&writer);
 }
 
@@ -368,7 +365,7 @@ comms_proto_dedup_check (comms_proto_dedup_t const * p_dd,
 
         /* Unsigned difference: correct across the 32-bit ms wrap. */
         if ((p_e->cmd_id == p_cmd->cmd_id)
-            && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
+            && ((now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
         {
             if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id)
                 && (p_e->value == p_cmd->value))
@@ -512,14 +509,14 @@ static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
 /** Write a frame header: frame type (5 bits) and protocol version (3 bits). */
 static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)
 {
-    app_pack_put(p_w, (uint32_t)type, 5u);
+    app_pack_put(p_w, type, 5u);
     app_pack_put(p_w, COMMS_FRAME_VERSION, 3u);
 }
 
 /** centi-degrees -> tenths of a degree, rounded half away from zero. */
 static int32_t cdeg_to_tenths (int16_t cdeg)
 {
-    int32_t value = (int32_t)cdeg;
+    int32_t value = cdeg;
 
     return (value >= 0) ? ((value + 5) / 10) : -((5 - value) / 10);
 }

@@ -515,7 +515,7 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
     /* depth (4 Nov): taken as the measured width (square), at most
        OBST_WIDTH_MAX; OBST_WIDTH_MAX when the width is not known */
     depth = ((p_prof->w_mm > 0u) && (p_prof->w_mm <= WIDTH_MAX_MM))
-                ? (int32_t)p_prof->w_mm
+                ? p_prof->w_mm
                 : OBST_WIDTH_MAX_MM;
     pass  = app_types_max_i32(((int32_t)p_prof->closest_mm + back) - fwd, 0)
             + depth + OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM;
@@ -535,7 +535,7 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
                                        + OBST_JOIN_EXTRA_MM);
     n_steps++;
     p_steps[n_steps].kind  = OBST_STEP_MOVE;
-    p_steps[n_steps].value = (int16_t)OBST_IR_AHEAD_MM;
+    p_steps[n_steps].value = OBST_IR_AHEAD_MM;
     n_steps++;
     p_steps[n_steps].kind = OBST_STEP_LINESCAN;
     p_steps[n_steps].value =

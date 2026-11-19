@@ -325,7 +325,7 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
                          OBST_FLG_RANGE | OBST_FLG_ECHO | OBST_FLG_REQ,
                          TWF_ORW | TWF_BITCLR, &ptn, OBST_WAIT_TIMEOUT_MS);
         subsystem4_heartbeat(SAFETY_HB_OBSTACLE);
-        now_ms = (uint32_t)app_time_ms();
+        now_ms = app_time_ms();
         subsystem2_get_odom(&odom);
 
         if ((ptn & OBST_FLG_REQ) != 0u)
@@ -418,15 +418,14 @@ static void ping (void)
 /** Post an event to MissionTask (source: ObstacleTask). */
 static void post (uint8_t type, uint16_t arg, int32_t data)
 {
-    (void)subsystem5_mission_post(type, (uint8_t)APP_SRC_OBST_MISSION, arg,
-                                  data);
+    (void)subsystem5_mission_post(type, APP_SRC_OBST_MISSION, arg, data);
 }
 
 /** Post a telemetry LOG record (source: ObstacleTask). */
 static void log_ev (uint16_t code, int32_t data)
 {
-    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,
-                                code, data);
+    (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_OBST_MISSION, code,
+                                data);
 }
 
 /** A real turn (0.1 deg) as the encoders must count it: x the turn slip
@@ -436,8 +435,7 @@ static int32_t turn_gain (void)
     line_types_snap_t line;
 
     subsystem3_get_snap(&line);
-    return (line.turn_gain_pm != 0u) ? (int32_t)line.turn_gain_pm
-                                     : OBST_GAIN_UNIT;
+    return (line.turn_gain_pm != 0u) ? line.turn_gain_pm : OBST_GAIN_UNIT;
 }
 
 /** Step-out leg: the car's real heading from the line toward side s,
@@ -687,7 +685,7 @@ static void plan (uint32_t now_ms, motion_types_odom_t const * p_odom)
         {
             g_o.ignore_until_mm = p_odom->dist_mm + OBST_CONTINUE_IGNORE_MM;
         }
-        post(MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
+        post(MISSION_EV_PROFILE_DONE, g_prof.plan, g_prof.w_mm);
         goto_state(OBST_ST_IDLE);
     }
     else if (g_o.retries < OBST_REVERSE_TRIES)
@@ -729,7 +727,7 @@ static void plan_edges (uint32_t now_ms, motion_types_odom_t const * p_odom)
     }
     g_o.b_edge_face = false;
     publish_profile();
-    post(MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
+    post(MISSION_EV_PROFILE_DONE, g_prof.plan, g_prof.w_mm);
     goto_state(OBST_ST_IDLE);
 #elif OBST_WIDTH_PROBE
     /* 7 Nov: measure the edges by side-stepping past them */
@@ -800,7 +798,7 @@ static void edge_finish (void)
     log_ev(OBST_LOG_EDGES_CAR,
            (int32_t)(((uint32_t)(uint16_t)g_prof.left_lat_mm << 16)
                      | (uint16_t)g_prof.right_lat_mm));
-    post(MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
+    post(MISSION_EV_PROFILE_DONE, g_prof.plan, g_prof.w_mm);
     goto_state(OBST_ST_IDLE);
 }
 
@@ -831,7 +829,7 @@ static void probe_finish (uint32_t now_ms)
     g_prof.closest_mm = g_o.edge_face;
     g_o.b_edge_face   = true;
     publish_profile();
-    post(MISSION_EV_PROFILE_DONE, g_prof.plan, (int32_t)g_prof.w_mm);
+    post(MISSION_EV_PROFILE_DONE, g_prof.plan, g_prof.w_mm);
     goto_state(OBST_ST_IDLE);
 }
 
@@ -932,7 +930,7 @@ static void probe_motion (uint32_t now_ms, motion_types_odom_t const * p_odom)
     else if ((PB_TURN == g_o.probe_ph)
              && (MOTION_ST_IDLE_BRAKED == p_odom->state))
     {
-        send_step(OBST_STEP_TURN, slip_ddeg((int16_t)OBST_PROBE_DDEG), p_odom);
+        send_step(OBST_STEP_TURN, slip_ddeg(OBST_PROBE_DDEG), p_odom);
     }
     else if ((PB_UNTURN == g_o.probe_ph)
              && (MOTION_ST_IDLE_BRAKED == p_odom->state))
@@ -986,9 +984,8 @@ static void probe_range (uint16_t range, uint32_t now_ms,
             send_step(OBST_STEP_MOVE,
                       (int16_t)((int32_t)g_o.edge_face - OBST_PROBE_FACE_MM),
                       p_odom);
-            g_o.edge_face =
-                (uint16_t)OBST_PROBE_FACE_MM; /* where the face should be after
-                                                 the move */
+            g_o.edge_face = OBST_PROBE_FACE_MM; /* where the face should be
+                                                   after the move */
         }
         else
         {
@@ -1253,7 +1250,7 @@ static void monitor_events (mission_types_snap_t const * p_mission,
     if (!g_o.b_slow_sent && (g_o.d_mm < p_mission->slow_mm))
     {
         g_o.b_slow_sent = true;
-        post(MISSION_EV_SLOW_DOWN, 0u, (int32_t)g_o.d_mm);
+        post(MISSION_EV_SLOW_DOWN, 0u, g_o.d_mm);
     }
     else if (g_o.b_slow_sent && (g_o.d_mm > (p_mission->slow_mm + 50u)))
     {
@@ -1270,7 +1267,7 @@ static void monitor_events (mission_types_snap_t const * p_mission,
         g_o.b_obst_sent = true;
         store_pose(p_odom);
         g_o.det_mm = g_o.d_mm;
-        post(MISSION_EV_OBSTACLE, 0u, (int32_t)g_o.d_mm);
+        post(MISSION_EV_OBSTACLE, 0u, g_o.d_mm);
     }
 }
 
@@ -1566,7 +1563,7 @@ static void edge_return (motion_types_odom_t const * p_odom)
             g_o.edge_side = -1;
             g_o.edge_miss = 0u;
             g_o.edge_ref  = 0u;
-            g_o.edge_step = (int16_t)-OBST_EDGE_STEP_DDEG;
+            g_o.edge_step = -OBST_EDGE_STEP_DDEG;
             g_o.edge_ph   = EDGE_PH_TURN;
         }
         else
@@ -1583,7 +1580,7 @@ static void edge_return (motion_types_odom_t const * p_odom)
 /** BLOCKED, one slot: give up after the timeout, or rescan now and then. */
 static void blocked_slot (uint32_t now_ms)
 {
-    if ((uint32_t)(now_ms - g_o.blocked_start_ms) >= OBST_BLOCKED_TIMEOUT_MS)
+    if ((now_ms - g_o.blocked_start_ms) >= OBST_BLOCKED_TIMEOUT_MS)
     {
         post(MISSION_EV_BLOCKED_TIMEOUT, 0u, 0);
         g_o.b_blocked = false;
@@ -1711,8 +1708,7 @@ static void out_end (uint32_t now_ms, obstacle_core_step_t const * p_st,
     stop_motion();
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
     log_ev(OBST_LOG_OUT,
-           (int32_t)(((g_o.out.b_seen ? (uint32_t)(uint16_t)g_o.out.seen_lat
-                                      : 0xFFFFu)
+           (int32_t)(((g_o.out.b_seen ? (uint16_t)g_o.out.seen_lat : 0xFFFFu)
                       << 16)
                      | (uint32_t)app_types_clamp_i32(lat, 0, 0xFFFF)));
     for (kdx = (uint8_t)(g_o.step_i + 1u); kdx < g_o.n_steps; kdx++)

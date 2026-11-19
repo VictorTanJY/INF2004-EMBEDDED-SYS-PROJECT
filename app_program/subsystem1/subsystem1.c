@@ -55,7 +55,7 @@ EXPORT bool subsystem1_telem_post (uint8_t kind, uint8_t src, uint16_t code,
         app_atomic_inc(&g_telem_drops);
         return false;
     }
-    comms_proto_rec_pack(&rec, kind, src, code, data, (uint32_t)app_time_ms());
+    comms_proto_rec_pack(&rec, kind, src, code, data, app_time_ms());
     if (tk_snd_mbf(g_mbf_telem, &rec, sizeof(rec), TMO_POL) != E_OK)
     {
         app_atomic_inc(&g_telem_drops);
@@ -66,7 +66,7 @@ EXPORT bool subsystem1_telem_post (uint8_t kind, uint8_t src, uint16_t code,
 
 EXPORT uint32_t subsystem1_telem_drops (void)
 {
-    return (uint32_t)g_telem_drops;
+    return g_telem_drops;
 }
 
 EXPORT ID subsystem1_mbf_telem (void)

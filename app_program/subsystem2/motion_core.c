@@ -512,7 +512,7 @@ static motion_core_result_t command_run (motion_core_t *            p_mc,
 static void command_move (motion_core_t *            p_mc,
                           motion_types_cmd_t const * p_cmd, uint32_t now_ms)
 {
-    int8_t  dir = (p_cmd->arg0 < 0) ? (int8_t)-1 : (int8_t)1;
+    int8_t  dir = (p_cmd->arg0 < 0) ? -1 : 1;
     int64_t target;
     int32_t vmax;
 
@@ -654,7 +654,7 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
 {
     int32_t const integ_max =
         (int32_t)(((int64_t)MOTION_I_MAX * 1000000) / MOTION_KI_MILLI);
-    int8_t const dir = (setpoint > 0) ? (int8_t)1 : (int8_t)-1;
+    int8_t const dir = (setpoint > 0) ? 1 : -1;
     int32_t      error;
     int32_t      feedfwd;
     int32_t      output;
@@ -824,8 +824,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     progress  = b_move ? ((p_mc->m_dir * (rel_l + rel_r)) / 2)
                        : ((p_mc->m_dir * (rel_r - rel_l)) / 2);
     remaining = p_mc->m_target_um - progress;
-    tol =
-        b_move ? (int64_t)MOTION_POS_TOL_UM : turn_arc_um(MOTION_ANG_TOL_CDEG);
+    tol       = b_move ? MOTION_POS_TOL_UM : turn_arc_um(MOTION_ANG_TOL_CDEG);
 
     if (remaining <= tol)
     {

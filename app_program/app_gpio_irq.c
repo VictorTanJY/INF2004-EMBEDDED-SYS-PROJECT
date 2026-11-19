@@ -133,7 +133,7 @@ static uint32_t this_core (void)
     callbacks attached on this core. */
 static void gpio_bank0_isr (UINT intno)
 {
-    uint32_t const t_us = (uint32_t)app_time_us();
+    uint32_t const t_us = app_time_us();
     uint32_t const core = this_core();
     uint32_t       reg;
 

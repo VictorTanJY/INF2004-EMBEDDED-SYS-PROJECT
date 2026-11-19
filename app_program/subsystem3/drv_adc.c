@@ -204,7 +204,7 @@ static inline uint32_t dma_al1_ctrl (uint32_t chan)
 /** CHAIN_TO field: start channel chan when this one completes. */
 static inline uint32_t dma_ctrl_chain (uint32_t chan)
 {
-    return (uint32_t)chan << 11;
+    return chan << 11;
 }
 
 /** Control word of an ADC block channel: 16-bit transfers into the buffer,

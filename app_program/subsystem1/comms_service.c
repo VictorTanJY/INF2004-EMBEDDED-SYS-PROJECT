@@ -103,7 +103,7 @@ mqtt_utk_cfg_t const * mqtt_utk_app_config (void)
 
 void mqtt_utk_app_connected (void)
 {
-    uint32_t const now_ms = (uint32_t)app_time_ms();
+    uint32_t const now_ms = app_time_ms();
 
     gb_online        = true;
     g_next_telem_ms  = now_ms;
@@ -130,7 +130,7 @@ void mqtt_utk_app_poll (void)
     {
         return; /* subsystem1_init() has not run yet */
     }
-    now_ms = (uint32_t)app_time_ms();
+    now_ms = app_time_ms();
 
     if (!gb_flag_synced)
     {
@@ -193,8 +193,7 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
         {
             err = comms_handle(&cmd);
         }
-        ack_len =
-            comms_proto_build_ack(&cmd, err, g_tx, (uint16_t)sizeof(g_tx));
+        ack_len = comms_proto_build_ack(&cmd, err, g_tx, sizeof(g_tx));
         (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
     }
 }
@@ -202,7 +201,7 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
 /** A well-formed command: drop a redelivery, else check and execute it. */
 static comms_proto_err_t comms_handle (comms_proto_cmd_t const * p_cmd)
 {
-    uint32_t const                   now_ms = (uint32_t)app_time_ms();
+    uint32_t const                   now_ms = app_time_ms();
     comms_proto_dedup_result_t const dup =
         comms_proto_cmd_repeat_safe(p_cmd->cmd)
             ? COMMS_DEDUP_NEW
@@ -295,8 +294,8 @@ static bool comms_publish_event (comms_proto_rec_t const * p_rec, uint8_t seq)
     comms_proto_event_t event;
     uint16_t            len;
 
-    comms_proto_rec_unpack(p_rec, (uint32_t)app_time_ms(), &event);
-    len = comms_proto_build_event(&event, seq, g_tx, (uint16_t)sizeof(g_tx));
+    comms_proto_rec_unpack(p_rec, app_time_ms(), &event);
+    len = comms_proto_build_event(&event, seq, g_tx, sizeof(g_tx));
     return comms_publish(COMMS_TOPIC_EVENT, len, 1u, 0u);
 }
 
@@ -310,9 +309,8 @@ static void comms_publish_status (uint32_t now_ms)
     uint16_t             len;
 
     subsystem5_get_mission_snap(&mission);
-    len =
-        comms_proto_build_status(now_ms / 1000u, cyw43_utk_get_rssi(), drops,
-                                 mission.nav_map, g_tx, (uint16_t)sizeof(g_tx));
+    len = comms_proto_build_status(now_ms / 1000u, cyw43_utk_get_rssi(), drops,
+                                   mission.nav_map, g_tx, sizeof(g_tx));
 
     (void)comms_publish(COMMS_TOPIC_STATUS, len, 1u, 1u);
 }
@@ -358,7 +356,7 @@ static void comms_publish_telemetry (uint32_t now_ms)
     telem.clr_l_mm     = obst.clr_l_mm;
     telem.clr_r_mm     = obst.clr_r_mm;
 
-    len = comms_proto_build_telemetry(&telem, g_tx, (uint16_t)sizeof(g_tx));
+    len = comms_proto_build_telemetry(&telem, g_tx, sizeof(g_tx));
     (void)comms_publish(COMMS_TOPIC_TELEMETRY, len, 0u, 0u);
 }
 
@@ -415,14 +413,14 @@ static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
     {
         return COMMS_ERR_FULL;
     }
-    err = subsystem5_mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS,
-                                  (uint16_t)p_cmd->param_id, p_cmd->value);
+    err = subsystem5_mission_post(event, APP_SRC_COMMS, p_cmd->param_id,
+                                  p_cmd->value);
     if (err != E_OK)
     {
         return COMMS_ERR_FULL;
     }
-    (void)subsystem1_telem_post(COMMS_KIND_EVENT, (uint8_t)APP_SRC_COMMS,
-                                (uint16_t)event, p_cmd->value);
+    (void)subsystem1_telem_post(COMMS_KIND_EVENT, APP_SRC_COMMS, event,
+                                p_cmd->value);
     return COMMS_ERR_NONE;
 }
 

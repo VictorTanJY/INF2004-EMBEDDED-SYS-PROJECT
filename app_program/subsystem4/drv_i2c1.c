@@ -92,7 +92,7 @@ EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
     {
         return err;
     }
-    t_start = (uint32_t)app_time_us();
+    t_start = app_time_us();
     out_w(IC_DATA_CMD, reg);
     out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
     return finish(t_start);
@@ -114,7 +114,7 @@ EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
     {
         return err;
     }
-    t_start = (uint32_t)app_time_us();
+    t_start = app_time_us();
     out_w(IC_DATA_CMD, reg); /* register address */
     for (idx = 0u; idx < n_bytes; idx++)
     {
@@ -159,14 +159,14 @@ EXPORT ER drv_i2c1_probe (uint8_t addr7)
 /** True once I2C_TIMEOUT_US have passed since t_start (us). */
 static bool timed_out (uint32_t t_start)
 {
-    return ((uint32_t)(app_time_us() - t_start) > I2C_TIMEOUT_US);
+    return ((app_time_us() - t_start) > I2C_TIMEOUT_US);
 }
 
 /** Disable I2C1, set the 7-bit target address and enable it again.  Returns
     E_OK or E_TMOUT. */
 static ER set_target (uint8_t addr7)
 {
-    uint32_t const t_start = (uint32_t)app_time_us();
+    uint32_t const t_start = app_time_us();
 
     out_w(IC_ENABLE, 0u);
     while ((in_w(IC_ENABLE_STATUS) & 1u) != 0u)
@@ -208,8 +208,8 @@ static ER finish (uint32_t t_start)
  */
 static void recovery_delay (void)
 {
-    uint32_t const t_start = (uint32_t)app_time_us();
-    while ((uint32_t)((uint32_t)app_time_us() - t_start) < I2C_RECOVERY_HALF_US)
+    uint32_t const t_start = app_time_us();
+    while ((app_time_us() - t_start) < I2C_RECOVERY_HALF_US)
     {
     }
 }
@@ -218,11 +218,11 @@ static void recovery_delay (void)
     Returns E_OK or E_IO. */
 static ER scl_release (void)
 {
-    uint32_t const t_start = (uint32_t)app_time_us();
+    uint32_t const t_start = app_time_us();
     out_w(APP_REGS_GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
     while (0u == (in_w(APP_REGS_GPIO_IN) & (1uL << S4_PIN_IMU_SCL)))
     {
-        if ((uint32_t)((uint32_t)app_time_us() - t_start) >= 100u)
+        if ((app_time_us() - t_start) >= 100u)
         {
             return E_TMOUT;
         }

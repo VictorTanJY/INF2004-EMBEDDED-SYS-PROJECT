@@ -95,7 +95,7 @@ EXPORT void subsystem4_test_run (void)
             (UB *)"[INFO] S4-U07 pitch %d cdeg, roll %d cdeg, |a|-1g %d mg, "
                   "I2C errors %d in 1 s, cal 0x%x\n",
             (INT)snap_b.pitch_cdeg, (INT)snap_b.roll_cdeg, (INT)snap_b.accel_mg,
-            (INT)(snap_b.i2c_errors - snap_a.i2c_errors), (INT)snap_b.cal);
+            (snap_b.i2c_errors - snap_a.i2c_errors), (INT)snap_b.cal);
         TEST_CHECK(
             &report, "S4-U07",
             (iabs(snap_b.pitch_cdeg) <= T_LEVEL_CDEG)
@@ -129,7 +129,7 @@ static void test_estop (test_report_t * p_report)
     subsystem5_get_mission_snap(&mission);
     pre = mission.state;
     subsystem2_estop_test_clear();
-    t_start = (uint32_t)app_time_us();
+    t_start = app_time_us();
     (void)tk_set_flg(subsystem4_flg_safety(), T_FAULT_BIT);
     (void)tk_dly_tsk(50);
     lat = subsystem2_estop_test_us() - t_start;
@@ -145,8 +145,8 @@ static void test_estop (test_report_t * p_report)
                "LOW; latched)");
 
     /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
-    (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
-                                  (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
+    (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET, APP_SRC_SAFETY_IMU,
+                                  0u, 0);
     for (elapsed = 0u; elapsed < T_RESET_WAIT_MS; elapsed += 50u)
     {
         (void)tk_dly_tsk(50);
@@ -162,7 +162,7 @@ static void test_estop (test_report_t * p_report)
     tm_printf((UB *)"[INFO] S4-U09 cleared after %d ms; mission state %d "
                     "(was %d), brake %d, latched 0x%x\n",
               (INT)elapsed, (INT)mission.state, (INT)pre,
-              (INT)(subsystem2_estop_latched() ? 1 : 0),
+              (subsystem2_estop_latched() ? 1 : 0),
               (INT)subsystem4_get_latched());
     TEST_CHECK(p_report, "S4-U09",
                b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)

@@ -794,7 +794,7 @@ static void test_capture_h19 (void)
                                "elements, %u mm\n",
                                vectors_slides_get(step)->slide, diff, noise,
                                (int32_t)result, (uint32_t)out.elements,
-                               (uint32_t)(out.length_um / 1000u));
+                               (out.length_um / 1000u));
                     }
                 }
             }
@@ -1618,7 +1618,7 @@ static void test_best_h20_part2 (void)
 
             for (elem = 0u; elem < n_elems; elem++)
             {
-                widths[elem] = 1500u + (uint32_t)(rnd() % 9000u);
+                widths[elem] = 1500u + (rnd() % 9000u);
             }
             tries++;
             if (CODE39_OK
@@ -1832,8 +1832,8 @@ static void test_light_print (void)
             }
             printf("light print, thin bars %u, %u mm spot: %d / %d so far (%d "
                    "by the adaptive swing, %d by the first three readings)\n",
-                   (uint32_t)thin[theta], (uint32_t)(spots[setpoint] / 1000u),
-                   good, total, by_adapt, before);
+                   (uint32_t)thin[theta], (spots[setpoint] / 1000u), good,
+                   total, by_adapt, before);
         }
     }
     g_spot_um    = 1500u;

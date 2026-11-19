@@ -96,7 +96,7 @@ EXPORT void subsystem5_test_run (void)
                    "ultrasonic echo received, range within 2 cm .. 4 m");
     }
 
-    (void)subsystem5_scan_request(SCAN_REQ_STOP, (uint8_t)(T_SCAN_SEQ + 1u), 0);
+    (void)subsystem5_scan_request(SCAN_REQ_STOP, (T_SCAN_SEQ + 1u), 0);
 
     test_report_summary(&report, "subsystem5");
 }

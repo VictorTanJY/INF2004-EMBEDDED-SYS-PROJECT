@@ -58,7 +58,7 @@ static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
 {
     /* NOTE: width <= 32, so 2^(width - 1) <= 2^31 fits int64_t. */
     int64_t const half    = (int64_t)(UINT64_C(1) << (width - 1u));
-    int64_t       clamped = (int64_t)value;
+    int64_t       clamped = value;
 
     if (clamped < -half)
     {

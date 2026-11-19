@@ -60,7 +60,7 @@ static inline int32_t app_types_max_i32 (int32_t lhs, int32_t rhs)
 /** Time comparisons that survive the 32-bit millisecond wrap. */
 static inline uint32_t app_types_elapsed_ms (uint32_t now_ms, uint32_t since_ms)
 {
-    return (uint32_t)(now_ms - since_ms);
+    return (now_ms - since_ms);
 }
 
 #endif /* APP_TYPES_H */

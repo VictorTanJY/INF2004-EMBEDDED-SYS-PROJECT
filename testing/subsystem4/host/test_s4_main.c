@@ -339,7 +339,7 @@ static void test_h04b (void)
     } /* hand lifts it: +0.4 g, 150 ms */
     CHECK("S4-H05", ((g_ev & IMU_EV_LIFT) != 0u)
                         && (g_ic.lift_rise_mg > IMU_LIFT_RISE_MG));
-    printf("lift: rise %d mg\n", (int32_t)g_ic.lift_rise_mg);
+    printf("lift: rise %d mg\n", g_ic.lift_rise_mg);
     /* held still in the air: no second event; set down and lifted again: a new
      * one */
     g_ev = 0u;
@@ -413,7 +413,7 @@ static void test_h05b (void)
     CHECK("S4-H05b",
           ((g_ev & IMU_EV_RISE_MAX) != 0u)
               && (g_ic.rise_max_mg >= 400)); /* the two +1 g samples */
-    printf("largest rise while driving: %d mg\n", (int32_t)g_ic.rise_max_mg);
+    printf("largest rise while driving: %d mg\n", g_ic.rise_max_mg);
 
     /* S4-H05c: on a hump the up push is not a lift */
     imu_core_init(&g_ic);
@@ -491,8 +491,7 @@ static void test_h05e (void)
         }
     }
     printf("in the air: %u fake hump(s), max %u mm (real %u)\n",
-           (uint32_t)(g_ic.humps - 1u), (uint32_t)g_ic.hump_max_mm,
-           (uint32_t)real_max);
+           (g_ic.humps - 1u), (uint32_t)g_ic.hump_max_mm, (uint32_t)real_max);
     CHECK("S4-H05e", ((g_ev & IMU_EV_HUMP_END) != 0u)
                          && (g_ic.hump_max_mm > real_max)); /* the bug */
     imu_core_hump_restore(&g_ic);                           /* lift confirmed */
@@ -578,8 +577,8 @@ static void test_h06 (void)
             int16_t mag[3] = {0, 0, 0};
             int32_t accel[3];
             /* facing east: north is to the left */
-            mag[IMU_AXIS_FWD]  = (int16_t)((0 * IMU_SIGN_FWD) + 120);
-            mag[IMU_AXIS_LEFT] = (int16_t)((400 * IMU_SIGN_LEFT) - 80);
+            mag[IMU_AXIS_FWD]  = ((0 * IMU_SIGN_FWD) + 120);
+            mag[IMU_AXIS_LEFT] = ((400 * IMU_SIGN_LEFT) - 80);
             mag[IMU_AXIS_UP]   = 30;
             accel_for(0.0, 0.0, 0.0, accel);
             (void)imu_core_step(&g_ic, accel, mag, 0, 0, 0, 10u, 10u);
@@ -790,7 +789,7 @@ static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
             (*p_ends)++;
         }
     }
-    return (int32_t)g_ic.last_hump_mm;
+    return g_ic.last_hump_mm;
 }
 
 /** Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
@@ -825,7 +824,7 @@ static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
             (*p_ends)++;
         }
     }
-    return (int32_t)g_ic.last_hump_mm;
+    return g_ic.last_hump_mm;
 }
 
 /** S4-H11: Change Requirement 1, the packed IMU snapshot */

@@ -135,7 +135,7 @@ EXPORT void subsystem2_motor_estop (void)
     DI(intsts);
     g_estop_latch = 1u;
 #if APP_TEST
-    g_estop_test_us = (uint32_t)app_time_us();
+    g_estop_test_us = app_time_us();
 #endif
     out_w(APP_REGS_GPIO_OUT_CLR, mask); /* LOW first, so no glitch HIGH  */
     out_w(APP_REGS_GPIO_OE_SET, mask);  /* drive the pins                 */

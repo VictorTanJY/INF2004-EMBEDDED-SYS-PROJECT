@@ -76,7 +76,7 @@ EXPORT void subsystem1_test_run (void)
     telem.obst_w_mm    = 65535u;
     telem.clr_l_mm     = 65535u;
     telem.clr_r_mm     = 65535u;
-    len = comms_proto_build_telemetry(&telem, buf, (uint16_t)sizeof(buf));
+    len                = comms_proto_build_telemetry(&telem, buf, sizeof(buf));
     TEST_CHECK(&report, "S1-U02", 27u == len,
                "worst-case telemetry is a 27-byte binary frame");
 
@@ -97,8 +97,7 @@ EXPORT void subsystem1_test_run (void)
                "start accepted only in IDLE");
 
     /* S1-U05: ack frame. */
-    len =
-        comms_proto_build_ack(&cmd, COMMS_ERR_BUSY, buf, (uint16_t)sizeof(buf));
+    len = comms_proto_build_ack(&cmd, COMMS_ERR_BUSY, buf, sizeof(buf));
     TEST_CHECK(&report, "S1-U05",
                (3u == len) && s1_bytes_eq(buf, g_ack_busy, 3u),
                "ack frame: 3 bytes, id 9, err busy");

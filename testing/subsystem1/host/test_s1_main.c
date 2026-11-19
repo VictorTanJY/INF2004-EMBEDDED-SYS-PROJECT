@@ -370,7 +370,7 @@ static void test_telemetry_h05 (void)
                         && (1022u == app_pack_take(&reader, 10u)));
     printf("info: telemetry frame = %u B (+%u B topic); the JSON it replaces "
            "was 297 B typical, 340 B worst case\n",
-           (uint32_t)len, (uint32_t)strlen("picocar/is23/telemetry"));
+           len, (uint32_t)strlen("picocar/is23/telemetry"));
 }
 
 /** S1-H06..H08: event, status and acknowledgement frames. */

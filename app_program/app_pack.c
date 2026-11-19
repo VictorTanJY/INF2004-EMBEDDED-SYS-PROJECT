@@ -177,7 +177,7 @@ void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
             }
             break;
             case PK_SYM:
-                value = app_pack_sym_index((char)(uint8_t)raw);
+                value = app_pack_sym_index((uint8_t)raw);
             break;
             default: /* PK_U */
                 value = app_pack_sat_u(raw, width);
@@ -210,7 +210,7 @@ void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
                 raw = (value == app_pack_mask(width)) ? 0xFFFFFFFFuL : value;
             break;
             case PK_SYM:
-                raw = (uint8_t)app_pack_sym_char((uint8_t)value);
+                raw = app_pack_sym_char((uint8_t)value);
             break;
             default: /* PK_U, PK_W */
                 raw = value;
@@ -289,11 +289,11 @@ static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
 
     if (1u == p_f->size)
     {
-        return (int32_t)(int8_t)(uint8_t)raw;
+        return (int8_t)(uint8_t)raw;
     }
     if (2u == p_f->size)
     {
-        return (int32_t)(int16_t)(uint16_t)raw;
+        return (int16_t)(uint16_t)raw;
     }
     return (int32_t)raw;
 }

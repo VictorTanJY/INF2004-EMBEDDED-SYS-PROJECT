@@ -43,8 +43,8 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
     (void)stacd;
     (void)p_exinf;
 
-    mission_core_init(&g_mc, (uint32_t)app_time_ms());
-    g_mc.snap.t_ms = (uint32_t)app_time_ms();
+    mission_core_init(&g_mc, app_time_ms());
+    g_mc.snap.t_ms = app_time_ms();
     subsystem5_put_mission_snap(&g_mc.snap);
 
     for (;;)
@@ -54,15 +54,15 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
         uint32_t now_ms;
 
         subsystem4_heartbeat(SAFETY_HB_MISSION);
-        now_ms = (uint32_t)app_time_ms();
+        now_ms = app_time_ms();
 
         out.n_acts = 0u;
         if ((INT)sizeof(ev_word) == msg_len)
         {
             mission_core_evt_unpack(ev_word, &event);
             /* the laptop's event log: every event MissionTask decides on */
-            (void)subsystem1_telem_post(COMMS_KIND_EVENT, event.src,
-                                        (uint16_t)event.type, event.data);
+            (void)subsystem1_telem_post(COMMS_KIND_EVENT, event.src, event.type,
+                                        event.data);
             mission_core_event(&g_mc, &event, now_ms, &out);
             run_actions(&out);
         }
@@ -146,9 +146,8 @@ static void run_actions (mission_core_out_t const * p_out)
                 {
                     /* mbf_motion full: MotionTask stalled; its heartbeat
                      * catches it */
-                    (void)subsystem1_telem_post(COMMS_KIND_LOG,
-                                                (uint8_t)APP_SRC_OBST_MISSION,
-                                                70u, (int32_t)p_a->cmd);
+                    (void)subsystem1_telem_post(
+                        COMMS_KIND_LOG, APP_SRC_OBST_MISSION, 70u, p_a->cmd);
                 }
             break;
 
@@ -163,7 +162,7 @@ static void run_actions (mission_core_out_t const * p_out)
 
             case MISSION_ACT_STATE:
                 (void)subsystem1_telem_post(COMMS_KIND_STATE,
-                                            (uint8_t)APP_SRC_OBST_MISSION,
+                                            APP_SRC_OBST_MISSION,
                                             (uint16_t)p_a->arg0, 0);
             break;
 
@@ -175,13 +174,13 @@ static void run_actions (mission_core_out_t const * p_out)
                     subsystem4_get_imu_snap(&imu);
                     /* run summary: highest hump peak of the run (FR7) */
                     (void)subsystem1_telem_post(
-                        COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,
-                        MISSION_LOG_SUMMARY, (int32_t)imu.hump_max_mm);
+                        COMMS_KIND_LOG, APP_SRC_OBST_MISSION,
+                        MISSION_LOG_SUMMARY, imu.hump_max_mm);
                 }
                 else
                 {
                     (void)subsystem1_telem_post(
-                        COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION, p_a->cmd,
+                        COMMS_KIND_LOG, APP_SRC_OBST_MISSION, p_a->cmd,
                         (int32_t)(((uint32_t)(uint16_t)p_a->arg0 << 16)
                                   | (uint16_t)p_a->arg1));
                 }

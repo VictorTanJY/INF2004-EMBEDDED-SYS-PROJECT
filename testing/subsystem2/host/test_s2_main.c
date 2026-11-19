@@ -152,9 +152,8 @@ static void test_h01 (void)
                                    + MOTION_TIMEOUT_MARGIN_MS));
         CHECK("S2-H02", (10u == odom.last_done_seq) && (1u == odom.done_count)
                             && (MOTION_ST_IDLE_BRAKED == odom.state));
-        printf("MOVE 1000 mm: %d mm in %u ms (x %d, y %d)\n",
-               (int32_t)odom.dist_mm, (uint32_t)elapsed, (int32_t)odom.x_mm,
-               (int32_t)odom.y_mm);
+        printf("MOVE 1000 mm: %d mm in %u ms (x %d, y %d)\n", odom.dist_mm,
+               elapsed, odom.x_mm, odom.y_mm);
     }
 
     /* S2-H03: TURN +90.0 deg and -180.0 deg -> heading within 1 deg of the
@@ -166,13 +165,13 @@ static void test_h01 (void)
     CHECK("S2-H03", (1 == g_ev[MOTION_EV_DONE])
                         && (abs(odom.heading_cdeg - 9000) <= 100));
     CHECK("S2-H03", abs(odom.dist_mm) <= 5);
-    printf("TURN +90: heading %d cdeg\n", (int32_t)odom.heading_cdeg);
+    printf("TURN +90: heading %d cdeg\n", odom.heading_cdeg);
     (void)cmd(MOTION_SRC_MISSION, 21, MOTION_CMD_TURN, -1800, 180);
     (void)run_until_event(MOTION_EV_DONE, 10000u);
     motion_core_snapshot(&g_mc, &odom);
     CHECK("S2-H03", (2 == g_ev[MOTION_EV_DONE])
                         && (abs(odom.heading_cdeg - (-9000)) <= 100));
-    printf("TURN -180: heading %d cdeg\n", (int32_t)odom.heading_cdeg);
+    printf("TURN -180: heading %d cdeg\n", odom.heading_cdeg);
 }
 
 /** Checks S2-H09, S2-H04, S2-H05, S2-H06, S2-H07, S2-H08. */
@@ -210,8 +209,7 @@ static void test_h09 (void)
         }
         CHECK("S2-H05", (elapsed >= 200u) && (elapsed <= 300u));
         CHECK("S2-H05", (0 == g_mc.duty_l) && (0 == g_mc.duty_r));
-        printf("STOP ramp from 250 mm/s: braked after %u ms\n",
-               (uint32_t)elapsed);
+        printf("STOP ramp from 250 mm/s: braked after %u ms\n", elapsed);
     }
 
     /* S2-H06: stall: wheel locked while driven -> STALL after 300 ms */
@@ -224,8 +222,7 @@ static void test_h09 (void)
 
         CHECK("S2-H06", 1 == g_ev[MOTION_EV_STALL]);
         CHECK("S2-H06", (elapsed >= 300u) && (elapsed <= 600u));
-        printf("STALL reported %u ms after the wheel locked\n",
-               (uint32_t)elapsed);
+        printf("STALL reported %u ms after the wheel locked\n", elapsed);
     }
 
     /* S2-H07: E-stop latch */
@@ -281,8 +278,8 @@ static void test_h10 (void)
     motion_core_snapshot(&g_mc, &odom);
     CHECK("S2-H10",
           (abs(odom.x_mm - 500) <= 25) && (abs(odom.y_mm - 500) <= 25));
-    printf("square leg: x %d y %d heading %d\n", (int32_t)odom.x_mm,
-           (int32_t)odom.y_mm, (int32_t)odom.heading_cdeg);
+    printf("square leg: x %d y %d heading %d\n", odom.x_mm, odom.y_mm,
+           odom.heading_cdeg);
 
     /* S2-H11: encoder counter wrap does not disturb odometry */
     reset_all(0.5);

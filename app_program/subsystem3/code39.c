@@ -755,7 +755,7 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
     if (!b_over)
     {
         best = in_band(n_elems, BEST_T) ? g_bt.cost[n_elems][BEST_T] : BEST_INF;
-        if (in_band(n_elems, (uint16_t)(BEST_T - 2u))
+        if (in_band(n_elems, (BEST_T - 2u))
             && (g_bt.edits[n_elems][BEST_T - 2u] < BEST_MAX_EDITS)
             && (g_bt.cost[n_elems][BEST_T - 2u] < BEST_INF)
             && ((g_bt.cost[n_elems][BEST_T - 2u] + BEST_EDIT) < best))

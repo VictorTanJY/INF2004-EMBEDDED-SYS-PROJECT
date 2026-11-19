@@ -165,8 +165,8 @@ bool line_track_cal_finish (line_track_cal_t * p_cal)
 uint16_t line_track_cal_norm (line_track_cal_t const * p_cal, uint8_t chan,
                               uint16_t raw)
 {
-    int32_t const white = (int32_t)p_cal->white[chan];
-    int32_t const black = (int32_t)p_cal->black[chan];
+    int32_t const white = p_cal->white[chan];
+    int32_t const black = p_cal->black[chan];
     int32_t       norm;
 
     if (!p_cal->b_valid || (white == black))
@@ -295,7 +295,7 @@ uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
     int32_t const c_r =
         p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_R, &runs_r) : -1;
     int32_t const tot =
-        (p_s->n_samples > 0u) ? (int32_t)p_s->h_ddeg[p_s->n_samples - 1u] : 0;
+        (p_s->n_samples > 0u) ? p_s->h_ddeg[p_s->n_samples - 1u] : 0;
     int32_t gain;
 
     if (!p_cal->b_valid)

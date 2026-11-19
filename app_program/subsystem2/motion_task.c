@@ -92,7 +92,7 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
     }
     EI(intsts);
 
-    motion_core_init(&g_core, (uint32_t)app_time_ms_hw());
+    motion_core_init(&g_core, app_time_ms_hw());
 
     for (;;)
     {
@@ -105,13 +105,13 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 
         (void)tk_slp_tsk(MOTION_WAKE_TIMEOUT_MS);
 #if APP_TEST
-        wake_us = (uint32_t)app_time_us();
+        wake_us = app_time_us();
         tt_wake(wake_us);
 #endif
         timing_pin_toggle();
         subsystem4_heartbeat(SAFETY_HB_MOTION);
 
-        now_ms = (uint32_t)app_time_ms_hw();
+        now_ms = app_time_ms_hw();
         enc_l  = drv_encoder_read(DRV_ENC_LEFT);
         enc_r  = drv_encoder_read(DRV_ENC_RIGHT);
 
@@ -136,7 +136,7 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
         write_pwm(g_core.duty_l, g_core.duty_r);
 
         motion_core_snapshot(&g_core, &odom);
-        odom.t_ms  = (uint32_t)app_time_ms();
+        odom.t_ms  = app_time_ms();
         odom.hw_ok = b_hw_ok ? 1u : 0u;
         subsystem2_put_odom(&odom);
 
@@ -182,7 +182,7 @@ static void tt_wake (uint32_t now_us)
 /** Self-test timing: record how long this cycle's work took. */
 static void tt_done (uint32_t wake_us)
 {
-    uint32_t const exec = (uint32_t)app_time_us() - wake_us;
+    uint32_t const exec = app_time_us() - wake_us;
 
     if (exec > g_tt_exec_max_us)
     {
@@ -233,15 +233,15 @@ static void report_events (void)
         switch (event.code)
         {
             case MOTION_EV_DONE:
-                (void)subsystem5_mission_post(
-                    MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
-                    (uint16_t)event.seq, (int32_t)event.src);
+                (void)subsystem5_mission_post(MISSION_EV_MOTION_DONE,
+                                              APP_SRC_MOTION, event.seq,
+                                              event.src);
             break;
 
             case MOTION_EV_FAILED:
-                (void)subsystem5_mission_post(
-                    MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
-                    (uint16_t)event.seq, (int32_t)event.src);
+                (void)subsystem5_mission_post(MISSION_EV_MOTION_FAILED,
+                                              APP_SRC_MOTION, event.seq,
+                                              event.src);
             break;
 
             case MOTION_EV_STALL:
@@ -250,9 +250,8 @@ static void report_events (void)
 
             case MOTION_EV_ENC_FAULT:
                 (void)tk_set_flg(subsystem4_flg_safety(), SAFETY_FLT_ENC_FAULT);
-                (void)subsystem1_telem_post(COMMS_KIND_FAULT,
-                                            (uint8_t)APP_SRC_MOTION, 0u,
-                                            (int32_t)SAFETY_FLT_ENC_FAULT);
+                (void)subsystem1_telem_post(COMMS_KIND_FAULT, APP_SRC_MOTION,
+                                            0u, SAFETY_FLT_ENC_FAULT);
             break;
 
             case MOTION_EV_ENC_OK:

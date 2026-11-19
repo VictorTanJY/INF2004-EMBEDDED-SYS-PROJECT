@@ -551,14 +551,13 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
             return 0u; /* no smaller than the first reading */
         }
         return line_barcode_prof_swing(p_bc->prof, p_bc->prof_n,
-                                       (uint16_t)delta, p_w,
-                                       (uint16_t)BC_MAX_ELEMENTS);
+                                       (uint16_t)delta, p_w, BC_MAX_ELEMENTS);
     }
     thr = (uint16_t)(white
                      + ((1u == kdx) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
     return line_barcode_prof_elements(p_bc->prof, p_bc->prof_n, thr,
                                       (uint16_t)(span / 16u), p_w,
-                                      (uint16_t)BC_MAX_ELEMENTS);
+                                      BC_MAX_ELEMENTS);
 }
 
 /** 14 Nov: a speck before the start or after the stop adds a bar and a
@@ -703,7 +702,7 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
     {
         return BC_VALID;
     }
-    p_out->reason = (uint8_t)result;
+    p_out->reason = result;
     return BC_REJECT;
 }
 
