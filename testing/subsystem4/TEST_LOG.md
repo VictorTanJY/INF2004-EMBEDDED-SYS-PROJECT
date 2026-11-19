@@ -32,7 +32,7 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S4-M06 | lifted during a run -> brake, run ended | FR15 (revised 14 Nov) | manual | during a run, lift the robot level (IMU) and also lift it so the IR sensors see no floor | FAULT "Lifted" (code 1), motors braked, run summary published; humps measured in the air not counted |
 | S4-M07 | withdrawn 14 Nov: the remote E-stop command was removed (MQTT `stop` and the lift / overturn stops remain) | — | — | — | — |
 | S4-M08 | missed heartbeat -> FAULT | FR15 | manual | debug build that suspends one task | HEARTBEAT fault, log code 41 names the task |
-| S4-M09 | power: motor start + servo sweep, 10 runs, 5 min idle | A10 | manual | scope V+ and 3V3 | no brown-out resets, no power-bank auto-off |
+| S4-M09 | power: motor start + servo sweep, 10 runs, 5 min idle (**retired 20 Nov 2026: removed by the team**) | A10 | manual | scope V+ and 3V3 | no brown-out resets, no power-bank auto-off |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **host** = pure-logic test on a PC (`make -C testing/subsystem4/host`, gcc with ASan + UBSan);

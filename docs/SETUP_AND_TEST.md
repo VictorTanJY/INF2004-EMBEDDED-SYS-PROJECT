@@ -61,7 +61,7 @@ reports what it sees, and each sensor is tested in its own phase.
 |---|---|---|---|
 | `app_program/subsystem5/mission_cfg.h` | `MISSION_SELFTEST_MASK` | `0x0Fu` | **`0x0Bu`** until the IMU is wired (phase E). Without the GY-511 the boot self-test fails and the robot stays in FAULT |
 | `app_program/app_config.h` | `APP_BENCH` | 0 | **1** for phases D–G: drive the hardware from the laptop over MQTT |
-| `app_program/app_config.h` | `APP_TIMING_PINS` | 0 | **1** when you capture timing on GP6 / GP7 (S2-M07, S3-M06) |
+| `app_program/app_config.h` | `APP_TIMING_PINS` | 0 | **1** when you capture timing on GP6 / GP7 (S2-M07, S3-M06, both retired 20 Nov) |
 
 Put all three back to their defaults before a demo or a graded run (phase H).
 
@@ -188,7 +188,7 @@ re-plug to see the boot.
 - A `SKIP` line names what was missing (motor battery off, no IMU, no
   echo). It is not a pass: fix the set-up and run the test image again.
 
-**B7. Pins (S2-M01):** GP8, GP9, GP10, GP11 LOW (motor driver brake);
+**B7. Pins (S2-M01, retired 20 Nov; optional check):** GP8, GP9, GP10, GP11 LOW (motor driver brake);
 GP15 a 50 Hz pulse of ~1.5 ms (servo centre).
 
 **B8. Battery:** unplug USB, power from the battery / power bank with the
@@ -288,7 +288,7 @@ Both wheels must turn forward. If one runs backwards, flip its
 `MOTION_MOT_SIGN_*`. If a wheel runs away (speed keeps rising, then a STALL
 fault), its **encoder** sign is wrong.
 
-**D5. PWM (S2-M01):** analyser on GP8–GP11 during a move: 20 kHz, only one
+**D5. PWM (S2-M01, retired 20 Nov; optional check):** analyser on GP8–GP11 during a move: 20 kHz, only one
 pin of each pair active.
 
 **D6. Distance (S2-M03), on the floor:** `bench_move` 1000, five times,
@@ -310,7 +310,7 @@ within 300 ms with < 10 % error.
 `FAULT` event with data 4 (STALL) after 300–400 ms, motors braked. Reset
 with GP21 held 2 s or the `reset` command.
 
-**D10. Timing (S2-M07):** `APP_TIMING_PINS 1`, analyser on GP6 for 60 s
+**D10. Timing (S2-M07, retired 20 Nov; optional check):** `APP_TIMING_PINS 1`, analyser on GP6 for 60 s
 while telemetry runs: every edge 10 ms ± 1 ms (NFR1). If not, see A2 (pace
 the loop from a TIMER alarm on core 1).
 
@@ -346,7 +346,7 @@ published). With the analyser, time detection → GP8–GP11 LOW: **≤ 20 ms**
 close, 4 stall, 8 overturned, 32 heartbeat). There is no remote E-stop
 (removed 14 Nov): MQTT `stop` ramps the robot down to IDLE.
 
-**E7. Power (S4-M09, A10):** scope V+ and 3V3 while starting the motors
+**E7. Power (S4-M09, retired 20 Nov; A10, optional check):** scope V+ and 3V3 while starting the motors
 with the servo sweeping (`bench_servo`): no resets.
 
 Hump height (S4-M04) needs line following: it is step F8.
@@ -407,7 +407,7 @@ reason: 2 count, 3 ratio, 4 pattern, 5 start/stop, 6 length, 7 too long).
 character is executed at the next cross-junction (left / right / straight /
 U-turn), then line following resumes.
 
-**F8. Timing (S3-M06):** `APP_TIMING_PINS 1`, GP7 toggles every 10 ms
+**F8. Timing (S3-M06, retired 20 Nov; optional check):** `APP_TIMING_PINS 1`, GP7 toggles every 10 ms
 block; snapshot `missed_blocks` stays 0 (NFR2).
 
 **F9b. One-wheel humps (S4-M04b):** the course humps lie under one wheel

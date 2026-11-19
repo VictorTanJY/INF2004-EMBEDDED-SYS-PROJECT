@@ -26,7 +26,7 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S3-M03 | line following, 3 runs over a 2 m practice-track section (straights and curves) | FR1, NFR11 | manual | start, observe, save the dashboard log | no intervention; stays in LINE_FOLLOW |
 | S3-M04 | junctions and line loss: 10 cross-junction crossings, 5 line-loss tests | FR2 | manual | event log | "Cross-junction" at each crossing; LINE_LOST then LINE_FOUND after each loss |
 | S3-M05 | barcodes: 10 passes each over the A and Z sheets (3 mm narrow bars) at cruise speed | FR3, NFR3 | manual | event log: "Barcode 'X' read", "Barcode rejected", "Barcode decode time" | >= 7 / 10 correct per sheet, 0 wrong commands, decode time <= 50 000 us |
-| S3-M06 | ADC block timing | NFR2 | manual | `APP_TIMING_PINS=1`, GP7 on a logic analyser; `missed_blocks` in the snapshot | 10 ms blocks, 0 missed |
+| S3-M06 | ADC block timing (**retired 20 Nov 2026: removed by the team**) | NFR2 | manual | `APP_TIMING_PINS=1`, GP7 on a logic analyser; `missed_blocks` in the snapshot | 10 ms blocks, 0 missed |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **host** = pure-logic test on a PC (`make -C testing/subsystem3/host`, gcc with ASan + UBSan);

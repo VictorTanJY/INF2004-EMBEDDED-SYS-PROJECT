@@ -26,13 +26,13 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | S2-H14 | named motion API (FR5): `motion_move_forward` / `_backward`, `motion_turn_left` / `_right`, `motion_stop`, `motion_drive` post the right command and sign; out-of-range arguments refused with nothing posted; a `motion_turn_left` 90 deg runs to MOTION_DONE in the controller | FR5 | host | `make -C testing/subsystem2/host` | `host tests: N passed, 0 failed` |
 | S2-H15 | *retired 17 Nov:* speed-step recorder (the recorder was removed from the firmware) | NFR5 | – | – | – |
 | S2-H16 | CR1: the packed `mbf_motion` word (every command round-trips; DRIVE / MOVE / TURN / SET_AUTH payloads; saturation; 5-bit seq); the API refuses what the word cannot carry; the odometry layout (329 bits, 11 words) round-trips exactly and saturates out of range | CR1, IF-01, IF-02 | auto (host) | `make -C testing/subsystem2/host` | `host tests: N passed`; S2-H16 no FAIL line |
-| S2-M01 | GP8–GP11 LOW at boot and after a safety stop (`motor_estop()`); 20 kHz, one input of each pair always 0 | A3, NFR1, Section 2.2 | manual | scope or logic analyser on GP8–GP11 | LOW/LOW at boot; 20 kHz PWM on one pin per motor when driving |
+| S2-M01 | GP8–GP11 LOW at boot and after a safety stop (`motor_estop()`); 20 kHz, one input of each pair always 0 (**retired 20 Nov 2026: removed by the team**) | A3, NFR1, Section 2.2 | manual | scope or logic analyser on GP8–GP11 | LOW/LOW at boot; 20 kHz PWM on one pin per motor when driving |
 | S2-M02 | encoder counts per wheel revolution and direction sign | A4 | manual | hand-turn each wheel 10 revolutions, read `enc` in telemetry | set `MOTION_COUNTS_PER_REV`, `MOTION_ENC_SIGN_*` |
 | S2-M03 | wheel circumference: 1 m straight move, 5 forward + 5 back | NFR4 | manual | MOVE 1000 / -1000 (MQTT-free: bench test build, see guide) vs tape measure | within +-3 % after correcting `MOTION_WHEEL_CIRC_UM`; drift <= 50 mm (NFR4) |
 | S2-M04 | track width: 90 deg left, 90 deg right and 180 deg turns, 5 each | NFR4, A5 | manual | protractor / overhead video | +-8 deg / +-10 deg after correcting `MOTION_TRACK_MM` |
 | S2-M05 | PID step response | NFR5 | manual | DRIVE 250 mm/s step, log `v_mm_s` | within +-10 % <= 500 ms after the set-point ramp ends, steady error within +-10 % |
 | S2-M06 | stall detection | FR15 | manual | hold one wheel while driving | STALL fault within 300–400 ms, motors braked |
-| S2-M07 | MotionTask period jitter with WiFi publishing | NFR1, A2 | manual | build with `APP_TIMING_PINS=1`, logic analyser on GP6 for 60 s | every half-period 10 ms +-1 ms |
+| S2-M07 | MotionTask period jitter with WiFi publishing (**retired 20 Nov 2026: removed by the team**) | NFR1, A2 | manual | build with `APP_TIMING_PINS=1`, logic analyser on GP6 for 60 s | every half-period 10 ms +-1 ms |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
 **host** = pure-logic test on a PC (`make -C testing/subsystem2/host`, gcc with ASan + UBSan);
