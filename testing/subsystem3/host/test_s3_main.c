@@ -1,6 +1,6 @@
-/*
- *  test_s3_main.c
- *  Host unit tests for subsystem 3: Code 39 decoding (code39.c), barcode
+/** @file test_s3_main.c
+ *
+ *  @brief Host unit tests for subsystem 3: Code 39 decoding (code39.c), barcode
  *  capture from a 1 kHz sample stream (line_barcode.c) and line tracking
  *  (line_track.c).  The barcode tests use the element widths of the
  *  instructor's sample sheets (vectors_slides.h): A, F and Z at all three
@@ -69,6 +69,14 @@
 /* ---- sample-stream simulation ---------------------------------------- */
 #define TRACK_LEN_UM 1200000u /* 1.2 m of track per pass */
 
+/** Reads of one test series: decoded right, tried, decoded wrong. */
+typedef struct
+{
+    int32_t good;
+    int32_t total;
+    int32_t wrong;
+} decode_count_t;
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -77,7 +85,7 @@ static char const g_data_chars[] =
 
 static uint32_t g_rng = 12345u;
 
-/* Reflectance (0..1000, 1000 = black) at position x along a track with
+/** Reflectance (0..1000, 1000 = black) at position x along a track with
    60 mm of white, then the code, then white.  Sensor spot: a box of
    g_spot_um (1.5 mm; S3-H15 widens it to blur the 3 mm elements). */
 static uint32_t g_spot_um = 1500u;
@@ -92,7 +100,7 @@ static uint32_t g_thin_um = 0u;
 /* ---- line tracking ---------------------------------------------------- */
 static line_track_cfg_t const g_cfg = {20000u, 80000u, 300};
 
-/* S3-H16 (3 Nov): turn slip from the calibration spin.  Model: the car
+/** S3-H16 (3 Nov): turn slip from the calibration spin.  Model: the car
    spins about its axle on a straight 18 mm line through the axle; the
    line sensors are OBST_IR_AHEAD 120 mm ahead, 9 mm either side (both
    half on the line at the start); the encoders count `gain` x the real
@@ -131,7 +139,28 @@ static void     test_light_print(void);
 static void     test_pack_s3(void);
 static void     check_result(char const * p_id, bool b_ok, char const * p_file,
                              int32_t line);
+static void     test_capture_h05(void);
+static void     test_capture_h15(void);
+static void     test_capture_h18(void);
+static void     test_capture_h19(void);
+static void     test_capture_h20(void);
+static void     test_track_h10(void);
+static void     test_track_h13(void);
+static void     test_track_h12(void);
+static void     test_best_h20(void);
+static void     test_best_h20_part2(void);
+static void     test_best_h20_part3(void);
+static void     blur_passes(decode_count_t * p_count);
+static void     weak_passes(decode_count_t * p_count);
+static void     best_kind(int32_t kind, decode_count_t * p_count);
+static void best_one(int32_t kind, size_t cnt, uint16_t at_idx, int32_t diff,
+                     decode_count_t * p_count);
+static bool best_damage(int32_t kind, uint32_t widths[29], uint16_t n_elems,
+                        uint16_t at_idx, uint32_t accel[40], uint16_t * p_mid);
+static void test_capture_h18_bleed(void);
+static void test_capture_h18_spot(void);
 
+/** Run subsystem 3's host tests.  Exit status 0 if all passed. */
 int main (void)
 {
     test_table();
@@ -148,7 +177,7 @@ int main (void)
     return (0 == g_fail) ? 0 : 1;
 }
 
-/* Widths of *c* with the given narrow width, ratio and +-jitter. */
+/** Widths of *c* with the given narrow width, ratio and +-jitter. */
 static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
                            float64_t jitter, uint32_t * p_w)
 {
@@ -176,6 +205,7 @@ static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
     return n_elems;
 }
 
+/** Reverse the order of n_elems widths in place. */
 static void reverse (uint32_t * p_w, uint16_t n_elems)
 {
     uint16_t idx;
@@ -188,6 +218,8 @@ static void reverse (uint32_t * p_w, uint16_t n_elems)
     }
 }
 
+/** S3-H03: synthetic barcodes at several widths and print ratios decode
+    exactly. */
 static void test_synthetic (void)
 {
     uint32_t const narrows[3] = {3000u, 5100u, 6900u};
@@ -240,6 +272,7 @@ static void test_synthetic (void)
     CHECK("S3-H03", b_ok && (0 == wrong));
 }
 
+/** S3-H04: damaged codes are rejected, never read as another character. */
 static void test_rejects (void)
 {
     uint32_t widths[40];
@@ -305,7 +338,21 @@ static void test_rejects (void)
     }
 }
 
+/** The barcode capture on simulated sensor readings (S3-H05..H07, H15,
+    H18..H20). */
 static void test_capture (void)
+{
+    test_capture_h05();
+    test_capture_h15();
+    test_capture_h18();
+    test_capture_h18_bleed();
+    test_capture_h18_spot();
+    test_capture_h19();
+    test_capture_h20();
+}
+
+/** Checks S3-H05. */
+static void test_capture_h05 (void)
 {
     uint32_t const speeds[2] = {150u, 300u}; /* NFR3 speeds, mm/s */
     int32_t        step;
@@ -390,6 +437,13 @@ static void test_capture (void)
     }
     printf("noisy passes: %d / %d decoded, %d wrong\n", good, total, wrong);
     CHECK("S3-H05", (0 == wrong) && ((good * 100) >= (total * 95)));
+}
+
+/** Checks S3-H15. */
+static void test_capture_h15 (void)
+{
+    decode_count_t blur = {0, 0, 0};
+    decode_count_t weak = {0, 0, 0};
 
     /* S3-H15: blurred sensor spot (2 Nov, the robot saw 3 elements: thin
        bars and thin gaps never crossed the old fixed 350 / 220 levels).  A
@@ -398,105 +452,122 @@ static void test_capture (void)
        directions, clean and noisy (old levels: 32 / 48 and 0 / 48).  A weak
        sensor (white 250, black 800, 4 mm spot): at least 2 of 3 slides
        decode, never a wrong character (old levels: none, all too long). */
+    blur_passes(&blur);
+    weak_passes(&weak);
+    g_spot_um = 1500u;
+    g_white   = 80u;
+    g_black   = 920u;
+    printf("blurred passes: %d / %d decoded, %d wrong; weak sensor %d / "
+           "%d, %d wrong\n",
+           blur.good, blur.total, blur.wrong, weak.good, weak.total,
+           weak.wrong);
+    CHECK("S3-H15", (0 == blur.wrong) && (blur.good == blur.total));
+    CHECK("S3-H15", (0 == weak.wrong) && ((weak.good * 3) >= (weak.total * 2)));
+}
+
+/** S3-H15: every slide, both speeds and directions, under a 3.5 and a 4 mm
+   sensor spot. */
+static void blur_passes (decode_count_t * p_count)
+{
+    uint32_t const speeds[2] = {150u, 300u}; /* NFR3 speeds, mm/s */
+    uint32_t const spots[2]  = {3500u, 4000u};
+    int32_t        step;
+    int32_t        value;
+    int32_t        diff;
+    int32_t        setpoint;
+
+    for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
     {
-        uint32_t const spots[2] = {3500u, 4000u};
-        int32_t        setpoint;
-        int32_t        blur_good  = 0;
-        int32_t        blur_total = 0;
-        int32_t        blur_wrong = 0;
-        int32_t        weak_good  = 0;
-        int32_t        weak_total = 0;
-        int32_t        weak_wrong = 0;
-
-        for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
+        g_spot_um = spots[setpoint];
+        for (step = 0; step < N_SLIDES; step++)
         {
-            g_spot_um = spots[setpoint];
-            for (step = 0; step < N_SLIDES; step++)
+            for (value = 0; value < T_SPEEDS; value++)
             {
-                for (value = 0; value < T_SPEEDS; value++)
+                for (diff = 0; diff < T_DIRECTIONS; diff++)
                 {
-                    for (diff = 0; diff < T_DIRECTIONS; diff++)
-                    {
-                        uint32_t              widths[29];
-                        line_barcode_out_t    out;
-                        line_barcode_result_t result;
-                        int32_t               kdx;
+                    uint32_t              widths[29];
+                    line_barcode_out_t    out;
+                    line_barcode_result_t result;
+                    int32_t               kdx;
 
-                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-                        {
-                            widths[kdx] =
-                                (vectors_slides_get(step)->p_w[kdx] * 297u)
-                                / 339u;
-                        }
-                        if (diff)
-                        {
-                            reverse(widths, 29);
-                        }
-                        memset(&out, 0, sizeof(out));
-                        result = run_pass(widths, 29, speeds[value],
-                                          (diff ? 60 : 0), &out);
-                        blur_total++;
-                        if ((BC_VALID == result)
-                            && (out.chr == vectors_slides_get(step)->chr))
-                        {
-                            blur_good++;
-                        }
-                        else if (BC_VALID == result)
-                        {
-                            blur_wrong++;
-                        }
-                        else
-                        {
-                            /* No action required. */
-                        }
+                    for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
+                    {
+                        widths[kdx] =
+                            (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
+                    }
+                    if (diff)
+                    {
+                        reverse(widths, 29);
+                    }
+                    memset(&out, 0, sizeof(out));
+                    result = run_pass(widths, 29, speeds[value],
+                                      (diff ? 60 : 0), &out);
+                    p_count->total++;
+                    if ((BC_VALID == result)
+                        && (out.chr == vectors_slides_get(step)->chr))
+                    {
+                        p_count->good++;
+                    }
+                    else if (BC_VALID == result)
+                    {
+                        p_count->wrong++;
+                    }
+                    else
+                    {
+                        /* No action required. */
                     }
                 }
             }
         }
-        g_spot_um = 4000u;
-        g_white   = 250u;
-        g_black   = 800u;
-        for (step = 0; step < N_SLIDES; step++)
-        {
-            uint32_t           widths[29];
-            line_barcode_out_t out;
-            int32_t            kdx;
-
-            for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-            {
-                widths[kdx] =
-                    (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
-            }
-            line_barcode_result_t result;
-
-            memset(&out, 0, sizeof(out));
-            result = run_pass(widths, 29, 150u, 0, &out);
-            weak_total++;
-            if ((BC_VALID == result)
-                && (out.chr == vectors_slides_get(step)->chr))
-            {
-                weak_good++;
-            }
-            else if (BC_VALID == result)
-            {
-                weak_wrong++;
-            }
-            else
-            {
-                /* No action required. */
-            }
-        }
-        g_spot_um = 1500u;
-        g_white   = 80u;
-        g_black   = 920u;
-        printf("blurred passes: %d / %d decoded, %d wrong; weak sensor %d / "
-               "%d, %d wrong\n",
-               blur_good, blur_total, blur_wrong, weak_good, weak_total,
-               weak_wrong);
-        CHECK("S3-H15", (0 == blur_wrong) && (blur_good == blur_total));
-        CHECK("S3-H15",
-              (0 == weak_wrong) && ((weak_good * 3) >= (weak_total * 2)));
     }
+}
+
+/** S3-H15: a weak sensor (white 250, black 800, 4 mm spot), every slide. */
+static void weak_passes (decode_count_t * p_count)
+{
+    int32_t step;
+
+    g_spot_um = 4000u;
+    g_white   = 250u;
+    g_black   = 800u;
+    for (step = 0; step < N_SLIDES; step++)
+    {
+        uint32_t              widths[29];
+        line_barcode_out_t    out;
+        line_barcode_result_t result;
+        int32_t               kdx;
+
+        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
+        {
+            widths[kdx] = (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
+        }
+        memset(&out, 0, sizeof(out));
+        result = run_pass(widths, 29, 150u, 0, &out);
+        p_count->total++;
+        if ((BC_VALID == result) && (out.chr == vectors_slides_get(step)->chr))
+        {
+            p_count->good++;
+        }
+        else if (BC_VALID == result)
+        {
+            p_count->wrong++;
+        }
+        else
+        {
+            /* No action required. */
+        }
+    }
+}
+
+/** Checks S3-H18. */
+static void test_capture_h18 (void)
+{
+    int32_t step;
+    int32_t diff;
+    int32_t good  = 0;
+    int32_t total = 0;
+    int32_t wrong = 0;
+    int32_t kdx;
 
     /* S3-H18 (7 Nov): (a) a read one bar short at either end (2 elements
        lost) still decodes, both directions, never a wrong letter; (b) black
@@ -504,81 +575,32 @@ static void test_capture (void)
        with bars and spaces ranked apart; (c) a 5-6 mm spot over 3 mm
        elements: the profile's second try decodes more than the swing
        reading alone, never a wrong letter. */
+    for (step = 0; step < N_SLIDES; step++)
     {
-        int32_t good  = 0;
-        int32_t total = 0;
-        int32_t wrong = 0;
-        int32_t kdx;
-
-        for (step = 0; step < N_SLIDES; step++)
+        for (diff = 0; diff < T_DIRECTIONS; diff++)
         {
-            for (diff = 0; diff < T_DIRECTIONS; diff++)
-            {
-                int32_t cut;
+            int32_t cut;
 
-                for (cut = 0; cut < T_CODE_ENDS; cut++)
-                {
-                    uint32_t widths[29];
-                    char     chr;
-                    bool     b_rev;
-
-                    for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-                    {
-                        widths[kdx] = vectors_slides_get(step)->p_w[kdx];
-                    }
-                    if (diff)
-                    {
-                        reverse(widths, 29);
-                    }
-                    total++;
-                    if (CODE39_OK
-                        == code39_decode_one_repair(cut ? widths : &widths[2],
-                                                    27, 15, &chr, &b_rev))
-                    {
-                        if (chr == vectors_slides_get(step)->chr)
-                        {
-                            good++;
-                        }
-                        else
-                        {
-                            wrong++;
-                        }
-                    }
-                }
-            }
-        }
-        printf("one bar short at an end: %d / %d decoded, %d wrong\n", good,
-               total, wrong);
-        CHECK("S3-H18", (0 == wrong) && (good == total));
-
-        good  = 0;
-        total = 0;
-        wrong = 0;
-        {
-            size_t idx;
-
-            for (idx = 0u; idx < T_LETTERS; idx++)
+            for (cut = 0; cut < T_CODE_ENDS; cut++)
             {
                 uint32_t widths[29];
-                uint16_t n_elems =
-                    make_code((char)('A' + idx), 3000u, 2.5, 0.0, widths);
                 char     chr;
                 bool     b_rev;
-                uint16_t elem;
 
-                for (elem = 0u; elem < n_elems; elem++)
+                for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                 {
-                    widths[elem] =
-                        (0u == (elem % 2u))
-                            ? (widths[elem] + 1200u)
-                            : ((widths[elem] > 1200u) ? (widths[elem] - 1200u)
-                                                      : 100u);
+                    widths[kdx] = vectors_slides_get(step)->p_w[kdx];
+                }
+                if (diff)
+                {
+                    reverse(widths, 29);
                 }
                 total++;
                 if (CODE39_OK
-                    == code39_decode_one(widths, n_elems, 15, &chr, &b_rev))
+                    == code39_decode_one_repair(cut ? widths : &widths[2], 27,
+                                                15, &chr, &b_rev))
                 {
-                    if (chr == (char)('A' + idx))
+                    if (chr == vectors_slides_get(step)->chr)
                     {
                         good++;
                     }
@@ -589,66 +611,125 @@ static void test_capture (void)
                 }
             }
         }
-        printf("black bleeding 40 %%: %d / %d decoded, %d wrong\n", good, total,
-               wrong);
-        CHECK("S3-H18", (0 == wrong) && (good == total));
+    }
+    printf("one bar short at an end: %d / %d decoded, %d wrong\n", good, total,
+           wrong);
+    CHECK("S3-H18", (0 == wrong) && (good == total));
+}
 
+/** S3-H18 (b): black bleeding into white (bars +40 % of a narrow, spaces
+   -40 %) decodes with bars and spaces ranked apart. */
+static void test_capture_h18_bleed (void)
+{
+    int32_t good  = 0;
+    int32_t total = 0;
+    int32_t wrong = 0;
+    size_t  idx;
+
+    for (idx = 0u; idx < T_LETTERS; idx++)
+    {
+        uint32_t widths[29];
+        uint16_t n_elems =
+            make_code((char)('A' + idx), 3000u, 2.5, 0.0, widths);
+        char     chr;
+        bool     b_rev;
+        uint16_t elem;
+
+        for (elem = 0u; elem < n_elems; elem++)
         {
-            uint32_t const spots[2] = {5000u, 6000u};
-            int32_t        setpoint;
-            int32_t        pass2 = 0;
-
-            good  = 0;
-            total = 0;
-            wrong = 0;
-            for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
+            widths[elem] =
+                (0u == (elem % 2u))
+                    ? (widths[elem] + 1200u)
+                    : ((widths[elem] > 1200u) ? (widths[elem] - 1200u) : 100u);
+        }
+        total++;
+        if (CODE39_OK == code39_decode_one(widths, n_elems, 15, &chr, &b_rev))
+        {
+            if (chr == (char)('A' + idx))
             {
-                g_spot_um = spots[setpoint];
-                for (step = 0; step < N_SLIDES; step++)
-                {
-                    for (diff = 0; diff < T_DIRECTIONS; diff++)
-                    {
-                        uint32_t              widths[29];
-                        line_barcode_out_t    out;
-                        line_barcode_result_t result;
-
-                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-                        {
-                            widths[kdx] =
-                                (vectors_slides_get(step)->p_w[kdx] * 297u)
-                                / 339u;
-                        }
-                        if (diff)
-                        {
-                            reverse(widths, 29);
-                        }
-                        memset(&out, 0, sizeof(out));
-                        result = run_pass(widths, 29, 90u, 0, &out);
-                        total++;
-                        if ((BC_VALID == result)
-                            && (out.chr == vectors_slides_get(step)->chr))
-                        {
-                            good++;
-                        }
-                        else if (BC_VALID == result)
-                        {
-                            wrong++;
-                        }
-                        else
-                        {
-                            /* No action required. */
-                        }
-                        pass2 += (g_last_pass != 0u) ? 1 : 0;
-                    }
-                }
+                good++;
             }
-            g_spot_um = 1500u;
-            printf("5-6 mm spot: %d / %d decoded (%d by the second try), %d "
-                   "wrong\n",
-                   good, total, pass2, wrong);
-            CHECK("S3-H18", 0 == wrong);
+            else
+            {
+                wrong++;
+            }
         }
     }
+    printf("black bleeding 40 %%: %d / %d decoded, %d wrong\n", good, total,
+           wrong);
+    CHECK("S3-H18", (0 == wrong) && (good == total));
+}
+
+/** S3-H18 (c): a 5-6 mm spot over 3 mm elements: the profile's second try
+   decodes more than the swing reading alone, never a wrong letter. */
+static void test_capture_h18_spot (void)
+{
+    uint32_t const spots[2] = {5000u, 6000u};
+    int32_t        setpoint;
+    int32_t        pass2 = 0;
+    int32_t        good  = 0;
+    int32_t        total = 0;
+    int32_t        wrong = 0;
+    int32_t        step;
+    int32_t        diff;
+    int32_t        kdx;
+
+    for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
+    {
+        g_spot_um = spots[setpoint];
+        for (step = 0; step < N_SLIDES; step++)
+        {
+            for (diff = 0; diff < T_DIRECTIONS; diff++)
+            {
+                uint32_t              widths[29];
+                line_barcode_out_t    out;
+                line_barcode_result_t result;
+
+                for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
+                {
+                    widths[kdx] =
+                        (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
+                }
+                if (diff)
+                {
+                    reverse(widths, 29);
+                }
+                memset(&out, 0, sizeof(out));
+                result = run_pass(widths, 29, 90u, 0, &out);
+                total++;
+                if ((BC_VALID == result)
+                    && (out.chr == vectors_slides_get(step)->chr))
+                {
+                    good++;
+                }
+                else if (BC_VALID == result)
+                {
+                    wrong++;
+                }
+                else
+                {
+                    /* No action required. */
+                }
+                pass2 += (g_last_pass != 0u) ? 1 : 0;
+            }
+        }
+    }
+    g_spot_um = 1500u;
+    printf("5-6 mm spot: %d / %d decoded (%d by the second try), %d "
+           "wrong\n",
+           good, total, pass2, wrong);
+    CHECK("S3-H18", 0 == wrong);
+}
+
+/** Checks S3-H19. */
+static void test_capture_h19 (void)
+{
+    int32_t step;
+    int32_t diff;
+    int32_t good  = 0;
+    int32_t total = 0;
+    int32_t wrong = 0;
+    int32_t noise;
 
     /* S3-H19 (7 Nov 18:33 robot runs): "*Z*", the robot's levels while
        driving: white ~20, wide bars ~690, 3 mm bars too faint for the
@@ -657,87 +738,80 @@ static void test_capture (void)
        which with a 25 mm end stopped every capture at 3 elements / 51 mm.
        With the 40 mm end the whole code is kept and the darkness record
        (low threshold) finds the faint bars. */
+    g_spot_um    = 1500u;
+    g_white      = 20u;
+    g_black      = 690u;
+    g_thin_black = 240u;
+    for (noise = 0; noise <= T_BLUR_NOISE; noise += T_BLUR_NOISE)
     {
-        int32_t step;
-        int32_t diff;
-        int32_t good  = 0;
-        int32_t total = 0;
-        int32_t wrong = 0;
-        int32_t noise;
-
-        g_spot_um    = 1500u;
-        g_white      = 20u;
-        g_black      = 690u;
-        g_thin_black = 240u;
-        for (noise = 0; noise <= T_BLUR_NOISE; noise += T_BLUR_NOISE)
+        for (step = 0; step < N_SLIDES; step++)
         {
-            for (step = 0; step < N_SLIDES; step++)
+            if ('Z' == vectors_slides_get(step)->chr)
             {
-                if ('Z' == vectors_slides_get(step)->chr)
+                for (diff = 0; diff < T_DIRECTIONS; diff++)
                 {
-                    for (diff = 0; diff < T_DIRECTIONS; diff++)
+                    uint32_t              widths[29];
+                    line_barcode_out_t    out;
+                    line_barcode_result_t result;
+                    int32_t               kdx;
+
+                    uint32_t wmin = 0xFFFFFFFFu;
+
+                    /* printed at the specified size: 3 mm narrow (~141 mm
+                     * code)
+                     */
+                    for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                     {
-                        uint32_t              widths[29];
-                        line_barcode_out_t    out;
-                        line_barcode_result_t result;
-                        int32_t               kdx;
-
-                        uint32_t wmin = 0xFFFFFFFFu;
-
-                        /* printed at the specified size: 3 mm narrow (~141 mm
-                         * code)
-                         */
-                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-                        {
-                            wmin = (vectors_slides_get(step)->p_w[kdx] < wmin)
-                                       ? vectors_slides_get(step)->p_w[kdx]
-                                       : wmin;
-                        }
-                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-                        {
-                            widths[kdx] =
-                                (vectors_slides_get(step)->p_w[kdx] * 3000u)
-                                / wmin;
-                        }
-                        g_thin_um = 6000u; /* bars under 6 mm are the faint
-                                              narrow ones */
-                        if (diff)
-                        {
-                            reverse(widths, 29);
-                        }
-                        memset(&out, 0, sizeof(out));
-                        result = run_pass(widths, 29, 90u, noise, &out);
-                        total++;
-                        if ((BC_VALID == result) && ('Z' == out.chr))
-                        {
-                            good++;
-                        }
-                        else if (BC_VALID == result)
-                        {
-                            wrong++;
-                        }
-                        else
-                        {
-                            printf(
-                                "  Z slide %d dir %d noise %d: result %d, %u "
-                                "elements, %u mm\n",
-                                vectors_slides_get(step)->slide, diff, noise,
-                                (int32_t)result, (uint32_t)out.elements,
-                                (uint32_t)(out.length_um / 1000u));
-                        }
+                        wmin = (vectors_slides_get(step)->p_w[kdx] < wmin)
+                                   ? vectors_slides_get(step)->p_w[kdx]
+                                   : wmin;
+                    }
+                    for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
+                    {
+                        widths[kdx] =
+                            (vectors_slides_get(step)->p_w[kdx] * 3000u) / wmin;
+                    }
+                    g_thin_um = 6000u; /* bars under 6 mm are the faint
+                                          narrow ones */
+                    if (diff)
+                    {
+                        reverse(widths, 29);
+                    }
+                    memset(&out, 0, sizeof(out));
+                    result = run_pass(widths, 29, 90u, noise, &out);
+                    total++;
+                    if ((BC_VALID == result) && ('Z' == out.chr))
+                    {
+                        good++;
+                    }
+                    else if (BC_VALID == result)
+                    {
+                        wrong++;
+                    }
+                    else
+                    {
+                        printf("  Z slide %d dir %d noise %d: result %d, %u "
+                               "elements, %u mm\n",
+                               vectors_slides_get(step)->slide, diff, noise,
+                               (int32_t)result, (uint32_t)out.elements,
+                               (uint32_t)(out.length_um / 1000u));
                     }
                 }
             }
         }
-        g_spot_um    = 1500u;
-        g_white      = 80u;
-        g_black      = 920u;
-        g_thin_black = 0u;
-        printf("faint 3 mm bars (robot 7 Nov): Z %d / %d decoded, %d wrong\n",
-               good, total, wrong);
-        CHECK("S3-H19", (0 == wrong) && (good == total));
     }
+    g_spot_um    = 1500u;
+    g_white      = 80u;
+    g_black      = 920u;
+    g_thin_black = 0u;
+    printf("faint 3 mm bars (robot 7 Nov): Z %d / %d decoded, %d wrong\n", good,
+           total, wrong);
+    CHECK("S3-H19", (0 == wrong) && (good == total));
+}
 
+/** Checks S3-H20, S3-H06, S3-H07. */
+static void test_capture_h20 (void)
+{
     /* S3-H20 (14 Nov car runs, 1 mm slit on the sensor, 3 mm "*A*"): two
        reads with a 1.4 mm speck outside the code, one after the stop
        (31 elements) and one before the start with a wide bar split by a
@@ -825,18 +899,21 @@ static void test_capture (void)
     }
 }
 
+/** Pseudo-random number 0..65535 (fixed sequence). */
 static uint32_t rnd (void)
 {
     g_rng = (g_rng * 1103515245u) + 12345u;
     return (g_rng >> 8) & 0xFFFFu;
 }
 
-/* uniform in [-1, 1] */
+/** uniform in [-1, 1] */
 static float64_t rndu (void)
 {
     return ((float64_t)rnd() / 32767.5) - 1.0;
 }
 
+/** Simulated barcode reading at x_um: the code p_w seen through a sensor spot
+    of g_spot_um. */
 static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
                             uint32_t x_um)
 {
@@ -872,7 +949,7 @@ static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
     return (uint16_t)(level / taps);
 }
 
-/* Run one pass at v_mm_s; returns the result and fills *p_out. */
+/** Run one pass at v_mm_s; returns the result and fills *p_out. */
 static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
                                        uint32_t v_mm_s, int32_t noise,
                                        line_barcode_out_t * p_out)
@@ -919,6 +996,8 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
     return found;
 }
 
+/** S3-H01: the Code 39 table: every pattern is valid and maps back to its
+    character. */
 static void test_table (void)
 {
     size_t idx;
@@ -964,6 +1043,8 @@ static void test_table (void)
           (0x094u == code39_pattern('*')) && ('\0' == code39_char(0x1FFu)));
 }
 
+/** S3-H02: the barcodes measured from the briefing slides decode to their
+    characters. */
 static void test_slides (void)
 {
     int32_t step;
@@ -999,7 +1080,7 @@ static void test_slides (void)
     }
 }
 
-/* Feed blocks of 3 mm (0.3 m/s x 10 ms) for dist_um; returns OR of events. */
+/** Feed blocks of 3 mm (0.3 m/s x 10 ms) for dist_um; returns OR of events. */
 static uint8_t feed (line_track_t * p_t, uint16_t left, uint16_t ret,
                      uint32_t dist_um)
 {
@@ -1013,7 +1094,16 @@ static uint8_t feed (line_track_t * p_t, uint16_t left, uint16_t ret,
     return events;
 }
 
+/** Line tracking: steering, junctions, gaps and line loss (S3-H08..H14). */
 static void test_track (void)
+{
+    test_track_h10();
+    test_track_h13();
+    test_track_h12();
+}
+
+/** Checks S3-H10, S3-H08, S3-H09, S3-H11, S3-H14. */
+static void test_track_h10 (void)
 {
     line_track_t track;
     uint8_t      events;
@@ -1085,103 +1175,107 @@ static void test_track (void)
     (void)feed(&track, 500u, 500u, 45000u); /* centred again for 45 mm */
     (void)feed(&track, 60u, 60u, 9000u);    /* a gap */
     CHECK("S3-H14", (0 == track.omega) && (300 == track.v_mm_s));
+}
+
+/** Checks S3-H13. */
+static void test_track_h13 (void)
+{
+    line_track_t track;
+    int32_t      prev;
+    int32_t      idx;
+    int32_t      max_jump = 0;
 
     /* S3-H13: steering ramp: the error flips full left / full right every
        10 ms (the weaving seen on 2 Nov); the turn command never moves more
        than LINE_OMEGA_STEP per block; a steady error still reaches the full
        command within 850 / 50 = 17 blocks */
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 30000u);
+    prev = track.omega;
+    for (idx = 0; idx < T_ALTERNATIONS; idx++)
     {
-        int32_t prev;
-        int32_t idx;
-        int32_t max_jump = 0;
-
-        line_track_init(&track);
-        (void)feed(&track, 500u, 500u, 30000u);
-        prev = track.omega;
-        for (idx = 0; idx < T_ALTERNATIONS; idx++)
-        {
-            if (0 == (idx % 2))
-            {
-                (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u);
-            }
-            else
-            {
-                (void)line_track_step(&track, &g_cfg, 0u, 1000u, 3000u);
-            }
-            max_jump = (app_types_abs_i32(track.omega - prev) > max_jump)
-                           ? app_types_abs_i32(track.omega - prev)
-                           : max_jump;
-            prev     = track.omega;
-        }
-        CHECK("S3-H13", max_jump <= LINE_OMEGA_STEP);
-
-        line_track_init(&track);
-        (void)feed(&track, 500u, 500u, 30000u);
-        for (idx = 0; idx < T_RAMP_BLOCKS; idx++)
+        if (0 == (idx % 2))
         {
             (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u);
         }
-        CHECK("S3-H13", (LINE_STEER_SIGN * LINE_KP) == track.omega);
-        (void)line_track_step(&track, &g_cfg, 500u, 500u,
-                              3000u); /* back on centre */
-        CHECK("S3-H13",
-              track.omega
-                  == (LINE_STEER_SIGN
-                      * app_types_max_i32(LINE_KP - LINE_OMEGA_STEP, 0)));
+        else
+        {
+            (void)line_track_step(&track, &g_cfg, 0u, 1000u, 3000u);
+        }
+        max_jump = (app_types_abs_i32(track.omega - prev) > max_jump)
+                       ? app_types_abs_i32(track.omega - prev)
+                       : max_jump;
+        prev     = track.omega;
     }
+    CHECK("S3-H13", max_jump <= LINE_OMEGA_STEP);
 
-    /* S3-H12: calibration: contrast check and normalisation */
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 30000u);
+    for (idx = 0; idx < T_RAMP_BLOCKS; idx++)
     {
-        line_track_cal_t cal;
-        uint16_t         raw[3];
-        int32_t          idx;
-
-        memset(&cal, 0, sizeof(cal));
-        line_track_cal_start(&cal);
-        for (idx = 0; idx < T_CAL_SAMPLES; idx++)
-        {
-            raw[0] =
-                (uint16_t)((idx < 50) ? 300 : 3000); /* white 300, black 3000 */
-            raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
-            raw[2] = (uint16_t)((idx < 50) ? 250 : 2500);
-            line_track_cal_sample(&cal, raw);
-        }
-        CHECK("S3-H12",
-              line_track_cal_finish(&cal) && (cal.contrast_x10 >= 30u));
-        CHECK("S3-H12", (0u == line_track_cal_norm(&cal, 0, 300))
-                            && (1000u == line_track_cal_norm(&cal, 0, 3000)));
-        CHECK("S3-H12", (500u == line_track_cal_norm(&cal, 0, 1650))
-                            && (1000u == line_track_cal_norm(&cal, 0, 4095)));
-        line_track_cal_start(&cal);
-        for (idx = 0; idx < T_CAL_SAMPLES; idx++)
-        {
-            raw[0] = (uint16_t)((idx < 50) ? 1000 : 2000); /* 2:1 only */
-            raw[1] = 1000;
-            raw[2] = 1000;
-            line_track_cal_sample(&cal, raw);
-        }
-        CHECK("S3-H12", !line_track_cal_finish(&cal) && cal.b_valid
-                            && (1000u == line_track_cal_norm(&cal, 0, 3000)));
-        /* the barcode sensor does not take part: fixed levels from
-           line_cfg.h, even when it saw no contrast during the spin */
-        line_track_cal_start(&cal);
-        for (idx = 0; idx < T_CAL_SAMPLES; idx++)
-        {
-            raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);
-            raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
-            raw[2] = 3700; /* stuck */
-            line_track_cal_sample(&cal, raw);
-        }
-        CHECK("S3-H12", line_track_cal_finish(&cal));
-        CHECK("S3-H12", (LINE_BC_WHITE_RAW == cal.white[2])
-                            && (LINE_BC_BLACK_RAW == cal.black[2]));
-        CHECK(
-            "S3-H12",
-            (0u == line_track_cal_norm(&cal, 2, LINE_BC_WHITE_RAW))
-                && (1000u == line_track_cal_norm(&cal, 2, LINE_BC_BLACK_RAW)));
+        (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u);
     }
+    CHECK("S3-H13", (LINE_STEER_SIGN * LINE_KP) == track.omega);
+    (void)line_track_step(&track, &g_cfg, 500u, 500u,
+                          3000u); /* back on centre */
+    CHECK("S3-H13", track.omega
+                        == (LINE_STEER_SIGN
+                            * app_types_max_i32(LINE_KP - LINE_OMEGA_STEP, 0)));
 }
 
+/** Checks S3-H12. */
+static void test_track_h12 (void)
+{
+    line_track_cal_t cal;
+    uint16_t         raw[3];
+    int32_t          idx;
+
+    /* S3-H12: calibration: contrast check and normalisation */
+    memset(&cal, 0, sizeof(cal));
+    line_track_cal_start(&cal);
+    for (idx = 0; idx < T_CAL_SAMPLES; idx++)
+    {
+        raw[0] =
+            (uint16_t)((idx < 50) ? 300 : 3000); /* white 300, black 3000 */
+        raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
+        raw[2] = (uint16_t)((idx < 50) ? 250 : 2500);
+        line_track_cal_sample(&cal, raw);
+    }
+    CHECK("S3-H12", line_track_cal_finish(&cal) && (cal.contrast_x10 >= 30u));
+    CHECK("S3-H12", (0u == line_track_cal_norm(&cal, 0, 300))
+                        && (1000u == line_track_cal_norm(&cal, 0, 3000)));
+    CHECK("S3-H12", (500u == line_track_cal_norm(&cal, 0, 1650))
+                        && (1000u == line_track_cal_norm(&cal, 0, 4095)));
+    line_track_cal_start(&cal);
+    for (idx = 0; idx < T_CAL_SAMPLES; idx++)
+    {
+        raw[0] = (uint16_t)((idx < 50) ? 1000 : 2000); /* 2:1 only */
+        raw[1] = 1000;
+        raw[2] = 1000;
+        line_track_cal_sample(&cal, raw);
+    }
+    CHECK("S3-H12", !line_track_cal_finish(&cal) && cal.b_valid
+                        && (1000u == line_track_cal_norm(&cal, 0, 3000)));
+    /* the barcode sensor does not take part: fixed levels from
+       line_cfg.h, even when it saw no contrast during the spin */
+    line_track_cal_start(&cal);
+    for (idx = 0; idx < T_CAL_SAMPLES; idx++)
+    {
+        raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);
+        raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
+        raw[2] = 3700; /* stuck */
+        line_track_cal_sample(&cal, raw);
+    }
+    CHECK("S3-H12", line_track_cal_finish(&cal));
+    CHECK("S3-H12", (LINE_BC_WHITE_RAW == cal.white[2])
+                        && (LINE_BC_BLACK_RAW == cal.black[2]));
+    CHECK("S3-H12",
+          (0u == line_track_cal_norm(&cal, 2, LINE_BC_WHITE_RAW))
+              && (1000u == line_track_cal_norm(&cal, 2, LINE_BC_BLACK_RAW)));
+}
+
+/** Simulated raw line-sensor reading at (x, y) mm from an 18 mm wide line
+    along the x axis. */
 static uint16_t slip_raw (float64_t x_val, float64_t y_val)
 {
     float64_t const half = 9.0;
@@ -1193,6 +1287,8 @@ static uint16_t slip_raw (float64_t x_val, float64_t y_val)
     return (uint16_t)(300.0 + (factor * 2700.0));
 }
 
+/** Simulate a 360 deg calibration spin with this turn slip (gain_pm), over a
+    line or not.  Returns the measured gain. */
 static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
 {
     static line_track_slip_t slip;
@@ -1237,6 +1333,7 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
     }
 }
 
+/** S3-H16: turn slip measured from a simulated calibration spin. */
 static void test_slip (void)
 {
     int32_t const gains[4] = {1000, 1200, 1500, 1800};
@@ -1266,7 +1363,7 @@ static void test_slip (void)
     CHECK("S3-H16", 0u == slip_run(1500, false, 0));
 }
 
-/* S3-H20 (8 Nov robot run: 27 of 29 elements with a 1.0 mm element):
+/** S3-H20 (8 Nov robot run: 27 of 29 elements with a 1.0 mm element):
    best match for a bar split by a speck (29 -> 31), two thin elements
    run into a neighbour (29 -> 27), both at once (29, ratio broken), and
    a lost end with a split; every character, both directions, 3 mm
@@ -1296,6 +1393,8 @@ static uint16_t split_at (uint32_t const * p_in, uint16_t n_elems,
     return out_n;
 }
 
+/** Copy p_in to p_out with the elements at_idx..at_idx+2 merged into one.
+    Returns the new count. */
 static uint16_t merge_at (uint32_t const * p_in, uint16_t n_elems,
                           uint16_t at_idx, uint32_t * p_out)
 {
@@ -1317,7 +1416,7 @@ static uint16_t merge_at (uint32_t const * p_in, uint16_t n_elems,
     return out_n;
 }
 
-/* the merges the sensor makes: a thin space (or bar) between two of the
+/** the merges the sensor makes: a thin space (or bar) between two of the
    other kind, at least one of them thin */
 static bool thin_triplet (uint32_t const * p_w, uint16_t at_idx,
                           uint32_t narrow)
@@ -1327,149 +1426,180 @@ static bool thin_triplet (uint32_t const * p_w, uint16_t at_idx,
                || (p_w[at_idx + 2u] < ((narrow * 3u) / 2u)));
 }
 
+/** S3-H20: best-match decoding of damaged reads. */
 static void test_best (void)
 {
-    size_t  cnt;
-    int32_t good  = 0;
-    int32_t total = 0;
-    int32_t wrong = 0;
-    int32_t kind;
+    test_best_h20();
+    test_best_h20_part2();
+    test_best_h20_part3();
+}
+
+/** Checks S3-H20. */
+static void test_best_h20 (void)
+{
+    decode_count_t count = {0, 0, 0};
+    int32_t        kind;
 
     for (kind = 0; kind < T_DAMAGE_KINDS; kind++)
     {
-        int32_t kgood  = 0;
-        int32_t ktotal = 0;
+        best_kind(kind, &count);
+    }
+    printf("best match: %d / %d decoded, %d wrong\n", count.good, count.total,
+           count.wrong);
+    CHECK("S3-H20", 0 == count.wrong);
+}
 
-        for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
+/** S3-H20: one kind of damage (0 split bar, 1 merged thin pair, 2 split +
+   merge, 3 end lost + split) at every position of every character, both
+   directions; adds to *p_count. */
+static void best_kind (int32_t kind, decode_count_t * p_count)
+{
+    decode_count_t kcount = {0, 0, 0};
+    size_t         cnt;
+
+    for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
+    {
+        uint16_t at_idx;
+
+        for (at_idx = 1u; at_idx < (T_CODE_ELEMS_U - 1u); at_idx++)
         {
-            uint16_t at_idx;
+            int32_t diff;
 
-            for (at_idx = 1u; at_idx < (T_CODE_ELEMS_U - 1u); at_idx++)
+            for (diff = 0; diff < T_DIRECTIONS; diff++)
             {
-                int32_t diff;
-
-                for (diff = 0; diff < T_DIRECTIONS; diff++)
-                {
-                    uint32_t widths[29];
-                    uint32_t accel[40];
-                    uint32_t buf[40];
-                    uint16_t n_elems =
-                        make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths);
-                    uint16_t elem;
-                    uint16_t mid = 0u;
-                    char     chr;
-                    bool     b_rev;
-                    bool     b_case = true; /* this position fits the kind */
-
-                    for (elem = 0u; elem < n_elems; elem++)
-                    {
-                        widths[elem] = (0u == (elem % 2u))
-                                           ? (widths[elem] + 800u)
-                                           : (widths[elem] - 800u);
-                    }
-                    if (diff)
-                    {
-                        reverse(widths, n_elems);
-                    }
-                    if (0 == kind)
-                    {
-                        if ((at_idx % 2u) != 0u)
-                        {
-                            b_case = false;
-                        } /* a speck in a bar */
-                        else
-                        {
-                            mid =
-                                split_at(widths, n_elems, at_idx, 1000u, accel);
-                        }
-                    }
-                    else if (1 == kind)
-                    {
-                        if ((at_idx > 26u)
-                            || !thin_triplet(widths, at_idx, 3000u))
-                        {
-                            b_case = false;
-                        }
-                        else
-                        {
-                            mid = merge_at(widths, n_elems, at_idx, accel);
-                        }
-                    }
-                    else if (2 == kind)
-                    {
-                        uint16_t const setpoint =
-                            (uint16_t)((at_idx + 12u) % 27u);
-
-                        if ((at_idx > 26u)
-                            || !thin_triplet(widths, at_idx, 3000u)
-                            || ((setpoint % 2u) != 0u)
-                            || (((setpoint + 2u) >= at_idx)
-                                && (setpoint <= (at_idx + 2u))))
-                        {
-                            b_case = false;
-                        }
-                        else
-                        {
-                            mid = merge_at(widths, n_elems, at_idx, buf);
-                            mid = split_at(buf, mid,
-                                           (setpoint < at_idx)
-                                               ? setpoint
-                                               : (uint16_t)(setpoint - 2u),
-                                           1000u, accel);
-                        }
-                    }
-                    else
-                    {
-                        if (((at_idx % 2u) != 0u) || (at_idx < 2u))
-                        {
-                            b_case = false;
-                        } /* first bar lost, speck in a bar */
-                        else
-                        {
-                            mid =
-                                split_at(&widths[2], (uint16_t)(n_elems - 2u),
-                                         (uint16_t)(at_idx - 2u), 1000u, accel);
-                        }
-                    }
-                    if (b_case)
-                    {
-                        ktotal++;
-                    }
-                    if (b_case
-                        && (CODE39_OK
-                            == code39_decode_one_best(accel, mid, &chr,
-                                                      &b_rev)))
-                    {
-                        if (chr == g_data_chars[cnt])
-                        {
-                            kgood++;
-                        }
-                        else
-                        {
-                            wrong++;
-                            printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n",
-                                   kind, g_data_chars[cnt], (uint32_t)at_idx,
-                                   diff, chr);
-                        }
-                    }
-                }
+                best_one(kind, cnt, at_idx, diff, &kcount);
             }
         }
-        printf("best match, %s: %d / %d decoded\n",
-               (0 == kind) ? "split bar"
-                           : ((1 == kind) ? "merged thin pair"
-                                          : ((2 == kind) ? "split + merge"
-                                                         : "end lost + split")),
-               kgood, ktotal);
-        CHECK("S3-H20", (kgood * 100) >= (ktotal
-                                          * (((0 == kind) || (3 == kind))
-                                                 ? 95
-                                                 : ((1 == kind) ? 70 : 60))));
-        good += kgood;
-        total += ktotal;
     }
-    printf("best match: %d / %d decoded, %d wrong\n", good, total, wrong);
-    CHECK("S3-H20", 0 == wrong);
+    printf("best match, %s: %d / %d decoded\n",
+           (0 == kind) ? "split bar"
+                       : ((1 == kind) ? "merged thin pair"
+                                      : ((2 == kind) ? "split + merge"
+                                                     : "end lost + split")),
+           kcount.good, kcount.total);
+    CHECK("S3-H20", (kcount.good * 100) >= (kcount.total
+                                            * (((0 == kind) || (3 == kind))
+                                                   ? 95
+                                                   : ((1 == kind) ? 70 : 60))));
+    p_count->good += kcount.good;
+    p_count->total += kcount.total;
+    p_count->wrong += kcount.wrong;
+}
+
+/** S3-H20: character g_data_chars[cnt] with damage of this kind at at_idx,
+   reversed if diff. */
+static void best_one (int32_t kind, size_t cnt, uint16_t at_idx, int32_t diff,
+                      decode_count_t * p_count)
+{
+    uint32_t widths[29];
+    uint32_t accel[40];
+    uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths);
+    uint16_t elem;
+    uint16_t mid = 0u;
+    char     chr;
+    bool     b_rev;
+    bool     b_case;
+
+    for (elem = 0u; elem < n_elems; elem++)
+    {
+        widths[elem] =
+            (0u == (elem % 2u)) ? (widths[elem] + 800u) : (widths[elem] - 800u);
+    }
+    if (diff)
+    {
+        reverse(widths, n_elems);
+    }
+    b_case = best_damage(kind, widths, n_elems, at_idx, accel, &mid);
+    if (b_case)
+    {
+        p_count->total++;
+    }
+    if (b_case
+        && (CODE39_OK == code39_decode_one_best(accel, mid, &chr, &b_rev)))
+    {
+        if (chr == g_data_chars[cnt])
+        {
+            p_count->good++;
+        }
+        else
+        {
+            p_count->wrong++;
+            printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n", kind,
+                   g_data_chars[cnt], (uint32_t)at_idx, diff, chr);
+        }
+    }
+}
+
+/** S3-H20: damage widths[] at at_idx into accel[] (*p_mid elements);
+   false when this position does not fit the kind. */
+static bool best_damage (int32_t kind, uint32_t widths[29], uint16_t n_elems,
+                         uint16_t at_idx, uint32_t accel[40], uint16_t * p_mid)
+{
+    uint32_t buf[40];
+    uint16_t mid    = 0u;
+    bool     b_case = true; /* this position fits the kind */
+
+    if (0 == kind)
+    {
+        if ((at_idx % 2u) != 0u)
+        {
+            b_case = false;
+        } /* a speck in a bar */
+        else
+        {
+            mid = split_at(widths, n_elems, at_idx, 1000u, accel);
+        }
+    }
+    else if (1 == kind)
+    {
+        if ((at_idx > 26u) || !thin_triplet(widths, at_idx, 3000u))
+        {
+            b_case = false;
+        }
+        else
+        {
+            mid = merge_at(widths, n_elems, at_idx, accel);
+        }
+    }
+    else if (2 == kind)
+    {
+        uint16_t const setpoint = (uint16_t)((at_idx + 12u) % 27u);
+
+        if ((at_idx > 26u) || !thin_triplet(widths, at_idx, 3000u)
+            || ((setpoint % 2u) != 0u)
+            || (((setpoint + 2u) >= at_idx) && (setpoint <= (at_idx + 2u))))
+        {
+            b_case = false;
+        }
+        else
+        {
+            mid = merge_at(widths, n_elems, at_idx, buf);
+            mid = split_at(buf, mid,
+                           (setpoint < at_idx) ? setpoint
+                                               : (uint16_t)(setpoint - 2u),
+                           1000u, accel);
+        }
+    }
+    else
+    {
+        if (((at_idx % 2u) != 0u) || (at_idx < 2u))
+        {
+            b_case = false;
+        } /* first bar lost, speck in a bar */
+        else
+        {
+            mid = split_at(&widths[2], (uint16_t)(n_elems - 2u),
+                           (uint16_t)(at_idx - 2u), 1000u, accel);
+        }
+    }
+    *p_mid = mid;
+    return b_case;
+}
+
+/** Checks S3-H20. */
+static void test_best_h20_part2 (void)
+{
+    size_t cnt;
 
     /* random widths and heavier damage: never accepted as a wrong letter */
     {
@@ -1547,83 +1677,85 @@ static void test_best (void)
         CHECK("S3-H20", (0 == accepted) && (0 == bad));
         (void)tries;
     }
-
-    /* the slide samples through the whole capture with a speck in a wide bar */
-    {
-        int32_t step2;
-        int32_t diff2;
-        int32_t gap2     = 0;
-        int32_t elapsed2 = 0;
-        int32_t w2n      = 0;
-        int32_t pos3     = 0;
-
-        g_spot_um = 300u; /* sharp enough that the speck reads as a gap */
-
-        for (step2 = 0; step2 < N_SLIDES; step2++)
-        {
-            for (diff2 = 0; diff2 < T_DIRECTIONS; diff2++)
-            {
-                uint32_t              widths[29];
-                uint32_t              accel[31];
-                uint32_t              wmin = 0xFFFFFFFFu;
-                uint16_t              kdx;
-                uint16_t              at_idx = 0u;
-                line_barcode_out_t    out;
-                line_barcode_result_t result2;
-
-                for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
-                {
-                    wmin = (vectors_slides_get(step2)->p_w[kdx] < wmin)
-                               ? vectors_slides_get(step2)->p_w[kdx]
-                               : wmin;
-                }
-                for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
-                {
-                    widths[kdx] =
-                        (vectors_slides_get(step2)->p_w[kdx] * 3000u) / wmin;
-                }
-                if (diff2)
-                {
-                    reverse(widths, 29);
-                }
-                for (kdx = T_DATA_FIRST_U; kdx < T_DATA_END_U; kdx += 2u)
-                {
-                    at_idx = (widths[kdx] > widths[at_idx]) ? kdx : at_idx;
-                } /* widest bar of X */
-                (void)split_at(widths, 29, at_idx, 1200u, accel);
-                memset(&out, 0, sizeof(out));
-                result2 = run_pass(accel, 31, 150u, 0, &out);
-                elapsed2++;
-                if ((BC_VALID == result2)
-                    && (out.chr == vectors_slides_get(step2)->chr))
-                {
-                    gap2++;
-                    pos3 += (4u == g_last_pass) ? 1 : 0;
-                }
-                else if (BC_VALID == result2)
-                {
-                    w2n++;
-                }
-                else
-                {
-                    printf("  speck slide %d dir %d: result %d reason %d, %u "
-                           "elements\n",
-                           vectors_slides_get(step2)->slide, diff2,
-                           (int32_t)result2, (int32_t)out.reason,
-                           (uint32_t)out.elements);
-                }
-            }
-        }
-        g_spot_um = 1500u;
-        printf("capture with a speck in a wide bar: %d / %d decoded (%d by "
-               "best match), %d wrong\n",
-               gap2, elapsed2, pos3, w2n);
-        CHECK("S3-H20",
-              (0 == w2n) && ((gap2 * 100) >= (elapsed2 * 90)) && (pos3 > 0));
-    }
 }
 
-/* S3-H21 (9 Nov 00:02-00:17 robot runs): a light print -- wide bars only
+/** Checks S3-H20. */
+static void test_best_h20_part3 (void)
+{
+    int32_t step2;
+    int32_t diff2;
+    int32_t gap2     = 0;
+    int32_t elapsed2 = 0;
+    int32_t w2n      = 0;
+    int32_t pos3     = 0;
+
+    /* the slide samples through the whole capture with a speck in a wide bar */
+    g_spot_um = 300u; /* sharp enough that the speck reads as a gap */
+
+    for (step2 = 0; step2 < N_SLIDES; step2++)
+    {
+        for (diff2 = 0; diff2 < T_DIRECTIONS; diff2++)
+        {
+            uint32_t              widths[29];
+            uint32_t              accel[31];
+            uint32_t              wmin = 0xFFFFFFFFu;
+            uint16_t              kdx;
+            uint16_t              at_idx = 0u;
+            line_barcode_out_t    out;
+            line_barcode_result_t result2;
+
+            for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
+            {
+                wmin = (vectors_slides_get(step2)->p_w[kdx] < wmin)
+                           ? vectors_slides_get(step2)->p_w[kdx]
+                           : wmin;
+            }
+            for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
+            {
+                widths[kdx] =
+                    (vectors_slides_get(step2)->p_w[kdx] * 3000u) / wmin;
+            }
+            if (diff2)
+            {
+                reverse(widths, 29);
+            }
+            for (kdx = T_DATA_FIRST_U; kdx < T_DATA_END_U; kdx += 2u)
+            {
+                at_idx = (widths[kdx] > widths[at_idx]) ? kdx : at_idx;
+            } /* widest bar of X */
+            (void)split_at(widths, 29, at_idx, 1200u, accel);
+            memset(&out, 0, sizeof(out));
+            result2 = run_pass(accel, 31, 150u, 0, &out);
+            elapsed2++;
+            if ((BC_VALID == result2)
+                && (out.chr == vectors_slides_get(step2)->chr))
+            {
+                gap2++;
+                pos3 += (4u == g_last_pass) ? 1 : 0;
+            }
+            else if (BC_VALID == result2)
+            {
+                w2n++;
+            }
+            else
+            {
+                printf("  speck slide %d dir %d: result %d reason %d, %u "
+                       "elements\n",
+                       vectors_slides_get(step2)->slide, diff2,
+                       (int32_t)result2, (int32_t)out.reason,
+                       (uint32_t)out.elements);
+            }
+        }
+    }
+    g_spot_um = 1500u;
+    printf("capture with a speck in a wide bar: %d / %d decoded (%d by "
+           "best match), %d wrong\n",
+           gap2, elapsed2, pos3, w2n);
+    CHECK("S3-H20",
+          (0 == w2n) && ((gap2 * 100) >= (elapsed2 * 90)) && (pos3 > 0));
+}
+
+/** S3-H21 (9 Nov 00:02-00:17 robot runs): a light print -- wide bars only
    ~700-720 / 1000, white ~7, white noise 20-30 -- under a 3-5 mm spot:
    the 3 mm elements swing less than BC_DELTA and the swing reading finds
    13-17 elements.  The adaptive swing (BC_ADAPT_*) over the darkness
@@ -1715,7 +1847,7 @@ static void test_light_print (void)
     CHECK("S3-H21", (0 == wrong) && (by_adapt > 0));
 }
 
-/* S3-H22: Change Requirement 1, the packed line snapshot */
+/** S3-H22: Change Requirement 1, the packed line snapshot */
 static void test_pack_s3 (void)
 {
     line_types_snap_t snap;

@@ -1,6 +1,6 @@
-/*
- *  motion_api.c
- *  Subsystem 2 -- the named motion API.  See motion_api.h.
+/** @file motion_api.c
+ *
+ *  @brief Subsystem 2 -- the named motion API.  See motion_api.h.
  *  Each function checks its range and posts one MOTION_CMD_* command.
  */
 
@@ -52,6 +52,9 @@ motion_api_err_t motion_api_drive (uint8_t src, uint8_t seq, int16_t v_mm_s,
     return subsystem2_post(src, seq, MOTION_CMD_DRIVE, v_mm_s, omega_mrad_s);
 }
 
+/** Check amount against limit and rate against MOTION_API_MAX_RATE, then post
+    cmd with sign applied to amount.  Returns subsystem2_post()'s result, or
+    MOTION_API_E_PAR. */
 static motion_api_err_t post_signed (uint8_t src, uint8_t seq, uint8_t cmd,
                                      int32_t sign, uint16_t amount,
                                      uint16_t limit, uint16_t rate)

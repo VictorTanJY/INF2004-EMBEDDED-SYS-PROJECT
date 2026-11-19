@@ -1,6 +1,6 @@
-/*
- *  drv_ultrasonic.c
- *  Subsystem 5 -- HC-SR04P driver.  See drv_ultrasonic.h.
+/** @file drv_ultrasonic.c
+ *
+ *  @brief Subsystem 5 -- HC-SR04P driver.  See drv_ultrasonic.h.
  */
 
 #include "drv_ultrasonic.h"
@@ -98,7 +98,7 @@ EXPORT bool drv_ultrasonic_take (uint32_t * p_width_us)
 
 #if US_PINS_FREE
 
-/* echo_isr: bank-0 callback on core 1. */
+/** echo_isr: bank-0 callback on core 1. */
 static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
 {
     (void)pin;

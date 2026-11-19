@@ -1,8 +1,8 @@
-/*
- *  subsystem5.c
- *  Subsystem 5 -- Obstacle and mission: kernel objects and snapshots.
+/** @file subsystem5.c
+ *
+ *  @brief Subsystem 5 -- Obstacle and mission: kernel objects and snapshots.
  *  Owner: Buddy 5 (Ryan).  Tasks: mission_task.c,
- * obstacle_task.c. Logic: mission_core.c, obstacle_core.c.
+ *  obstacle_task.c. Logic: mission_core.c, obstacle_core.c.
  */
 
 #include "subsystem5.h"
@@ -13,7 +13,7 @@ static ID g_mbf_mission;
 static ID g_mbf_scan;
 static ID g_flg_obst;
 
-/* Snapshots are stored packed (Change Requirement 1).  The writer packs
+/** Snapshots are stored packed (Change Requirement 1).  The writer packs
    and the readers unpack in their own task; only whole records are copied
    under the lock, so nobody read-modify-writes the shared words. */
 static app_lock_t g_mission_lock;
@@ -212,7 +212,7 @@ EXPORT ID subsystem5_flg_obst (void)
     return g_flg_obst;
 }
 
-/* range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
+/** range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
 static void range_cyc_handler (void * p_exinf)
 {
     (void)p_exinf;

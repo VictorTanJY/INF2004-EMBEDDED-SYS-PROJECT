@@ -1,6 +1,7 @@
-/*
- *  imu_core.c
- *  Subsystem 4 -- ImuTask logic (pure).  See imu_core.h.  Owner: Buddy 4.
+/** @file imu_core.c
+ *
+ *  @brief Subsystem 4 -- ImuTask logic (pure).  See imu_core.h.  Owner:
+ * Buddy 4.
  */
 
 #include <stddef.h>
@@ -337,7 +338,7 @@ uint32_t imu_core_snap_layout_bits (void)
     return app_pack_layout_bits(g_imu_layout, IMU_FIELDS);
 }
 
-/* Low-pass filter (alpha 1/4), mg x 16; accel = the filtered mg.  |a| of
+/** Low-pass filter (alpha 1/4), mg x 16; accel = the filtered mg.  |a| of
    the raw sample for the snapshot. */
 static void acc_filter (imu_core_t * p_ic, int32_t const acc_mg[IMU_AXES],
                         int32_t accel[IMU_AXES])
@@ -365,7 +366,7 @@ static void acc_filter (imu_core_t * p_ic, int32_t const acc_mg[IMU_AXES],
     p_ic->b_have_acc  = true;
 }
 
-/* Attitude.  The forward axis also sees the robot's own acceleration, so
+/** Attitude.  The forward axis also sees the robot's own acceleration, so
    the encoder estimate is subtracted before taking the angle.  Returns the
    up-axis acceleration, mg. */
 static int32_t attitude (imu_core_t * p_ic, int32_t const accel[IMU_AXES])
@@ -391,7 +392,7 @@ static int32_t attitude (imu_core_t * p_ic, int32_t const accel[IMU_AXES])
     return up_mg;
 }
 
-/* Magnetic heading, clockwise from north, once the hard-iron offsets are
+/** Magnetic heading, clockwise from north, once the hard-iron offsets are
    known. */
 static void heading_update (imu_core_t * p_ic, int16_t const mag_raw[IMU_AXES])
 {
@@ -409,7 +410,7 @@ static void heading_update (imu_core_t * p_ic, int16_t const mag_raw[IMU_AXES])
     }
 }
 
-/* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off again
+/** Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off again
    below 25 deg on both axes. */
 static uint8_t tilt_step (imu_core_t * p_ic, uint32_t now_ms)
 {
@@ -454,6 +455,7 @@ static uint8_t tilt_step (imu_core_t * p_ic, uint32_t now_ms)
 }
 
 /* ---- hump sequence ------------------------------------------------------ */
+/** Back to flat ground: forget the hump in progress. */
 static void hump_reset (imu_core_t * p_ic)
 {
     p_ic->hump_state     = IMU_HUMP_FLAT;
@@ -464,6 +466,8 @@ static void hump_reset (imu_core_t * p_ic)
     p_ic->theta_max_cdeg = 0;
 }
 
+/** Add the height gained over ds_um of travel at pitch theta (0.01 deg) and
+    track the peak. */
 static void integrate (imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
 {
     p_ic->h_um += ((int64_t)app_math_sin_q15(theta) * (int64_t)ds_um) / 32768;
@@ -477,6 +481,8 @@ static void integrate (imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
     }
 }
 
+/** Pitch hump detection on forward travel ds_um: climb, crest, descent,
+    height.  Returns IMU_EV_* bits. */
 static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
 {
     int32_t const theta  = p_ic->pitch_cdeg;
@@ -572,6 +578,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
 
 /* ---- one-wheel hump (roll) ------------------------------------------------
  */
+/** Forget the one-wheel (roll) hump in progress. */
 static void side_reset (imu_core_t * p_ic)
 {
     p_ic->side_state     = 0u;
@@ -579,6 +586,7 @@ static void side_reset (imu_core_t * p_ic)
     p_ic->side_peak_cdeg = 0;
 }
 
+/** Record a finished one-wheel hump of height_mm (last and largest). */
 static void side_record (imu_core_t * p_ic, uint16_t height_mm)
 {
     p_ic->last_hump_mm = height_mm;
@@ -589,7 +597,7 @@ static void side_record (imu_core_t * p_ic, uint16_t height_mm)
     p_ic->humps++;
 }
 
-/* Runs on forward travel only, and only while no pitch hump is in
+/** Runs on forward travel only, and only while no pitch hump is in
    progress.  Returns IMU_EV_* bits. */
 static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
 {
@@ -646,7 +654,7 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
 }
 
 /* ---- lift (14 Nov) ------------------------------------------------------ */
-/* up_mg: low-pass filtered up axis.  A lift is the up axis staying
+/** up_mg: low-pass filtered up axis.  A lift is the up axis staying
    IMU_LIFT_RISE_MG above the level calibration's mean for
    IMU_LIFT_HOLD_MS on flat ground (a hump also pushes the robot up).
    While driving, the largest rise of each excursion is kept, and a new
@@ -710,6 +718,8 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
 }
 
 /* ---- classification ------------------------------------------------------ */
+/** Motion class from speed, acceleration, yaw rate and humps: stationary,
+    cruising, accelerating, decelerating, turning, climbing or descending. */
 static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
                          int32_t yaw_cdeg_s)
 {
@@ -754,7 +764,7 @@ static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
     return IMU_MOTION_CRUISING;
 }
 
-/* body-frame value of one raw axis triple */
+/** body-frame value of one raw axis triple */
 static int32_t axis (int32_t const vec[3], int32_t axis_no, int32_t sign)
 {
     return sign * vec[axis_no];

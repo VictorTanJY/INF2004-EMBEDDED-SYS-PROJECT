@@ -1,6 +1,6 @@
-/*
- *  line_barcode.c
- *  Subsystem 3 -- barcode capture.  See line_barcode.h.
+/** @file line_barcode.c
+ *
+ *  @brief Subsystem 3 -- barcode capture.  See line_barcode.h.
  */
 
 #include "line_barcode.h"
@@ -264,7 +264,7 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
     return result;
 }
 
-/* Track the bar / gap level of the barcode reading. */
+/** Track the bar / gap level of the barcode reading. */
 static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
 {
     /* Bars and gaps by SWING (2 Nov): a level change needs the reading to
@@ -297,7 +297,7 @@ static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
     }
 }
 
-/* ARMED: learn the white-paper levels; the first dark reading starts a
+/** ARMED: learn the white-paper levels; the first dark reading starts a
    capture. */
 static void armed (line_barcode_capture_t * p_bc, uint16_t norm,
                    uint32_t step_um)
@@ -327,7 +327,7 @@ static void armed (line_barcode_capture_t * p_bc, uint16_t norm,
     }
 }
 
-/* Start a capture at the first dark reading. */
+/** Start a capture at the first dark reading. */
 static void capture_start (line_barcode_capture_t * p_bc, uint16_t norm,
                            uint32_t step_um)
 {
@@ -353,7 +353,7 @@ static void capture_start (line_barcode_capture_t * p_bc, uint16_t norm,
     pre_reset(p_bc);
 }
 
-/* CAPTURING: record the profile and the elements; decode at the end. */
+/** CAPTURING: record the profile and the elements; decode at the end. */
 static line_barcode_result_t capturing (line_barcode_capture_t * p_bc,
                                         uint16_t norm, uint32_t step_um,
                                         bool                 b_was_black,
@@ -406,7 +406,7 @@ static line_barcode_result_t capturing (line_barcode_capture_t * p_bc,
     return result;
 }
 
-/* Darkness profile, one bin per BC_PROF_BIN_UM of travel; each bin keeps
+/** Darkness profile, one bin per BC_PROF_BIN_UM of travel; each bin keeps
    its darkest reading. */
 static void capture_profile (line_barcode_capture_t * p_bc, uint16_t norm,
                              uint32_t step_um)
@@ -428,7 +428,7 @@ static void capture_profile (line_barcode_capture_t * p_bc, uint16_t norm,
     }
 }
 
-/* Reject the capture (reason: a CODE39_ERR_* code) and cool down. */
+/** Reject the capture (reason: a CODE39_ERR_* code) and cool down. */
 static line_barcode_result_t capture_reject (line_barcode_capture_t * p_bc,
                                              uint8_t                  reason,
                                              line_barcode_out_t *     p_out)
@@ -440,6 +440,7 @@ static line_barcode_result_t capture_reject (line_barcode_capture_t * p_bc,
     return BC_REJECT;
 }
 
+/** Forget the darkness history kept before a capture starts. */
 static void pre_reset (line_barcode_capture_t * p_bc)
 {
     p_bc->pre_n   = 0u;
@@ -448,7 +449,7 @@ static void pre_reset (line_barcode_capture_t * p_bc)
     p_bc->pre_um  = 0u;
 }
 
-/* While armed: keep the darkness record of the last BC_PRE_BINS bins. */
+/** While armed: keep the darkness record of the last BC_PRE_BINS bins. */
 static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
                       uint32_t step_um)
 {
@@ -467,13 +468,14 @@ static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
     }
 }
 
+/** End a capture: ignore the barcode sensor for BC_COOLDOWN_UM of travel. */
 static void start_cooldown (line_barcode_capture_t * p_bc)
 {
     p_bc->state       = LINE_BC_COOLDOWN;
     p_bc->cooldown_um = 0u;
 }
 
-/* Runs (in bins, bar first) to widths: runs shorter than
+/** Runs (in bins, bar first) to widths: runs shorter than
    BC_PROF_MIN_BINS merge into their neighbours (a speck inside a bar or a
    glint inside a space), keeping the bar / space alternation. */
 static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
@@ -509,7 +511,7 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
     return out;
 }
 
-/* Elements found again from the darkness profile at threshold k (1 mid,
+/** Elements found again from the darkness profile at threshold k (1 mid,
    2 low for faint thin bars) against this code's own levels, or k 3 by
    swing sized to this code (BC_ADAPT_*); 0 if none or not useful. */
 static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
@@ -559,7 +561,7 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
                                       (uint16_t)BC_MAX_ELEMENTS);
 }
 
-/* 14 Nov: a speck before the start or after the stop adds a bar and a
+/** 14 Nov: a speck before the start or after the stop adds a bar and a
    space at that end, so the read has 31 or 33 elements and decodes as
    nothing (two car reads of "*A*" on 14 Nov, both with a 1.4 mm bar
    outside the code).  An end bar under BC_SPECK_PCT % of the read's
@@ -605,7 +607,7 @@ static uint16_t trim_specks (uint32_t const * p_w, uint16_t n_elems,
     return (uint16_t)(last - *p_first);
 }
 
-/* Exact decode (with the end repair) of one reading; if it fails, again
+/** Exact decode (with the end repair) of one reading; if it fails, again
    without an end speck.  *p_b_trim says the second one decoded.  The
    first result is returned on failure (NOT_BARCODE must stay itself). */
 static code39_result_t decode_exact (uint32_t const * p_w, uint16_t n_elems,
@@ -632,7 +634,7 @@ static code39_result_t decode_exact (uint32_t const * p_w, uint16_t n_elems,
     return result;
 }
 
-/* The trailing white run ended the code: decode what was captured.
+/** The trailing white run ended the code: decode what was captured.
    7 Nov: the swing reading first; if it does not decode, bars found
    again from the darkness profile against this code's own levels, at
    mid-way and then low for faint thin bars; each reading may also be
@@ -705,7 +707,7 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
     return BC_REJECT;
 }
 
-/* Last pass, best match (8 Nov): the reading whose element count, specks
+/** Last pass, best match (8 Nov): the reading whose element count, specks
    trimmed, is nearest 29 is fitted to every *X*.  true = decoded. */
 static bool best_pass (line_barcode_capture_t * p_bc,
                        uint32_t             read_widths[BC_MAX_ELEMENTS + 1u],

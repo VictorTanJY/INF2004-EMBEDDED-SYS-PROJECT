@@ -8,6 +8,8 @@
 
 #include <tk/tkernel.h>
 
+/** HmiTask: samples both buttons every HMI_PERIOD_MS and posts their events.
+    Created by subsystem1_start(). */
 IMPORT void task_hmi_thread(INT stacd, void * p_exinf);
 
 #endif /* TASK_HMI_H */

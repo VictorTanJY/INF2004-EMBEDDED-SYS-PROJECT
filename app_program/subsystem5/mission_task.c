@@ -1,7 +1,7 @@
-/*
- *  mission_task.c
- *  Subsystem 5 -- MissionTask (priority 8, core 1): the system statechart
- *  (Week 6 Section 5).  Owner: Buddy 5 (Ryan).
+/** @file mission_task.c
+ *
+ *  @brief Subsystem 5 -- MissionTask (priority 8, core 1): the system
+ * statechart (Week 6 Section 5).  Owner: Buddy 5 (Ryan).
  *
  *  Waits on mbf_mission with a 100 ms timeout.  Every event is echoed to
  *  telemetry (mbf_telem), fed to mission_core, and every pass runs the
@@ -20,7 +20,7 @@
 #include "../subsystem3/subsystem3.h"
 #include "../subsystem4/subsystem4.h"
 
-/* mission_core.c hard-codes these two APP_SRC values (pure module). */
+/** mission_core.c hard-codes these two APP_SRC values (pure module). */
 typedef uint8_t s5_check_src_line_t[(3u == APP_SRC_LINE) ? 1 : -1];
 typedef uint8_t s5_check_src_imu_t[(4u == APP_SRC_SAFETY_IMU) ? 1 : -1];
 
@@ -87,7 +87,7 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
     }
 }
 
-/* One motion action through the named API (FR5); SET_AUTH and
+/** One motion action through the named API (FR5); SET_AUTH and
    CLEAR_ESTOP have no named form and use subsystem2_post. */
 static ER mission_motion (mission_core_act_t const * p_a)
 {
@@ -129,6 +129,8 @@ static ER mission_motion (mission_core_act_t const * p_a)
     return err;
 }
 
+/** Carry out the actions the statechart returned: motion commands, scan
+    requests, safety reset, state reports and LOG records. */
 static void run_actions (mission_core_out_t const * p_out)
 {
     uint8_t idx;

@@ -1,6 +1,6 @@
-/*
- *  subsystem3_test.c
- *  On-target tests for subsystem 3.  Built only with: make TEST=1
+/** @file subsystem3_test.c
+ *
+ *  @brief On-target tests for subsystem 3.  Built only with: make TEST=1
  *  Record results in testing/subsystem3/TEST_LOG.md.
  *  Decoding and tracking are tested on a PC (testing/subsystem3/host).
  */
@@ -40,6 +40,7 @@ static line_barcode_capture_t g_t_bc; /* ~3 KB: kept off the task stack */
 #if APP_TEST
 static uint16_t make_star_code(char chr, uint32_t * p_w);
 static uint16_t level_at(uint32_t const * p_w, uint16_t n_elems, uint32_t x_um);
+static void     test_pipeline(test_report_t * p_report);
 #endif
 
 #if APP_TEST
@@ -107,54 +108,7 @@ EXPORT void subsystem3_test_run (void)
                    && (snap_b.raw_bc <= 1000u),
                "100 ADC blocks per second, none lost; readings in 0..1000");
 
-    /* ---- S3-U07: whole barcode pipeline on the target, timed -------- */
-    {
-        uint32_t              widths[29];
-        uint16_t              n_widths = make_star_code('A', widths);
-        uint32_t              x_val;
-        uint32_t              worst_us = 0u;
-        uint32_t              total_us = 0u;
-        uint32_t              samples  = 0u;
-        line_barcode_result_t found    = BC_NONE;
-        uint8_t               results  = 0u;
-        line_barcode_out_t    out_ok   = {0};
-
-        line_barcode_init(&g_t_bc);
-        for (x_val = 0u; x_val < T_TRACK_UM; x_val += T_STEP_UM)
-        {
-            line_barcode_out_t    out     = {0};
-            uint32_t const        t_start = (uint32_t)app_time_us();
-            line_barcode_result_t result  = line_barcode_sample(
-                &g_t_bc, level_at(widths, n_widths, x_val), T_STEP_UM, &out);
-            uint32_t const elapsed = (uint32_t)app_time_us() - t_start;
-
-            total_us += elapsed;
-            samples++;
-            if (elapsed > worst_us)
-            {
-                worst_us = elapsed;
-            }
-            if (result != BC_NONE)
-            {
-                results++;
-                if (BC_NONE == found)
-                {
-                    found  = result;
-                    out_ok = out;
-                }
-            }
-        }
-        tm_printf((UB *)"[INFO] S3-U07 result %d char '%c' pass %d; worst "
-                        "sample %d us, mean %d us over %d samples\n",
-                  (INT)found, (INT)((out_ok.chr != '\0') ? out_ok.chr : '?'),
-                  (INT)g_t_bc.pass, (INT)worst_us, (INT)(total_us / samples),
-                  (INT)samples);
-        TEST_CHECK(&report, "S3-U07",
-                   (BC_VALID == found) && ('A' == out_ok.chr) && (1u == results)
-                       && (worst_us < T_BLOCK_US),
-                   "barcode *A* decodes once through bc_sample; slowest call "
-                   "fits a 10 ms block");
-    }
+    test_pipeline(&report);
 
     test_report_summary(&report, "subsystem3");
 }
@@ -163,6 +117,59 @@ EXPORT void subsystem3_test_run (void)
 
 #if APP_TEST
 
+/** S3-U07: the whole barcode pipeline on the target, timed. */
+static void test_pipeline (test_report_t * p_report)
+{
+    /* ---- S3-U07: whole barcode pipeline on the target, timed -------- */
+    uint32_t              widths[29];
+    uint16_t              n_widths = make_star_code('A', widths);
+    uint32_t              x_val;
+    uint32_t              worst_us = 0u;
+    uint32_t              total_us = 0u;
+    uint32_t              samples  = 0u;
+    line_barcode_result_t found    = BC_NONE;
+    uint8_t               results  = 0u;
+    line_barcode_out_t    out_ok   = {0};
+
+    line_barcode_init(&g_t_bc);
+    for (x_val = 0u; x_val < T_TRACK_UM; x_val += T_STEP_UM)
+    {
+        line_barcode_out_t    out     = {0};
+        uint32_t const        t_start = (uint32_t)app_time_us();
+        line_barcode_result_t result  = line_barcode_sample(
+            &g_t_bc, level_at(widths, n_widths, x_val), T_STEP_UM, &out);
+        uint32_t const elapsed = (uint32_t)app_time_us() - t_start;
+
+        total_us += elapsed;
+        samples++;
+        if (elapsed > worst_us)
+        {
+            worst_us = elapsed;
+        }
+        if (result != BC_NONE)
+        {
+            results++;
+            if (BC_NONE == found)
+            {
+                found  = result;
+                out_ok = out;
+            }
+        }
+    }
+    tm_printf((UB *)"[INFO] S3-U07 result %d char '%c' pass %d; worst "
+                    "sample %d us, mean %d us over %d samples\n",
+              (INT)found, (INT)((out_ok.chr != '\0') ? out_ok.chr : '?'),
+              (INT)g_t_bc.pass, (INT)worst_us, (INT)(total_us / samples),
+              (INT)samples);
+    TEST_CHECK(p_report, "S3-U07",
+               (BC_VALID == found) && ('A' == out_ok.chr) && (1u == results)
+                   && (worst_us < T_BLOCK_US),
+               "barcode *A* decodes once through bc_sample; slowest call "
+               "fits a 10 ms block");
+}
+
+/** Element widths (um) of the barcode *chr* into p_w: narrow 3 mm, wide 9 mm.
+    Returns how many. */
 static uint16_t make_star_code (char chr, uint32_t * p_w)
 {
     char const seq[3]  = {'*', chr, '*'};
@@ -187,6 +194,8 @@ static uint16_t make_star_code (char chr, uint32_t * p_w)
     return n_elems;
 }
 
+/** Simulated barcode sensor reading at x_um along a track carrying the code
+    p_w after T_LEAD_UM of white. */
 static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
 {
     uint32_t pos = T_LEAD_UM;

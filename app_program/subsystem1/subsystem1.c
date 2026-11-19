@@ -1,6 +1,6 @@
-/*
- *  subsystem1.c
- *  Subsystem 1 -- Comms and HMI: creates mbf_telem and starts HmiTask.
+/** @file subsystem1.c
+ *
+ *  @brief Subsystem 1 -- Comms and HMI: creates mbf_telem and starts HmiTask.
  *  Owner: Buddy 1 (Victor).
  *
  *  CommsTask is not created here: it is the template's WiFi service task

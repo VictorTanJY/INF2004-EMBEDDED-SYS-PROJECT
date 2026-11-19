@@ -1,6 +1,6 @@
-/*
- *  mission_cfg.h
- *  Subsystem 5 -- mission and obstacle tuning.  Owner: Buddy 5.
+/** @file mission_cfg.h
+ *
+ *  @brief Subsystem 5 -- mission and obstacle tuning.  Owner: Buddy 5.
  *  Values marked MEASURE are placeholders (A11, A12, NFR6, FR11).
  *  Pure C header.
  */

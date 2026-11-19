@@ -1,6 +1,6 @@
-/*
- *  mission_types.h
- *  Subsystem 5 -- system states, mission events, scan requests and the
+/** @file mission_types.h
+ *
+ *  @brief Subsystem 5 -- system states, mission events, scan requests and the
  *  mission / obstacle snapshots (IF-06, IF-09, IF-10).
  *  Owner: Buddy 5 (Ryan).  Pure C (no kernel).
  */
@@ -71,10 +71,10 @@ typedef uint8_t mission_types_ev_t; /* one of the constants below */
 
 typedef struct
 {
-    uint8_t  type;     /* mission_types_ev_t                          */
-    uint8_t  src;      /* APP_SRC_*                             */
-    uint16_t arg;      /* small argument (seq, param id, ...)   */
-    int32_t  data;     /* see mission_types_ev_t                      */
+    uint8_t  type;     /**< mission_types_ev_t                          */
+    uint8_t  src;      /**< APP_SRC_*                             */
+    uint16_t arg;      /**< small argument (seq, param id, ...)   */
+    int32_t  data;     /**< see mission_types_ev_t                      */
 } mission_types_evt_t; /* 8 bytes */
 
 /* ---------------------------------------------------------------------
@@ -94,7 +94,7 @@ typedef uint8_t mission_types_nav_t; /* one of the constants below */
 #define MISSION_NAV_COUNT    4u
 #define MISSION_NAV_NONE     0xFFu
 
-/* MissionTask's own fault causes (mission_types_snap_t.cause), besides
+/** MissionTask's own fault causes (mission_types_snap_t.cause), besides
  * SafetyTask's.
  */
 typedef uint8_t mission_types_cause_t; /* one of the constants below */
@@ -113,7 +113,7 @@ typedef uint8_t mission_types_cause_t; /* one of the constants below */
 #define MISSION_CAL_IMU 0x02u
 #define MISSION_CAL_ALL (MISSION_CAL_IR | MISSION_CAL_IMU)
 
-/* mission_types_snap_t.cal_phase: what CALIBRATING asks the sensor tasks to do
+/** mission_types_snap_t.cal_phase: what CALIBRATING asks the sensor tasks to do
  */
 typedef uint8_t mission_types_cal_phase_t; /* one of the constants below */
 #define MISSION_CAL_PH_NONE   0u
@@ -128,22 +128,23 @@ typedef uint8_t mission_types_cal_phase_t; /* one of the constants below */
 typedef struct
 {
     uint32_t t_ms;
-    uint32_t fault_bits;     /* SAFETY_FLT_* bits of the last FAULT    */
-    uint16_t cruise_mm_s;    /* line-following speed (param 1)         */
-    uint16_t speed_cap_mm_s; /* current cap: slow-down / hump / nav    */
-    uint16_t slow_mm;        /* obstacle slow-down range (param 2)     */
-    uint16_t stop_mm;        /* obstacle stop range (param 3)          */
-    uint16_t lost_mm;        /* line-lost length (param 4)             */
-    uint16_t junction_mm;    /* junction length (param 5)              */
-    uint16_t runs;           /* runs started since boot                */
-    uint8_t  state;          /* mission_types_state_t                        */
-    uint8_t  auth;           /* motion_types_src_t granted to MotionTask     */
-    uint8_t pending_nav; /* mission_types_nav_t latched for the next junction */
-    char    pending_char; /* the barcode character that set it, 0 = none */
-    char    nav_map[MISSION_NAV_COUNT]; /* 0 = not mapped yet          */
-    uint8_t calibrated; /* MISSION_CAL_* bits                     */
-    uint8_t cal_phase;  /* mission_types_cal_phase_t                    */
-    uint8_t cause;      /* mission_types_cause_t of the last FAULT      */
+    uint32_t fault_bits;     /**< SAFETY_FLT_* bits of the last FAULT    */
+    uint16_t cruise_mm_s;    /**< line-following speed (param 1)         */
+    uint16_t speed_cap_mm_s; /**< current cap: slow-down / hump / nav    */
+    uint16_t slow_mm;        /**< obstacle slow-down range (param 2)     */
+    uint16_t stop_mm;        /**< obstacle stop range (param 3)          */
+    uint16_t lost_mm;        /**< line-lost length (param 4)             */
+    uint16_t junction_mm;    /**< junction length (param 5)              */
+    uint16_t runs;           /**< runs started since boot                */
+    uint8_t  state; /**< mission_types_state_t                        */
+    uint8_t  auth;  /**< motion_types_src_t granted to MotionTask     */
+    uint8_t
+         pending_nav;  /**< mission_types_nav_t latched for the next junction */
+    char pending_char; /**< the barcode character that set it, 0 = none */
+    char nav_map[MISSION_NAV_COUNT]; /**< 0 = not mapped yet          */
+    uint8_t calibrated; /**< MISSION_CAL_* bits                     */
+    uint8_t cal_phase;  /**< mission_types_cal_phase_t                    */
+    uint8_t cause;      /**< mission_types_cause_t of the last FAULT      */
     uint8_t reserved;
 } mission_types_snap_t;
 
@@ -162,7 +163,7 @@ typedef uint8_t mission_types_scan_code_t; /* one of the constants below */
 
 typedef struct
 {
-    uint8_t type; /* mission_types_scan_code_t */
+    uint8_t type; /**< mission_types_scan_code_t */
     uint8_t seq;
     int16_t param;
 } mission_types_scan_req_t; /* 4 bytes */
@@ -198,19 +199,19 @@ typedef uint8_t mission_types_obst_state_t; /* one of the constants below */
 typedef struct
 {
     uint32_t t_ms;
-    uint32_t pings;      /* pings sent since boot                  */
-    uint16_t d_mm;       /* last median range ahead; NONE = no target */
-    uint16_t w_mm;       /* profiled width (beam-corrected)        */
-    uint16_t closest_mm; /* closest profiled point                 */
-    uint16_t clr_l_mm;   /* free space beside each edge            */
+    uint32_t pings;      /**< pings sent since boot                  */
+    uint16_t d_mm;       /**< last median range ahead; NONE = no target */
+    uint16_t w_mm;       /**< profiled width (beam-corrected)        */
+    uint16_t closest_mm; /**< closest profiled point                 */
+    uint16_t clr_l_mm;   /**< free space beside each edge            */
     uint16_t clr_r_mm;
-    int16_t  left_lat_mm;  /* lateral position of the left edge      */
-    int16_t  right_lat_mm; /* ... and of the right edge              */
-    uint16_t no_echo;      /* consecutive pings with no echo         */
-    uint8_t  valid;        /* 1 = profile fields valid               */
-    uint8_t  plan;    /* mission_types_obst_plan_t                            */
-    uint8_t  state;   /* mission_types_obst_state_t                           */
-    uint8_t  retries; /* reverse-and-rescan attempts            */
+    int16_t  left_lat_mm;  /**< lateral position of the left edge      */
+    int16_t  right_lat_mm; /**< ... and of the right edge              */
+    uint16_t no_echo;      /**< consecutive pings with no echo         */
+    uint8_t  valid;        /**< 1 = profile fields valid               */
+    uint8_t  plan;  /**< mission_types_obst_plan_t                            */
+    uint8_t  state; /**< mission_types_obst_state_t                           */
+    uint8_t  retries; /**< reverse-and-rescan attempts            */
 } mission_types_obst_snap_t;
 
 #endif /* MISSION_TYPES_H */

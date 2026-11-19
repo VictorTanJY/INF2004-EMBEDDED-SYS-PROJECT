@@ -1,6 +1,6 @@
-/*
- *  imu_cfg.h
- *  Subsystem 4 -- IMU mounting, hump detection and safety tuning.
+/** @file imu_cfg.h
+ *
+ *  @brief Subsystem 4 -- IMU mounting, hump detection and safety tuning.
  *  Owner: Buddy 4.  Values marked MEASURE are placeholders (A8, A9).
  *  Pure C header.
  */

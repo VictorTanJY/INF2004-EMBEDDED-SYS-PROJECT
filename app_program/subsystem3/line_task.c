@@ -1,18 +1,18 @@
-/*
- *  line_task.c
- *  Subsystem 3 -- LineBarcodeTask (priority 7, core 1), woken by
+/** @file line_task.c
+ *
+ *  @brief Subsystem 3 -- LineBarcodeTask (priority 7, core 1), woken by
  *  adc_dma_isr every 10 ms (Week 6 Sections 3 and 6.2).  Owner: Buddy 3.
  *
  *  Every block (10 samples per channel):
- *    1. heartbeat; take the block; count missed blocks (NFR2);
- *    2. CALIBRATING: record min/max during the spin, finish on request;
- *    3. region B: feed the 10 barcode samples, with the distance the
- *       barcode sensor moved per sample, to the capture state machine;
- *       a valid read posts BARCODE(character) -- MissionTask decides from
- *       the MQTT map whether it is a command;
- *    4. region A: steering error, junction / gap / lost; post events;
- *    5. while holding LINE authority in LINE_FOLLOW: DRIVE(v, omega);
- *    6. publish the line snapshot.
+ *  1. heartbeat; take the block; count missed blocks (NFR2);
+ *  2. CALIBRATING: record min/max during the spin, finish on request;
+ *  3. region B: feed the 10 barcode samples, with the distance the
+ *  barcode sensor moved per sample, to the capture state machine;
+ *  a valid read posts BARCODE(character) -- MissionTask decides from
+ *  the MQTT map whether it is a command;
+ *  4. region A: steering error, junction / gap / lost; post events;
+ *  5. while holding LINE authority in LINE_FOLLOW: DRIVE(v, omega);
+ *  6. publish the line snapshot.
  */
 
 #include "line_task.h"
@@ -77,17 +77,17 @@
 /* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
 #define LINE_LOG_SLIP_DIAG 45u
 
-/* LineBarcodeTask's state, kept from one block to the next. */
+/** LineBarcodeTask's state, kept from one block to the next. */
 typedef struct
 {
     line_types_snap_t snap;
     uint32_t          last_seq;
     bool              b_hw_ok;
     bool              b_cal_active;
-    bool              b_all_black; /* 14 Nov: all three IR sensors black now */
-    bool              b_no_floor;  /* ...for LINE_NOFLOOR_UM: lifted         */
-    uint32_t          nofloor_um;
-    uint8_t           drive_seq;
+    bool     b_all_black; /**< 14 Nov: all three IR sensors black now */
+    bool     b_no_floor;  /**< ...for LINE_NOFLOOR_UM: lifted         */
+    uint32_t nofloor_um;
+    uint8_t  drive_seq;
 } line_task_state_t;
 
 static line_track_cal_t       g_cal;
@@ -125,7 +125,7 @@ static void line_snapshot(line_task_state_t *         p_st,
 EXPORT void line_task_thread (INT stacd, void * p_exinf)
 {
     uint16_t          block[DRV_ADC_BLOCK_LEN];
-    line_task_state_t st = {0};
+    line_task_state_t state = {0};
     uint32_t          seq;
 
     (void)stacd;
@@ -134,33 +134,33 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
     timing_pin_init();
     line_track_init(&g_trk);
     line_barcode_init(&g_bc);
-    st.b_hw_ok = (E_OK == drv_adc_init());
+    state.b_hw_ok = (E_OK == drv_adc_init());
     /* tk_get_tid(): on SMP this task may run before subsystem3_start()
        has its ID */
-    st.b_hw_ok = st.b_hw_ok && (E_OK == drv_adc_start(tk_get_tid()));
+    state.b_hw_ok = state.b_hw_ok && (E_OK == drv_adc_start(tk_get_tid()));
 
     for (;;)
     {
         (void)tk_slp_tsk(LINE_WAKE_TIMEOUT_MS);
         subsystem4_heartbeat(SAFETY_HB_LINE);
 
-        if (!st.b_hw_ok || !drv_adc_get_block(block, &seq)
-            || (seq == st.last_seq))
+        if (!state.b_hw_ok || !drv_adc_get_block(block, &seq)
+            || (seq == state.last_seq))
         {
-            st.snap.t_ms = (uint32_t)app_time_ms();
-            st.snap.flags =
-                (uint8_t)((st.snap.flags & (uint8_t)~LINE_FLAG_HW_OK)
-                          | (st.b_hw_ok ? LINE_FLAG_HW_OK : 0u));
-            subsystem3_put_snap(&st.snap);
+            state.snap.t_ms = (uint32_t)app_time_ms();
+            state.snap.flags =
+                (uint8_t)((state.snap.flags & (uint8_t)~LINE_FLAG_HW_OK)
+                          | (state.b_hw_ok ? LINE_FLAG_HW_OK : 0u));
+            subsystem3_put_snap(&state.snap);
         }
         else
         {
-            line_block(&st, block, seq);
+            line_block(&state, block, seq);
         }
     }
 }
 
-/* One new block of DRV_ADC_BLOCK_LEN samples (sequence number seq). */
+/** One new block of DRV_ADC_BLOCK_LEN samples (sequence number seq). */
 static void line_block (line_task_state_t * p_st,
                         uint16_t const block[DRV_ADC_BLOCK_LEN], uint32_t seq)
 {
@@ -230,7 +230,7 @@ static void line_block (line_task_state_t * p_st,
     line_snapshot(p_st, &odom);
 }
 
-/* Calibration spin: record the levels and the line crossings. */
+/** Calibration spin: record the levels and the line crossings. */
 static void line_cal_spin (line_task_state_t *         p_st,
                            uint16_t const              block[DRV_ADC_BLOCK_LEN],
                            motion_types_odom_t const * p_odom)
@@ -256,7 +256,7 @@ static void line_cal_spin (line_task_state_t *         p_st,
                            (uint16_t)(cross_right / LINE_SAMPLES_PER_BLOCK));
 }
 
-/* Calibration finished: levels, turn slip, report CAL_DONE. */
+/** Calibration finished: levels, turn slip, report CAL_DONE. */
 static void line_cal_finish (line_task_state_t * p_st)
 {
     bool const b_ok = line_track_cal_finish(&g_cal);
@@ -286,7 +286,7 @@ static void line_cal_finish (line_task_state_t * p_st)
                                   (uint16_t)APP_SRC_LINE, b_ok ? 1 : 0);
 }
 
-/* Barcode region: feed every sample to the capture state machine, and sum
+/** Barcode region: feed every sample to the capture state machine, and sum
    each channel for the line region. */
 static void line_barcode_block (line_task_state_t * p_st,
                                 uint16_t const      block[DRV_ADC_BLOCK_LEN],
@@ -310,7 +310,7 @@ static void line_barcode_block (line_task_state_t * p_st,
     }
 }
 
-/* One barcode sample (raw reading bc_raw; the sensor moved step_um). */
+/** One barcode sample (raw reading bc_raw; the sensor moved step_um). */
 static void line_barcode_one (line_task_state_t * p_st, uint16_t bc_raw,
                               uint32_t step_um)
 {
@@ -362,7 +362,7 @@ static void line_barcode_one (line_task_state_t * p_st, uint16_t bc_raw,
     }
 }
 
-/* Line region: block means, steering error, junction / lost / found. */
+/** Line region: block means, steering error, junction / lost / found. */
 static void line_region (line_task_state_t *          p_st,
                          uint32_t const               sum[LINE_CH_COUNT],
                          motion_types_odom_t const *  p_odom,
@@ -409,7 +409,7 @@ static void line_region (line_task_state_t *          p_st,
     }
 }
 
-/* Published in the snapshot (LINE_SENS_NO_FLOOR); ImuTask undoes the
+/** Published in the snapshot (LINE_SENS_NO_FLOOR); ImuTask undoes the
    humps measured in the air and then sets SAFETY_FLT_LIFT. */
 static void line_no_floor (line_task_state_t *         p_st,
                            motion_types_odom_t const * p_odom)
@@ -440,7 +440,7 @@ static void line_no_floor (line_task_state_t *         p_st,
     }
 }
 
-/* Publish the line snapshot. */
+/** Publish the line snapshot. */
 static void line_snapshot (line_task_state_t *         p_st,
                            motion_types_odom_t const * p_odom)
 {
@@ -465,7 +465,7 @@ static void line_snapshot (line_task_state_t *         p_st,
     subsystem3_put_snap(&p_st->snap);
 }
 
-/* LOG 35 / 36 for the capture that was just rejected (still in g_bc). */
+/** LOG 35 / 36 for the capture that was just rejected (still in g_bc). */
 static void bc_reject_detail (line_barcode_capture_t const * p_bc)
 {
     uint32_t const len_mm =
@@ -495,7 +495,7 @@ static void bc_reject_detail (line_barcode_capture_t const * p_bc)
                                 (int32_t)((w_min << 16) | w_max));
 }
 
-/* LOG 76 and 75 for the capture that was just rejected (still in g_bc). */
+/** LOG 76 and 75 for the capture that was just rejected (still in g_bc). */
 static void bc_widths_log (line_barcode_capture_t const * p_bc)
 {
     static uint32_t widths[BC_MAX_ELEMENTS + 1u];
@@ -549,7 +549,7 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
     }
 }
 
-/* LOG 73 for the capture that just ended (still in g_bc). */
+/** LOG 73 for the capture that just ended (still in g_bc). */
 static void bc_levels_log (line_barcode_capture_t const * p_bc)
 {
     uint32_t const noise =
@@ -563,6 +563,7 @@ static void bc_levels_log (line_barcode_capture_t const * p_bc)
                   | (uint32_t)app_types_min_i32(p_bc->peak, 1023)));
 }
 
+/** With APP_TIMING_PINS, make S3_PIN_TIMING an output for the oscilloscope. */
 static void timing_pin_init (void)
 {
 #if APP_TIMING_PINS
@@ -572,6 +573,7 @@ static void timing_pin_init (void)
 #endif
 }
 
+/** With APP_TIMING_PINS, toggle S3_PIN_TIMING once per block. */
 static void timing_pin_toggle (void)
 {
 #if APP_TIMING_PINS
@@ -579,7 +581,7 @@ static void timing_pin_toggle (void)
 #endif
 }
 
-/* Barcode sensor ground speed in um per 1 ms sample (= mm/s). */
+/** Barcode sensor ground speed in um per 1 ms sample (= mm/s). */
 static uint32_t bc_step_um (motion_types_odom_t const * p_odom)
 {
     /* yaw [cdeg/s] x pi / 18000 x offset [mm] = mm/s; offset + right, so a left

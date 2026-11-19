@@ -1,6 +1,6 @@
-/*
- *  subsystem5_test.c
- *  On-target tests for subsystem 5.  Built only with: make TEST=1
+/** @file subsystem5_test.c
+ *
+ *  @brief On-target tests for subsystem 5.  Built only with: make TEST=1
  *  Record results in testing/subsystem5/TEST_LOG.md.
  *  The statechart and geometry are tested on a PC (testing/subsystem5/host).
  *

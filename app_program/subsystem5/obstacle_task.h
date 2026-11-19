@@ -9,6 +9,8 @@
 
 #include <tk/tkernel.h>
 
+/** ObstacleTask: ultrasonic monitor, servo scans and the bypass.  Created by
+    subsystem5_start(). */
 IMPORT void obstacle_task_thread(INT stacd, void * p_exinf);
 
 #endif /* OBSTACLE_TASK_H */

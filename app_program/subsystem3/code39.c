@@ -1,6 +1,6 @@
-/*
- *  code39.c
- *  Subsystem 3 -- Code 39 decoder.  See code39.h.
+/** @file code39.c
+ *
+ *  @brief Subsystem 3 -- Code 39 decoder.  See code39.h.
  */
 
 #include <stddef.h>
@@ -15,7 +15,7 @@
 typedef struct
 {
     char         chr;
-    char const * p_bits; /* 9 elements, bar first: 1 = wide */
+    char const * p_bits; /**< 9 elements, bar first: 1 = wide */
 } code39_entry_t;
 
 #define TABLE_LEN (sizeof(g_code39_table) / sizeof(g_code39_table[0]))
@@ -50,34 +50,34 @@ typedef struct
 #define BEST_INF        0x3FFFFFFFu
 #define BEST_BOUND_MAX  (((BEST_ELEM_MAX * BEST_T) * BEST_MARGIN_X10) / 10u)
 
-/* Best match: the measured read, shared by every template fitted to it. */
+/** Best match: the measured read, shared by every template fitted to it. */
 typedef struct
 {
-    uint32_t const * p_w;     /* measured widths                    */
-    uint16_t         n_elems; /* ... how many                       */
-    uint32_t const * p_lv;    /* bar n, bar W, space n, space W      */
-    bool const *     p_speck; /* measured element is a speck        */
-    uint32_t         inv;     /* (100 << 16) / narrow width         */
+    uint32_t const * p_w;     /**< measured widths                    */
+    uint16_t         n_elems; /**< ... how many                       */
+    uint32_t const * p_lv;    /**< bar n, bar W, space n, space W      */
+    bool const *     p_speck; /**< measured element is a speck        */
+    uint32_t         inv;     /**< (100 << 16) / narrow width         */
 } best_fit_in_t;
 
-/* Best match: the best character so far and the runner-up's cost. */
+/** Best match: the best character so far and the runner-up's cost. */
 typedef struct
 {
-    uint32_t best_cost; /* best cost and its character         */
-    uint32_t next_cost; /* best cost of any other character    */
+    uint32_t best_cost; /**< best cost and its character         */
+    uint32_t next_cost; /**< best cost of any other character    */
     char     ch1;
     bool     b_rev1;
 } best_rank_t;
 
-/* Best match: the edit-distance tables (5.2 KB, kept off the stack). */
+/** Best match: the edit-distance tables (5.2 KB, kept off the stack). */
 typedef struct
 {
     uint32_t cost[BEST_N_MAX + 1u][BEST_T + 1u];
     uint8_t  edits[BEST_N_MAX + 1u][BEST_T + 1u];
-    uint32_t rmin[BEST_N_MAX + 1u]; /* smallest cost in each row */
+    uint32_t rmin[BEST_N_MAX + 1u]; /**< smallest cost in each row */
 } best_tables_t;
 
-/* Code 39 character set (ISO/IEC 16388), element order b s b s b s b s b. */
+/** Code 39 character set (ISO/IEC 16388), element order b s b s b s b s b. */
 static code39_entry_t const g_code39_table[] = {
     {'0', "000110100"}, {'1', "100100001"}, {'2', "001100001"},
     {'3', "101100000"}, {'4', "000110001"}, {'5', "100110000"},
@@ -217,7 +217,7 @@ code39_result_t code39_decode_one (uint32_t const * p_widths, uint16_t n_elems,
 }
 
 /* ---- one element pair lost at an end (7 Nov) ----------------------- */
-/* A read one bar short at either end still decodes: the start '*' begins
+/** A read one bar short at either end still decodes: the start '*' begins
    (narrow bar, wide space) and the stop '*' ends (narrow space, narrow
    bar); a missed end bar takes its neighbouring space into the quiet
    zone, so 2 elements are gone.  Each of the four ways of putting them
@@ -356,7 +356,7 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
     return CODE39_OK;
 }
 
-/* Best match: fit the template *X* for one character X, both ways round. */
+/** Best match: fit the template *X* for one character X, both ways round. */
 static void best_try_char (best_fit_in_t const *  p_fit,
                            code39_entry_t const * p_entry, best_rank_t * p_rank)
 {
@@ -383,7 +383,7 @@ static void best_try_char (best_fit_in_t const *  p_fit,
     }
 }
 
-/* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces.  Expected
+/** *X*: start, gap, X, gap, stop -- the gaps are narrow spaces.  Expected
    width (from the four levels) and wide flag of each of the BEST_T
    elements. */
 static void best_template (uint16_t pat, uint32_t const levels[4],
@@ -404,7 +404,7 @@ static void best_template (uint16_t pat, uint32_t const levels[4],
     }
 }
 
-/* Reverse the template in place (a barcode read backwards). */
+/** Reverse the template in place (a barcode read backwards). */
 static void best_reverse (uint32_t expect[BEST_T], bool b_wide[BEST_T])
 {
     uint8_t kdx;
@@ -421,7 +421,7 @@ static void best_reverse (uint32_t expect[BEST_T], bool b_wide[BEST_T])
     }
 }
 
-/* Keep the best cost with its character and direction, and the best cost
+/** Keep the best cost with its character and direction, and the best cost
    of any other character. */
 static void best_rank (best_rank_t * p_rank, uint32_t cost, char chr,
                        bool b_rev)
@@ -446,6 +446,7 @@ static void best_rank (best_rank_t * p_rank, uint32_t cost, char chr,
     }
 }
 
+/** Pattern of a table entry: its 9 elements as bits, bar first, 1 = wide. */
 static uint16_t bits_of (char const * p_bits)
 {
     uint16_t pattern = 0u;
@@ -458,14 +459,14 @@ static uint16_t bits_of (char const * p_bits)
     return pattern;
 }
 
-/* Width of element k, read forwards or backwards. */
+/** Width of element k, read forwards or backwards. */
 static uint32_t width_at (uint32_t const * p_w, uint16_t n_elems, uint16_t pos,
                           bool b_rev)
 {
     return b_rev ? p_w[(n_elems - 1u) - pos] : p_w[pos];
 }
 
-/* The k-th widest (k = 0, 1, ...) of the elements of one kind: bars at
+/** The k-th widest (k = 0, 1, ...) of the elements of one kind: bars at
    even indexes 0..8, spaces at odd ones 1..7. */
 static uint32_t kth_widest (uint32_t const * p_w, uint8_t first, uint8_t rank,
                             uint8_t * p_idx)
@@ -494,7 +495,7 @@ static uint32_t kth_widest (uint32_t const * p_w, uint8_t first, uint8_t rank,
     return best;
 }
 
-/* Classify one character's 9 elements (7 Nov): bars and spaces are ranked
+/** Classify one character's 9 elements (7 Nov): bars and spaces are ranked
    SEPARATELY, the 2 widest bars and the widest space being wide, each
    standing out from the rest of its kind by ratio_min.  Under the sensor's
    spot black reads wider and white narrower, so ranking all 9 together
@@ -565,6 +566,9 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
     return CODE39_OK;
 }
 
+/** Decode the characters of a read in one direction (b_rev: reversed) into
+    p_text, wide/narrow split at ratio_min_x10 / 10.  Returns CODE39_OK or the
+    first error. */
 static code39_result_t decode_dir (uint32_t const * p_w, uint16_t n_elems,
                                    uint16_t ratio_min_x10, bool b_rev,
                                    char * p_text)
@@ -611,6 +615,7 @@ static code39_result_t decode_dir (uint32_t const * p_w, uint16_t n_elems,
     return CODE39_OK;
 }
 
+/** Median of n_elems values; sorts p_v in place. */
 static uint32_t median_of (uint32_t * p_v, uint16_t n_elems)
 {
     uint16_t idx;
@@ -629,7 +634,7 @@ static uint32_t median_of (uint32_t * p_v, uint16_t n_elems)
     return (0u == n_elems) ? 0u : p_v[n_elems / 2u];
 }
 
-/* This read's widths of narrow and wide bars and spaces: the median
+/** This read's widths of narrow and wide bars and spaces: the median
    narrow and wide of each kind, split half-way between the median of
    all elements (most are narrow) and the median of the widest third. */
 static void best_levels (uint32_t const * p_w, uint16_t n_elems,
@@ -671,7 +676,7 @@ static void best_levels (uint32_t const * p_w, uint16_t n_elems,
     }
 }
 
-/* Width error squared in hundredths of a narrow; inv = 100 x 65536 / narrow.
+/** Width error squared in hundredths of a narrow; inv = 100 x 65536 / narrow.
    Multiply and shift only: the Cortex-M0+ has no 64-bit divide, and this
    runs about 50 000 times per read. */
 static uint32_t sq_err (uint32_t meas, uint32_t expect, uint32_t inv)
@@ -687,6 +692,8 @@ static uint32_t sq_err (uint32_t meas, uint32_t expect, uint32_t inv)
     return (scaled > 1000u) ? 1000000u : (scaled * scaled);
 }
 
+/** True if measured index idx and printed index jdx are close enough for the
+    best-match table (BEST_BAND). */
 static bool in_band (uint16_t idx, uint16_t jdx)
 {
     uint16_t const diff =
@@ -695,6 +702,8 @@ static bool in_band (uint16_t idx, uint16_t jdx)
     return (diff <= BEST_BAND);
 }
 
+/** True if a measured element is a speck: thinner than BEST_SPECK_PCT % of a
+    narrow element of its kind (bar or space, by idx). */
 static bool is_speck (uint32_t width, uint16_t idx, uint32_t const * p_lv)
 {
     uint32_t const narrow = p_lv[((idx % 2u) != 0u) ? 2u : 0u];
@@ -702,7 +711,7 @@ static bool is_speck (uint32_t width, uint16_t idx, uint32_t const * p_lv)
     return ((uint64_t)width * 100u) < ((uint64_t)narrow * BEST_SPECK_PCT);
 }
 
-/* Cost of lining p_w up with the printed widths p_e (BEST_T of them);
+/** Cost of lining p_w up with the printed widths p_e (BEST_T of them);
    p_wide: printed element wide; p_speck: measured element is a speck.
    14 Nov: gives up (BEST_INF) once every open path costs bound or more:
    such a fit can change neither the best nor the runner-up (a car read
@@ -758,7 +767,7 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
     return best;
 }
 
-/* Every defect moves the two indexes apart by 2, so only a band of cells
+/** Every defect moves the two indexes apart by 2, so only a band of cells
    can be reached; only those are used. */
 static void best_clear (uint16_t n_elems)
 {
@@ -781,7 +790,7 @@ static void best_clear (uint16_t n_elems)
     g_bt.edits[0][2] = 1u;
 }
 
-/* The three steps out of the filled cell (idx measured, jdx printed). */
+/** The three steps out of the filled cell (idx measured, jdx printed). */
 static void best_steps (best_fit_in_t const * p_fit, uint32_t const * p_e,
                         bool const * p_wide, uint16_t idx, uint16_t jdx)
 {
@@ -820,7 +829,7 @@ static void best_steps (best_fit_in_t const * p_fit, uint32_t const * p_e,
     }
 }
 
-/* A path reaches cell (idx, jdx) at this cost with this many edits: keep
+/** A path reaches cell (idx, jdx) at this cost with this many edits: keep
    it if it is cheaper. */
 static void best_relax (uint32_t idx, uint32_t jdx, uint32_t cost,
                         uint8_t edits)

@@ -9,6 +9,8 @@
 
 #include <tk/tkernel.h>
 
+/** MissionTask: the system statechart; decides which task has motion
+    authority.  Created by subsystem5_start(). */
 IMPORT void mission_task_thread(INT stacd, void * p_exinf);
 
 #endif /* MISSION_TASK_H */

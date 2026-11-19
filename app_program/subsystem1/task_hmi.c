@@ -1,6 +1,6 @@
-/*
- *  task_hmi.c
- *  Subsystem 1 -- HmiTask: the two Robo Pico buttons (FR16).
+/** @file task_hmi.c
+ *
+ *  @brief Subsystem 1 -- HmiTask: the two Robo Pico buttons (FR16).
  *  Owner: Buddy 1 (Victor).
  *
  *  Priority 11, core 0, periodic 20 ms (tk_dly_tsk): a human timescale,
@@ -8,9 +8,9 @@
  *  MissionTask (subsystem 5) owns the state machine and decides what each
  *  event means in the current state.
  *
- *    GP20 BTN_START  press               -> MISSION_EV_BTN_START_STOP
- *    GP21 BTN_MODE   short press         -> MISSION_EV_BTN_CALIBRATE
- *                    held >= 2 s         -> MISSION_EV_BTN_RESET (fault reset)
+ *  GP20 BTN_START  press               -> MISSION_EV_BTN_START_STOP
+ *  GP21 BTN_MODE   short press         -> MISSION_EV_BTN_CALIBRATE
+ *  held >= 2 s         -> MISSION_EV_BTN_RESET (fault reset)
  *
  *  Every event is also posted to mbf_telem so it appears on MQTT.
  */
@@ -69,6 +69,7 @@ EXPORT void task_hmi_thread (INT stacd, void * p_exinf)
     }
 }
 
+/** Configure a button pin as an input with the internal pull-up. */
 static void hmi_pin_init (uint32_t pin)
 {
     (void)gpio_set_pin(pin, GPIO_MODE_IN);
@@ -76,11 +77,14 @@ static void hmi_pin_init (uint32_t pin)
     set_w(app_regs_pad(pin), APP_REGS_PAD_PUE);
 }
 
+/** True if the button on pin is pressed now (raw level, not debounced). */
 static bool hmi_pressed (uint32_t pin)
 {
     return (S1_BTN_PRESSED_LEVEL == gpio_get_val(pin));
 }
 
+/** Post a button event to MissionTask; a full mbf_mission is logged, not
+    waited on. */
 static void hmi_report (mission_types_ev_t event)
 {
     /* Both sends use TMO_POL; a full mbf_mission is reported, not waited on. */

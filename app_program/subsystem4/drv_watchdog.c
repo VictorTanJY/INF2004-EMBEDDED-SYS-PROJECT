@@ -1,6 +1,6 @@
-/*
- *  drv_watchdog.c
- *  Subsystem 4 -- watchdog driver.  See drv_watchdog.h.
+/** @file drv_watchdog.c
+ *
+ *  @brief Subsystem 4 -- watchdog driver.  See drv_watchdog.h.
  */
 
 #include "drv_watchdog.h"

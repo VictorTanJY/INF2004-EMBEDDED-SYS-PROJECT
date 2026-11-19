@@ -9,6 +9,7 @@
 
 #include <tk/tkernel.h>
 
+/** Run subsystem 2's on-target self-tests and print the [TEST] lines. */
 IMPORT void subsystem2_test_run(void);
 
 #endif /* SUBSYSTEM2_TEST_H */

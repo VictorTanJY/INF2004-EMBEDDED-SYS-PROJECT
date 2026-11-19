@@ -1,7 +1,7 @@
-/*
- *  app_config.h
- *  Build switches for the whole application.  Pure C (also included by the
- *  host tests).  Change a value here, rebuild, flash.
+/** @file app_config.h
+ *
+ *  @brief Build switches for the whole application.  Pure C (also included by
+ * the host tests).  Change a value here, rebuild, flash.
  */
 
 #ifndef APP_CONFIG_H

@@ -1,18 +1,18 @@
-/*
- *  mission_core.c
- *  Subsystem 5 -- system statechart (pure).  See mission_core.h.
+/** @file mission_core.c
+ *
+ *  @brief Subsystem 5 -- system statechart (pure).  See mission_core.h.
  *  Owner: Buddy 5 (Ryan).
  *
  *  States and transitions follow Week 6 Section 5:
- *    BOOT -> IDLE (self-test passed) | FAULT
- *    IDLE -> CALIBRATING (calibrate) -> IDLE
- *    IDLE / MISSION_COMPLETE -> LINE_FOLLOW (start, only once calibrated)
- *    LINE_FOLLOW -> EXECUTE_NAV (junction with a latched barcode command)
- *                -> OBSTACLE_HANDLING -> AVOIDING -> LINE_RECOVERY ->
- * LINE_FOLLOW
- *                -> LINE_SEARCH (line lost / recovery failed) -> LINE_FOLLOW |
- * FAULT any active state -> MISSION_COMPLETE (stop); any state -> FAULT FAULT
- * -> BOOT only after an operator reset with every cause cleared.
+ *  BOOT -> IDLE (self-test passed) | FAULT
+ *  IDLE -> CALIBRATING (calibrate) -> IDLE
+ *  IDLE / MISSION_COMPLETE -> LINE_FOLLOW (start, only once calibrated)
+ *  LINE_FOLLOW -> EXECUTE_NAV (junction with a latched barcode command)
+ *  -> OBSTACLE_HANDLING -> AVOIDING -> LINE_RECOVERY ->
+ *  LINE_FOLLOW
+ *  -> LINE_SEARCH (line lost / recovery failed) -> LINE_FOLLOW |
+ *  FAULT any active state -> MISSION_COMPLETE (stop); any state -> FAULT FAULT
+ *  -> BOOT only after an operator reset with every cause cleared.
  */
 
 #include <stddef.h>
@@ -54,7 +54,7 @@ typedef struct
 
 static char const g_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
-/* Data representation of IF-10 (mission part). */
+/** Data representation of IF-10 (mission part). */
 static app_pack_field_t const g_mission_layout[] = {
     {offsetof(mission_types_snap_t, t_ms),
      sizeof(((mission_types_snap_t){0}).t_ms), 32u, PK_W},
@@ -441,7 +441,7 @@ uint32_t mission_core_snap_layout_bits (void)
     return app_pack_layout_bits(g_mission_layout, MISSION_FIELDS);
 }
 
-/* mission_core_tick(): the timeouts and checks of the current state. */
+/** mission_core_tick(): the timeouts and checks of the current state. */
 static void tick_state (mission_core_t *              p_mc,
                         mission_core_inputs_t const * p_in, uint32_t now_ms,
                         mission_core_out_t * p_out)
@@ -500,7 +500,7 @@ static void tick_state (mission_core_t *              p_mc,
     }
 }
 
-/* BOOT: wait for every subsystem's self-test, or fail after the timeout. */
+/** BOOT: wait for every subsystem's self-test, or fail after the timeout. */
 static void tick_boot (mission_core_t *              p_mc,
                        mission_core_inputs_t const * p_in, uint32_t now_ms,
                        mission_core_out_t * p_out)
@@ -529,7 +529,7 @@ static void tick_boot (mission_core_t *              p_mc,
     }
 }
 
-/* CALIBRATING: stand still, then spin, then wait for the answers. */
+/** CALIBRATING: stand still, then spin, then wait for the answers. */
 static void tick_calibrating (mission_core_t * p_mc, uint32_t now_ms,
                               mission_core_out_t * p_out)
 {
@@ -556,7 +556,7 @@ static void tick_calibrating (mission_core_t * p_mc, uint32_t now_ms,
     }
 }
 
-/* mission_core_event(): faults and resets. */
+/** mission_core_event(): faults and resets. */
 static void mission_core_ev_safety (mission_core_t *            p_mc,
                                     mission_types_evt_t const * p_ev,
                                     uint32_t now_ms, mission_core_out_t * p_out)
@@ -614,7 +614,7 @@ static void mission_core_ev_safety (mission_core_t *            p_mc,
     }
 }
 
-/* mission_core_event(): operator buttons and remote commands. */
+/** mission_core_event(): operator buttons and remote commands. */
 static void mission_core_ev_operator (mission_core_t *            p_mc,
                                       mission_types_evt_t const * p_ev,
                                       uint32_t                    now_ms,
@@ -711,7 +711,7 @@ static void mission_core_ev_operator (mission_core_t *            p_mc,
     }
 }
 
-/* mission_core_event(): calibration and motion progress. */
+/** mission_core_event(): calibration and motion progress. */
 static void mission_core_ev_progress (mission_core_t *            p_mc,
                                       mission_types_evt_t const * p_ev,
                                       uint32_t                    now_ms,
@@ -754,7 +754,7 @@ static void mission_core_ev_progress (mission_core_t *            p_mc,
     }
 }
 
-/* The motion command MissionTask waits for has finished (b_ok) or
+/** The motion command MissionTask waits for has finished (b_ok) or
    failed. */
 static void motion_finished (mission_core_t * p_mc, bool b_ok, uint32_t now_ms,
                              mission_core_out_t * p_out)
@@ -784,7 +784,7 @@ static void motion_finished (mission_core_t * p_mc, bool b_ok, uint32_t now_ms,
     }
 }
 
-/* mission_core_event(): line and barcode. */
+/** mission_core_event(): line and barcode. */
 static void mission_core_ev_line (mission_core_t *            p_mc,
                                   mission_types_evt_t const * p_ev,
                                   uint32_t now_ms, mission_core_out_t * p_out)
@@ -842,7 +842,7 @@ static void mission_core_ev_line (mission_core_t *            p_mc,
     }
 }
 
-/* mission_core_event(): obstacle handling. */
+/** mission_core_event(): obstacle handling. */
 static void mission_core_ev_obstacle (mission_core_t *            p_mc,
                                       mission_types_evt_t const * p_ev,
                                       uint32_t                    now_ms,
@@ -923,6 +923,8 @@ static void mission_core_ev_obstacle (mission_core_t *            p_mc,
     }
 }
 
+/** LINE_SEARCH: the next of the three search turns (left, right across, back),
+    or FAULT (line lost) after the last. */
 static void search_next (mission_core_t * p_mc, uint32_t now_ms,
                          mission_core_out_t * p_out)
 {
@@ -945,6 +947,8 @@ static void search_next (mission_core_t * p_mc, uint32_t now_ms,
 }
 
 /* ---- state entry -------------------------------------------------------- */
+/** Enter a state: record the time, reset the step, report it and take the
+    state's entry actions. */
 static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
                    mission_core_out_t * p_out)
 {
@@ -1019,6 +1023,8 @@ static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
     }
 }
 
+/** Enter FAULT with this cause and fault bits (bits kept if already in FAULT).
+ */
 static void enter_fault (mission_core_t * p_mc, uint8_t cause, uint32_t bits,
                          uint32_t now_ms, mission_core_out_t * p_out)
 {
@@ -1030,6 +1036,8 @@ static void enter_fault (mission_core_t * p_mc, uint8_t cause, uint32_t bits,
     }
 }
 
+/** Start a run (LINE_FOLLOW) if both sensors are calibrated; otherwise log
+    NOT_CALIBRATED. */
 static void start_run (mission_core_t * p_mc, uint32_t now_ms,
                        mission_core_out_t * p_out)
 {
@@ -1046,6 +1054,8 @@ static void start_run (mission_core_t * p_mc, uint32_t now_ms,
     enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
 }
 
+/** Apply a remote SET (value already range-checked by CommsTask): store the
+    parameter, update the speed cap and log it. */
 static void apply_param (mission_core_t * p_mc, uint16_t param_id,
                          int32_t value, mission_core_out_t * p_out)
 {
@@ -1085,6 +1095,8 @@ static void apply_param (mission_core_t * p_mc, uint16_t param_id,
     log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id, (int16_t)value);
 }
 
+/** True if this MOTION_DONE / MOTION_FAILED answers the command MissionTask is
+    waiting for; it then stops waiting. */
 static bool seq_matches (mission_core_t *            p_mc,
                          mission_types_evt_t const * p_ev)
 {
@@ -1098,6 +1110,8 @@ static bool seq_matches (mission_core_t *            p_mc,
 }
 
 /* ------------------------------------------------------------------ */
+/** Append an action for MissionTask to carry out; dropped if the list is full.
+ */
 static void push (mission_core_out_t * p_out, uint8_t kind, uint8_t cmd,
                   uint8_t seq, int16_t arg0, int16_t arg1)
 {
@@ -1112,6 +1126,8 @@ static void push (mission_core_out_t * p_out, uint8_t kind, uint8_t cmd,
     }
 }
 
+/** Queue a motion command; MOVE and TURN get the next sequence number and
+    MissionTask waits for their completion. */
 static void motion (mission_core_t * p_mc, mission_core_out_t * p_out,
                     uint8_t cmd, int16_t arg0, int16_t arg1)
 {
@@ -1128,6 +1144,7 @@ static void motion (mission_core_t * p_mc, mission_core_out_t * p_out,
     push(p_out, MISSION_ACT_MOTION, cmd, seq, arg0, arg1);
 }
 
+/** Queue SET_AUTH: give motion authority to src. */
 static void set_auth (mission_core_t * p_mc, mission_core_out_t * p_out,
                       uint8_t src)
 {
@@ -1135,23 +1152,27 @@ static void set_auth (mission_core_t * p_mc, mission_core_out_t * p_out,
     p_mc->snap.auth = src;
 }
 
+/** Queue a request to ObstacleTask. */
 static void scan (mission_core_out_t * p_out, uint8_t type, int16_t param)
 {
     push(p_out, MISSION_ACT_SCAN, type, 0u, param, 0);
 }
 
+/** Queue a telemetry LOG record. */
 static void log_act (mission_core_out_t * p_out, uint8_t code, int16_t arg0,
                      int16_t arg1)
 {
     push(p_out, MISSION_ACT_LOG, code, 0u, arg0, arg1);
 }
 
+/** True in the states of a run (LINE_FOLLOW .. LINE_SEARCH). */
 static bool is_active (uint8_t state)
 {
     return (state >= MISSION_ST_LINE_FOLLOW)
            && (state <= MISSION_ST_LINE_SEARCH);
 }
 
+/** Speed cap: cruise speed, lowered while an obstacle is near or on a hump. */
 static void update_speed_cap (mission_core_t * p_mc)
 {
     uint16_t cap = p_mc->snap.cruise_mm_s;
@@ -1167,6 +1188,8 @@ static void update_speed_cap (mission_core_t * p_mc)
     p_mc->snap.speed_cap_mm_s = cap;
 }
 
+/** The motion steps of a junction movement (move to the centre, then the turn)
+    into steps[].  Returns how many. */
 static uint8_t nav_steps (uint8_t nav, step_t steps[2])
 {
     steps[0].cmd  = MOTION_CMD_MOVE;
@@ -1191,6 +1214,8 @@ static uint8_t nav_steps (uint8_t nav, step_t steps[2])
     }
 }
 
+/** EXECUTE_NAV: send the next step of the movement, or go back to line
+    following after the last. */
 static void nav_next (mission_core_t * p_mc, uint32_t now_ms,
                       mission_core_out_t * p_out)
 {

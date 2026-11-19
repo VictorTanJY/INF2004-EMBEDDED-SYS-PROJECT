@@ -1,6 +1,6 @@
-/*
- *  mqtt_utk.h
- *  MQTT client wiring for micro T-Kernel (RP2040, NO_SYS=1)
+/** @file mqtt_utk.h
+ *
+ *  @brief MQTT client wiring for micro T-Kernel (RP2040, NO_SYS=1)
  *
  *  PicoCar extension (agreed with the team and the instructor, Week 6
  *  A14 / TEAM.md IF-11).  Everything here runs on the WiFi service task
@@ -26,42 +26,42 @@
 
 typedef struct
 {
-    char const * p_sub_topic; /* NULL = subscribe to nothing        */
+    char const * p_sub_topic; /**< NULL = subscribe to nothing        */
     uint8_t      sub_qos;
-    char const * p_will_topic; /* NULL = no Last Will                */
-    char const * p_will_msg;   /* text; its strlen() is used         */
+    char const * p_will_topic; /**< NULL = no Last Will                */
+    char const * p_will_msg;   /**< text; its strlen() is used         */
     uint8_t      will_qos;
     uint8_t      will_retain;
 } mqtt_utk_cfg_t;
 
-/*
+/**
  * Call once from cyw43_utk_task() before its poll loop.  Starts the
  * application poll chain (mqtt_utk_app_poll() every MQTT_UTK_POLL_MS), so
  * the application keeps draining its queues while the link is down.
  */
 void mqtt_utk_init(void);
 
-/*
+/**
  * Called by cyw43_utk_task() on every poll pass while the link is up.
  * Starts a connection when none is running and no back-off is pending;
  * otherwise it does nothing.
  */
 void mqtt_utk_start(void);
 
-/* 1 while connected to the broker. */
+/** 1 while connected to the broker. */
 uint8_t mqtt_utk_is_connected(void);
 
-/*
+/**
  * Publish one message.  Never blocks.  Returns 0 when lwIP queued it,
  * MQTT_UTK_E_OFFLINE, or a negative lwIP err_t.  The caller owns retries.
  */
 int32_t mqtt_utk_publish(char const * p_topic, uint8_t const * p_data,
                          uint16_t len, uint8_t qos, uint8_t retain);
 
-/* QoS 1/2 publishes that lwIP later reported as failed (e.g. timeout). */
+/** QoS 1/2 publishes that lwIP later reported as failed (e.g. timeout). */
 uint32_t mqtt_utk_pub_failures(void);
 
-/* Received messages dropped because they exceeded MQTT_UTK_RX_DATA_MAX. */
+/** Received messages dropped because they exceeded MQTT_UTK_RX_DATA_MAX. */
 uint32_t mqtt_utk_rx_dropped(void);
 
 /* ---------------------------------------------------------------------
@@ -69,10 +69,14 @@ uint32_t mqtt_utk_rx_dropped(void);
  * without the application still links.  All are called on the WiFi
  * service task and must not block.
  * --------------------------------------------------------------------- */
-mqtt_utk_cfg_t const * mqtt_utk_app_config(void); /* NULL = defaults */
-void                   mqtt_utk_app_connected(void);
-void                   mqtt_utk_app_disconnected(void);
-void                   mqtt_utk_app_poll(void);
+mqtt_utk_cfg_t const * mqtt_utk_app_config(void); /**< NULL = defaults */
+/** Hook: the MQTT connection is up (subscribed). */
+void mqtt_utk_app_connected(void);
+/** Hook: the MQTT connection was lost. */
+void mqtt_utk_app_disconnected(void);
+/** Hook: called every MQTT_UTK_POLL_MS, connected or not. */
+void mqtt_utk_app_poll(void);
+/** Hook: a message of len bytes arrived on p_topic. */
 void mqtt_utk_app_rx(char const * p_topic, uint8_t const * p_data,
                      uint16_t len);
 

@@ -1,6 +1,6 @@
-/*
- *  test_s4_main.c
- *  Host unit tests for subsystem 4: imu_core.c (pitch, humps, tilt,
+/** @file test_s4_main.c
+ *
+ *  @brief Host unit tests for subsystem 4: imu_core.c (pitch, humps, tilt,
  *  lift, classification, calibration) and safety_core.c (heartbeats).
  *  Humps are simulated geometrically: the chassis rests on the drive axle
  *  at x and the caster at x + L, so pitch = atan((z(x+L) - z(x)) / L) for
@@ -62,8 +62,33 @@ static int32_t   run_side_hump(float64_t h_mm, float64_t len_mm, int32_t side,
 static void      test_pack_s4(void);
 static void      check_result(char const * p_id, bool b_ok, char const * p_file,
                               int32_t line);
+static void      test_h01(void);
+static void      test_h10(void);
+static void      test_h03(void);
+static void      test_h04b(void);
+static void      test_h05b(void);
+static void      test_h05e(void);
+static void      test_h06(void);
+static void      test_h08(void);
+static void      test_h09(void);
 
+/** Run subsystem 4's host tests.  Exit status 0 if all passed. */
 int main (void)
+{
+    test_h01();
+    test_h10();
+    test_h03();
+    test_h04b();
+    test_h05b();
+    test_h05e();
+    test_h06();
+    test_h08();
+    test_h09();
+    return (0 == g_fail) ? 0 : 1;
+}
+
+/** Checks S4-H01, S4-H01b. */
+static void test_h01 (void)
 {
     /* S4-H01: humps of known height, 300 mm long: NFR7 (+-20 % or +-5 mm) */
     {
@@ -97,7 +122,11 @@ int main (void)
         printf("hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - "
                "known limit\n");
     }
+}
 
+/** Checks S4-H10, S4-H10b, S4-H10c, S4-H02. */
+static void test_h10 (void)
+{
     /* S4-H10: humps under ONE wheel (roll): 10 / 20 / 30 mm x 300 mm, both
        sides, reported within NFR7 (+-20 % or +-5 mm) */
     {
@@ -185,7 +214,11 @@ int main (void)
         CHECK("S4-H02", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)));
         CHECK("S4-H02", abs(g_ic.pitch_cdeg) < 300);
     }
+}
 
+/** Checks S4-H03, S4-H04. */
+static void test_h03 (void)
+{
     /* S4-H03: a long 8 deg ramp is a ramp, not a hump */
     {
         int32_t kdx;
@@ -242,7 +275,11 @@ int main (void)
     }
     CHECK("S4-H04",
           ((g_ev & IMU_EV_TILT_ON) != 0u) && (g_ic.roll_cdeg < -3000));
+}
 
+/** Checks S4-H04b, S4-H05. */
+static void test_h04b (void)
+{
     /* S4-H04b: a wheel start on the bench (encoders report 0 -> 400 mm/s
        in 20 ms while the chassis stays level) and a 150 ms 40-deg spike
        must not raise TILT. */
@@ -322,7 +359,11 @@ int main (void)
         }
     }
     CHECK("S4-H05", (g_ev & IMU_EV_LIFT) != 0u);
+}
 
+/** Checks S4-H05b, S4-H05c, S4-H05d. */
+static void test_h05b (void)
+{
     /* S4-H05b: the robot's own jolts do not lift it: one 10 ms sample of
        +1.5 g, two of +1 g, and +0.2 g for 200 ms while driving */
     imu_core_init(&g_ic);
@@ -409,60 +450,66 @@ int main (void)
         }
     } /* 1190 mg: +300 over level */
     CHECK("S4-H05d", (g_ev & IMU_EV_LIFT) != 0u);
+}
+
+/** Checks S4-H05e. */
+static void test_h05e (void)
+{
+    int32_t  step0;
+    int32_t  elem0;
+    uint16_t real_max;
 
     /* S4-H05e (14 Nov run 02:44): held in the air, nose up 10 deg with
        the wheels spinning, the hump check read humps of 12-41 mm.  Saved
        when all IR went black, restored when the lift was confirmed: the
        run keeps its real humps only; a real hump while all black briefly
        (a crossing line) is kept. */
+    (void)run_hump(20.0, 150.0, &step0, &elem0); /* one real hump */
+    real_max = g_ic.hump_max_mm;
+    CHECK("S4-H05e", (real_max >= 10u) && (1u == g_ic.humps));
+    imu_core_hump_save(&g_ic); /* all IR black */
+    g_ev = 0u;
     {
-        int32_t  step0;
-        int32_t  elem0;
-        uint16_t real_max;
-
-        (void)run_hump(20.0, 150.0, &step0, &elem0); /* one real hump */
-        real_max = g_ic.hump_max_mm;
-        CHECK("S4-H05e", (real_max >= 10u) && (1u == g_ic.humps));
-        imu_core_hump_save(&g_ic); /* all IR black */
-        g_ev = 0u;
+        int32_t kdx;
+        for (kdx = 0; kdx < T_600_MS; kdx++)
         {
-            int32_t kdx;
-            for (kdx = 0; kdx < T_600_MS; kdx++)
-            {
-                step(10.0, 0.0, 0.0, 300, 3000, 0);
-            }
-        } /* nose up in the air */
-        {
-            int32_t kdx;
-            for (kdx = 0; kdx < T_600_MS; kdx++)
-            {
-                step(-10.0, 0.0, 0.0, 300, 3000, 0);
-            }
+            step(10.0, 0.0, 0.0, 300, 3000, 0);
         }
+    } /* nose up in the air */
+    {
+        int32_t kdx;
+        for (kdx = 0; kdx < T_600_MS; kdx++)
         {
-            int32_t kdx;
-            for (kdx = 0; kdx < T_300_MS; kdx++)
-            {
-                step(0.0, 0.0, 0.0, 300, 3000, 0);
-            }
+            step(-10.0, 0.0, 0.0, 300, 3000, 0);
         }
-        printf("in the air: %u fake hump(s), max %u mm (real %u)\n",
-               (uint32_t)(g_ic.humps - 1u), (uint32_t)g_ic.hump_max_mm,
-               (uint32_t)real_max);
-        CHECK("S4-H05e", ((g_ev & IMU_EV_HUMP_END) != 0u)
-                             && (g_ic.hump_max_mm > real_max)); /* the bug */
-        imu_core_hump_restore(&g_ic); /* lift confirmed */
-        CHECK("S4-H05e", (g_ic.hump_max_mm == real_max) && (1u == g_ic.humps)
-                             && (IMU_HUMP_FLAT == g_ic.hump_state));
-
-        imu_core_hump_save(&g_ic); /* crossing line */
-        g_ic.hump_max_mm =
-            (uint16_t)(real_max + 5u); /* a hump measured meanwhile */
-        imu_core_hump_drop(&g_ic);     /* floor again */
-        imu_core_hump_restore(&g_ic);  /* nothing saved: keeps it */
-        CHECK("S4-H05e", g_ic.hump_max_mm == (real_max + 5u));
     }
+    {
+        int32_t kdx;
+        for (kdx = 0; kdx < T_300_MS; kdx++)
+        {
+            step(0.0, 0.0, 0.0, 300, 3000, 0);
+        }
+    }
+    printf("in the air: %u fake hump(s), max %u mm (real %u)\n",
+           (uint32_t)(g_ic.humps - 1u), (uint32_t)g_ic.hump_max_mm,
+           (uint32_t)real_max);
+    CHECK("S4-H05e", ((g_ev & IMU_EV_HUMP_END) != 0u)
+                         && (g_ic.hump_max_mm > real_max)); /* the bug */
+    imu_core_hump_restore(&g_ic);                           /* lift confirmed */
+    CHECK("S4-H05e", (g_ic.hump_max_mm == real_max) && (1u == g_ic.humps)
+                         && (IMU_HUMP_FLAT == g_ic.hump_state));
 
+    imu_core_hump_save(&g_ic); /* crossing line */
+    g_ic.hump_max_mm =
+        (uint16_t)(real_max + 5u); /* a hump measured meanwhile */
+    imu_core_hump_drop(&g_ic);     /* floor again */
+    imu_core_hump_restore(&g_ic);  /* nothing saved: keeps it */
+    CHECK("S4-H05e", g_ic.hump_max_mm == (real_max + 5u));
+}
+
+/** Checks S4-H06, S4-H07. */
+static void test_h06 (void)
+{
     /* S4-H06: level calibration removes a 3 deg mounting offset */
     imu_core_init(&g_ic);
     g_now = 0u;
@@ -539,7 +586,11 @@ int main (void)
             CHECK("S4-H07", abs(g_ic.heading_cdeg - 9000) <= 200);
         }
     }
+}
 
+/** Checks S4-H08. */
+static void test_h08 (void)
+{
     /* S4-H08: motion classification */
     imu_core_init(&g_ic);
     g_now = 0u;
@@ -603,7 +654,11 @@ int main (void)
         }
     }
     CHECK("S4-H08", IMU_MOTION_DECELERATING == g_ic.motion);
+}
 
+/** Checks S4-H09. */
+static void test_h09 (void)
+{
     /* S4-H09: heartbeats: each task times out after its own limit */
     {
         safety_core_hb_state_t hb_state;
@@ -649,10 +704,9 @@ int main (void)
 
     test_pack_s4();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (0 == g_fail) ? 0 : 1;
 }
 
-/* Accelerometer reading (mg, raw axes) for chassis pitch theta (deg),
+/** Accelerometer reading (mg, raw axes) for chassis pitch theta (deg),
    roll phi (deg) and a forward linear acceleration a_lin (mm/s^2). */
 static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
                        int32_t out[3])
@@ -672,6 +726,8 @@ static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
     out[2]              = (int32_t)lround(body[2]);
 }
 
+/** Feed one 10 ms IMU sample at pitch theta and roll phi (rad) with linear
+    acceleration a_lin, speed value, ds_um of travel and yaw rate. */
 static void step (float64_t theta, float64_t phi, float64_t a_lin,
                   int32_t value, int32_t ds_um, int32_t yaw)
 {
@@ -682,7 +738,7 @@ static void step (float64_t theta, float64_t phi, float64_t a_lin,
     g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, yaw, 10u, g_now);
 }
 
-/* Level chassis with an extra up acceleration (mg), e.g. a hand lift. */
+/** Level chassis with an extra up acceleration (mg), e.g. a hand lift. */
 static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
 {
     int32_t accel[3];
@@ -693,6 +749,7 @@ static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
     g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, 0, 10u, g_now);
 }
 
+/** Height of a cosine hump (start, len, height in mm) at x_val mm. */
 static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
                        float64_t height)
 {
@@ -703,7 +760,7 @@ static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
     return 0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
 }
 
-/* Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */
+/** Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */
 static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
                          int32_t * p_ends)
 {
@@ -736,7 +793,7 @@ static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
     return (int32_t)g_ic.last_hump_mm;
 }
 
-/* Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
+/** Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
    h_mm (side = +1 right wheel, -1 left).  The raised wheel rolls the
    chassis by asin(z / track) and tips the nose down by atan(z / 2 / L)
    (drive axle behind the caster).  Returns the reported peak. */
@@ -771,7 +828,7 @@ static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
     return (int32_t)g_ic.last_hump_mm;
 }
 
-/* S4-H11: Change Requirement 1, the packed IMU snapshot */
+/** S4-H11: Change Requirement 1, the packed IMU snapshot */
 static void test_pack_s4 (void)
 {
     imu_types_snap_t snap;

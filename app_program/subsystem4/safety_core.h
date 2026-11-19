@@ -1,6 +1,6 @@
-/*
- *  safety_core.h
- *  Subsystem 4 -- SafetyTask heartbeat supervision as pure functions
+/** @file safety_core.h
+ *
+ *  @brief Subsystem 4 -- SafetyTask heartbeat supervision as pure functions
  *  (Week 6 Section 3).  Owner: Buddy 4.  Host-tested.
  *
  *  Each monitored task increments its own counter on every pass; SafetyTask
@@ -23,14 +23,15 @@ typedef struct
     bool     b_started;
 } safety_core_hb_state_t;
 
+/** Heartbeat timeout of a monitored task, ms. */
 uint32_t safety_core_hb_timeout_ms(imu_types_safety_hb_t task);
 
-/* Start (or restart, after an operator reset) the supervision now. */
+/** Start (or restart, after an operator reset) the supervision now. */
 void safety_core_hb_start(safety_core_hb_state_t * p_st,
                           uint32_t const           counts[SAFETY_HB_COUNT],
                           uint32_t                 now_ms);
 
-/* Returns a bit mask (bit k = task k) of the tasks past their timeout. */
+/** Returns a bit mask (bit k = task k) of the tasks past their timeout. */
 uint32_t safety_core_hb_check(safety_core_hb_state_t * p_st,
                               uint32_t const           counts[SAFETY_HB_COUNT],
                               uint32_t                 now_ms);

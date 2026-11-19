@@ -1,6 +1,6 @@
-/*
- *  app_pack.c
- *  Minimum-bit data representation (Change Requirement 1): byte streams
+/** @file app_pack.c
+ *
+ *  @brief Minimum-bit data representation (Change Requirement 1): byte streams
  *  for MQTT frames, Code 39 symbols and table-driven record packing.
  *  Pure C; see app_pack.h for the rules.
  */
@@ -41,7 +41,7 @@ void app_pack_writer_init (app_pack_writer_t * p_w, uint8_t * p_buf,
     p_w->b_overflow = false;
 }
 
-/* Append the low width bits (1..32) of value. */
+/** Append the low width bits (1..32) of value. */
 void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
 {
     uint8_t idx;
@@ -62,7 +62,7 @@ void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
     }
 }
 
-/* Frame length in whole bytes, 0 if anything overflowed. */
+/** Frame length in whole bytes, 0 if anything overflowed. */
 uint16_t app_pack_writer_len (app_pack_writer_t const * p_w)
 {
     return p_w->b_overflow ? 0u : (uint16_t)((p_w->bits + 7u) >> 3);
@@ -77,7 +77,7 @@ void app_pack_reader_init (app_pack_reader_t * p_r, uint8_t const * p_buf,
     p_r->b_short = false;
 }
 
-/* Read the next width bits (1..32); 0 and b_short once past the end. */
+/** Read the next width bits (1..32); 0 and b_short once past the end. */
 uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
 {
     uint32_t value = 0u;
@@ -136,7 +136,7 @@ uint32_t app_pack_layout_bits (app_pack_field_t const * p_f, uint16_t n_fields)
     return bits;
 }
 
-/* Pack every field of p_rec into p_words (nwords, cleared first). */
+/** Pack every field of p_rec into p_words (nwords, cleared first). */
 void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
                         void const * p_rec, uint32_t * p_words, uint16_t nwords)
 {
@@ -187,7 +187,7 @@ void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
     }
 }
 
-/* Unpack p_words into the fields of p_rec (other bytes are left as they are).
+/** Unpack p_words into the fields of p_rec (other bytes are left as they are).
  */
 void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
                           uint32_t const * p_words, void * p_rec)
@@ -220,6 +220,8 @@ void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
     }
 }
 
+/** Write value into width bits at bit position *p_pos of the word array p_w,
+    then advance *p_pos. */
 static void pk_word_put (uint32_t * p_w, uint32_t * p_pos, uint32_t value,
                          uint8_t width)
 {
@@ -235,6 +237,8 @@ static void pk_word_put (uint32_t * p_w, uint32_t * p_pos, uint32_t value,
     *p_pos += width;
 }
 
+/** Read width bits at bit position *p_pos of the word array p_w, then advance
+ *p_pos. */
 static uint32_t pk_word_take (uint32_t const * p_w, uint32_t * p_pos,
                               uint8_t width)
 {
@@ -250,7 +254,7 @@ static uint32_t pk_word_take (uint32_t const * p_w, uint32_t * p_pos,
     return value & app_pack_mask(width);
 }
 
-/* Read a member of size 1, 2 or 4 as unsigned / signed. */
+/** Read a member of size 1, 2 or 4 as unsigned / signed. */
 static uint32_t pk_member_u (void const * p_rec, app_pack_field_t const * p_f)
 {
     uint8_t const * p_byte = (uint8_t const *)p_rec + p_f->offset;
@@ -277,6 +281,8 @@ static uint32_t pk_member_u (void const * p_rec, app_pack_field_t const * p_f)
     return value;
 }
 
+/** Value of the signed record member described by p_f, sign-extended to 32
+    bits. */
 static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
 {
     uint32_t const raw = pk_member_u(p_rec, p_f);
@@ -292,6 +298,7 @@ static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
     return (int32_t)raw;
 }
 
+/** Store value into the record member described by p_f (1, 2 or 4 bytes). */
 static void pk_member_set (void * p_rec, app_pack_field_t const * p_f,
                            uint32_t value)
 {

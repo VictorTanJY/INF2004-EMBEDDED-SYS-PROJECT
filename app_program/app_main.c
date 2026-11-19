@@ -1,28 +1,28 @@
-/*
- *  app_main.c
- *  START HERE.  usermain() below is your program's entry point.
+/** @file app_main.c
+ *
+ *  @brief START HERE.  usermain() below is your program's entry point.
  *
  *  How micro T-Kernel starts your code
  *  -----------------------------------
- *    reset -> kernel initialises itself -> creates the "initial task"
- *          -> initial task calls usermain()
+ *  reset -> kernel initialises itself -> creates the "initial task"
+ *  -> initial task calls usermain()
  *
  *  usermain() runs inside that initial task at priority 1 (the highest).
  *  On a single core nothing you create runs until usermain() blocks, but
  *  on the dual-core build the OTHER core may start a new task at once.
  *  So usermain() works in two phases:
- *    1. every subsystem creates its kernel objects  (subsystemN_init)
- *    2. every subsystem starts its tasks             (subsystemN_start)
+ *  1. every subsystem creates its kernel objects  (subsystemN_init)
+ *  2. every subsystem starts its tasks             (subsystemN_start)
  *  and then puts the initial task to sleep forever.
  *  If usermain() RETURNS, the kernel shuts the whole system down.
  *
  *  PicoCar (team IS-23): one subsystem per buddy (TEAM.md section 1)
  *  -----------------------------------------------------------------
- *    subsystem1/  Comms + HMI     CommsTask (= kernel WiFi task), HmiTask
- *    subsystem2/  Motion          MotionTask
- *    subsystem3/  Line + barcode  LineBarcodeTask
- *    subsystem4/  IMU + safety    ImuTask, SafetyTask
- *    subsystem5/  Obstacle + mission  ObstacleTask, MissionTask
+ *  subsystem1/  Comms + HMI     CommsTask (= kernel WiFi task), HmiTask
+ *  subsystem2/  Motion          MotionTask
+ *  subsystem3/  Line + barcode  LineBarcodeTask
+ *  subsystem4/  IMU + safety    ImuTask, SafetyTask
+ *  subsystem5/  Obstacle + mission  ObstacleTask, MissionTask
  *  Interfaces IF-01 .. IF-12 are listed in TEAM.md section 5.  The
  *  subsystem that RECEIVES or OWNS the data creates the object and
  *  publishes its ID in its header; the other side just uses it.
@@ -50,7 +50,7 @@
 
 static void check_er(ER err, char const * p_what);
 
-/*
+/**
  * Create and start one task (declared in app.h for every subsystem).
  *   prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or 0 for "any core".
  */

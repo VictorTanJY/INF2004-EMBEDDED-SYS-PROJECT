@@ -1,6 +1,6 @@
-/*
- *  comms_proto.c
- *  Subsystem 1 -- MQTT message formats.  Owner: Buddy 1 (Victor).
+/** @file comms_proto.c
+ *
+ *  @brief Subsystem 1 -- MQTT message formats.  Owner: Buddy 1 (Victor).
  *
  *  Pure C, no kernel calls (see comms_proto.h for the frame layouts).
  *  Built into the firmware and into testing/subsystem1/host/ for the host
@@ -20,7 +20,7 @@ typedef uint8_t
 #define NONE_CLR_CM 127u  /* telemetry clr_l / clr_r: no profile */
 #define T10_BITS    24u   /* frame time, 10 ms units (46.6 h)   */
 
-/* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
+/** Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
 static comms_proto_param_t const g_params[COMMS_PARAM_COUNT] = {
     {"speed_mm_s", 1u, 150, 350}, /* cruise speed, NFR11 (Buddy 2/3)       */
     {"slow_cm", 2u, 25, 60},      /* slow-down range, FR9, default 40 (B5) */
@@ -448,7 +448,7 @@ void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
     }
 }
 
-/* SET: parameter index and value, both checked. */
+/** SET: parameter index and value, both checked. */
 static comms_proto_err_t parse_set (app_pack_reader_t * p_reader, uint16_t len,
                                     comms_proto_cmd_t * p_cmd)
 {
@@ -475,7 +475,7 @@ static comms_proto_err_t parse_set (app_pack_reader_t * p_reader, uint16_t len,
     return COMMS_ERR_NONE;
 }
 
-/* MAP: four different Code 39 data characters, packed one per byte. */
+/** MAP: four different Code 39 data characters, packed one per byte. */
 static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
                                     comms_proto_cmd_t * p_cmd)
 {
@@ -509,13 +509,14 @@ static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
     return COMMS_ERR_NONE;
 }
 
+/** Write a frame header: frame type (5 bits) and protocol version (3 bits). */
 static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)
 {
     app_pack_put(p_w, (uint32_t)type, 5u);
     app_pack_put(p_w, COMMS_FRAME_VERSION, 3u);
 }
 
-/* centi-degrees -> tenths of a degree, rounded half away from zero. */
+/** centi-degrees -> tenths of a degree, rounded half away from zero. */
 static int32_t cdeg_to_tenths (int16_t cdeg)
 {
     int32_t value = (int32_t)cdeg;
@@ -523,7 +524,7 @@ static int32_t cdeg_to_tenths (int16_t cdeg)
     return (value >= 0) ? ((value + 5) / 10) : -((5 - value) / 10);
 }
 
-/* mm -> cm, rounded; none_code if absent or too large for the field. */
+/** mm -> cm, rounded; none_code if absent or too large for the field. */
 static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
                                 uint32_t none_code)
 {

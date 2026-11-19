@@ -1,6 +1,6 @@
-/*
- *  comms_service.c
- *  Subsystem 1 -- CommsTask application layer (Week 6 Section 6.5).
+/** @file comms_service.c
+ *
+ *  @brief Subsystem 1 -- CommsTask application layer (Week 6 Section 6.5).
  *  Owner: Buddy 1 (Victor).
  *
  *  Everything in this file runs on the template's WiFi service task
@@ -11,12 +11,12 @@
  *  and snapshots are copied under their per-snapshot locks.
  *
  *  Every poll (~20 ms):
- *    1. re-publish the offline event ring, oldest first (QoS 1);
- *    2. drain up to COMMS_DRAIN_MAX records from mbf_telem and publish
- *       them as events, or keep them in the ring while offline;
- *    3. every 200 ms, sample the snapshots and publish telemetry (QoS 0;
- *       dropped while offline, as designed);
- *    4. every 1 s, publish the retained status message (the heartbeat).
+ *  1. re-publish the offline event ring, oldest first (QoS 1);
+ *  2. drain up to COMMS_DRAIN_MAX records from mbf_telem and publish
+ *  them as events, or keep them in the ring while offline;
+ *  3. every 200 ms, sample the snapshots and publish telemetry (QoS 0;
+ *  dropped while offline, as designed);
+ *  4. every 1 s, publish the retained status message (the heartbeat).
  *  Received commands are validated, executed and acknowledged.
  *
  *  Built only with NET=lwip MQTT=1; otherwise the records in mbf_telem
@@ -39,14 +39,14 @@
 
 #if !TM_MQTT
 
-/* MQTT is not built: nothing drains mbf_telem. */
+/** MQTT is not built: nothing drains mbf_telem. */
 typedef int32_t s1_comms_service_unused_t;
 
 #endif /* !TM_MQTT */
 
 #if TM_MQTT
 
-/* The frame fields must hold subsystem 5's enums (Change Requirement 1). */
+/** The frame fields must hold subsystem 5's enums (Change Requirement 1). */
 typedef uint8_t
     s1_check_states_t[(MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
 typedef uint8_t
@@ -68,7 +68,7 @@ static mqtt_utk_cfg_t const g_mqtt_cfg = {
     1u                  /* will retained                        */
 };
 
-/* All state is zero-initialised and touched only by the WiFi task. */
+/** All state is zero-initialised and touched only by the WiFi task. */
 static comms_proto_ring_t g_ring;
 static uint8_t  g_telem_seq; /* 8 bits on the wire, wraps            */
 static uint8_t  g_event_seq;
@@ -199,7 +199,7 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
     }
 }
 
-/* A well-formed command: drop a redelivery, else check and execute it. */
+/** A well-formed command: drop a redelivery, else check and execute it. */
 static comms_proto_err_t comms_handle (comms_proto_cmd_t const * p_cmd)
 {
     uint32_t const                   now_ms = (uint32_t)app_time_ms();
@@ -241,6 +241,7 @@ static comms_proto_err_t comms_handle (comms_proto_cmd_t const * p_cmd)
     return err;
 }
 
+/** True if the two NUL-terminated topic strings are equal. */
 static bool topic_eq (char const * p_a, char const * p_b)
 {
     while ((*p_a != '\0') && (*p_a == *p_b))
@@ -251,6 +252,7 @@ static bool topic_eq (char const * p_a, char const * p_b)
     return (*p_a == *p_b);
 }
 
+/** Set or clear SAFETY_FLT_WIFI_LOSS in flg_safety, once the flag exists. */
 static void comms_set_wifi_loss (bool b_lost)
 {
     if (subsystem4_flg_safety() > 0)
@@ -268,6 +270,8 @@ static void comms_set_wifi_loss (bool b_lost)
     }
 }
 
+/** Publish len bytes of g_tx on p_topic.  Returns false if MQTT refused it
+    (the caller retries), true if sent or not worth retrying. */
 static bool comms_publish (char const * p_topic, uint16_t len, uint8_t qos,
                            uint8_t retain)
 {
@@ -284,6 +288,8 @@ static bool comms_publish (char const * p_topic, uint16_t len, uint8_t qos,
     return true;
 }
 
+/** Publish one telemetry record as an event frame (QoS 1).  Returns
+    comms_publish()'s result. */
 static bool comms_publish_event (comms_proto_rec_t const * p_rec, uint8_t seq)
 {
     comms_proto_event_t event;
@@ -294,6 +300,8 @@ static bool comms_publish_event (comms_proto_rec_t const * p_rec, uint8_t seq)
     return comms_publish(COMMS_TOPIC_EVENT, len, 1u, 0u);
 }
 
+/** Publish the retained status frame (the 1 s heartbeat): uptime, signal and
+    drop counters. */
 static void comms_publish_status (uint32_t now_ms)
 {
     uint32_t drops = subsystem1_telem_drops() + g_ring_lost + g_pub_errors
@@ -309,6 +317,7 @@ static void comms_publish_status (uint32_t now_ms)
     (void)comms_publish(COMMS_TOPIC_STATUS, len, 1u, 1u);
 }
 
+/** Sample every snapshot and publish one telemetry frame (QoS 0). */
 static void comms_publish_telemetry (uint32_t now_ms)
 {
     comms_proto_telem_t       telem;
@@ -353,7 +362,7 @@ static void comms_publish_telemetry (uint32_t now_ms)
     (void)comms_publish(COMMS_TOPIC_TELEMETRY, len, 0u, 0u);
 }
 
-/* Due check that tolerates the 32-bit millisecond wrap. */
+/** Due check that tolerates the 32-bit millisecond wrap. */
 static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
                        uint32_t period_ms)
 {
@@ -369,6 +378,8 @@ static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
     return true;
 }
 
+/** Execute a checked command by posting the matching event to MissionTask.
+    Returns COMMS_ERR_NONE, or the reason it was refused. */
 static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
 {
     ER                 err;

@@ -1,6 +1,6 @@
-/*
- *  code39.h
- *  Subsystem 3 -- Code 39 decoding from measured element widths (FR3).
+/** @file code39.h
+ *
+ *  @brief Subsystem 3 -- Code 39 decoding from measured element widths (FR3).
  *  Owner: Buddy 3.  Pure C (host-tested with the instructor's sample
  *  sheets: testing/subsystem3/host).
  *
@@ -37,13 +37,13 @@ typedef uint8_t code39_result_t; /* one of the constants below */
 
 #define CODE39_MAX_CHARS 6u
 
-/* 9-bit pattern of a character, element 0 in bit 8, wide = 1; 0 if none. */
+/** 9-bit pattern of a character, element 0 in bit 8, wide = 1; 0 if none. */
 uint16_t code39_pattern(char chr);
 
-/* Character of a 9-bit pattern, or 0 if it is not a Code 39 character. */
+/** Character of a 9-bit pattern, or 0 if it is not a Code 39 character. */
 char code39_char(uint16_t pattern);
 
-/*
+/**
  * Decode n widths.  On success p_text holds the characters between the
  * '*' start and stop (NUL-terminated, at most CODE39_MAX_CHARS - 2), and
  * *p_b_reversed says whether the widths had to be read backwards.
@@ -53,19 +53,19 @@ code39_result_t code39_decode(uint32_t const * p_widths, uint16_t n_elems,
                               uint16_t ratio_min_x10, char * p_text,
                               bool * pb_reversed);
 
-/* Single data character (FR3): the decoded *X*, or an error. */
+/** Single data character (FR3): the decoded *X*, or an error. */
 code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n_elems,
                                   uint16_t ratio_min_x10, char * p_char,
                                   bool * pb_reversed);
 
-/* As code39_decode_one(), and if the read is one bar short at either end
+/** As code39_decode_one(), and if the read is one bar short at either end
    (n = 10 k - 3) the lost pair is put back; kept only if unambiguous. */
 code39_result_t code39_decode_one_repair(uint32_t const * p_widths,
                                          uint16_t         n_elems,
                                          uint16_t ratio_min_x10, char * p_char,
                                          bool * pb_reversed);
 
-/*
+/**
  * Last resort for one data character (8 Nov): the read is lined up with
  * the 29 elements of *X* for every X, both directions, letting one
  * measured element stand for three printed ones (two thin elements lost

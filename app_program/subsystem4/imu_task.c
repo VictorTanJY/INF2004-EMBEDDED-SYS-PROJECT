@@ -1,10 +1,10 @@
-/*
- * imu_task.c
- * Subsystem 4 -- ImuTask (priority 10, core 0).
- * Woken by imu_cyc every 10 ms. Owner: Buddy 4.
+/** @file imu_task.c
  *
- * Three consecutive I2C errors raise IMU_FAULT.
- * Recovery requires IMU_RECOVER_SAMPLES good samples.
+ *  @brief Subsystem 4 -- ImuTask (priority 10, core 0).
+ *  Woken by imu_cyc every 10 ms. Owner: Buddy 4.
+ *
+ *  Three consecutive I2C errors raise IMU_FAULT.
+ *  Recovery requires IMU_RECOVER_SAMPLES good samples.
  */
 
 #include "imu_task.h"
@@ -46,7 +46,7 @@
 /* level calibration: up-axis mean, mg (>= 500) */
 #define IMU_LOG_LVL_UP 59u
 
-/* ImuTask's state, kept from one 10 ms cycle to the next. */
+/** ImuTask's state, kept from one 10 ms cycle to the next. */
 typedef struct
 {
     imu_types_snap_t snap;
@@ -57,12 +57,12 @@ typedef struct
     uint8_t          errors;
     uint8_t          good;
     uint8_t          prev_phase;
-    bool     b_tilt_sent; /* SAFETY_FLT_TILT set for this tilt (14 Nov) */
-    bool     b_was_black; /* line snapshot: all IR black last cycle     */
-    bool     b_was_air;   /* line snapshot: no floor last cycle         */
-    bool     b_air_start; /* the IR sensors just found no floor         */
-    UINT     safety_bits; /* flg_safety bits to set after the snapshot  */
-    uint32_t still_ms;    /* start of the stand-still phase             */
+    bool     b_tilt_sent; /**< SAFETY_FLT_TILT set for this tilt (14 Nov) */
+    bool     b_was_black; /**< line snapshot: all IR black last cycle     */
+    bool     b_was_air;   /**< line snapshot: no floor last cycle         */
+    bool     b_air_start; /**< the IR sensors just found no floor         */
+    UINT     safety_bits; /**< flg_safety bits to set after the snapshot  */
+    uint32_t still_ms;    /**< start of the stand-still phase             */
     uint16_t prev_runs;
     uint32_t cycle;
     uint32_t prev_ms;
@@ -91,15 +91,15 @@ static void imu_debug_logs(imu_task_state_t const * p_st,
 
 EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 {
-    imu_task_state_t st = {0};
+    imu_task_state_t state = {0};
 
     (void)stacd;
     (void)p_exinf;
 
-    st.prev_phase = MISSION_CAL_PH_NONE;
+    state.prev_phase = MISSION_CAL_PH_NONE;
     imu_core_init(&g_ic);
-    st.b_hw_ok = imu_hw_init();
-    st.prev_ms = (uint32_t)app_time_ms_hw();
+    state.b_hw_ok = imu_hw_init();
+    state.prev_ms = (uint32_t)app_time_ms_hw();
 
     for (;;)
     {
@@ -110,13 +110,13 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 
         (void)tk_slp_tsk(IMU_WAKE_TIMEOUT_MS);
         subsystem4_heartbeat(SAFETY_HB_IMU);
-        st.cycle++;
+        state.cycle++;
 
-        if (!st.b_hw_ok)
+        if (!state.b_hw_ok)
         {
-            if (0u == (st.cycle % IMU_RETRY_CYCLES))
+            if (0u == (state.cycle % IMU_RETRY_CYCLES))
             {
-                st.b_hw_ok = imu_hw_init();
+                state.b_hw_ok = imu_hw_init();
             }
             err = E_IO;
         }
@@ -124,7 +124,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
         {
             err = drv_lsm303_read_accel(acc);
 
-            if ((E_OK == err) && (0u == (st.cycle % 2u)))
+            if ((E_OK == err) && (0u == (state.cycle % 2u)))
             {
                 b_mag = (E_OK == drv_lsm303_read_mag(mag));
             }
@@ -132,16 +132,16 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 
         if (err != E_OK)
         {
-            imu_read_failed(&st, err);
+            imu_read_failed(&state, err);
         }
         else
         {
-            imu_read_ok(&st, acc, b_mag ? mag : NULL);
+            imu_read_ok(&state, acc, b_mag ? mag : NULL);
         }
     }
 }
 
-/* I2C error handling: three in a row raise IMU_FAULT, once per episode. */
+/** I2C error handling: three in a row raise IMU_FAULT, once per episode. */
 static void imu_read_failed (imu_task_state_t * p_st, ER err)
 {
     p_st->errors =
@@ -183,7 +183,7 @@ static void imu_read_failed (imu_task_state_t * p_st, ER err)
     subsystem4_put_imu_snap(&p_st->snap);
 }
 
-/* One good sample: recovery, calibration, humps, events and the snapshot.
+/** One good sample: recovery, calibration, humps, events and the snapshot.
    p_mag is NULL when no magnetometer sample was read this cycle. */
 static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
                          int16_t const * p_mag)
@@ -283,7 +283,7 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
     }
 }
 
-/* Calibration: MissionTask entered phase new_phase. */
+/** Calibration: MissionTask entered phase new_phase. */
 static void imu_cal_phase (imu_task_state_t * p_st, uint8_t new_phase,
                            uint32_t now_ms)
 {
@@ -307,7 +307,7 @@ static void imu_cal_phase (imu_task_state_t * p_st, uint8_t new_phase,
     }
 }
 
-/* Calibration finished: close the phase that was running, report. */
+/** Calibration finished: close the phase that was running, report. */
 static void imu_cal_finish (uint8_t prev_phase)
 {
     bool b_level;
@@ -335,7 +335,7 @@ static void imu_cal_finish (uint8_t prev_phase)
         (uint16_t)APP_SRC_SAFETY_IMU, b_level ? 1 : 0);
 }
 
-/* Calibration: feed this cycle's sample to the running phase. */
+/** Calibration: feed this cycle's sample to the running phase. */
 static void imu_cal_sample (imu_task_state_t const * p_st, uint8_t phase,
                             uint32_t now_ms, int32_t const acc[IMU_AXES],
                             int16_t const * p_mag)
@@ -364,7 +364,7 @@ static void imu_cal_sample (imu_task_state_t const * p_st, uint8_t phase,
     }
 }
 
-/* All three IR sensors black: the robot may be in the air (wheels
+/** All three IR sensors black: the robot may be in the air (wheels
    spinning, chassis tipped: read as humps).  Keep the hump results as they
    are; if it turns out lifted, undo every hump since and stop measuring
    humps until it is back on the floor.  Returns true while there is no
@@ -396,7 +396,7 @@ static bool imu_floor_check (imu_task_state_t * p_st)
     return b_air;
 }
 
-/* Events of this cycle: mission events, safety bits and LOG records. */
+/** Events of this cycle: mission events, safety bits and LOG records. */
 static void imu_report (imu_task_state_t * p_st, uint8_t events,
                         mission_types_snap_t const * p_mission)
 {
@@ -417,7 +417,7 @@ static void imu_report (imu_task_state_t * p_st, uint8_t events,
     imu_log_events(events);
 }
 
-/* 14 Nov: tilt (overturned) and lift brake the motors while a run is
+/** 14 Nov: tilt (overturned) and lift brake the motors while a run is
    active (SafetyTask latches the fault); idle, they are only logged, so
    handling the robot does not latch a fault.  The bits are set after the
    snapshot, so the run summary (MissionTask, core 1) reads the humps as
@@ -440,7 +440,7 @@ static void imu_safety_bits (imu_task_state_t * p_st, uint8_t events,
     }
 }
 
-/* LOG records for the lift, tilt, motion and ramp events. */
+/** LOG records for the lift, tilt, motion and ramp events. */
 static void imu_log_events (uint8_t events)
 {
     if ((events & IMU_EV_LIFT) != 0u)
@@ -481,7 +481,7 @@ static void imu_log_events (uint8_t events)
     }
 }
 
-/* Bring-up only (IMU_DEBUG_LOGS in imu_cfg.h): raw acceleration, pitch and
+/** Bring-up only (IMU_DEBUG_LOGS in imu_cfg.h): raw acceleration, pitch and
    roll as LOG 100..104 on the first good sample, then every 100 cycles.
    Off by default: five QoS 1 events per second exceed lwIP's MQTT
    in-flight limit and fill the laptop's log. */
@@ -516,6 +516,9 @@ static void imu_debug_logs (imu_task_state_t const * p_st,
 #endif
 }
 
+/** Initialise I2C1 and the LSM303.  Returns true if both succeeded; the
+    results are logged (LOG 90..93 and 53) the first time and whenever they
+    change. */
 static bool imu_hw_init (void)
 {
     static bool     b_reported = false;

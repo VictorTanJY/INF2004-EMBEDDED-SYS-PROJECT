@@ -1,6 +1,6 @@
-/*
- *  safety_core.c
- *  Subsystem 4 -- heartbeat supervision (pure).  See safety_core.h.
+/** @file safety_core.c
+ *
+ *  @brief Subsystem 4 -- heartbeat supervision (pure).  See safety_core.h.
  */
 
 #include "safety_core.h"

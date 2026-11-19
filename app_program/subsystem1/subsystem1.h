@@ -1,6 +1,6 @@
-/*
- *  subsystem1.h
- *  Subsystem 1 -- WiFi communication, command and telemetry (CommsTask,
+/** @file subsystem1.h
+ *
+ *  @brief Subsystem 1 -- WiFi communication, command and telemetry (CommsTask,
  *  i.e. the template's WiFi/MQTT service) and the buttons (HmiTask).
  *  Owner: Buddy 1 (Victor, 2503553).
  *
@@ -8,9 +8,9 @@
  *  4 and 6.5.
  *
  *  IF-12  mbf_telem: telemetry records from any task.  Post them with
- *         subsystem1_telem_post(); it never blocks (TMO_POL) and counts a drop
- *         when the buffer is full (NFR10: telemetry never blocks a
- *         control task).
+ *  subsystem1_telem_post(); it never blocks (TMO_POL) and counts a drop
+ *  when the buffer is full (NFR10: telemetry never blocks a
+ *  control task).
  */
 
 #ifndef SUBSYSTEM1_H
@@ -41,14 +41,14 @@
 #define S1_MBF_TELEM_RECORDS 64u
 #define S1_MBF_TELEM_BYTES   (S1_MBF_TELEM_RECORDS * (4u + 8u))
 
-/* ID of mbf_telem (design documents); 0 until subsystem1_init() has run. */
+/** ID of mbf_telem (design documents); 0 until subsystem1_init() has run. */
 IMPORT ID subsystem1_mbf_telem(void);
 
-/* Post one record (tasks only, not ISRs).  true = queued, false = dropped. */
+/** Post one record (tasks only, not ISRs).  true = queued, false = dropped. */
 IMPORT bool subsystem1_telem_post(uint8_t kind, uint8_t src, uint16_t code,
                                   int32_t data);
 
-/* Records dropped because mbf_telem was full. */
+/** Records dropped because mbf_telem was full. */
 IMPORT uint32_t subsystem1_telem_drops(void);
 
 /* MQTT topics (TEAM.md IF-11).  COMMS_TOPIC_BASE may be overridden with
@@ -68,11 +68,11 @@ IMPORT uint32_t subsystem1_telem_drops(void);
 /* Private to subsystem 1 */
 #include "task_hmi.h"
 
-/* Called by usermain() in this order: every subsystem's _init() first,
+/** Called by usermain() in this order: every subsystem's _init() first,
    then every subsystem's _start(), so every kernel object exists before
    any task can use it. */
-IMPORT ER subsystem1_init(void);  /* create this subsystem's kernel objects */
-IMPORT ER subsystem1_start(void); /* create and start its tasks             */
+IMPORT ER subsystem1_init(void);  /**< create this subsystem's kernel objects */
+IMPORT ER subsystem1_start(void); /**< create and start its tasks             */
 
 #endif /* SUBSYSTEM1_H */
 

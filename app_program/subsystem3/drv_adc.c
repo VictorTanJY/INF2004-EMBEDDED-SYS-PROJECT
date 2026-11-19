@@ -1,6 +1,6 @@
-/*
- *  drv_adc.c
- *  Subsystem 3 -- ADC + DMA driver.  See drv_adc.h.
+/** @file drv_adc.c
+ *
+ *  @brief Subsystem 3 -- ADC + DMA driver.  See drv_adc.h.
  *
  *  ADC: 48 MHz / (1 + 15999) = 3 kHz, round robin over AIN0..AIN2, so each
  *  channel is sampled at 1 kHz (NFR2).  Each DMA channel fills a 30-sample
@@ -163,48 +163,59 @@ EXPORT uint32_t drv_adc_errors (void)
 }
 
 
+/** Number of samples in the ADC FIFO, from its FCS register value. */
 static inline uint32_t adc_fcs_level (uint32_t fcs)
 {
     return (fcs >> 16) & 0xFu;
 }
 
+/** Address of the read-address register of DMA channel chan. */
 static inline uint32_t dma_read_addr (uint32_t chan)
 {
     return DMA_BASE_ADDR + (0x40u * chan) + 0x00u;
 }
 
+/** Address of the write-address register of DMA channel chan. */
 static inline uint32_t dma_write_addr (uint32_t chan)
 {
     return DMA_BASE_ADDR + (0x40u * chan) + 0x04u;
 }
 
+/** Address of the transfer-count register of DMA channel chan. */
 static inline uint32_t dma_trans_count (uint32_t chan)
 {
     return DMA_BASE_ADDR + (0x40u * chan) + 0x08u;
 }
 
+/** Address of the control register of DMA channel chan (writing it starts the
+    channel). */
 static inline uint32_t dma_ctrl_trig (uint32_t chan)
 {
     return DMA_BASE_ADDR + (0x40u * chan) + 0x0Cu;
 }
 
+/** Address of the alias control register of DMA channel chan (writing it does
+    not start the channel). */
 static inline uint32_t dma_al1_ctrl (uint32_t chan)
 {
     return DMA_BASE_ADDR + (0x40u * chan) + 0x10u;
 }
 
+/** CHAIN_TO field: start channel chan when this one completes. */
 static inline uint32_t dma_ctrl_chain (uint32_t chan)
 {
     return (uint32_t)chan << 11;
 }
 
+/** Control word of an ADC block channel: 16-bit transfers into the buffer,
+    paced by the ADC, chained to chain_to. */
 static uint32_t ctrl_for (uint32_t chain_to)
 {
     return DMA_CTRL_EN | DMA_CTRL_SIZE_HALF | DMA_CTRL_INCR_WRITE
            | dma_ctrl_chain(chain_to) | DMA_CTRL_TREQ_ADC;
 }
 
-/* adc_dma_isr: one 10 ms block is complete. */
+/** adc_dma_isr: one 10 ms block is complete. */
 static void adc_dma_isr (UINT intno)
 {
     uint32_t const ints =

@@ -1,6 +1,6 @@
-/*
- *  hmi_button.c
- *  Subsystem 1 -- button debounce (pure C, see hmi_button.h).
+/** @file hmi_button.c
+ *
+ *  @brief Subsystem 1 -- button debounce (pure C, see hmi_button.h).
  *  Owner: Buddy 1 (Victor).
  */
 

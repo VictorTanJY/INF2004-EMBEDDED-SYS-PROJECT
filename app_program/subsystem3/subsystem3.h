@@ -1,6 +1,6 @@
-/*
- *  subsystem3.h
- *  Subsystem 3 -- IR line following and Code 39 barcode decoding
+/** @file subsystem3.h
+ *
+ *  @brief Subsystem 3 -- IR line following and Code 39 barcode decoding
  *  (LineBarcodeTask).  Owner: Buddy 3 (Ho Boon Hean).
  *
  *  PUBLIC interface of subsystem 3.  Week 6 design review: Sections 3,
@@ -24,18 +24,18 @@
 #define S3_PIN_IR_BARCODE 28u /* ADC2 (VBAT jumper open) */
 #define S3_PIN_TIMING     7u  /* spare GP7, APP_TIMING_PINS=1 */
 
-IMPORT void subsystem3_get_snap(line_types_snap_t * p_out); /* any task       */
-IMPORT void
-subsystem3_put_snap(line_types_snap_t const * p_in); /* LineBarcodeTask only */
+IMPORT void subsystem3_get_snap(line_types_snap_t * p_out); /**< any task */
+IMPORT void subsystem3_put_snap(
+    line_types_snap_t const * p_in); /**< LineBarcodeTask only */
 
 /* Private to subsystem 3 */
 #include "line_task.h"
 
-/* Called by usermain() in this order: every subsystem's _init() first,
+/** Called by usermain() in this order: every subsystem's _init() first,
    then every subsystem's _start(), so every kernel object exists before
    any task can use it. */
-IMPORT ER subsystem3_init(void);  /* create this subsystem's kernel objects */
-IMPORT ER subsystem3_start(void); /* create and start its tasks             */
+IMPORT ER subsystem3_init(void);  /**< create this subsystem's kernel objects */
+IMPORT ER subsystem3_start(void); /**< create and start its tasks             */
 
 #endif /* SUBSYSTEM3_H */
 

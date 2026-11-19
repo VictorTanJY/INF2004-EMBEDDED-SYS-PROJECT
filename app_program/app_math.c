@@ -1,6 +1,6 @@
-/*
- *  app_math.c
- *  Integer trigonometry and square root.  See app_math.h.
+/** @file app_math.c
+ *
+ *  @brief Integer trigonometry and square root.  See app_math.h.
  */
 
 #include "app_math.h"
@@ -109,7 +109,7 @@ int32_t app_math_wrap_cdeg (int32_t cdeg)
     return angle;
 }
 
-/*
+/**
  * sin(t) by its Taylor series to t^9 on |t| <= pi/2, in Q30.
  * Truncation error < (pi/2)^11 / 11! = 3.6e-6.
  */
@@ -188,7 +188,7 @@ static int64_t q30_floor (int64_t value)
     return quot;
 }
 
-/*
+/**
  * atan(z) for 0 <= z <= 1, z in Q30, result in cdeg.  Abramowitz & Stegun
  * 4.4.49: atan(z) = z (a1 + a3 z^2 + a5 z^4 + a7 z^6 + a9 z^8), |err| <= 1e-5
  * rad.

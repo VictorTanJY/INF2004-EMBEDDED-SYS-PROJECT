@@ -1,6 +1,6 @@
-/*
- *  subsystem4_test.c
- *  On-target tests for subsystem 4.  Built only with: make TEST=1
+/** @file subsystem4_test.c
+ *
+ *  @brief On-target tests for subsystem 4.  Built only with: make TEST=1
  *  Record results in testing/subsystem4/TEST_LOG.md.
  *  IMU and heartbeat logic are tested on a PC (testing/subsystem4/host).
  *
@@ -13,8 +13,10 @@
 #include "subsystem4_test.h"
 #include "safety_task.h"
 #include "subsystem4.h"
+
 /* subsystem2_motor_estop timestamp, odometry */
 #include "../subsystem2/subsystem2.h"
+
 /* subsystem5_mission_post / subsystem5_get_mission_snap */
 #include "../subsystem5/subsystem5.h"
 #include "../test_report.h"
@@ -36,12 +38,12 @@
 
 #if APP_TEST
 
-
 #endif
 
 #if APP_TEST
 static bool    brake_pins_low(void);
 static int32_t iabs(int32_t value);
+static void    test_estop(test_report_t * p_report);
 #endif
 
 #if APP_TEST
@@ -103,63 +105,7 @@ EXPORT void subsystem4_test_run (void)
             "IMU reads level (pitch, roll within 5 deg), no I2C errors in 1 s");
     }
 
-    /* ---- S4-U08: fault bit -> both motors braked (NFR8) ---------------- */
-    {
-        mission_types_snap_t mission;
-        motion_types_odom_t  odom;
-        uint32_t             t_start;
-        uint32_t             lat;
-        uint32_t             elapsed;
-        bool                 b_ok = false;
-        uint8_t              pre;
-
-        subsystem5_get_mission_snap(&mission);
-        pre = mission.state;
-        subsystem2_estop_test_clear();
-        t_start = (uint32_t)app_time_us();
-        (void)tk_set_flg(subsystem4_flg_safety(), T_FAULT_BIT);
-        (void)tk_dly_tsk(50);
-        lat = subsystem2_estop_test_us() - t_start;
-        subsystem2_get_odom(&odom);
-        tm_printf((UB *)"[INFO] S4-U08 fault flag -> motor_estop() %d us "
-                        "(limit %d us)\n",
-                  (INT)lat, (INT)T_NFR8_US);
-        TEST_CHECK(&report, "S4-U08",
-                   (subsystem2_estop_test_us() != 0u) && (lat <= T_NFR8_US)
-                       && subsystem2_estop_latched() && brake_pins_low()
-                       && ((subsystem4_get_latched() & T_FAULT_BIT) != 0u),
-                   "fault flag brakes both motors within 20 ms (GP8-11 SIO, "
-                   "LOW; latched)");
-
-        /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
-        (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
-                                      (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
-        for (elapsed = 0u; elapsed < T_RESET_WAIT_MS; elapsed += 50u)
-        {
-            (void)tk_dly_tsk(50);
-            subsystem5_get_mission_snap(&mission);
-            if (!subsystem2_estop_latched() && (0u == subsystem4_get_latched())
-                && ((pre != MISSION_ST_IDLE)
-                    || (MISSION_ST_IDLE == mission.state)))
-            {
-                b_ok = true;
-                break;
-            }
-        }
-        subsystem2_get_odom(&odom);
-        tm_printf((UB *)"[INFO] S4-U09 cleared after %d ms; mission state %d "
-                        "(was %d), brake %d, latched 0x%x\n",
-                  (INT)elapsed, (INT)mission.state, (INT)pre,
-                  (INT)(subsystem2_estop_latched() ? 1 : 0),
-                  (INT)subsystem4_get_latched());
-        TEST_CHECK(
-            &report, "S4-U09",
-            b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)
-                && (APP_REGS_FUNCSEL_PWM
-                    == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu)),
-            "Reset clears the latch, PWM reconnected, mission back to "
-            "IDLE (if it was IDLE)");
-    }
+    test_estop(&report);
 
     test_report_summary(&report, "subsystem4");
 }
@@ -168,6 +114,65 @@ EXPORT void subsystem4_test_run (void)
 
 #if APP_TEST
 
+/** S4-U08 / U09: a fault bit brakes both motors; Reset clears it. */
+static void test_estop (test_report_t * p_report)
+{
+    /* ---- S4-U08: fault bit -> both motors braked (NFR8) ---------------- */
+    mission_types_snap_t mission;
+    motion_types_odom_t  odom;
+    uint32_t             t_start;
+    uint32_t             lat;
+    uint32_t             elapsed;
+    bool                 b_ok = false;
+    uint8_t              pre;
+
+    subsystem5_get_mission_snap(&mission);
+    pre = mission.state;
+    subsystem2_estop_test_clear();
+    t_start = (uint32_t)app_time_us();
+    (void)tk_set_flg(subsystem4_flg_safety(), T_FAULT_BIT);
+    (void)tk_dly_tsk(50);
+    lat = subsystem2_estop_test_us() - t_start;
+    subsystem2_get_odom(&odom);
+    tm_printf((UB *)"[INFO] S4-U08 fault flag -> motor_estop() %d us "
+                    "(limit %d us)\n",
+              (INT)lat, (INT)T_NFR8_US);
+    TEST_CHECK(p_report, "S4-U08",
+               (subsystem2_estop_test_us() != 0u) && (lat <= T_NFR8_US)
+                   && subsystem2_estop_latched() && brake_pins_low()
+                   && ((subsystem4_get_latched() & T_FAULT_BIT) != 0u),
+               "fault flag brakes both motors within 20 ms (GP8-11 SIO, "
+               "LOW; latched)");
+
+    /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
+    (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
+                                  (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
+    for (elapsed = 0u; elapsed < T_RESET_WAIT_MS; elapsed += 50u)
+    {
+        (void)tk_dly_tsk(50);
+        subsystem5_get_mission_snap(&mission);
+        if (!subsystem2_estop_latched() && (0u == subsystem4_get_latched())
+            && ((pre != MISSION_ST_IDLE) || (MISSION_ST_IDLE == mission.state)))
+        {
+            b_ok = true;
+            break;
+        }
+    }
+    subsystem2_get_odom(&odom);
+    tm_printf((UB *)"[INFO] S4-U09 cleared after %d ms; mission state %d "
+                    "(was %d), brake %d, latched 0x%x\n",
+              (INT)elapsed, (INT)mission.state, (INT)pre,
+              (INT)(subsystem2_estop_latched() ? 1 : 0),
+              (INT)subsystem4_get_latched());
+    TEST_CHECK(p_report, "S4-U09",
+               b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)
+                   && (APP_REGS_FUNCSEL_PWM
+                       == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu)),
+               "Reset clears the latch, PWM reconnected, mission back to "
+               "IDLE (if it was IDLE)");
+}
+
+/** True if GP8-GP11 are SIO outputs driven low (the emergency brake). */
 static bool brake_pins_low (void)
 {
     uint32_t const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
@@ -184,6 +189,7 @@ static bool brake_pins_low (void)
                == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_B)) & 0x1Fu));
 }
 
+/** Absolute value (value must not be INT32_MIN). */
 static int32_t iabs (int32_t value)
 {
     return (value < 0) ? -value : value;

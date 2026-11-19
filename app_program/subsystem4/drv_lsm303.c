@@ -1,6 +1,8 @@
-/* LSM303D driver for the robot identified by WHO_AM_I 0x49 at 0x1D.
- * Datasheet: https://www.st.com/resource/en/datasheet/lsm303d.pdf
- * API units and sensor-axis order match the existing imu_core interface.
+/** @file drv_lsm303.c
+ *
+ *  @brief LSM303D driver for the robot identified by WHO_AM_I 0x49 at 0x1D.
+ *  Datasheet: https://www.st.com/resource/en/datasheet/lsm303d.pdf
+ *  API units and sensor-axis order match the existing imu_core interface.
  */
 
 #include "drv_lsm303.h"
@@ -105,7 +107,7 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
     return E_OK;
 }
 
-/* Diagnostic layout:
+/** Diagnostic layout:
  * bits 31..24: stage (0 = success, 1 = identity read,
  *                    2 = unexpected identity, 4 = configuration,
  *                    5 = acceleration stuck at full scale after 2 tries)
@@ -120,7 +122,7 @@ static ER init_result (uint8_t stage, ER err, uint8_t chip_id)
     return err;
 }
 
-/* Sleep in 10 ms steps and keep ImuTask's heartbeat (100 ms timeout)
+/** Sleep in 10 ms steps and keep ImuTask's heartbeat (100 ms timeout)
    alive: a reboot and retry take up to ~150 ms. */
 static void wait_ms (uint32_t delay_ms)
 {
@@ -133,6 +135,8 @@ static void wait_ms (uint32_t delay_ms)
     }
 }
 
+/** One attempt to identify and configure the accelerometer and magnetometer.
+    Returns E_OK or the first error. */
 static ER init_once (void)
 {
     uint8_t  chip_id = 0u;
@@ -202,6 +206,7 @@ static ER init_once (void)
     return init_result(0u, E_OK, chip_id);
 }
 
+/** Signed 16-bit value from its low and high bytes. */
 static int16_t le16 (uint8_t low, uint8_t high)
 {
     uint16_t const word = (uint16_t)((uint16_t)low | ((uint16_t)high << 8));

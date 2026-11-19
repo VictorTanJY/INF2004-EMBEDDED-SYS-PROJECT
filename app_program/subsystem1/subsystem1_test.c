@@ -1,6 +1,6 @@
-/*
- *  subsystem1_test.c
- *  On-target tests for subsystem 1.  Built only with: make TEST=1
+/** @file subsystem1_test.c
+ *
+ *  @brief On-target tests for subsystem 1.  Built only with: make TEST=1
  *  Record results in testing/subsystem1/TEST_LOG.md.
  *
  *  The same protocol and debounce logic is also tested on a PC, with
@@ -16,7 +16,7 @@
 
 #if APP_TEST
 
-/* Command frames (comms_proto.h): header 0x25 = type 5, version 1. */
+/** Command frames (comms_proto.h): header 0x25 = type 5, version 1. */
 static uint8_t const g_start_7[3]  = {0x25u, 0x07u, 0x01u}; /* START, id 7  */
 static uint8_t const g_start_9[3]  = {0x25u, 0x09u, 0x01u}; /* START, id 9  */
 static uint8_t const g_start_11[3] = {0x25u, 0x0Bu, 0x01u}; /* START, id 11 */
@@ -33,6 +33,7 @@ static bool s1_bytes_eq(uint8_t const * p_a, uint8_t const * p_b,
                         uint16_t n_bytes);
 static bool s1_parse(uint8_t const * p_frame, uint16_t n_bytes,
                      comms_proto_cmd_t * p_cmd, comms_proto_err_t * p_err);
+static void test_button(test_report_t * p_report);
 #endif
 
 #if APP_TEST
@@ -44,11 +45,7 @@ EXPORT void subsystem1_test_run (void)
     comms_proto_cmd_t   cmd;
     comms_proto_err_t   err;
     comms_proto_telem_t telem = {0};
-    hmi_button_t        btn;
     uint16_t            len;
-    uint32_t            idx;
-    bool                b_long  = false;
-    bool                b_short = false;
 
     test_report_t report = {0, 0, 0};
 
@@ -106,24 +103,7 @@ EXPORT void subsystem1_test_run (void)
                (3u == len) && s1_bytes_eq(buf, g_ack_busy, 3u),
                "ack frame: 3 bytes, id 9, err busy");
 
-    /* S1-U06: a 10 ms bounce is ignored; a 2 s hold gives one LONG, no SHORT.
-     */
-    hmi_button_init(&btn);
-    (void)hmi_button_update(&btn, true, 20u, 2000u);
-    TEST_CHECK(&report, "S1-U06a",
-               HMI_BTN_EV_NONE == hmi_button_update(&btn, false, 20u, 2000u),
-               "single-sample glitch ignored");
-    hmi_button_init(&btn);
-    for (idx = 0u; idx < T_HOLD_SAMPLES; idx++)
-    {
-        hmi_button_ev_t event = hmi_button_update(&btn, true, 20u, 2000u);
-
-        b_long = b_long || (HMI_BTN_EV_LONG == event);
-    }
-    (void)hmi_button_update(&btn, false, 20u, 2000u);
-    b_short = (HMI_BTN_EV_SHORT == hmi_button_update(&btn, false, 20u, 2000u));
-    TEST_CHECK(&report, "S1-U06b", b_long && !b_short,
-               "long press reported once, no short");
+    test_button(&report);
 
     /* S1-U07: a delayed QoS 1 redelivery is recognised; a reused id is not. */
     {
@@ -149,6 +129,33 @@ EXPORT void subsystem1_test_run (void)
 
 #if APP_TEST
 
+/** S1-U06: a 10 ms bounce is ignored; a 2 s hold gives one LONG, no SHORT. */
+static void test_button (test_report_t * p_report)
+{
+    hmi_button_t btn;
+    uint32_t     idx;
+    bool         b_long  = false;
+    bool         b_short = false;
+
+    hmi_button_init(&btn);
+    (void)hmi_button_update(&btn, true, 20u, 2000u);
+    TEST_CHECK(p_report, "S1-U06a",
+               HMI_BTN_EV_NONE == hmi_button_update(&btn, false, 20u, 2000u),
+               "single-sample glitch ignored");
+    hmi_button_init(&btn);
+    for (idx = 0u; idx < T_HOLD_SAMPLES; idx++)
+    {
+        hmi_button_ev_t event = hmi_button_update(&btn, true, 20u, 2000u);
+
+        b_long = b_long || (HMI_BTN_EV_LONG == event);
+    }
+    (void)hmi_button_update(&btn, false, 20u, 2000u);
+    b_short = (HMI_BTN_EV_SHORT == hmi_button_update(&btn, false, 20u, 2000u));
+    TEST_CHECK(p_report, "S1-U06b", b_long && !b_short,
+               "long press reported once, no short");
+}
+
+/** True if the first n_bytes of p_a and p_b are equal. */
 static bool s1_bytes_eq (uint8_t const * p_a, uint8_t const * p_b,
                          uint16_t n_bytes)
 {
@@ -164,6 +171,8 @@ static bool s1_bytes_eq (uint8_t const * p_a, uint8_t const * p_b,
     return true;
 }
 
+/** Parse a command frame into *p_cmd, the result into *p_err.  True if it
+    parsed. */
 static bool s1_parse (uint8_t const * p_frame, uint16_t n_bytes,
                       comms_proto_cmd_t * p_cmd, comms_proto_err_t * p_err)
 {

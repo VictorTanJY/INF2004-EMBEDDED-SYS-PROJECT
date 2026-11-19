@@ -1,16 +1,16 @@
-/*
- *  motion_task.c
- *  Subsystem 2 -- MotionTask (priority 6, core 1), woken by motion_cyc
+/** @file motion_task.c
+ *
+ *  @brief Subsystem 2 -- MotionTask (priority 6, core 1), woken by motion_cyc
  *  every 10 ms (Week 6 Sections 3 and 6.1).  Owner: Buddy 2 (Jedrek).
  *
  *  Every cycle:
- *    1. heartbeat; read both PIO encoder counts;
- *    2. drain mbf_motion (TMO_POL) into the controller (authority rules);
- *    3. one controller step (PID, profiles, STOPPING, stall);
- *    4. write the PWM duty -- the latch is checked immediately before the
- *       write, inside DI/EI, so subsystem2_motor_estop() cannot be undone;
- *    5. publish the odometry snapshot; report events:
- *       MOTION_DONE / MOTION_FAILED -> mbf_mission, STALL -> flg_safety.
+ *  1. heartbeat; read both PIO encoder counts;
+ *  2. drain mbf_motion (TMO_POL) into the controller (authority rules);
+ *  3. one controller step (PID, profiles, STOPPING, stall);
+ *  4. write the PWM duty -- the latch is checked immediately before the
+ *  write, inside DI/EI, so subsystem2_motor_estop() cannot be undone;
+ *  5. publish the odometry snapshot; report events:
+ *  MOTION_DONE / MOTION_FAILED -> mbf_mission, STALL -> flg_safety.
  */
 
 #include "motion_task.h"
@@ -29,7 +29,7 @@ static motion_core_t g_core;
 
 #if APP_TEST
 
-/* make TEST=1 only: loop timing for S2-U07.  Written by MotionTask
+/** make TEST=1 only: loop timing for S2-U07.  Written by MotionTask
    (core 1) only; the test task reads each 32-bit word, which is one
    indivisible load on the M0+.  The test asks for a restart through
    g_tt_restart (a byte it sets and MotionTask clears), so the counters
@@ -150,6 +150,8 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 #if APP_TEST
 
 
+/** Self-test timing: record the period since the last wake-up (restarted on
+    request). */
 static void tt_wake (uint32_t now_us)
 {
     if (g_tt_restart != 0u)
@@ -177,6 +179,7 @@ static void tt_wake (uint32_t now_us)
     g_tt_prev_us = now_us;
 }
 
+/** Self-test timing: record how long this cycle's work took. */
 static void tt_done (uint32_t wake_us)
 {
     uint32_t const exec = (uint32_t)app_time_us() - wake_us;
@@ -189,6 +192,7 @@ static void tt_done (uint32_t wake_us)
 
 #endif
 
+/** With APP_TIMING_PINS, make S2_PIN_TIMING an output for the oscilloscope. */
 static void timing_pin_init (void)
 {
 #if APP_TIMING_PINS
@@ -198,6 +202,7 @@ static void timing_pin_init (void)
 #endif
 }
 
+/** With APP_TIMING_PINS, toggle S2_PIN_TIMING once per cycle. */
 static void timing_pin_toggle (void)
 {
 #if APP_TIMING_PINS
@@ -205,7 +210,7 @@ static void timing_pin_toggle (void)
 #endif
 }
 
-/* Step 4: check the latch and write, as one indivisible step on core 1. */
+/** Step 4: check the latch and write, as one indivisible step on core 1. */
 static void write_pwm (int16_t duty_l, int16_t duty_r)
 {
     UINT intsts;
@@ -218,6 +223,7 @@ static void write_pwm (int16_t duty_l, int16_t duty_r)
     EI(intsts);
 }
 
+/** Post the controller's completion events to MissionTask and telemetry. */
 static void report_events (void)
 {
     motion_core_event_t event;

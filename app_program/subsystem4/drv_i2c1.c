@@ -1,6 +1,6 @@
-/*
- *  drv_i2c1.c
- *  Subsystem 4 -- polled I2C1 master.  See drv_i2c1.h.
+/** @file drv_i2c1.c
+ *
+ *  @brief Subsystem 4 -- polled I2C1 master.  See drv_i2c1.h.
  *  Preserves the robot's 100 kHz timing. Recovery releases a stuck SDA
  *  with up to nine open-drain SCL pulses, followed by a STOP.
  */
@@ -156,11 +156,14 @@ EXPORT ER drv_i2c1_probe (uint8_t addr7)
     return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
 }
 
+/** True once I2C_TIMEOUT_US have passed since t_start (us). */
 static bool timed_out (uint32_t t_start)
 {
     return ((uint32_t)(app_time_us() - t_start) > I2C_TIMEOUT_US);
 }
 
+/** Disable I2C1, set the 7-bit target address and enable it again.  Returns
+    E_OK or E_TMOUT. */
 static ER set_target (uint8_t addr7)
 {
     uint32_t const t_start = (uint32_t)app_time_us();
@@ -179,7 +182,7 @@ static ER set_target (uint8_t addr7)
     return E_OK;
 }
 
-/* Wait for the STOP of the transfer, then check for an abort (NACK). */
+/** Wait for the STOP of the transfer, then check for an abort (NACK). */
 static ER finish (uint32_t t_start)
 {
     while (0u == (in_w(IC_RAW_INTR_STAT) & (INTR_STOP_DET | INTR_TX_ABRT)))
@@ -199,7 +202,7 @@ static ER finish (uint32_t t_start)
     return E_OK;
 }
 
-/* Open-drain recovery: drive LOW or release; never drive either line HIGH.
+/** Open-drain recovery: drive LOW or release; never drive either line HIGH.
  * NXP UM10204 section 3.1.16: up to nine clocks if SDA is stuck LOW.
  * All waits are bounded. A shorted/unpowered device remains an error.
  */
@@ -211,6 +214,8 @@ static void recovery_delay (void)
     }
 }
 
+/** Release SCL and wait up to 100 us for it to go high (a device may hold it).
+    Returns E_OK or E_IO. */
 static ER scl_release (void)
 {
     uint32_t const t_start = (uint32_t)app_time_us();
@@ -226,6 +231,8 @@ static ER scl_release (void)
     return E_OK;
 }
 
+/** Free a stuck bus: clock SCL by hand until a device releases SDA, then send
+    a STOP.  Returns E_OK or E_IO. */
 static ER clear_bus (void)
 {
     uint32_t const sda = 1uL << S4_PIN_IMU_SDA;

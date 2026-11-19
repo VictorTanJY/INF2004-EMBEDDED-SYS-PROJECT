@@ -1,6 +1,6 @@
-/*
- *  mqtt_utk.c
- *  MQTT client wiring for micro T-Kernel (RP2040, NO_SYS=1)
+/** @file mqtt_utk.c
+ *
+ *  @brief MQTT client wiring for micro T-Kernel (RP2040, NO_SYS=1)
  *
  *  Runs entirely on the single processor-1-owned task that already owns
  *  the CYW43439 and the rest of lwIP (docs/RELEASE.md safety rule 6):
@@ -13,21 +13,21 @@
  *
  *  PicoCar changes from the template demo (Week 6 Section 6.5, A14;
  *  agreed with the team and the instructor, recorded as IF-11 in TEAM.md):
- *    - the 5 s "hb" demo publish is gone: the application publishes a
- *      retained status message at 1 Hz from mqtt_utk_app_poll();
- *    - keep-alive 60 s -> 10 s, and a Last Will from the application;
- *    - fixed 3 s retry -> 1, 2, 4, 8, 16 s exponential back-off, reset on
- *      every accepted connection;
- *    - subscribes to the application's command topic only, not to the
- *      topic it publishes on;
- *    - received payloads are passed on byte for byte (the demo replaced
- *      non-printable bytes with '.'), and oversized ones are dropped and
- *      counted instead of being truncated;
- *    - no tm_printf per message: on the dual-core USB build tm_printf
- *      masks interrupts on core 0, whose tick drives every cyclic handler.
- *      Only connection changes are printed;
- *    - mqtt_publish() results are returned to the caller, and failures
- *      reported later by lwIP are counted.
+ *  - the 5 s "hb" demo publish is gone: the application publishes a
+ *  retained status message at 1 Hz from mqtt_utk_app_poll();
+ *  - keep-alive 60 s -> 10 s, and a Last Will from the application;
+ *  - fixed 3 s retry -> 1, 2, 4, 8, 16 s exponential back-off, reset on
+ *  every accepted connection;
+ *  - subscribes to the application's command topic only, not to the
+ *  topic it publishes on;
+ *  - received payloads are passed on byte for byte (the demo replaced
+ *  non-printable bytes with '.'), and oversized ones are dropped and
+ *  counted instead of being truncated;
+ *  - no tm_printf per message: on the dual-core USB build tm_printf
+ *  masks interrupts on core 0, whose tick drives every cyclic handler.
+ *  Only connection changes are printed;
+ *  - mqtt_publish() results are returned to the caller, and failures
+ *  reported later by lwIP are counted.
  *
  *  This file does not include tk/tkernel.h or any pico-sdk/cyw43 header
  *  (unlike cyw43_utk.c and sys_arch.c), so it isn't subject to either
@@ -54,13 +54,13 @@
 #define MQTT_UTK_RX_TOPIC_MAX 64
 #define MQTT_UTK_RX_DATA_MAX  128
 
-/* lwIP declares this as a struct tag only (Barr-C 5.1b: types via typedef). */
+/** lwIP declares this as a struct tag only (Barr-C 5.1b: types via typedef). */
 typedef struct mqtt_connect_client_info_t mqtt_utk_client_info_t;
 
 static mqtt_client_t * gp_client;
 static ip_addr_t       g_broker_addr;
 
-/* 1 while a connect attempt is running or a back-off retry is pending;
+/** 1 while a connect attempt is running or a back-off retry is pending;
  * mqtt_utk_start() does nothing then. */
 static bool     gb_busy;
 static uint32_t g_backoff_ms = MQTT_UTK_BACKOFF_MIN_MS;
@@ -203,6 +203,8 @@ uint32_t mqtt_utk_rx_dropped (void)
 
 /* ------------------------------------------------------------------------ */
 
+/** lwIP timer: call the application's poll hook every MQTT_UTK_POLL_MS and re-
+    arm. */
 static void poll_timeout (void * p_arg)
 {
     (void)p_arg;
@@ -210,6 +212,7 @@ static void poll_timeout (void * p_arg)
     sys_timeout(MQTT_UTK_POLL_MS, poll_timeout, NULL);
 }
 
+/** lwIP timer: the back-off is over; the poll loop may connect again. */
 static void retry_timeout (void * p_arg)
 {
     (void)p_arg;
@@ -217,6 +220,8 @@ static void retry_timeout (void * p_arg)
         false; /* the poll loop calls mqtt_utk_start() while the link is up */
 }
 
+/** Schedule the next connection attempt after the back-off time, then double
+    it. */
 static void schedule_retry (void)
 {
     tm_printf((UB *)"mqtt: retry in %u s\n", (UINT)(g_backoff_ms / 1000u));
@@ -231,7 +236,7 @@ static void schedule_retry (void)
     }
 }
 
-/* mqtt.c NUL-terminates the topic before handing it over, but it is only
+/** mqtt.c NUL-terminates the topic before handing it over, but it is only
  * valid for the duration of this call -- copy it out. */
 static void incoming_publish_cb (void * p_arg, char const * p_topic,
                                  uint32_t tot_len)
@@ -251,6 +256,8 @@ static void incoming_publish_cb (void * p_arg, char const * p_topic,
     gb_rx_too_long = (tot_len > MQTT_UTK_RX_DATA_MAX);
 }
 
+/** lwIP: payload bytes of a received message; collected, and passed to
+    mqtt_utk_app_rx() when the last part arrives. */
 static void incoming_data_cb (void * p_arg, uint8_t const * p_data,
                               uint16_t len, uint8_t flags)
 {
@@ -278,6 +285,7 @@ static void incoming_data_cb (void * p_arg, uint8_t const * p_data,
     }
 }
 
+/** lwIP: the subscription finished; a failure is printed. */
 static void subscribe_done_cb (void * p_arg, err_t result)
 {
     (void)p_arg;
@@ -287,6 +295,7 @@ static void subscribe_done_cb (void * p_arg, err_t result)
     }
 }
 
+/** lwIP: a QoS 1/2 publish finished; failures are counted. */
 static void publish_done_cb (void * p_arg, err_t result)
 {
     (void)p_arg;
@@ -296,6 +305,8 @@ static void publish_done_cb (void * p_arg, err_t result)
     }
 }
 
+/** lwIP: the connection status changed.  Accepted: subscribe and tell the
+    application.  Lost or refused: tell it and retry after the back-off. */
 static void connection_cb (mqtt_client_t * p_client, void * p_arg,
                            mqtt_connection_status_t status)
 {

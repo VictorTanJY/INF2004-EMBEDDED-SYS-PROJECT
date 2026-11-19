@@ -1,6 +1,6 @@
-/*
- *  line_types.h
- *  Subsystem 3 -- line snapshot format (IF-04).  Owner: Buddy 3 (Boon).
+/** @file line_types.h
+ *
+ *  @brief Subsystem 3 -- line snapshot format (IF-04).  Owner: Buddy 3 (Boon).
  *  Pure C (no kernel).  subsystem3.h adds the kernel side.
  */
 
@@ -25,34 +25,34 @@
 /* all three black for LINE_NOFLOOR_UM: lifted */
 #define LINE_SENS_NO_FLOOR 0x08u
 
-/* line_types_snap_t.bc_state */
+/** line_types_snap_t.bc_state */
 typedef uint8_t line_types_bc_state_t; /* one of the constants below */
 #define LINE_BC_WAIT_QUIET 0u
 #define LINE_BC_ARMED      1u /* quiet zone seen, waiting for a bar */
 #define LINE_BC_CAPTURING  2u
 #define LINE_BC_COOLDOWN   3u
 
-/* IF-04  Line snapshot (written by LineBarcodeTask every 10 ms). */
+/** IF-04  Line snapshot (written by LineBarcodeTask every 10 ms). */
 typedef struct
 {
-    uint32_t t_ms;          /* time of the update                       */
-    uint32_t blocks;        /* 10 ms ADC blocks processed (NFR2 check)  */
-    uint32_t missed_blocks; /* blocks lost (sequence gap, NFR2)         */
-    int16_t  err;           /* (L - R)/(L + R) x 1000, + = line to the left */
-    int16_t  omega_mrad_s;  /* last steering command                    */
-    uint16_t raw_l;         /* normalised 0..1000 (1000 = black)        */
+    uint32_t t_ms;          /**< time of the update                       */
+    uint32_t blocks;        /**< 10 ms ADC blocks processed (NFR2 check)  */
+    uint32_t missed_blocks; /**< blocks lost (sequence gap, NFR2)         */
+    int16_t  err;           /**< (L - R)/(L + R) x 1000, + = line to the left */
+    int16_t  omega_mrad_s;  /**< last steering command                    */
+    uint16_t raw_l;         /**< normalised 0..1000 (1000 = black)        */
     uint16_t raw_r;
     uint16_t raw_bc;
-    uint16_t barcode_ok;   /* valid decodes since boot                 */
-    uint16_t barcode_err;  /* rejected reads since boot                */
-    uint16_t contrast_x10; /* worst calibration contrast x 10 (>= 30)  */
-    uint8_t  flags;        /* LINE_FLAG_*                              */
-    uint8_t  bc_state;     /* line_types_bc_state_t                          */
-    char     last_barcode; /* last valid Code 39 character, 0 = none   */
-    uint8_t  last_reject;  /* code39_result_t of the last reject       */
-    uint16_t turn_gain_pm; /* turn slip from the calibration spin: ask
+    uint16_t barcode_ok;   /**< valid decodes since boot                 */
+    uint16_t barcode_err;  /**< rejected reads since boot                */
+    uint16_t contrast_x10; /**< worst calibration contrast x 10 (>= 30)  */
+    uint8_t  flags;        /**< LINE_FLAG_*                              */
+    uint8_t  bc_state; /**< line_types_bc_state_t                          */
+    char     last_barcode; /**< last valid Code 39 character, 0 = none   */
+    uint8_t  last_reject;  /**< code39_result_t of the last reject       */
+    uint16_t turn_gain_pm; /**< turn slip from the calibration spin: ask
                               for real deg x this / 1000; 0 = not measured */
-    uint8_t sens;          /* LINE_SENS_*: each line sensor on the line  */
+    uint8_t sens;          /**< LINE_SENS_*: each line sensor on the line  */
 } line_types_snap_t;
 
 #endif /* LINE_TYPES_H */

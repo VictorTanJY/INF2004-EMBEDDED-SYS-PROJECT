@@ -1,14 +1,14 @@
-/*
- *  subsystem3.c
- *  Subsystem 3 -- Line following and barcode: objects and the line
+/** @file subsystem3.c
+ *
+ *  @brief Subsystem 3 -- Line following and barcode: objects and the line
  *  snapshot.  Owner: Buddy 3.  The task is in line_task.c; the pure
- * logic in line_track.c, line_barcode.c and code39.c; the driver in drv_adc.c.
+ *  logic in line_track.c, line_barcode.c and code39.c; the driver in drv_adc.c.
  */
 
 #include "subsystem3.h"
 #include "line_track.h"
 
-/* Stored packed (Change Requirement 1); whole records copied under the
+/** Stored packed (Change Requirement 1); whole records copied under the
    lock, packing and unpacking done in the writer's / reader's own task. */
 static app_lock_t g_line_lock;
 static uint32_t   g_line_snap[LINE_SNAP_WORDS];

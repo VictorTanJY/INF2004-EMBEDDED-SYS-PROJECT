@@ -1,6 +1,6 @@
-/*
- *  subsystem5.h
- *  Subsystem 5 -- Obstacle scanning and avoidance (ObstacleTask) and the
+/** @file subsystem5.h
+ *
+ *  @brief Subsystem 5 -- Obstacle scanning and avoidance (ObstacleTask) and the
  *  system state machine (MissionTask).  Owner: Buddy 5 (Ryan).
  *
  *  PUBLIC interface of subsystem 5.  Week 6 design review: Sections 3,
@@ -30,13 +30,14 @@
  * --------------------------------------------------------------------- */
 #define S5_MBF_MISSION_DEPTH 16u /* events (Week 6: 16 deep) */
 
-/* ID of mbf_mission (design documents); 0 until subsystem5_init() has run. */
+/** ID of mbf_mission (design documents); 0 until subsystem5_init() has run. */
 IMPORT ID subsystem5_mbf_mission(void);
 
-/* Post an event without waiting.  E_OK, or E_TMOUT when full (dropped and
+/** Post an event without waiting.  E_OK, or E_TMOUT when full (dropped and
    counted; MissionTask treats a drop as a fault, Week 6 8.3). */
-IMPORT ER       subsystem5_mission_post(uint8_t type, uint8_t src, uint16_t arg,
-                                        int32_t data);
+IMPORT ER subsystem5_mission_post(uint8_t type, uint8_t src, uint16_t arg,
+                                  int32_t data);
+/** Events dropped because mbf_mission was full. */
 IMPORT uint32_t subsystem5_mission_drops(void);
 
 /* ---------------------------------------------------------------------
@@ -49,18 +50,24 @@ IMPORT uint32_t subsystem5_mission_drops(void);
 #define OBST_FLG_ECHO  0x02u /* echo_isr               */
 #define OBST_FLG_REQ   0x04u /* MissionTask request    */
 
-IMPORT ID subsystem5_mbf_scan(void); /* ID of mbf_scan */
-IMPORT ID subsystem5_flg_obst(void); /* ID of flg_obst */
+IMPORT ID subsystem5_mbf_scan(void); /**< ID of mbf_scan */
+IMPORT ID subsystem5_flg_obst(void); /**< ID of flg_obst */
 
+/** Send a scan request to ObstacleTask and wake it.  E_OK, or E_TMOUT when
+    mbf_scan is full. */
 IMPORT ER subsystem5_scan_request(uint8_t type, uint8_t seq, int16_t param);
 
 /* ---------------------------------------------------------------------
  *  IF-10  Mission and obstacle snapshots.
  * --------------------------------------------------------------------- */
+/** Copy the mission snapshot (any task). */
 IMPORT void subsystem5_get_mission_snap(mission_types_snap_t * p_out);
+/** Store the mission snapshot (MissionTask only). */
 IMPORT void subsystem5_put_mission_snap(
     mission_types_snap_t const * p_in); /* MissionTask only */
+/** Copy the obstacle snapshot (any task). */
 IMPORT void subsystem5_get_obst_snap(mission_types_obst_snap_t * p_out);
+/** Store the obstacle snapshot (ObstacleTask only). */
 IMPORT void subsystem5_put_obst_snap(
     mission_types_obst_snap_t const * p_in); /* ObstacleTask only */
 
@@ -68,11 +75,11 @@ IMPORT void subsystem5_put_obst_snap(
 #include "mission_task.h"
 #include "obstacle_task.h"
 
-/* Called by usermain() in this order: every subsystem's _init() first,
+/** Called by usermain() in this order: every subsystem's _init() first,
    then every subsystem's _start(), so every kernel object exists before
    any task can use it. */
-IMPORT ER subsystem5_init(void);  /* create this subsystem's kernel objects */
-IMPORT ER subsystem5_start(void); /* create and start its tasks             */
+IMPORT ER subsystem5_init(void);  /**< create this subsystem's kernel objects */
+IMPORT ER subsystem5_start(void); /**< create and start its tasks             */
 
 #endif /* SUBSYSTEM5_H */
 

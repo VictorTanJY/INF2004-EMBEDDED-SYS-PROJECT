@@ -1,6 +1,6 @@
-/*
- *  line_cfg.h
- *  Subsystem 3 -- line-following and barcode tuning.  Owner: Buddy 3.
+/** @file line_cfg.h
+ *
+ *  @brief Subsystem 3 -- line-following and barcode tuning.  Owner: Buddy 3.
  *
  *  Values marked MEASURE are placeholders until measured on the track
  *  (A6, A7, NFR2, NFR3, NFR11).  Pure C header.

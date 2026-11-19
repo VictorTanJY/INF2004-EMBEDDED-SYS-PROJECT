@@ -1,6 +1,7 @@
-/*
- *  app.h
- *  Definitions shared by the whole team.  Changed only by team agreement.
+/** @file app.h
+ *
+ *  @brief Definitions shared by the whole team.  Changed only by team
+ * agreement.
  *
  *  Anything that belongs to ONE subsystem goes in that subsystem's own
  *  header instead (app_program/subsystemN/subsystemN.h).
@@ -66,11 +67,14 @@
 #include <tk/smp.h>
 typedef T_SPLOCK app_lock_t;
 
+/** Initialise a snapshot lock (unlocked). */
 Inline void app_lock_init (app_lock_t * p_lock)
 {
     (void)InitSpinLock(p_lock);
 }
 
+/** Lock a snapshot: disables interrupts on this core and returns the previous
+    interrupt status for app_unlock(). */
 Inline UINT app_lock (app_lock_t * p_lock)
 {
     UINT intsts = 0;
@@ -79,12 +83,14 @@ Inline UINT app_lock (app_lock_t * p_lock)
     return intsts;
 }
 
+/** Unlock a snapshot locked by app_lock(), restoring the interrupt status it
+    returned. */
 Inline void app_unlock (app_lock_t * p_lock, UINT intsts)
 {
     (void)ISpinUnlock(p_lock, intsts);
 }
 
-/* Atomic increment of a shared 32-bit counter (writers on both cores). */
+/** Atomic increment of a shared 32-bit counter (writers on both cores). */
 Inline void app_atomic_inc (uint32_t * p_count)
 {
     (void)atomic_inc(p_count);
@@ -92,11 +98,14 @@ Inline void app_atomic_inc (uint32_t * p_count)
 #else
 typedef uint32_t app_lock_t;
 
+/** Initialise a snapshot lock (unlocked). */
 Inline void app_lock_init (app_lock_t * p_lock)
 {
     *p_lock = 0;
 }
 
+/** Lock a snapshot: disables interrupts and returns the previous interrupt
+    status for app_unlock(). */
 Inline UINT app_lock (app_lock_t * p_lock)
 {
     UINT intsts;
@@ -106,12 +115,16 @@ Inline UINT app_lock (app_lock_t * p_lock)
     return intsts;
 }
 
+/** Unlock a snapshot locked by app_lock(), restoring the interrupt status it
+    returned. */
 Inline void app_unlock (app_lock_t * p_lock, UINT intsts)
 {
     (void)p_lock;
     EI(intsts);
 }
 
+/** Increment a shared 32-bit counter with interrupts disabled around the
+    read-modify-write (one core). */
 Inline void app_atomic_inc (uint32_t * p_count)
 {
     UINT intsts;
@@ -122,7 +135,7 @@ Inline void app_atomic_inc (uint32_t * p_count)
 }
 #endif
 
-/* Milliseconds since boot (low 32 bits of the kernel's operating time;
+/** Milliseconds since boot (low 32 bits of the kernel's operating time;
    wraps after 49.7 days).  Resolution is the 10 ms kernel tick.
    tk_get_otm, not tk_get_tim: the system clock is the operating time
    plus a TRON-epoch offset, so its low word starts near 3.36e9 at boot
@@ -136,7 +149,7 @@ Inline uint32_t app_time_ms (void)
     return (uint32_t)tim.lo;
 }
 
-/* RP2040 1 us system timer, low 32 bits (wraps every 71.6 min).  Correct
+/** RP2040 1 us system timer, low 32 bits (wraps every 71.6 min).  Correct
    only after the watchdog tick is set to 12 cycles (drv_watchdog, S4):
    from a cold power-on it otherwise runs 42.7 x slow. */
 Inline uint32_t app_time_us (void)
@@ -144,7 +157,7 @@ Inline uint32_t app_time_us (void)
     return in_w(TIMER_TIMERAWL);
 }
 
-/* 64-bit microseconds, read without a lock (high word re-checked). */
+/** 64-bit microseconds, read without a lock (high word re-checked). */
 Inline uint64_t app_time_us64 (void)
 {
     uint32_t hi0;
@@ -160,14 +173,14 @@ Inline uint64_t app_time_us64 (void)
     return ((uint64_t)hi0 << 32) | low;
 }
 
-/* Milliseconds from the 1 us timer (32 bits, wraps after 49.7 days):
+/** Milliseconds from the 1 us timer (32 bits, wraps after 49.7 days):
    used by the 10 ms loops, which need better than the 10 ms tick. */
 Inline uint32_t app_time_ms_hw (void)
 {
     return (uint32_t)(app_time_us64() / 1000u);
 }
 
-/* Take peripheral blocks out of reset.  Never ASSERT a reset here: PWM,
+/** Take peripheral blocks out of reset.  Never ASSERT a reset here: PWM,
    PIO0 and DMA are shared between subsystems (and with the radio). */
 Inline void app_reset_release (uint32_t mask)
 {

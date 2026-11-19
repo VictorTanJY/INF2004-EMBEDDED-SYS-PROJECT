@@ -1,6 +1,6 @@
-/*
- *  obstacle_core.c
- *  Subsystem 5 -- obstacle geometry (pure).  See obstacle_core.h.
+/** @file obstacle_core.c
+ *
+ *  @brief Subsystem 5 -- obstacle geometry (pure).  See obstacle_core.h.
  */
 
 #include "obstacle_core.h"
@@ -66,7 +66,7 @@ static app_pack_field_t const g_obst_layout[] = {
     {offsetof(mission_types_obst_snap_t, retries),
      sizeof(((mission_types_obst_snap_t){0}).retries), 3u, PK_U}};
 
-/* The obstacle = the run of points around the nearest one at its range.
+/** The obstacle = the run of points around the nearest one at its range.
    Consecutive-angle rule (hysteresis): a single point that misses between
    two that hit is a dropout, not an edge; an edge needs 2 misses. */
 static int32_t lateral_mm(int32_t angle_cdeg, uint16_t r_mm);
@@ -772,7 +772,7 @@ uint32_t obstacle_core_snap_layout_bits (void)
     return app_pack_layout_bits(g_obst_layout, OBST_FIELDS);
 }
 
-/* Lateral (+ left) of a servo-scan echo from the servo shaft (7 Nov): the
+/** Lateral (+ left) of a servo-scan echo from the servo shaft (7 Nov): the
    sensor sits OBST_SERVO_ARM_MM out along the horn at servo angle
    servo_cdeg, and the echo is r_mm from it along beam_cdeg (the servo angle,
    or an edge corrected by half a beam). */
@@ -791,20 +791,22 @@ static int32_t lateral_mm (int32_t angle_cdeg, uint16_t r_mm)
     return lateral2_mm(angle_cdeg, angle_cdeg, r_mm);
 }
 
-/* An echo that can be part of an obstacle: in range. */
+/** An echo that can be part of an obstacle: in range. */
 static bool usable (obstacle_core_point_t const * p_point)
 {
     return (p_point->r_mm != OBST_RANGE_NONE)
            && (p_point->r_mm <= OBST_MAX_RANGE_MM);
 }
 
+/** True if a usable point is within DEPTH_TOL_MM behind the nearest echo
+    r_min. */
 static bool same_object (obstacle_core_point_t const * p_point, uint16_t r_min)
 {
     return usable(p_point)
            && (p_point->r_mm <= ((uint32_t)r_min + DEPTH_TOL_MM));
 }
 
-/* Part of the obstacle grown from the nearest echo: at its range and
+/** Part of the obstacle grown from the nearest echo: at its range and
    (9 Nov) within OBST_GROUP_MAX_MM sideways of it. */
 static bool in_group (obstacle_core_point_t const * p_point, uint16_t r_min,
                       int32_t lat0)
@@ -816,6 +818,8 @@ static bool in_group (obstacle_core_point_t const * p_point, uint16_t r_min,
                <= OBST_GROUP_MAX_MM);
 }
 
+/** Grow the obstacle from its nearest echo outwards to the first points that
+    are not part of it; *p_lo / *p_hi = its first and last point. */
 static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
                   uint8_t nearest, uint16_t r_min, uint8_t * p_lo,
                   uint8_t * p_hi)
@@ -860,6 +864,7 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
     *p_hi = high;
 }
 
+/** Profile of a scan: nearest echo, edges, width and the plan. */
 static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
                           obstacle_core_point_t const * p_coarse,
                           uint8_t n_coarse, obstacle_core_profile_t * p_out)
@@ -876,7 +881,7 @@ static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     /* else nothing in front: CONTINUE */
 }
 
-/* The profile before anything is measured: nothing seen, CONTINUE. */
+/** The profile before anything is measured: nothing seen, CONTINUE. */
 static void profile_clear (obstacle_core_profile_t * p_out)
 {
     p_out->b_valid       = false;
@@ -894,7 +899,7 @@ static void profile_clear (obstacle_core_profile_t * p_out)
     p_out->plan_r_mm     = 0;
 }
 
-/* Index of the nearest usable echo (*p_nearest) and its range, or
+/** Index of the nearest usable echo (*p_nearest) and its range, or
    OBST_RANGE_NONE when there is none. */
 static uint16_t nearest_echo (obstacle_core_point_t const * p_fine,
                               uint8_t n_fine, uint8_t * p_nearest)
@@ -932,7 +937,7 @@ static uint16_t nearest_echo (obstacle_core_point_t const * p_fine,
     return r_min;
 }
 
-/* Grow the obstacle from its nearest echo, measure its edges and plan. */
+/** Grow the obstacle from its nearest echo, measure its edges and plan. */
 static void profile_measure (obstacle_core_point_t const * p_fine,
                              uint8_t                       n_fine,
                              obstacle_core_point_t const * p_coarse,
@@ -1010,7 +1015,7 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
            p_out);
 }
 
-/* Clearances beside the planned edges and the PLAN (FR11).  Points lo..hi
+/** Clearances beside the planned edges and the PLAN (FR11).  Points lo..hi
    of the fine scan are the obstacle itself (lo > hi: none). */
 static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
                     obstacle_core_point_t const * p_coarse, uint8_t n_coarse,
@@ -1096,7 +1101,7 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     }
 }
 
-/* Plan as for an OBST_WIDTH_MAX object centred straight ahead at r. */
+/** Plan as for an OBST_WIDTH_MAX object centred straight ahead at r. */
 static void force_ahead (obstacle_core_point_t const * p_fine, uint8_t n_fine,
                          obstacle_core_point_t const * p_coarse,
                          uint8_t n_coarse, uint16_t range,
@@ -1116,12 +1121,13 @@ static void force_ahead (obstacle_core_point_t const * p_fine, uint8_t n_fine,
 }
 
 /* ---- scan sequencer ---------------------------------------------------- */
+/** Refining an edge: true if the point belongs to the obstacle. */
 static bool is_hit (obstacle_core_point_t const * p_point, uint16_t r_min)
 {
     return same_object(p_point, r_min);
 }
 
-/* Insert keeping fine[] sorted by angle (refine points land between). */
+/** Insert keeping fine[] sorted by angle (refine points land between). */
 static void fine_insert (obstacle_core_scan_t * p_s, int16_t angle,
                          uint16_t r_mm)
 {
@@ -1142,7 +1148,7 @@ static void fine_insert (obstacle_core_scan_t * p_s, int16_t angle,
     p_s->n_fine++;
 }
 
-/* Edges of the obstacle in the fine scan; false if none or no outer miss. */
+/** Edges of the obstacle in the fine scan; false if none or no outer miss. */
 static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
 {
     uint8_t  idx;
@@ -1197,6 +1203,8 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
     }
 }
 
+/** Lateral position (mm, + left) of the echo edge seen at phi_cdeg and r_mm,
+    with the calibrated beam angle on side side. */
 static int32_t width_lat (int32_t phi_cdeg, uint16_t r_mm, int32_t side)
 {
     int32_t const psi = phi_cdeg - (side * OBST_WIDTH_BEAM_CDEG);

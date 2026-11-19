@@ -1,6 +1,6 @@
-/*
- *  imu_types.h
- *  Subsystem 4 -- fault bits (IF-05) and IMU snapshot (IF-08).
+/** @file imu_types.h
+ *
+ *  @brief Subsystem 4 -- fault bits (IF-05) and IMU snapshot (IF-08).
  *  Owner: Buddy 4 (Purvez).  Pure C (no kernel).
  */
 
@@ -74,21 +74,21 @@ typedef uint8_t imu_types_motion_t; /* one of the constants below */
 typedef struct
 {
     uint32_t t_ms;
-    int16_t  pitch_cdeg;       /* pitch, 0.01 deg, + nose up             */
-    int16_t  roll_cdeg;        /* + = right side up (checked on robot)   */
-    int16_t  heading_cdeg;     /* magnetometer, 0..35999                 */
-    int16_t  turn_rate_cdeg_s; /* encoder yaw rate, + left               */
-    int16_t  accel_mg;         /* |a| - 1 g, mg                          */
-    uint16_t hump_max_mm;      /* highest hump peak of the run           */
-    uint16_t last_hump_mm;     /* peak of the last completed hump        */
-    uint16_t humps;            /* completed humps this run               */
-    uint16_t i2c_errors;       /* since boot                             */
-    uint8_t  hump_state;  /* imu_types_hump_state_t                       */
-    uint8_t  motion;      /* imu_types_motion_t                           */
-    uint8_t  b_ok;        /* 1 = readings valid (no IMU_FAULT)      */
-    uint8_t  cal;         /* IMU_CAL_* bits                         */
-    uint8_t  pitch_valid; /* 1 = fresh, validated pitch (hump mask) */
-    uint8_t  tilt;        /* 1 = beyond 30 deg now (reset refused)  */
+    int16_t  pitch_cdeg;       /**< pitch, 0.01 deg, + nose up             */
+    int16_t  roll_cdeg;        /**< + = right side up (checked on robot)   */
+    int16_t  heading_cdeg;     /**< magnetometer, 0..35999                 */
+    int16_t  turn_rate_cdeg_s; /**< encoder yaw rate, + left               */
+    int16_t  accel_mg;         /**< |a| - 1 g, mg                          */
+    uint16_t hump_max_mm;      /**< highest hump peak of the run           */
+    uint16_t last_hump_mm;     /**< peak of the last completed hump        */
+    uint16_t humps;            /**< completed humps this run               */
+    uint16_t i2c_errors;       /**< since boot                             */
+    uint8_t  hump_state;  /**< imu_types_hump_state_t                       */
+    uint8_t  motion;      /**< imu_types_motion_t                           */
+    uint8_t  b_ok;        /**< 1 = readings valid (no IMU_FAULT)      */
+    uint8_t  cal;         /**< IMU_CAL_* bits                         */
+    uint8_t  pitch_valid; /**< 1 = fresh, validated pitch (hump mask) */
+    uint8_t  tilt;        /**< 1 = beyond 30 deg now (reset refused)  */
     uint8_t  reserved[2];
 } imu_types_snap_t;
 

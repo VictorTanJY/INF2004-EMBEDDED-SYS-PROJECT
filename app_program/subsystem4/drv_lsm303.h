@@ -1,10 +1,12 @@
-/* LSM303D accelerometer + magnetometer, shared I2C address 0x1D.
- * GY-511 boards with the LSM303D: the pin printed "DRDY" is the chip's
- * SA0 input.  It is NOT pulled on this board: wire it to 3V3 (address
- * 0x1D, used here); left floating the address drifts and the IMU drops
- * out (2 Nov).  Wired to GND the chip moves to 0x1E.
- * Acceleration: 100 Hz, +/-4 g. Magnetic: 50 Hz, +/-4 gauss.
- * INT1: active-high, non-latched, high-pass filtered high-g event.
+/** @file drv_lsm303.h
+ *
+ *  @brief LSM303D accelerometer + magnetometer, shared I2C address 0x1D.
+ *  GY-511 boards with the LSM303D: the pin printed "DRDY" is the chip's
+ *  SA0 input.  It is NOT pulled on this board: wire it to 3V3 (address
+ *  0x1D, used here); left floating the address drifts and the IMU drops
+ *  out (2 Nov).  Wired to GND the chip moves to 0x1E.
+ *  Acceleration: 100 Hz, +/-4 g. Magnetic: 50 Hz, +/-4 gauss.
+ *  INT1: active-high, non-latched, high-pass filtered high-g event.
  */
 #ifndef DRV_LSM303_H
 #define DRV_LSM303_H
@@ -16,16 +18,16 @@
 
 #define DRV_LSM303_ADDR 0x1Du /* SA0 ("DRDY" pin) high: board default */
 
-/* E_OBJ for an unexpected identity; bus/configuration errors propagate. */
+/** E_OBJ for an unexpected identity; bus/configuration errors propagate. */
 IMPORT ER drv_lsm303_init(void);
 
-/* Acceleration in mg, raw sensor axes X, Y, Z. */
+/** Acceleration in mg, raw sensor axes X, Y, Z. */
 IMPORT ER drv_lsm303_read_accel(int32_t acc_mg[3]);
 
-/* Magnetic raw counts, raw sensor axes X, Y, Z. */
+/** Magnetic raw counts, raw sensor axes X, Y, Z. */
 IMPORT ER drv_lsm303_read_mag(int16_t mag[3]);
 
-/* Result of the last drv_lsm303_init():
+/** Result of the last drv_lsm303_init():
  * bits 31..24: stage:
  *             0 = success
  *             1 = identity read failed

@@ -1,7 +1,7 @@
-/*
- *  golden.h
- *  Golden frames (hex) for the S1 host tests.  Each was produced by the C
- *  encoder (comms_proto.c) and decoded independently by the laptop codec
+/** @file golden.h
+ *
+ *  @brief Golden frames (hex) for the S1 host tests.  Each was produced by the
+ * C encoder (comms_proto.c) and decoded independently by the laptop codec
  *  (dashboard/picocar_codec.py) back to the inputs in test_s1_main.c;
  *  test_codec.py (S1-H21) repeats that decode on every run.
  */

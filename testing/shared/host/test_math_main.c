@@ -1,6 +1,6 @@
-/*
- *  test_math_main.c
- *  Host unit tests for the shared integer maths (app_program/app_math.c)
+/** @file test_math_main.c
+ *
+ *  @brief Host unit tests for the shared integer maths (app_program/app_math.c)
  *  and the minimum-bit packing helpers (app_program/app_pack.h, SH-H05).
  *  Build and run:  make -C testing/shared/host
  */
@@ -31,15 +31,33 @@ static int32_t g_fail;
 static void test_pack(void);
 static void check_result(char const * p_id, bool b_ok, char const * p_file,
                          int32_t line);
+static void test_pack_h05(void);
+static void test_pack_h05_part2(void);
+static void test_trig(int32_t * p_worst_sin, float64_t * p_worst_atan);
+static void test_wrap(void);
 
+/** Run the shared host tests (app_pack, app_math).  Exit status 0 if all
+    passed. */
 int main (void)
 {
-    int32_t   val_a;
     int32_t   worst_sin  = 0;
     float64_t worst_atan = 0.0;
-    uint32_t  x_val;
 
     test_pack();
+    test_trig(&worst_sin, &worst_atan);
+    test_wrap();
+    printf("worst sin/cos error %d LSB, worst atan2 error %.1f cdeg\n",
+           worst_sin, worst_atan);
+    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
+    return (0 == g_fail) ? 0 : 1;
+}
+
+/** SH-H01..H03: sine, cosine, atan2 and the integer square roots;
+ *p_worst_sin / *p_worst_atan = the largest errors seen. */
+static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
+{
+    int32_t  val_a;
+    uint32_t x_val;
 
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
     for (val_a = -T_SIN_RANGE_CDEG; val_a <= T_SIN_RANGE_CDEG; val_a += 7)
@@ -54,9 +72,9 @@ int main (void)
             ref = 32767;
         }
         diff = abs(got - ref);
-        if (diff > worst_sin)
+        if (diff > *p_worst_sin)
         {
-            worst_sin = diff;
+            *p_worst_sin = diff;
         }
         ref =
             (int32_t)lround(cos(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
@@ -65,12 +83,12 @@ int main (void)
             ref = 32767;
         }
         diff = abs(app_math_cos_q15(val_a) - ref);
-        if (diff > worst_sin)
+        if (diff > *p_worst_sin)
         {
-            worst_sin = diff;
+            *p_worst_sin = diff;
         }
     }
-    CHECK("SH-H01", worst_sin <= 2);
+    CHECK("SH-H01", *p_worst_sin <= 2);
 
     /* SH-H02: atan2 on a grid of vectors, all quadrants */
     {
@@ -92,13 +110,13 @@ int main (void)
                 {
                     diff = 36000.0 - diff;
                 } /* +-180 seam */
-                if (diff > worst_atan)
+                if (diff > *p_worst_atan)
                 {
-                    worst_atan = diff;
+                    *p_worst_atan = diff;
                 }
             }
         }
-        CHECK("SH-H02", worst_atan <= 1.0);
+        CHECK("SH-H02", *p_worst_atan <= 1.0);
         CHECK("SH-H02", 0 == app_math_atan2_cdeg(0, 0));
         CHECK("SH-H02", 9000 == app_math_atan2_cdeg(1, 0));
         CHECK("SH-H02", 18000 == app_math_atan2_cdeg(0, -1));
@@ -129,21 +147,27 @@ int main (void)
     }
     CHECK("SH-H03", 65535u == app_math_isqrt32(0xFFFFFFFFu));
     CHECK("SH-H03", 0xFFFFFFFFu == app_math_isqrt64(0xFFFFFFFFFFFFFFFFull));
+}
 
+/** SH-H04: angle wrap and Q15 multiply. */
+static void test_wrap (void)
+{
     /* SH-H04: wrap and Q15 multiply */
     CHECK("SH-H04", -18000 == app_math_wrap_cdeg(18000));
     CHECK("SH-H04", 17999 == app_math_wrap_cdeg(-18001));
     CHECK("SH-H04", 4500 == app_math_wrap_cdeg(72000 + 4500));
     CHECK("SH-H04", 1000000000 == app_math_mul_q15(2000000000, 16384));
-
-    printf("worst sin/cos error %d LSB, worst atan2 error %.1f cdeg\n",
-           worst_sin, worst_atan);
-    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (0 == g_fail) ? 0 : 1;
 }
 
-/* SH-H05: app_pack.h, every width the firmware uses */
+/** SH-H05: app_pack.h, every width the firmware uses */
 static void test_pack (void)
+{
+    test_pack_h05();
+    test_pack_h05_part2();
+}
+
+/** Checks SH-H05. */
+static void test_pack_h05 (void)
 {
     static uint8_t const widths[] = {2u,  3u,  4u,  5u,  6u,  7u,  8u, 9u,
                                      10u, 11u, 12u, 16u, 20u, 24u, 32u};
@@ -213,47 +237,47 @@ static void test_pack (void)
         CHECK("SH-H05", (0x12345678u == app_pack_set(0u, 0u, 32u, 0x12345678u))
                             && (1u == app_pack_get(0x80000000u, 31u, 1u)));
     }
+}
+
+/** Checks SH-H05. */
+static void test_pack_h05_part2 (void)
+{
+    uint8_t           buf[64];
+    uint32_t          vals[100];
+    uint8_t           bit_widths[100];
+    app_pack_writer_t writer;
+    app_pack_reader_t reader;
+    uint32_t          count = 0u;
+    uint32_t          kdx;
+    int32_t           ret = 1;
 
     /* streams: random widths and values round-trip; overflow is reported */
+    srand(77);
+    app_pack_writer_init(&writer, buf, sizeof(buf));
+    while (count < T_RANDOM_FIELDS)
     {
-        uint8_t           buf[64];
-        uint32_t          vals[100];
-        uint8_t           bit_widths[100];
-        app_pack_writer_t writer;
-        app_pack_reader_t reader;
-        uint32_t          count = 0u;
-        uint32_t          kdx;
-        int32_t           ret = 1;
-
-        srand(77);
-        app_pack_writer_init(&writer, buf, sizeof(buf));
-        while (count < T_RANDOM_FIELDS)
+        bit_widths[count] = (uint8_t)(1 + (rand() % 32));
+        vals[count]       = (((uint32_t)rand() << 16) ^ (uint32_t)rand())
+                            & app_pack_mask(bit_widths[count]);
+        if (((uint32_t)writer.bits + bit_widths[count]) > (sizeof(buf) * 8u))
         {
-            bit_widths[count] = (uint8_t)(1 + (rand() % 32));
-            vals[count]       = (((uint32_t)rand() << 16) ^ (uint32_t)rand())
-                                & app_pack_mask(bit_widths[count]);
-            if (((uint32_t)writer.bits + bit_widths[count])
-                > (sizeof(buf) * 8u))
-            {
-                break;
-            }
-            app_pack_put(&writer, vals[count], bit_widths[count]);
-            count++;
+            break;
         }
-        app_pack_reader_init(&reader, buf, app_pack_writer_len(&writer));
-        for (kdx = 0u; kdx < count; kdx++)
-        {
-            if (app_pack_take(&reader, bit_widths[kdx]) != vals[kdx])
-            {
-                ret = 0;
-            }
-        }
-        CHECK("SH-H05", ret && !reader.b_short && (count > 10u));
-        app_pack_put(&writer, 0xFFFFFFFFu, 32u);
-        app_pack_put(&writer, 0u, 33u);
-        CHECK("SH-H05",
-              writer.b_overflow && (0u == app_pack_writer_len(&writer)));
+        app_pack_put(&writer, vals[count], bit_widths[count]);
+        count++;
     }
+    app_pack_reader_init(&reader, buf, app_pack_writer_len(&writer));
+    for (kdx = 0u; kdx < count; kdx++)
+    {
+        if (app_pack_take(&reader, bit_widths[kdx]) != vals[kdx])
+        {
+            ret = 0;
+        }
+    }
+    CHECK("SH-H05", ret && !reader.b_short && (count > 10u));
+    app_pack_put(&writer, 0xFFFFFFFFu, 32u);
+    app_pack_put(&writer, 0u, 33u);
+    CHECK("SH-H05", writer.b_overflow && (0u == app_pack_writer_len(&writer)));
 }
 
 /*!

@@ -1,6 +1,6 @@
-/*
- *  drv_motor.c
- *  Subsystem 2 -- motor PWM driver.  See drv_motor.h.
+/** @file drv_motor.c
+ *
+ *  @brief Subsystem 2 -- motor PWM driver.  See drv_motor.h.
  *
  *  PWM: 125 MHz clk_sys, DIV 1.0, TOP 6249 -> 20 kHz (NFR1, Robo Pico
  *  driver maximum).  The PWM block is held in reset after boot
@@ -82,31 +82,38 @@ EXPORT void drv_motor_write (int16_t duty_l, int16_t duty_r)
 }
 
 
+/** Address of the control register of PWM slice. */
 static inline uint32_t pwm_ch_csr (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
 }
 
+/** Address of the clock divider register of PWM slice. */
 static inline uint32_t pwm_ch_div (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
 }
 
+/** Address of the counter register of PWM slice. */
 static inline uint32_t pwm_ch_ctr (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x08u;
 }
 
+/** Address of the compare register (channels A and B) of PWM slice. */
 static inline uint32_t pwm_ch_cc (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
 }
 
+/** Address of the wrap (TOP) register of PWM slice. */
 static inline uint32_t pwm_ch_top (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
 }
 
+/** Compare value of one motor input for a signed duty (per mille); sign
+    selects the input that drives forward.  0 for the input that stays low. */
 static uint32_t cc_for (int32_t duty, int32_t sign)
 {
     int32_t  drive = duty * sign;

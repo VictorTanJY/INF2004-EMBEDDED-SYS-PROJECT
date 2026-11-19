@@ -13,7 +13,7 @@
 /*!
  * @brief Count one check and print its PASS or FAIL line.
  * @param[in,out] p_report The run's counters.
- * @param[in] p_id Test id, as in testing/<subsystem>/TEST_LOG.md.
+ * @param[in] p_id Test id, as in testing/subsystemN/TEST_LOG.md.
  * @param[in] b_ok Whether the check passed.
  * @param[in] p_desc What was checked.
  * @param[in] p_file Source file of the check (FAIL lines only).

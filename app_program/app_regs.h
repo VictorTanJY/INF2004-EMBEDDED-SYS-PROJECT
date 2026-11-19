@@ -75,7 +75,7 @@ static inline uint32_t app_regs_gpio_ctrl (uint32_t pin)
     return (APP_REGS_IO_BANK0_BASE + 0x4u) + (pin * 8u);
 }
 
-/* Build stops here if a value above differs from the template's sysdef.h.
+/** Build stops here if a value above differs from the template's sysdef.h.
    NOTE: each sysdef.h constant is non-negative and below 2^32, so the
    (uint32_t) casts below keep its value. */
 typedef uint8_t app_regs_check_t

@@ -1,6 +1,6 @@
-/*
- *  motion_cfg.h
- *  Subsystem 2 -- robot geometry and controller tuning.  Owner: Buddy 2.
+/** @file motion_cfg.h
+ *
+ *  @brief Subsystem 2 -- robot geometry and controller tuning.  Owner: Buddy 2.
  *
  *  EVERY value marked MEASURE is a placeholder until it is measured on the
  *  robot (assumptions A4, A5; NFR4, NFR5).  docs/SETUP_AND_TEST.md says how.

@@ -1,9 +1,9 @@
-/*
- *  subsystem4.c
- *  Subsystem 4 -- IMU and safety: kernel objects, heartbeat words, the
+/** @file subsystem4.c
+ *
+ *  @brief Subsystem 4 -- IMU and safety: kernel objects, heartbeat words, the
  *  latched-fault word and the IMU snapshot.  Owner: Buddy 4 (Purvez).
  *  Tasks: safety_task.c, imu_task.c.  Logic: imu_core.c,
- * safety_core.c.
+ *  safety_core.c.
  */
 
 #include "subsystem4.h"
@@ -13,14 +13,14 @@
 static ID g_flg_safety;
 static ID g_tid_imu;
 
-/* Heartbeat counters: one byte per task (Change Requirement 1).  Each
+/** Heartbeat counters: one byte per task (Change Requirement 1).  Each
    task stores only its own byte (STRB, indivisible on the M0+), so no
    counter shares a read-modify-write with another; SafetyTask only reads
    and compares for a change (an 8-bit counter cannot come back to the
    same value within the 20 ms check: MotionTask beats twice in it). */
 static uint8_t volatile g_hb[SAFETY_HB_COUNT];
 
-/* IMU snapshot stored packed; whole records copied under the lock. */
+/** IMU snapshot stored packed; whole records copied under the lock. */
 static app_lock_t g_imu_lock;
 static uint32_t   g_imu_snap[IMU_SNAP_WORDS];
 static ID         g_cyc_imu;
@@ -136,6 +136,7 @@ EXPORT ID subsystem4_flg_safety (void)
     return g_flg_safety;
 }
 
+/** imu_cyc: every 10 ms, wakes ImuTask. */
 static void imu_cyc_handler (void * p_exinf)
 {
     (void)p_exinf;

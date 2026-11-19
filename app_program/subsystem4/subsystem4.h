@@ -1,6 +1,6 @@
-/*
- *  subsystem4.h
- *  Subsystem 4 -- IMU terrain monitoring (ImuTask) and fault supervision
+/** @file subsystem4.h
+ *
+ *  @brief Subsystem 4 -- IMU terrain monitoring (ImuTask) and fault supervision
  *  (SafetyTask).  Owner: Buddy 4 (Purvez).
  *
  *  PUBLIC interface of subsystem 4.  Week 6 design review: Sections 3,
@@ -32,13 +32,13 @@
  *  SafetyTask waits on it (TWF_ORW | TWF_BITCLR on SAFETY_BRAKE_MASK |
  *  SAFETY_REQ_RESET); every other task reads it with tk_ref_flg().
  * --------------------------------------------------------------------- */
-/* ID of flg_safety (design documents); 0 until subsystem4_init() has run. */
+/** ID of flg_safety (design documents); 0 until subsystem4_init() has run. */
 IMPORT ID subsystem4_flg_safety(void);
 
-/* Latched faults (SAFETY_FLT_* bits), written only by SafetyTask. */
+/** Latched faults (SAFETY_FLT_* bits), written only by SafetyTask. */
 IMPORT uint32_t subsystem4_get_latched(void);
 
-/* MissionTask: ask SafetyTask to clear the latch after an operator reset.
+/** MissionTask: ask SafetyTask to clear the latch after an operator reset.
    SafetyTask answers MISSION_EV_SAFETY_OK, or MISSION_EV_FAULT if a cause
    is still present. */
 IMPORT void subsystem4_request_reset(void);
@@ -49,26 +49,28 @@ IMPORT void subsystem4_request_reset(void);
  *  store is indivisible), so no lock is needed.  SafetyTask checks them
  *  every 20 ms against 50/50/300/300/100 ms.
  * --------------------------------------------------------------------- */
-IMPORT void     subsystem4_heartbeat(imu_types_safety_hb_t task);
+/** Called by a monitored task on every pass: advances its heartbeat counter. */
+IMPORT void subsystem4_heartbeat(imu_types_safety_hb_t task);
+/** Heartbeat counter of a monitored task (8-bit, wraps). */
 IMPORT uint32_t subsystem4_heartbeat_count(imu_types_safety_hb_t task);
 
 /* ---------------------------------------------------------------------
  *  IF-08  IMU snapshot (written by ImuTask).
  * --------------------------------------------------------------------- */
-IMPORT void subsystem4_get_imu_snap(imu_types_snap_t * p_out); /* any task */
+IMPORT void subsystem4_get_imu_snap(imu_types_snap_t * p_out); /**< any task */
 IMPORT void
-subsystem4_put_imu_snap(imu_types_snap_t const * p_in); /* ImuTask only   */
+subsystem4_put_imu_snap(imu_types_snap_t const * p_in); /**< ImuTask only   */
 
 
 /* Private to subsystem 4 */
 #include "safety_task.h"
 #include "imu_task.h"
 
-/* Called by usermain() in this order: every subsystem's _init() first,
+/** Called by usermain() in this order: every subsystem's _init() first,
    then every subsystem's _start(), so every kernel object exists before
    any task can use it. */
-IMPORT ER subsystem4_init(void);  /* create this subsystem's kernel objects */
-IMPORT ER subsystem4_start(void); /* create and start its tasks             */
+IMPORT ER subsystem4_init(void);  /**< create this subsystem's kernel objects */
+IMPORT ER subsystem4_start(void); /**< create and start its tasks             */
 
 #endif /* SUBSYSTEM4_H */
 

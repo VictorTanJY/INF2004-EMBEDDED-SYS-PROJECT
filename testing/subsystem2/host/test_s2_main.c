@@ -1,7 +1,7 @@
-/*
- *  test_s2_main.c
- *  Host unit tests for motion_core.c (subsystem 2) against a motor model:
- *  per wheel, steady speed = 0.5 mm/s per per-mille of duty above a 100
+/** @file test_s2_main.c
+ *
+ *  @brief Host unit tests for motion_core.c (subsystem 2) against a motor
+ * model: per wheel, steady speed = 0.5 mm/s per per-mille of duty above a 100
  *  per-mille deadband, first-order lag tau = 50 ms while driven and 20 ms
  *  while braked (both motor inputs low short the windings, so a braked
  *  wheel stops faster than it spins up; on the car the 360 deg
@@ -36,14 +36,14 @@
 
 typedef struct
 {
-    float64_t vals[2];   /* mm/s  */
-    float64_t pos_um[2]; /* wheel distance */
-    float64_t gain;      /* mm/s per per-mille above the deadband */
+    float64_t vals[2];   /**< mm/s  */
+    float64_t pos_um[2]; /**< wheel distance */
+    float64_t gain;      /**< mm/s per per-mille above the deadband */
     int32_t   locked[2];
     int32_t   enc_offset;
 } plant_t;
 
-/* The last command passed to the subsystem2_post stand-in. */
+/** The last command passed to the subsystem2_post stand-in. */
 typedef struct
 {
     int32_t count;
@@ -63,7 +63,7 @@ static uint32_t      g_now;
 static int32_t       g_ev[8]; /* counts per motion_core_ev_code_t */
 static uint8_t       g_last_seq;
 
-/* Stand-in for subsystem2.c's subsystem2_post (the real one posts to
+/** Stand-in for subsystem2.c's subsystem2_post (the real one posts to
    mbf_motion): records the last command for the motion_api tests. */
 static post_rec_t g_post;
 
@@ -79,6 +79,11 @@ static uint32_t             run_until_event(int32_t code, uint32_t max_ms);
 static void                 test_pack_s2(void);
 static void check_result(char const * p_id, bool b_ok, char const * p_file,
                          int32_t line);
+static void test_h01(void);
+static void test_h09(void);
+static void test_h10(void);
+static void test_pack_h16(void);
+static void test_pack_h16_part2(void);
 
 motion_api_err_t subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd,
                                   int16_t arg0, int16_t arg1)
@@ -92,7 +97,18 @@ motion_api_err_t subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd,
     return 0;
 }
 
+/** Run subsystem 2's host tests against a simulated drive train.  Exit status
+    0 if all passed. */
 int main (void)
+{
+    test_h01();
+    test_h09();
+    test_h10();
+    return (0 == g_fail) ? 0 : 1;
+}
+
+/** Checks S2-H01, S2-H02, S2-H03. */
+static void test_h01 (void)
 {
     motion_types_odom_t odom;
 
@@ -157,6 +173,12 @@ int main (void)
     CHECK("S2-H03", (2 == g_ev[MOTION_EV_DONE])
                         && (abs(odom.heading_cdeg - (-9000)) <= 100));
     printf("TURN -180: heading %d cdeg\n", (int32_t)odom.heading_cdeg);
+}
+
+/** Checks S2-H09, S2-H04, S2-H05, S2-H06, S2-H07, S2-H08. */
+static void test_h09 (void)
+{
+    motion_types_odom_t odom;
 
     /* S2-H04: DRIVE watchdog: no new DRIVE for 100 ms -> stops on its own */
     reset_all(0.5);
@@ -241,6 +263,12 @@ int main (void)
         CHECK("S2-H08", (50u == g_mc.last_fail_seq)
                             && (MOTION_ST_IDLE_BRAKED == g_mc.state));
     }
+}
+
+/** Checks S2-H10, S2-H11, S2-H12, S2-H13, S2-H14. */
+static void test_h10 (void)
+{
+    motion_types_odom_t odom;
 
     /* S2-H10: pose: MOVE 500, TURN +90, MOVE 500 -> (500, 500) */
     reset_all(0.5);
@@ -326,22 +354,24 @@ int main (void)
 
     test_pack_s2();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (0 == g_fail) ? 0 : 1;
 }
 
-/* True when the last posted command was cmd(arg0, arg1). */
+/** True when the last posted command was cmd(arg0, arg1). */
 static bool posted (uint8_t cmd, int32_t arg0, int32_t arg1)
 {
     return (g_post.cmd == cmd) && (g_post.arg0 == arg0)
            && (g_post.arg1 == arg1);
 }
 
+/** Reset the simulated motors and wheels; gain = mm/s per per-mille of duty
+    above the deadband. */
 static void plant_init (float64_t gain)
 {
     memset(&g_pl, 0, sizeof(g_pl));
     g_pl.gain = gain;
 }
 
+/** Advance the simulated wheels by 10 ms at these duties. */
 static void plant_step (int16_t duty_l, int16_t duty_r)
 {
     int16_t const duty[2] = {duty_l, duty_r};
@@ -378,6 +408,8 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
     }
 }
 
+/** Encoder count of simulated wheel width (0 left, 1 right), with its sign and
+    offset. */
 static int32_t enc_of (int32_t width)
 {
     float64_t counts =
@@ -388,6 +420,8 @@ static int32_t enc_of (int32_t width)
     return (int32_t)((uint32_t)(cnt * sign) + (uint32_t)g_pl.enc_offset);
 }
 
+/** Run the controller and the simulated wheels for delay_ms, counting the
+    events. */
 static void run_ms (uint32_t delay_ms, bool b_estop)
 {
     uint32_t            elapsed;
@@ -406,6 +440,8 @@ static void run_ms (uint32_t delay_ms, bool b_estop)
     }
 }
 
+/** Send a command to the controller now and count the events it gives.
+    Returns its result. */
 static motion_core_result_t cmd (uint8_t src, uint8_t seq, uint8_t code,
                                  int16_t arg0, int16_t arg1)
 {
@@ -421,6 +457,7 @@ static motion_core_result_t cmd (uint8_t src, uint8_t seq, uint8_t code,
     return result;
 }
 
+/** Fresh controller and simulated wheels with this gain, settled for 20 ms. */
 static void reset_all (float64_t gain)
 {
     g_now = 1000u;
@@ -430,6 +467,8 @@ static void reset_all (float64_t gain)
     run_ms(20u, false);
 }
 
+/** Run until another event of this code arrives or max_ms pass.  Returns the
+    time taken. */
 static uint32_t run_until_event (int32_t code, uint32_t max_ms)
 {
     uint32_t elapsed = 0u;
@@ -443,14 +482,18 @@ static uint32_t run_until_event (int32_t code, uint32_t max_ms)
     return elapsed;
 }
 
-/* S2-H16: Change Requirement 1, the packed mbf_motion word and odometry */
+/** S2-H16: Change Requirement 1, the packed mbf_motion word and odometry */
 static void test_pack_s2 (void)
+{
+    test_pack_h16();
+    test_pack_h16_part2();
+}
+
+/** Checks S2-H16. */
+static void test_pack_h16 (void)
 {
     motion_types_cmd_t   cmd;
     motion_types_cmd_t   unpacked;
-    motion_types_odom_t  odom;
-    motion_types_odom_t  ret;
-    uint32_t             words[MOTION_ODOM_WORDS];
     bool                 b_ok = true;
     int32_t              kdx;
     static int16_t const drive[][2] = {
@@ -507,6 +550,14 @@ static void test_pack_s2 (void)
         "S2-H16",
         (MOTION_API_E_PAR == motion_api_move_forward(0u, 1u, 4096u, 200u))
             && (MOTION_API_E_PAR == motion_api_turn_left(0u, 1u, 900u, 512u)));
+}
+
+/** Checks S2-H16. */
+static void test_pack_h16_part2 (void)
+{
+    motion_types_odom_t odom;
+    motion_types_odom_t ret;
+    uint32_t            words[MOTION_ODOM_WORDS];
 
     /* odometry: the layout fills MOTION_ODOM_WORDS; values in range come back
      * exactly */

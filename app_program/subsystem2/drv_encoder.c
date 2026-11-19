@@ -1,6 +1,6 @@
-/*
- *  drv_encoder.c
- *  Subsystem 2 -- PIO0 quadrature encoder driver.  See drv_encoder.h.
+/** @file drv_encoder.c
+ *
+ *  @brief Subsystem 2 -- PIO0 quadrature encoder driver.  See drv_encoder.h.
  *
  *  Each state machine loops forever: it samples the two pins, jumps through
  *  the 16-entry table on (old state, new state), adds +1 / -1 / 0 to Y and
@@ -23,7 +23,7 @@
 /* ~ 16 us at 125 MHz; the SM pushes every ~10 cycles */
 #define READ_SPIN_MAX 2000u
 
-/* pico-examples pio/quadrature_encoder/quadrature_encoder.pio, assembled. */
+/** pico-examples pio/quadrature_encoder/quadrature_encoder.pio, assembled. */
 static uint16_t const g_quad_prog[QUAD_PROG_LEN] = {
     0x000f, 0x000e, 0x0015, 0x000f, /*  0- 3: jump table, old state 00 */
     0x0015, 0x000f, 0x000f, 0x000e, /*  4- 7: old state 01             */
@@ -109,61 +109,74 @@ EXPORT int32_t drv_encoder_read (uint32_t which)
     return (int32_t)value;
 }
 
+/** Address of PIO0's receive FIFO of state machine sm_no. */
 static inline uint32_t pio_rxf (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x020u + (4u * sm_no);
 }
 
+/** Address of PIO0 instruction memory slot. */
 static inline uint32_t pio_instr_mem (uint32_t slot)
 {
     return PIO0_BASE_ADDR + 0x048u + (4u * slot);
 }
 
+/** Address of the clock divider register of PIO0 state machine sm_no. */
 static inline uint32_t pio_sm_clkdiv (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x0C8u + (0x18u * sm_no);
 }
 
+/** Address of the execution control register of PIO0 state machine sm_no. */
 static inline uint32_t pio_sm_execctrl (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x0CCu + (0x18u * sm_no);
 }
 
+/** Address of the shift control register of PIO0 state machine sm_no. */
 static inline uint32_t pio_sm_shiftctrl (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x0D0u + (0x18u * sm_no);
 }
 
+/** Address of the immediate-instruction register of PIO0 state machine sm_no.
+ */
 static inline uint32_t pio_sm_instr (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x0D8u + (0x18u * sm_no);
 }
 
+/** Address of the pin control register of PIO0 state machine sm_no. */
 static inline uint32_t pio_sm_pinctrl (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x0DCu + (0x18u * sm_no);
 }
 
+/** FSTAT bit: the receive FIFO of state machine sm_no is empty. */
 static inline uint32_t pio_fstat_rxempty (uint32_t sm_no)
 {
     return 1uL << (8u + sm_no);
 }
 
+/** CTRL bit that enables state machine sm_no. */
 static inline uint32_t pio_ctrl_sm_enable (uint32_t sm_no)
 {
     return 1uL << sm_no;
 }
 
+/** CTRL bit that restarts state machine sm_no. */
 static inline uint32_t pio_ctrl_sm_restart (uint32_t sm_no)
 {
     return 1uL << (4u + sm_no);
 }
 
+/** CTRL bit that restarts the clock divider of state machine sm_no. */
 static inline uint32_t pio_ctrl_clk_restart (uint32_t sm_no)
 {
     return 1uL << (8u + sm_no);
 }
 
+/** Make pin a Schmitt-triggered input with pull-up, connected to PIO0. */
 static void pin_setup (uint32_t pin)
 {
     out_w(app_regs_pad(pin), APP_REGS_PAD_IE | APP_REGS_PAD_PUE
@@ -171,6 +184,8 @@ static void pin_setup (uint32_t pin)
     out_w(app_regs_gpio_ctrl(pin), APP_REGS_FUNCSEL_PIO0);
 }
 
+/** Load and start the quadrature program on PIO0 state machine sm_idx for the
+    encoder whose channel A is pin_a. */
 static void sm_setup (uint32_t sm_idx, uint32_t pin_a)
 {
     out_w(pio_sm_clkdiv(sm_idx), 1uL << 16); /* full speed */

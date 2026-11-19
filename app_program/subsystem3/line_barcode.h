@@ -1,7 +1,7 @@
-/*
- *  line_barcode.h
- *  Subsystem 3 -- region B of the Line & Barcode statechart (Week 6 6.2):
- *  WAIT_QUIET -> ARMED -> CAPTURING -> (VALID | REJECT) -> COOLDOWN.
+/** @file line_barcode.h
+ *
+ *  @brief Subsystem 3 -- region B of the Line & Barcode statechart (Week
+ * 6 6.2): WAIT_QUIET -> ARMED -> CAPTURING -> (VALID | REJECT) -> COOLDOWN.
  *  Owner: Buddy 3.  Pure C (host-tested).
  *
  *  Fed one barcode-sensor sample at a time (1 kHz) with the distance the
@@ -21,64 +21,64 @@
 typedef enum
 {
     BC_NONE   = 0,
-    BC_VALID  = 1, /* p_out->ch holds the character        */
+    BC_VALID  = 1, /**< p_out->ch holds the character        */
     BC_REJECT = 2  /* p_out->reason holds the code39_result_t */
 } line_barcode_result_t;
 
 typedef struct
 {
     char     chr;
-    uint8_t  reason; /* code39_result_t */
+    uint8_t  reason; /**< code39_result_t */
     bool     b_reversed;
     uint16_t elements;
     uint32_t length_um;
-    uint16_t peak_norm; /* darkest bar seen (black-level learning) */
+    uint16_t peak_norm; /**< darkest bar seen (black-level learning) */
 } line_barcode_out_t;
 
 typedef struct
 {
-    uint8_t  state;    /* line_types_bc_state_t */
-    bool     b_black;  /* hysteresis level */
-    uint32_t run_um;   /* current run      */
-    uint32_t white_um; /* WAIT_QUIET: white so far */
+    uint8_t  state;    /**< line_types_bc_state_t */
+    bool     b_black;  /**< hysteresis level */
+    uint32_t run_um;   /**< current run      */
+    uint32_t white_um; /**< WAIT_QUIET: white so far */
     uint32_t total_um;
     uint32_t max_elem_um;
     uint32_t cooldown_um;
     uint16_t n_elems;
     uint16_t peak;
-    uint16_t ext; /* extreme of the current element (BC_DELTA) */
+    uint16_t ext; /**< extreme of the current element (BC_DELTA) */
     uint32_t widths[BC_MAX_ELEMENTS + 1u];
-    uint16_t prof[BC_PROF_BINS]; /* darkest norm per BC_PROF_BIN_UM   */
+    uint16_t prof[BC_PROF_BINS]; /**< darkest norm per BC_PROF_BIN_UM   */
     uint16_t prof_n;
-    uint32_t bin_um; /* travel into the current bin       */
-    uint8_t
-        pass; /* which reading decoded: 0 swing, 1 mid, 2 low, 3 adaptive swing,
-                 4 best match, 5 exact without an end speck,
-                 6 best match without an end speck */
-    /* 7 Nov: white-paper levels over the last BC_QUIET_UM before a code
+    uint32_t bin_um; /**< travel into the current bin       */
+    uint8_t  pass; /**< which reading decoded: 0 swing, 1 mid, 2 low, 3 adaptive
+                      swing, 4 best match, 5 exact without an end speck, 6 best
+                      match without an end speck */
+    /** 7 Nov: white-paper levels over the last BC_QUIET_UM before a code
        (lightest, darkest: their difference is the noise a bar must beat) */
     uint16_t q_lo;
     uint16_t q_hi;
-    uint16_t q_wlo; /* the window being measured            */
+    uint16_t q_wlo; /**< the window being measured            */
     uint16_t q_whi;
-    /* 7 Nov: darkness record of the last BC_PRE_BINS bins while armed */
+    /** 7 Nov: darkness record of the last BC_PRE_BINS bins while armed */
     uint16_t pre[BC_PRE_BINS];
-    uint16_t pre_n;   /* bins held (up to BC_PRE_BINS)        */
-    uint16_t pre_i;   /* next slot                            */
-    uint16_t pre_cur; /* darkest in the bin being filled      */
-    uint32_t pre_um;  /* travel into it                       */
+    uint16_t pre_n;   /**< bins held (up to BC_PRE_BINS)        */
+    uint16_t pre_i;   /**< next slot                            */
+    uint16_t pre_cur; /**< darkest in the bin being filled      */
+    uint32_t pre_um;  /**< travel into it                       */
 } line_barcode_capture_t;
 
+/** Reset the barcode capture: waiting for a quiet (white) stretch. */
 void line_barcode_init(line_barcode_capture_t * p_bc);
 
-/* From a darkness profile (bins of BC_PROF_BIN_UM), the elements against
+/** From a darkness profile (bins of BC_PROF_BIN_UM), the elements against
    threshold thr (bars at or above thr + hyst, spaces below thr - hyst);
    runs under BC_PROF_MIN_BINS merge into their neighbours.  Returns the
    element count (widths in um), the trailing white run excluded. */
 uint16_t line_barcode_prof_elements(uint16_t const * p_prof, uint16_t n_bins,
                                     uint16_t thr, uint16_t hyst,
                                     uint32_t * p_widths, uint16_t max_elems);
-/* As line_barcode_prof_elements() but by swing: a bar starts delta above the
+/** As line_barcode_prof_elements() but by swing: a bar starts delta above the
    lightest point of the space before it and ends delta below its darkest
    point (BC_ADAPT_*, 9 Nov). */
 uint16_t line_barcode_prof_swing(uint16_t const * p_prof, uint16_t n_bins,
@@ -88,14 +88,16 @@ uint16_t line_barcode_prof_swing(uint16_t const * p_prof, uint16_t n_bins,
    reading 0 swing, 1 mid, 2 low, 3 / 4 / 5 adaptive swing at
    BC_ADAPT_PCT / PCT2 / PCT3 (0 if not tried); returns the count. */
 #define BC_READINGS 6u
+/** Element widths (um) of the last capture as read by reading 0..BC_READINGS-1
+    into p_widths.  Returns how many. */
 uint16_t line_barcode_reading(line_barcode_capture_t const * p_bc,
                               uint8_t reading, uint32_t * p_widths);
-/* Light / dark levels of a profile (percentiles BC_PROF_WHITE_PCT / DARK_PCT).
+/** Light / dark levels of a profile (percentiles BC_PROF_WHITE_PCT / DARK_PCT).
  */
 void line_barcode_prof_levels(uint16_t const * p_prof, uint16_t n_bins,
                               uint16_t * p_white, uint16_t * p_dark);
 
-/* norm: 0..1000 (1000 = black).  step_um: distance since the last sample
+/** norm: 0..1000 (1000 = black).  step_um: distance since the last sample
    (absolute value).  Returns BC_VALID / BC_REJECT once per code. */
 line_barcode_result_t line_barcode_sample(line_barcode_capture_t * p_bc,
                                           uint16_t norm, uint32_t step_um,

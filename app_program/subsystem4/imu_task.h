@@ -9,6 +9,8 @@
 
 #include <tk/tkernel.h>
 
+/** ImuTask: attitude, humps, tilt and lift every 10 ms.  Created by
+    subsystem4_start(). */
 IMPORT void imu_task_thread(INT stacd, void * p_exinf);
 
 #endif /* IMU_TASK_H */

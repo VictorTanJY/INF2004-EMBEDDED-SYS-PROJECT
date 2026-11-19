@@ -1,6 +1,6 @@
-/*
- *  app_gpio_irq.c
- *  Shared IO_IRQ_BANK0 handler.  See app_gpio_irq.h.
+/** @file app_gpio_irq.c
+ *
+ *  @brief Shared IO_IRQ_BANK0 handler.  See app_gpio_irq.h.
  */
 
 #include "app_gpio_irq.h"
@@ -87,7 +87,7 @@ EXPORT uint32_t app_gpio_irq_count (void)
     return g_count;
 }
 
-/* IO_BANK0 interrupt registers (RP2040 datasheet 2.19.6.1).  Each register
+/** IO_BANK0 interrupt registers (RP2040 datasheet 2.19.6.1).  Each register
    covers 8 GPIOs, 4 bits per GPIO: LEVEL_LOW, LEVEL_HIGH, EDGE_LOW, EDGE_HIGH.
  */
 static inline uint32_t io_intr (uint32_t gpio_bank)
@@ -95,31 +95,42 @@ static inline uint32_t io_intr (uint32_t gpio_bank)
     return APP_REGS_IO_BANK0_BASE + 0x0F0u + (4u * gpio_bank);
 }
 
+/** Address of core 0's interrupt-enable register for GPIO bank word gpio_bank.
+ */
 static inline uint32_t io_proc0_inte (uint32_t gpio_bank)
 {
     return APP_REGS_IO_BANK0_BASE + 0x100u + (4u * gpio_bank);
 }
 
+/** Address of core 0's interrupt-status register for GPIO bank word gpio_bank.
+ */
 static inline uint32_t io_proc0_ints (uint32_t gpio_bank)
 {
     return APP_REGS_IO_BANK0_BASE + 0x120u + (4u * gpio_bank);
 }
 
+/** Address of core 1's interrupt-enable register for GPIO bank word gpio_bank.
+ */
 static inline uint32_t io_proc1_inte (uint32_t gpio_bank)
 {
     return APP_REGS_IO_BANK0_BASE + 0x130u + (4u * gpio_bank);
 }
 
+/** Address of core 1's interrupt-status register for GPIO bank word gpio_bank.
+ */
 static inline uint32_t io_proc1_ints (uint32_t gpio_bank)
 {
     return APP_REGS_IO_BANK0_BASE + 0x150u + (4u * gpio_bank);
 }
 
+/** Number of the core running the caller: 0 or 1. */
 static uint32_t this_core (void)
 {
     return in_w(SIO_CPUID_ADDR); /* 0 = core 0, 1 = core 1 */
 }
 
+/** Bank-0 GPIO interrupt: timestamp it, acknowledge the edges and call the
+    callbacks attached on this core. */
 static void gpio_bank0_isr (UINT intno)
 {
     uint32_t const t_us = (uint32_t)app_time_us();

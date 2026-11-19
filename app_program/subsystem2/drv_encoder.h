@@ -1,6 +1,6 @@
-/*
- *  drv_encoder.h
- *  Subsystem 2 -- two quadrature encoders counted by PIO0 (SM0: GP4/GP5,
+/** @file drv_encoder.h
+ *
+ *  @brief Subsystem 2 -- two quadrature encoders counted by PIO0 (SM0: GP4/GP5,
  *  SM1: GP16/GP17), x4, in hardware.  Register-level.  Owner: Buddy 2.
  *
  *  The program is the Raspberry Pi pico-examples quadrature_encoder.pio
@@ -19,10 +19,11 @@
 #define DRV_ENC_LEFT  0u /* PIO0 SM0 */
 #define DRV_ENC_RIGHT 1u /* PIO0 SM1 */
 
-/* Returns E_OBJ if a PIO0 state machine 0/1 is already running (boot check). */
+/** Returns E_OBJ if a PIO0 state machine 0/1 is already running (boot check).
+ */
 IMPORT ER drv_encoder_init(void);
 
-/* Current count (signed, wraps at 2^32).  A few microseconds. */
+/** Current count (signed, wraps at 2^32).  A few microseconds. */
 IMPORT int32_t drv_encoder_read(uint32_t which);
 
 #endif /* DRV_ENCODER_H */

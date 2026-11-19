@@ -1,6 +1,6 @@
-/*
- *  imu_core.h
- *  Subsystem 4 -- ImuTask logic as pure functions (Week 6 Section 6.3):
+/** @file imu_core.h
+ *
+ *  @brief Subsystem 4 -- ImuTask logic as pure functions (Week 6 Section 6.3):
  *  pitch / roll, level and hard-iron calibration, the hump sequence with
  *  height = sum(sin(theta) x ds) over ENCODER distance, motion
  *  classification, tilt and lift.  Owner: Buddy 4.  Host-tested.
@@ -26,84 +26,92 @@
 
 typedef struct
 {
-    int32_t acc_f[3]; /* filtered acceleration, mg x 16 */
+    int32_t acc_f[3]; /**< filtered acceleration, mg x 16 */
     bool    b_have_acc;
-    int32_t prev_mag_mg; /* |a| of the previous sample      */
+    int32_t prev_mag_mg; /**< |a| of the previous sample      */
 
-    /* level calibration */
+    /** level calibration */
     int32_t  pitch0_cdeg;
     int32_t  roll0_cdeg;
     int64_t  lvl_sum[3];
     int32_t  lvl_min[3];
     int32_t  lvl_max[3];
     uint16_t lvl_n;
-    int32_t  lvl_spread_mg; /* last finish: largest axis min..max  */
-    int32_t  lvl_up_mg;     /* last finish: mean on the up axis    */
+    int32_t  lvl_spread_mg; /**< last finish: largest axis min..max  */
+    int32_t  lvl_up_mg;     /**< last finish: mean on the up axis    */
 
-    /* hard-iron calibration */
+    /** hard-iron calibration */
     int16_t mag_min[3];
     int16_t mag_max[3];
     int16_t mag_off[3];
-    uint8_t cal; /* IMU_CAL_* */
+    uint8_t cal; /**< IMU_CAL_* */
 
-    /* attitude */
+    /** attitude */
     int32_t pitch_cdeg;
     int32_t roll_cdeg;
     int32_t heading_cdeg;
-    int32_t accel_mm_s2; /* dv/dt from odometry, filtered */
+    int32_t accel_mm_s2; /**< dv/dt from odometry, filtered */
     int32_t prev_v;
     bool    b_have_v;
 
-    /* hump sequence */
-    uint8_t  hump_state; /* imu_types_hump_state_t */
-    uint32_t dwell_um;   /* guard distance in the current condition */
-    uint32_t hump_um;    /* distance since the climb started */
-    int64_t  h_um;       /* integrated height */
+    /** hump sequence */
+    uint8_t  hump_state; /**< imu_types_hump_state_t */
+    uint32_t dwell_um;   /**< guard distance in the current condition */
+    uint32_t hump_um;    /**< distance since the climb started */
+    int64_t  h_um;       /**< integrated height */
     int64_t  h_peak_um;
     int32_t  theta_max_cdeg;
     uint16_t last_hump_mm;
     uint16_t hump_max_mm;
     uint16_t humps;
 
-    /* one-wheel hump (roll), see side_step() */
-    uint8_t  side_state;     /* 0 idle, 1 on the hump, 2 coming down */
-    uint32_t side_um;        /* distance with |roll| above IMU_SIDE_ON_CDEG */
-    int32_t  side_peak_cdeg; /* largest |roll| of this hump */
+    /** one-wheel hump (roll), see side_step() */
+    uint8_t  side_state;     /**< 0 idle, 1 on the hump, 2 coming down */
+    uint32_t side_um;        /**< distance with |roll| above IMU_SIDE_ON_CDEG */
+    int32_t  side_peak_cdeg; /**< largest |roll| of this hump */
 
     /* safety / classification */
     bool     b_tilt;
-    bool     b_tilt_over; /* beyond the limit, waiting for IMU_TILT_HOLD_MS */
+    bool     b_tilt_over; /**< beyond the limit, waiting for IMU_TILT_HOLD_MS */
     uint32_t tilt_since_ms;
-    bool     b_lift;  /* lift seen, not yet back below IMU_LIFT_REARM_MG */
-    bool b_lift_over; /* above IMU_LIFT_RISE_MG, waiting for IMU_LIFT_HOLD_MS */
+    bool     b_lift;  /**< lift seen, not yet back below IMU_LIFT_REARM_MG */
+    bool b_lift_over; /**< above IMU_LIFT_RISE_MG, waiting for IMU_LIFT_HOLD_MS
+                       */
     uint32_t lift_since_ms;
-    int32_t  lift_rise_mg; /* rise at the last lift */
-    int32_t
-        rise_peak_mg; /* largest rise of the current excursion while driving */
-    int32_t rise_max_mg; /* largest rise this run while driving on the flat */
+    int32_t  lift_rise_mg; /**< rise at the last lift */
+    int32_t  rise_peak_mg; /**< largest rise of the current excursion while
+                              driving */
+    int32_t rise_max_mg; /**< largest rise this run while driving on the flat */
 
     /* hump results saved when the floor may have gone (14 Nov) */
     bool     b_hump_saved;
     uint16_t saved_hump_max_mm;
     uint16_t saved_last_hump_mm;
     uint16_t saved_humps;
-    uint8_t  motion; /* imu_types_motion_t */
+    uint8_t  motion; /**< imu_types_motion_t */
     uint32_t motion_ms;
 } imu_core_t;
 
+/** Reset the IMU logic: no samples, not calibrated, no humps. */
 void imu_core_init(imu_core_t * p_ic);
 
-/* Level offsets: stand still ~1 s (CALIBRATING STILL phase). */
+/** Level offsets: stand still ~1 s (CALIBRATING STILL phase). */
 void imu_core_cal_level_start(imu_core_t * p_ic);
+/** Feed one filtered acceleration sample (mg) to the level calibration. */
 void imu_core_cal_level_sample(imu_core_t * p_ic, int32_t const acc_mg[3]);
+/** Finish the level calibration.  Returns true if enough steady samples gave
+    the level offsets. */
 bool imu_core_cal_level_finish(imu_core_t * p_ic);
 
-/* Hard-iron offsets: 360 deg spin (CALIBRATING SPIN phase). */
+/** Hard-iron offsets: 360 deg spin (CALIBRATING SPIN phase). */
 void imu_core_cal_mag_start(imu_core_t * p_ic);
+/** Feed one magnetometer sample to the hard-iron calibration. */
 void imu_core_cal_mag_sample(imu_core_t * p_ic, int16_t const mag[3]);
+/** Finish the hard-iron calibration.  Returns true if the spin covered enough
+    of the circle. */
 bool imu_core_cal_mag_finish(imu_core_t * p_ic);
 
-/*
+/**
  * One 10 ms step.  acc_mg: raw axes in mg; mag: raw counts (NULL = no new
  * sample); ds_um: encoder distance since the last step (signed); v_mm_s
  * and yaw_cdeg_s from the odometry snapshot.  Returns IMU_EV_* bits.
@@ -112,23 +120,30 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3],
                       int16_t const * p_mag, int32_t ds_um, int32_t v_mm_s,
                       int32_t yaw_cdeg_s, uint32_t dt_ms, uint32_t now_ms);
 
-/* 14 Nov: the robot may be off the floor (all IR sensors black): keep the
+/** 14 Nov: the robot may be off the floor (all IR sensors black): keep the
    hump results as they are now.  Drop: back on the floor, keep any hump
    measured since.  Restore: it was lifted: undo every hump measured since
    the save (wheels spinning in the air with the robot tipped read as
    humps) and end the hump in progress without a result. */
 void imu_core_hump_save(imu_core_t * p_ic);
+/** Keep the humps measured since imu_core_hump_save(): the robot was on the
+    floor after all. */
 void imu_core_hump_drop(imu_core_t * p_ic);
+/** Undo every hump measured since imu_core_hump_save(): the robot was lifted.
+ */
 void imu_core_hump_restore(imu_core_t * p_ic);
 
-/* New run: clear the run's hump maximum and count (MissionTask start). */
+/** New run: clear the run's hump maximum and count (MissionTask start). */
 void imu_core_new_run(imu_core_t * p_ic);
 
 /* Change Requirement 1: the IMU snapshot (IF-08) as stored between tasks. */
 #define IMU_SNAP_BITS  164u /* sum of the layout widths      */
 #define IMU_SNAP_WORDS 6u   /* 24 B instead of 32 B          */
+/** Pack the IMU snapshot into IMU_SNAP_WORDS words. */
 void imu_core_snap_pack(imu_types_snap_t const * p_snap, uint32_t * p_words);
+/** Unpack IMU_SNAP_WORDS words into the IMU snapshot. */
 void imu_core_snap_unpack(uint32_t const * p_words, imu_types_snap_t * p_snap);
+/** Bits used by the packed IMU snapshot. */
 uint32_t imu_core_snap_layout_bits(void);
 
 #endif /* IMU_CORE_H */

@@ -1,6 +1,6 @@
-/*
- *  line_track.c
- *  Subsystem 3 -- calibration and line tracking.  See line_track.h.
+/** @file line_track.c
+ *
+ *  @brief Subsystem 3 -- calibration and line tracking.  See line_track.h.
  */
 
 #include "line_track.h"
@@ -280,7 +280,7 @@ void line_track_slip_sample (line_track_slip_t * p_s, int32_t heading_cdeg,
     }
 }
 
-/* The two sensors sit either side of the car's centreline, so the mean of
+/** The two sensors sit either side of the car's centreline, so the mean of
    their next crossings is where the centreline is on the line again: 180
    real deg from the start (the car starts centred on it).  The sensors
    need not see the line at the same time. */
@@ -333,7 +333,7 @@ uint32_t line_track_snap_layout_bits (void)
     return app_pack_layout_bits(g_line_layout, LINE_FIELDS);
 }
 
-/* Junction, gap and lost / found from the two sensor levels. */
+/** Junction, gap and lost / found from the two sensor levels. */
 static uint8_t track_patterns (line_track_t *           p_t,
                                line_track_cfg_t const * p_cfg, uint32_t step_um)
 {
@@ -396,7 +396,7 @@ static uint8_t track_patterns (line_track_t *           p_t,
     return events;
 }
 
-/* Output: forward speed and turn rate. */
+/** Output: forward speed and turn rate. */
 static void track_output (line_track_t * p_t, line_track_cfg_t const * p_cfg)
 {
     if (p_t->b_lost)
@@ -438,7 +438,7 @@ static void track_output (line_track_t * p_t, line_track_cfg_t const * p_cfg)
     }
 }
 
-/* Steering ramp: move the turn command at most LINE_OMEGA_STEP per block
+/** Steering ramp: move the turn command at most LINE_OMEGA_STEP per block
    (10 ms), so a flip of the line error does not jump the wheel speeds. */
 static int32_t steer_toward (int32_t now, int32_t target)
 {
@@ -446,17 +446,21 @@ static int32_t steer_toward (int32_t now, int32_t target)
                                now + LINE_OMEGA_STEP);
 }
 
+/** Black / not black for one sensor, with hysteresis around the previous
+    state. */
 static bool is_black (bool b_black, uint16_t norm)
 {
     return b_black ? (norm >= LINE_BLACK_OFF) : (norm > LINE_BLACK_ON);
 }
 
+/** White / not white for one sensor, with hysteresis around the previous
+    state. */
 static bool is_white (bool b_white, uint16_t norm)
 {
     return b_white ? (norm <= LINE_WHITE_OFF) : (norm < LINE_WHITE_ON);
 }
 
-/* One sensor: the norm-weighted centre (0.1 deg) of its first dark run
+/** One sensor: the norm-weighted centre (0.1 deg) of its first dark run
    after LINE_SLIP_SKIP_DDEG that lasts LINE_SLIP_MIN_BLOCKS; -1 if none.
    *p_runs counts the dark runs seen. */
 static int32_t slip_centre (line_track_slip_t const * p_s,

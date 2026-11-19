@@ -1,6 +1,6 @@
-/*
- *  drv_servo.c
- *  Subsystem 5 -- servo PWM.  125 MHz / DIV 125 = 1 MHz count, TOP 19999
+/** @file drv_servo.c
+ *
+ *  @brief Subsystem 5 -- servo PWM.  125 MHz / DIV 125 = 1 MHz count, TOP 19999
  *  -> 20 ms period; the compare value is the pulse width in microseconds.
  */
 
@@ -50,21 +50,25 @@ EXPORT void drv_servo_set_deg (int32_t angle_deg)
           (uint32_t)pulse_us << 16); /* channel B; A (GP14) = 0 */
 }
 
+/** Address of the control register of PWM slice. */
 static inline uint32_t pwm_ch_csr (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
 }
 
+/** Address of the clock divider register of PWM slice. */
 static inline uint32_t pwm_ch_div (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
 }
 
+/** Address of the compare register (channels A and B) of PWM slice. */
 static inline uint32_t pwm_ch_cc (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
 }
 
+/** Address of the wrap (TOP) register of PWM slice. */
 static inline uint32_t pwm_ch_top (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;

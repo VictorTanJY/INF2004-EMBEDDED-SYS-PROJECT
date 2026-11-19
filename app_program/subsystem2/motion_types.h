@@ -1,6 +1,6 @@
-/*
- *  motion_types.h
- *  Subsystem 2 -- motion message and snapshot formats (IF-01, IF-02).
+/** @file motion_types.h
+ *
+ *  @brief Subsystem 2 -- motion message and snapshot formats (IF-01, IF-02).
  *  Owner: Buddy 2 (Jedrek).
  *
  *  Pure C (no kernel), so motion_core.c, mission_core.c and the host tests
@@ -55,15 +55,15 @@ typedef uint8_t motion_types_cmd_code_t; /* one of the constants below */
 
 typedef struct
 {
-    uint8_t src;      /* motion_types_src_t                          */
-    uint8_t seq;      /* sender's sequence number, 5 bits, wraps */
-    uint8_t cmd;      /* motion_types_cmd_code_t                     */
-    uint8_t reserved; /* 0                                     */
-    int16_t arg0;     /* see motion_types_cmd_code_t                 */
+    uint8_t src;      /**< motion_types_src_t                          */
+    uint8_t seq;      /**< sender's sequence number, 5 bits, wraps */
+    uint8_t cmd;      /**< motion_types_cmd_code_t                     */
+    uint8_t reserved; /**< 0                                     */
+    int16_t arg0;     /**< see motion_types_cmd_code_t                 */
     int16_t arg1;
 } motion_types_cmd_t;
 
-/* Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */
+/** Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */
 static inline uint8_t motion_types_seq_next (uint8_t seq)
 {
     return (uint8_t)((seq + 1u) & MOTION_SEQ_MASK);
@@ -90,29 +90,29 @@ typedef uint8_t motion_types_phase_t; /* one of the constants below */
 
 typedef struct
 {
-    uint32_t t_ms;  /* time of the update (app_time_ms)      */
-    int32_t  enc_l; /* accumulated encoder counts, x4        */
+    uint32_t t_ms;  /**< time of the update (app_time_ms)      */
+    int32_t  enc_l; /**< accumulated encoder counts, x4        */
     int32_t  enc_r;
-    int32_t  dist_mm; /* mean of both wheels, signed           */
-    int32_t  x_mm;    /* dead-reckoned pose                    */
+    int32_t  dist_mm; /**< mean of both wheels, signed           */
+    int32_t  x_mm;    /**< dead-reckoned pose                    */
     int32_t  y_mm;
-    int32_t  heading_cdeg; /* accumulated, + left (0.01 deg)        */
-    int16_t  v_l_mm_s;     /* measured wheel speeds                 */
+    int32_t  heading_cdeg; /**< accumulated, + left (0.01 deg)        */
+    int16_t  v_l_mm_s;     /**< measured wheel speeds                 */
     int16_t  v_r_mm_s;
-    int16_t  v_mm_s;          /* mean speed                            */
-    int16_t  yaw_rate_cdeg_s; /* + left                                */
-    int16_t  duty_l;          /* applied duty, per mille, signed       */
+    int16_t  v_mm_s;          /**< mean speed                            */
+    int16_t  yaw_rate_cdeg_s; /**< + left                                */
+    int16_t  duty_l;          /**< applied duty, per mille, signed       */
     int16_t  duty_r;
-    uint16_t rejected;      /* commands rejected (wrong authority)   */
-    uint8_t  state;         /* motion_types_state_t                        */
-    uint8_t  phase;         /* motion_types_phase_t (MANEUVER only)        */
-    uint8_t  auth;          /* motion_types_src_t currently obeyed         */
-    uint8_t  last_done_seq; /* seq of the last completed MOVE/TURN   */
-    uint8_t  last_done_src; /* its source                            */
-    uint8_t  last_fail_seq; /* seq of the last failed MOVE/TURN      */
-    uint8_t  done_count;    /* + 1 per completion (wraps)            */
-    uint8_t  fail_count;    /* + 1 per failure (wraps)               */
-    uint8_t  hw_ok;         /* 1 = PWM and PIO encoders initialised  */
+    uint16_t rejected;      /**< commands rejected (wrong authority)   */
+    uint8_t  state;         /**< motion_types_state_t                        */
+    uint8_t  phase;         /**< motion_types_phase_t (MANEUVER only)        */
+    uint8_t  auth;          /**< motion_types_src_t currently obeyed         */
+    uint8_t  last_done_seq; /**< seq of the last completed MOVE/TURN   */
+    uint8_t  last_done_src; /**< its source                            */
+    uint8_t  last_fail_seq; /**< seq of the last failed MOVE/TURN      */
+    uint8_t  done_count;    /**< + 1 per completion (wraps)            */
+    uint8_t  fail_count;    /**< + 1 per failure (wraps)               */
+    uint8_t  hw_ok;         /**< 1 = PWM and PIO encoders initialised  */
     uint8_t  reserved;
 } motion_types_odom_t;
 

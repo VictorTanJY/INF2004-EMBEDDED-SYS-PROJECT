@@ -1,17 +1,17 @@
-/*
- *  safety_task.c
- *  Subsystem 4 -- SafetyTask (priority 5, core 1): fault supervisor
+/** @file safety_task.c
+ *
+ *  @brief Subsystem 4 -- SafetyTask (priority 5, core 1): fault supervisor
  *  (Week 6 Section 3, FR15, NFR8).  Owner: Buddy 4.
  *
  *  Loop (at least every 20 ms):
- *    - tk_wai_flg(flg_safety, SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
- *      TWF_ORW | TWF_BITCLR, 20 ms): the bits that woke it are taken in the
- *      same call, so they cannot re-wake it (Tribunal 1 gap 1);
- *    - any brake bit: subsystem2_motor_estop() at once, OR into the latched
- * word, FAULT -> mbf_mission, fault record -> mbf_telem;
- *    - heartbeat check (50 / 50 / 300 / 300 / 100 ms): a missed task is
- *      HEARTBEAT_TIMEOUT, handled like a brake cause;
- *    - feed the watchdog (the only feeder; 200 ms).
+ *  - tk_wai_flg(flg_safety, SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
+ *  TWF_ORW | TWF_BITCLR, 20 ms): the bits that woke it are taken in the
+ *  same call, so they cannot re-wake it (Tribunal 1 gap 1);
+ *  - any brake bit: subsystem2_motor_estop() at once, OR into the latched
+ *  word, FAULT -> mbf_mission, fault record -> mbf_telem;
+ *  - heartbeat check (50 / 50 / 300 / 300 / 100 ms): a missed task is
+ *  HEARTBEAT_TIMEOUT, handled like a brake cause;
+ *  - feed the watchdog (the only feeder; 200 ms).
  *  REQ_RESET (operator reset via MissionTask): the latch is cleared only
  *  if no cause is still present (obstacle < 8 cm, missed heartbeat, robot
  *  still tilted beyond 30 deg).
@@ -60,7 +60,7 @@
 #define CHK_SYST_CLK_CPU 0x4u    /* CLKSOURCE = processor clock */
 #define CHK_SYS_COUNTS   250000u /* 2 ms at 125 MHz */
 
-/* Written only by SafetyTask (one writer, aligned word: indivisible). */
+/** Written only by SafetyTask (one writer, aligned word: indivisible). */
 static uint32_t volatile g_safety_latched;
 
 static bool volatile gb_tick_ok;
@@ -171,6 +171,7 @@ EXPORT uint32_t safety_task_tick_us (void)
 
 #endif
 
+/** Copy the heartbeat counter of every monitored task. */
 static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
 {
     uint8_t kdx;
@@ -181,6 +182,8 @@ static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
     }
 }
 
+/** Latch fault bits; newly latched ones are reported to MissionTask (FAULT)
+    and to telemetry. */
 static void latch (uint32_t bits, uint32_t now_ms)
 {
     uint32_t const fresh = bits & ~g_safety_latched;
@@ -197,7 +200,7 @@ static void latch (uint32_t bits, uint32_t now_ms)
     }
 }
 
-/* Causes that are still present right now (for an operator reset). */
+/** Causes that are still present right now (for an operator reset). */
 static uint32_t live_causes (safety_core_hb_state_t * p_hb, uint32_t now_ms)
 {
     imu_types_snap_t          imu;
@@ -223,6 +226,8 @@ static uint32_t live_causes (safety_core_hb_state_t * p_hb, uint32_t now_ms)
     return live;
 }
 
+/** Boot self-test (NFR8): count 2 ms of CPU clock with SysTick and check the 1
+    us timer moved 2000 us. */
 static void check_timer_tick (void)
 {
     uint32_t reload;

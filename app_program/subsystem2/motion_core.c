@@ -1,6 +1,6 @@
-/*
- *  motion_core.c
- *  Subsystem 2 -- MotionTask controller (pure).  See motion_core.h.
+/** @file motion_core.c
+ *
+ *  @brief Subsystem 2 -- MotionTask controller (pure).  See motion_core.h.
  *  Owner: Buddy 2 (Jedrek).
  */
 
@@ -427,7 +427,7 @@ uint32_t motion_core_odom_layout_bits (void)
     return app_pack_layout_bits(g_odom_layout, ODOM_FIELDS);
 }
 
-/* A command other than CLEAR_ESTOP, with no E-stop latched. */
+/** A command other than CLEAR_ESTOP, with no E-stop latched. */
 static motion_core_result_t command_run (motion_core_t *            p_mc,
                                          motion_types_cmd_t const * p_cmd,
                                          uint32_t                   now_ms)
@@ -508,7 +508,7 @@ static motion_core_result_t command_run (motion_core_t *            p_mc,
     return res;
 }
 
-/* MOVE / TURN from the authorised source with a valid speed. */
+/** MOVE / TURN from the authorised source with a valid speed. */
 static void command_move (motion_core_t *            p_mc,
                           motion_types_cmd_t const * p_cmd, uint32_t now_ms)
 {
@@ -539,6 +539,8 @@ static void command_move (motion_core_t *            p_mc,
 }
 
 /* ------------------------------------------------------------------ */
+/** Queue a completion event (code, sequence, source) for MotionTask to report;
+    dropped if the queue is full. */
 static void push_event (motion_core_t * p_mc, uint8_t code, uint8_t seq,
                         uint8_t src)
 {
@@ -551,6 +553,7 @@ static void push_event (motion_core_t * p_mc, uint8_t code, uint8_t seq,
     }
 }
 
+/** Clear both wheels' integrators and remembered directions. */
 static void reset_pid (motion_core_t * p_mc)
 {
     p_mc->integ_l_um = 0;
@@ -559,6 +562,7 @@ static void reset_pid (motion_core_t * p_mc)
     p_mc->dir_r      = 0;
 }
 
+/** Set-points and duties to zero, controller reset: the wheels brake. */
 static void brake (motion_core_t * p_mc)
 {
     p_mc->sp_v   = 0;
@@ -568,7 +572,7 @@ static void brake (motion_core_t * p_mc)
     reset_pid(p_mc);
 }
 
-/* End the active manoeuvre (if any) and report it. */
+/** End the active manoeuvre (if any) and report it. */
 static void end_maneuver (motion_core_t * p_mc, bool b_ok)
 {
     if (p_mc->state != MOTION_ST_MANEUVER)
@@ -592,18 +596,21 @@ static void end_maneuver (motion_core_t * p_mc, bool b_ok)
     p_mc->state = MOTION_ST_IDLE_BRAKED;
 }
 
+/** Wheel travel of counts encoder counts, um. */
 static int64_t counts_to_um (int32_t counts)
 {
     return ((int64_t)counts * MOTION_WHEEL_CIRC_UM) / MOTION_COUNTS_PER_REV;
 }
 
-/* Wheel arc (um) for a turn of angle_cdeg about the robot centre. */
+/** Wheel arc (um) for a turn of angle_cdeg about the robot centre. */
 static int64_t turn_arc_um (int32_t angle_cdeg)
 {
     return ((int64_t)app_types_abs_i32(angle_cdeg) * MOTION_TRACK_MM * PI_E6)
            / 36000000;
 }
 
+/** Start a MOVE or TURN: target_um of wheel travel at up to vmax mm/s in
+    direction dir, with its time limit. */
 static void start_maneuver (motion_core_t *            p_mc,
                             motion_types_cmd_t const * p_cmd, int64_t target_um,
                             int32_t vmax, int8_t dir, uint32_t now_ms)
@@ -630,7 +637,7 @@ static void start_maneuver (motion_core_t *            p_mc,
 }
 
 /* ------------------------------------------------------------------ */
-/* Ramp value toward target by at most step (step >= 0). */
+/** Ramp value toward target by at most step (step >= 0). */
 static int32_t ramp (int32_t value, int32_t target, int32_t step)
 {
     if (value < target)
@@ -640,6 +647,8 @@ static int32_t ramp (int32_t value, int32_t target, int32_t step)
     return app_types_max_i32(value - step, target);
 }
 
+/** PI speed controller with feed-forward for one wheel: duty (per mille) for
+    setpoint and measured speed in mm/s, over dt_ms. */
 static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
                           int8_t * p_dir, uint32_t dt_ms)
 {
@@ -687,6 +696,8 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
                                         MOTION_DUTY_MAX);
 }
 
+/** Wheel speeds, distance, heading and position from the new encoder counts,
+    dt_ms after the last. */
 static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
                              uint32_t dt_ms, uint32_t now_ms)
 {
@@ -748,6 +759,8 @@ static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
     }
 }
 
+/** Report MOTION_FAILED (stall) when a wheel driven hard has not moved for
+    MOTION_STALL_MS. */
 static void check_stall (motion_core_t * p_mc, uint32_t now_ms)
 {
     bool const b_l =
@@ -783,7 +796,7 @@ static void check_stall (motion_core_t * p_mc, uint32_t now_ms)
     }
 }
 
-/* MANEUVER: set sp_v / sp_w from the profile.  Returns false when the
+/** MANEUVER: set sp_v / sp_w from the profile.  Returns false when the
    manoeuvre ended this step (outputs already braked). */
 static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
                            uint32_t dt_ms)
@@ -869,6 +882,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     return true;
 }
 
+/** Width of the first argument field of a packed command of this kind, bits. */
 static uint8_t p0_bits (uint8_t cmd)
 {
     if (MOTION_CMD_DRIVE == cmd)

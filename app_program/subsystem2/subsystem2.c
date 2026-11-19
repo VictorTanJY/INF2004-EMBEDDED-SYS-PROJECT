@@ -1,6 +1,6 @@
-/*
- *  subsystem2.c
- *  Subsystem 2 -- Motion control: kernel objects, odometry snapshot and
+/** @file subsystem2.c
+ *
+ *  @brief Subsystem 2 -- Motion control: kernel objects, odometry snapshot and
  *  the E-stop latch.  Owner: Buddy 2 (Jedrek).
  *
  *  The task is in motion_task.c, the controller in motion_core.c, the
@@ -19,7 +19,7 @@ static uint32_t g_odom[MOTION_ODOM_WORDS]; /* packed (CR1), under g_odom_lock */
 static ID       g_tid_motion;
 static ID       g_cyc_motion;
 
-/* Written by subsystem2_motor_estop() (SafetyTask) and cleared by MotionTask,
+/** Written by subsystem2_motor_estop() (SafetyTask) and cleared by MotionTask,
    both on core 1.  A byte store/load is indivisible on the Cortex-M0+, and both
    writers run inside DI/EI on the same core, so no update is lost. */
 static uint8_t volatile g_estop_latch;
@@ -94,7 +94,7 @@ EXPORT ER subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
     return subsystem2_send(&msg);
 }
 
-/* The snapshot is stored packed (MOTION_ODOM_WORDS words).  Writer and
+/** The snapshot is stored packed (MOTION_ODOM_WORDS words).  Writer and
    readers pack / unpack in their own task and copy the whole record under
    the lock, so no task ever does a read-modify-write on the shared words. */
 EXPORT void subsystem2_get_odom (motion_types_odom_t * p_out)
@@ -151,7 +151,7 @@ EXPORT bool subsystem2_estop_latched (void)
     return (g_estop_latch != 0u);
 }
 
-/*
+/**
  * CLEAR_ESTOP (Tribunal 1 gap 3): the latch check, the latch clear and the
  * PWM reconnect run inside ONE DI/EI section on core 1, and only while
  * SafetyTask's latched-fault word is zero, so a fault raised meanwhile
@@ -193,7 +193,7 @@ EXPORT void subsystem2_estop_test_clear (void)
 
 #endif
 
-/* motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
+/** motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
 static void motion_cyc_handler (void * p_exinf)
 {
     (void)p_exinf;

@@ -1,6 +1,6 @@
-/*
- *  test_s1_main.c
- *  Host unit tests for subsystem 1's pure modules: comms_proto.c (binary
+/** @file test_s1_main.c
+ *
+ *  @brief Host unit tests for subsystem 1's pure modules: comms_proto.c (binary
  *  frame builders, command parser, packed telemetry record, offline ring)
  *  and hmi_button.c.
  *  Build and run:  make -C testing/subsystem1/host
@@ -59,7 +59,12 @@ static void              test_dedup(void);
 static void              test_map(void);
 static void check_result(char const * p_id, bool b_ok, char const * p_file,
                          int32_t line);
+static void test_telemetry_h03(void);
+static void test_telemetry_h05(void);
+static void test_parser_h09(void);
+static void test_parser_h12(void);
 
+/** Run subsystem 1's host tests.  Exit status 0 if all passed. */
 int main (void)
 {
     test_writer();
@@ -74,7 +79,7 @@ int main (void)
     return (0 == g_fail) ? 0 : 1;
 }
 
-/* Build a command frame the way the laptop does (picocar_codec.py). */
+/** Build a command frame the way the laptop does (picocar_codec.py). */
 static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
                            int32_t param_index, int32_t value,
                            char const * p_map)
@@ -102,6 +107,8 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
     return app_pack_writer_len(&writer);
 }
 
+/** Build a command frame from its fields and parse it into *p_cmd.  Returns
+    the parser's result. */
 static comms_proto_err_t parse (uint8_t ident, uint8_t cmd, int32_t param_index,
                                 int32_t value, char const * p_map,
                                 comms_proto_cmd_t * p_cmd)
@@ -112,6 +119,7 @@ static comms_proto_err_t parse (uint8_t ident, uint8_t cmd, int32_t param_index,
     return comms_proto_parse_cmd(buf, count, p_cmd);
 }
 
+/** Whitelist index of the parameter named p_name, or -1. */
 static int32_t param_index (char const * p_name)
 {
     static char const * const p_names[] = {
@@ -129,7 +137,7 @@ static int32_t param_index (char const * p_name)
     return 15;
 }
 
-/* Skip n bits (any number). */
+/** Skip n bits (any number). */
 static void skip (app_pack_reader_t * p_r, uint32_t count)
 {
     while (count > 0u)
@@ -141,6 +149,8 @@ static void skip (app_pack_reader_t * p_r, uint32_t count)
     }
 }
 
+/** 1 if the count bytes of p_buf, in hex, equal the string p_hex; else 0 (both
+    printed). */
 static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
                        char const * p_hex)
 {
@@ -161,6 +171,7 @@ static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
 }
 
 /* ------------------------------------------------------------------ */
+/** S1-H01: the byte-stream writer and reader. */
 static void test_writer (void)
 {
     uint8_t           buf[8];
@@ -215,7 +226,15 @@ static void test_writer (void)
     }
 }
 
+/** Telemetry and event frames (S1-H03..H08). */
 static void test_telemetry (void)
+{
+    test_telemetry_h03();
+    test_telemetry_h05();
+}
+
+/** Checks S1-H03, S1-H04. */
+static void test_telemetry_h03 (void)
 {
     uint8_t             buf[COMMS_FRAME_MAX];
     comms_proto_telem_t telem;
@@ -298,6 +317,15 @@ static void test_telemetry (void)
     CHECK("S1-H04",
           (20u == app_pack_take(&reader, 7u))
               && (126u == app_pack_take(&reader, 7u))); /* 500 cm caps at 126 */
+}
+
+/** Checks S1-H05. */
+static void test_telemetry_h05 (void)
+{
+    uint8_t             buf[COMMS_FRAME_MAX];
+    comms_proto_telem_t telem;
+    uint16_t            len;
+    app_pack_reader_t   reader;
 
     /* S1-H05: worst case: every field saturates, still 27 bytes */
     telem.seq          = 4294967295u;
@@ -345,6 +373,7 @@ static void test_telemetry (void)
            (uint32_t)len, (uint32_t)strlen("picocar/is23/telemetry"));
 }
 
+/** S1-H06..H08: event, status and acknowledgement frames. */
 static void test_event_status_ack (void)
 {
     uint8_t             buf[COMMS_FRAME_MAX];
@@ -435,7 +464,15 @@ static void test_event_status_ack (void)
     CHECK("S1-H08", (3u == len) && hex_eq(buf, len, GOLD_ACK_NO_ID));
 }
 
+/** Command parsing and validation (S1-H09..H14). */
 static void test_parser (void)
+{
+    test_parser_h09();
+    test_parser_h12();
+}
+
+/** Checks S1-H09, S1-H10, S1-H11. */
+static void test_parser_h09 (void)
 {
     comms_proto_cmd_t cmd;
     uint8_t           frame[8];
@@ -531,6 +568,14 @@ static void test_parser (void)
 #endif
     CHECK("S1-H11",
           COMMS_ERR_RANGE == parse(1u, COMMS_CMD_SET, 2, 99, NULL, &cmd));
+}
+
+/** Checks S1-H12, S1-H13, S1-H14. */
+static void test_parser_h12 (void)
+{
+    comms_proto_cmd_t cmd;
+    uint8_t           frame[8];
+    uint16_t          count;
 
     /* S1-H12: the length is exact: one byte more or less is a bad frame */
     count        = cmd_frame(frame, 1u, COMMS_CMD_STOP, 0, 0, NULL);
@@ -578,6 +623,7 @@ static void test_parser (void)
     }
 }
 
+/** S1-H15: the offline event ring keeps the newest records in order. */
 static void test_ring (void)
 {
     comms_proto_ring_t ring;
@@ -611,6 +657,9 @@ static void test_ring (void)
     CHECK("S1-H15", sizeof(ring) <= ((COMMS_RING_LEN * 9u) + 4u));
 }
 
+/** Feed a pattern of 20 ms samples ('1' pressed, '0' released) to a debouncer;
+    the events (P press, S short, L long) go into p_events.  Returns how many.
+ */
 static int32_t run_button (char const * p_pattern, uint16_t long_ms,
                            char * p_events)
 {
@@ -642,6 +691,7 @@ static int32_t run_button (char const * p_pattern, uint16_t long_ms,
     return count;
 }
 
+/** S1-H16: button debouncing, short and long presses. */
 static void test_button (void)
 {
     char ev_name[32];
@@ -668,6 +718,7 @@ static void test_button (void)
     CHECK("S1-H17", 0 == strcmp(ev_name, "PS"));
 }
 
+/** S1-H18: duplicate command ids within the window. */
 static void test_dedup (void)
 {
     comms_proto_dedup_t dedup;
@@ -724,6 +775,7 @@ static void test_dedup (void)
                         && !comms_proto_cmd_repeat_safe(cmd_a.cmd));
 }
 
+/** S1-H19: the barcode map command. */
 static void test_map (void)
 {
     comms_proto_cmd_t cmd;
