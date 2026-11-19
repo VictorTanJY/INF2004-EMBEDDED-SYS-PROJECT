@@ -25,11 +25,11 @@
 #define APP_CDEG_360        36000
 
 /* floor(sqrt(x)) */
-uint32_t app_isqrt32(uint32_t x);
-uint32_t app_isqrt64(uint64_t x);
+uint32_t app_isqrt32(uint32_t value);
+uint32_t app_isqrt64(uint64_t value);
 
 /* atan2(y, x) in cdeg, -18000..18000.  atan2(0, 0) = 0. */
-int32_t app_atan2_cdeg(int32_t y, int32_t x);
+int32_t app_atan2_cdeg(int32_t y_val, int32_t x_val);
 
 /* sin / cos of an angle in cdeg (any value), Q15. */
 int32_t app_sin_q15(int32_t cdeg);

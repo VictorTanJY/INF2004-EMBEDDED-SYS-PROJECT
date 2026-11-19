@@ -38,19 +38,19 @@
 
 #define I2C_TIMEOUT_US      2000u
 
-static bool timed_out(uint32_t t0)
+static bool timed_out(uint32_t t_start)
 {
-    return ((uint32_t)(app_time_us() - t0) > I2C_TIMEOUT_US);
+    return ((uint32_t)(app_time_us() - t_start) > I2C_TIMEOUT_US);
 }
 
 static ER set_target(uint8_t addr7)
 {
-    uint32_t const t0 = (uint32_t)app_time_us();
+    uint32_t const t_start = (uint32_t)app_time_us();
 
     out_w(IC_ENABLE, 0u);
     while ((in_w(IC_ENABLE_STATUS) & 1u) != 0u)
     {
-        if (timed_out(t0))
+        if (timed_out(t_start))
         {
             return E_TMOUT;
         }
@@ -62,11 +62,11 @@ static ER set_target(uint8_t addr7)
 }
 
 /* Wait for the STOP of the transfer, then check for an abort (NACK). */
-static ER finish(uint32_t t0)
+static ER finish(uint32_t t_start)
 {
     while ((in_w(IC_RAW_INTR_STAT) & (INTR_STOP_DET | INTR_TX_ABRT)) == 0u)
     {
-        if (timed_out(t0))
+        if (timed_out(t_start))
         {
             return E_TMOUT;
         }
@@ -87,17 +87,17 @@ static ER finish(uint32_t t0)
  */
 static void recovery_delay(void)
 {
-    uint32_t const t0 = (uint32_t)app_time_us();
-    while ((uint32_t)((uint32_t)app_time_us() - t0) < 5u) { }
+    uint32_t const t_start = (uint32_t)app_time_us();
+    while ((uint32_t)((uint32_t)app_time_us() - t_start) < 5u) { }
 }
 
 static ER scl_release(void)
 {
-    uint32_t const t0 = (uint32_t)app_time_us();
+    uint32_t const t_start = (uint32_t)app_time_us();
     out_w(GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
     while ((in_w(GPIO_IN) & (1uL << S4_PIN_IMU_SCL)) == 0u)
     {
-        if ((uint32_t)((uint32_t)app_time_us() - t0) >= 100u)
+        if ((uint32_t)((uint32_t)app_time_us() - t_start) >= 100u)
             return E_TMOUT;
     }
     recovery_delay();
@@ -108,39 +108,39 @@ static ER clear_bus(void)
 {
     uint32_t const sda = 1uL << S4_PIN_IMU_SDA;
     uint32_t const scl = 1uL << S4_PIN_IMU_SCL;
-    uint8_t i;
-    ER er;
+    uint8_t idx;
+    ER err;
     out_w(GPIO_OE_CLR, sda | scl);
     out_w(GPIO_OUT_CLR, sda | scl);
     out_w(GPIO_CTRL(S4_PIN_IMU_SDA), GPIO_CTRL_FUNCSEL_SIO);
     out_w(GPIO_CTRL(S4_PIN_IMU_SCL), GPIO_CTRL_FUNCSEL_SIO);
     out_w(GPIO(S4_PIN_IMU_SDA), GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
     out_w(GPIO(S4_PIN_IMU_SCL), GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
-    er = scl_release();
-    if (er == E_OK && ((in_w(GPIO_IN) & sda) == 0u))
+    err = scl_release();
+    if (err == E_OK && ((in_w(GPIO_IN) & sda) == 0u))
     {
-        for (i = 0u; i < 9u && ((in_w(GPIO_IN) & sda) == 0u); i++)
+        for (idx = 0u; idx < 9u && ((in_w(GPIO_IN) & sda) == 0u); idx++)
         {
             out_w(GPIO_OE_SET, scl);
             recovery_delay();
-            er = scl_release();
-            if (er != E_OK) break;
+            err = scl_release();
+            if (err != E_OK) break;
         }
-        if (er == E_OK)
+        if (err == E_OK)
         {
             /* STOP: SDA rises while SCL is HIGH. */
             out_w(GPIO_OE_SET, scl);
             out_w(GPIO_OE_SET, sda);
             recovery_delay();
-            er = scl_release();
+            err = scl_release();
             out_w(GPIO_OE_CLR, sda);
             recovery_delay();
         }
     }
     out_w(GPIO_OE_CLR, sda | scl);
-    if (er == E_OK && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
-        er = E_IO;
-    return er;
+    if (err == E_OK && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
+        err = E_IO;
+    return err;
 }
 
 EXPORT ER drv_i2c1_init(void)
@@ -171,72 +171,72 @@ EXPORT ER drv_i2c1_init(void)
 
 EXPORT ER drv_i2c1_write_reg(uint8_t addr7, uint8_t reg, uint8_t value)
 {
-    uint32_t t0;
-    ER             er = set_target(addr7);
+    uint32_t t_start;
+    ER             err = set_target(addr7);
 
-    if (er != E_OK)
+    if (err != E_OK)
     {
-        return er;
+        return err;
     }
-    t0 = (uint32_t)app_time_us();
+    t_start = (uint32_t)app_time_us();
     out_w(IC_DATA_CMD, reg);
     out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
-    return finish(t0);
+    return finish(t_start);
 }
 
-EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n)
+EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n_bytes)
 {
-    uint32_t t0;
-    ER             er;
-    uint8_t        i;
+    uint32_t t_start;
+    ER             err;
+    uint8_t        idx;
 
-    if ((p_buf == 0) || (addr7 > 0x7Fu) || (n == 0u) || (n > 16u))
+    if ((p_buf == 0) || (addr7 > 0x7Fu) || (n_bytes == 0u) || (n_bytes > 16u))
     {
         return E_PAR;
     }
-    er = set_target(addr7);
-    if (er != E_OK)
+    err = set_target(addr7);
+    if (err != E_OK)
     {
-        return er;
+        return err;
     }
-    t0 = (uint32_t)app_time_us();
+    t_start = (uint32_t)app_time_us();
     out_w(IC_DATA_CMD, reg);                            /* register address */
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < n_bytes; idx++)
     {
         uint32_t cmd = CMD_READ;
 
-        if (i == 0u)
+        if (idx == 0u)
         {
             cmd |= CMD_RESTART;
         }
-        if (i == (n - 1u))
+        if (idx == (n_bytes - 1u))
         {
             cmd |= CMD_STOP;
         }
         out_w(IC_DATA_CMD, cmd);
     }
-    er = finish(t0);
-    if (er != E_OK)
+    err = finish(t_start);
+    if (err != E_OK)
     {
-        return er;
+        return err;
     }
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < n_bytes; idx++)
     {
         while (in_w(IC_RXFLR) == 0u)
         {
-            if (timed_out(t0))
+            if (timed_out(t_start))
             {
                 return E_TMOUT;
             }
         }
-        p_buf[i] = (uint8_t)in_w(IC_DATA_CMD);
+        p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
     }
     return E_OK;
 }
 
 EXPORT ER drv_i2c1_probe(uint8_t addr7)
 {
-    uint8_t b;
+    uint8_t byte;
 
-    return drv_i2c1_read(addr7, 0x00u, &b, 1u);
+    return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
 }

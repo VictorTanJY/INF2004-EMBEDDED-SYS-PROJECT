@@ -30,46 +30,46 @@ static mission_out_t    g_out;
 static mission_inputs_t g_in;
 static uint32_t         g_now;
 
-static void ev(uint8_t type, uint16_t a, int32_t data)
+static void ev(uint8_t type, uint16_t val_a, int32_t data)
 {
-    mission_evt_t e = { type, 0u, a, data };
+    mission_evt_t evt = { type, 0u, val_a, data };
 
-    g_out.n = 0u;
-    mission_core_event(&g_mc, &e, g_now, &g_out);
+    g_out.n_acts = 0u;
+    mission_core_event(&g_mc, &evt, g_now, &g_out);
 }
 
-static void tick(uint32_t ms)
+static void tick(uint32_t delay_ms)
 {
-    uint32_t t;
+    uint32_t elapsed;
 
-    for (t = 0u; t < ms; t += 100u)
+    for (elapsed = 0u; elapsed < delay_ms; elapsed += 100u)
     {
         g_now += 100u;
-        g_out.n = 0u;
+        g_out.n_acts = 0u;
         mission_core_tick(&g_mc, &g_in, g_now, &g_out);
-        if (g_out.n > 0u) { return; }   /* caller inspects the actions */
+        if (g_out.n_acts > 0u) { return; }   /* caller inspects the actions */
     }
 }
 
 /* Find an action; returns its index or -1. */
 static int find(uint8_t kind, uint8_t cmd)
 {
-    uint8_t i;
+    uint8_t idx;
 
-    for (i = 0u; i < g_out.n; i++)
+    for (idx = 0u; idx < g_out.n_acts; idx++)
     {
-        if ((g_out.act[i].kind == kind) && (g_out.act[i].cmd == cmd)) { return (int)i; }
+        if ((g_out.act[idx].kind == kind) && (g_out.act[idx].cmd == cmd)) { return (int)idx; }
     }
     return -1;
 }
 
 static uint8_t last_seq(void)
 {
-    int i;
+    int idx;
 
-    for (i = (int)g_out.n - 1; i >= 0; i--)
+    for (idx = (int)g_out.n_acts - 1; idx >= 0; idx--)
     {
-        if ((g_out.act[i].kind == MISSION_ACT_MOTION) && (g_out.act[i].seq != 0u)) { return g_out.act[i].seq; }
+        if ((g_out.act[idx].kind == MISSION_ACT_MOTION) && (g_out.act[idx].seq != 0u)) { return g_out.act[idx].seq; }
     }
     return 0u;
 }
@@ -124,7 +124,7 @@ static void test_mission(void)
     CHECK("S5-H02", g_mc.snap.state == MISSION_ST_CALIBRATING && g_mc.snap.cal_phase == MISSION_CAL_PH_STILL);
     tick(MISSION_CAL_STILL_MS + 100u);
     CHECK("S5-H02", g_mc.snap.cal_phase == MISSION_CAL_PH_SPIN && find(MISSION_ACT_MOTION, MOTION_CMD_TURN) >= 0);
-    CHECK("S5-H02", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == 3600);
+    CHECK("S5-H02", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == 3600);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, (uint16_t)(seq + 1u), MOTION_SRC_MISSION);    /* stale seq: ignored */
     CHECK("S5-H02", g_mc.snap.cal_phase == MISSION_CAL_PH_SPIN);
@@ -171,7 +171,7 @@ static void test_mission(void)
     ev(MISSION_EV_BARCODE, 0u, 'Q');            /* read during the manoeuvre: latched for later */
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
     CHECK("S5-H04", find(MISSION_ACT_MOTION, MOTION_CMD_TURN) >= 0 &&
-                    g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == -900);
+                    g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == -900);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
     CHECK("S5-H04", g_mc.snap.state == MISSION_ST_LINE_FOLLOW && g_mc.snap.auth == MOTION_SRC_LINE);
@@ -179,20 +179,20 @@ static void test_mission(void)
     ev(MISSION_EV_JUNCTION, 0u, 0);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
-    CHECK("S5-H04", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == 900);
+    CHECK("S5-H04", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == 900);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
     ev(MISSION_EV_BARCODE, 0u, 'W');
     ev(MISSION_EV_JUNCTION, 0u, 0);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
-    CHECK("S5-H04", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == 1800);   /* U-turn */
+    CHECK("S5-H04", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == 1800);   /* U-turn */
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
     ev(MISSION_EV_BARCODE, 0u, 'Z');
     ev(MISSION_EV_JUNCTION, 0u, 0);
     CHECK("S5-H04", find(MISSION_ACT_MOTION, MOTION_CMD_MOVE) >= 0 &&
-                    g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].p0 == MISSION_NAV_STRAIGHT_MM);
+                    g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].arg0 == MISSION_NAV_STRAIGHT_MM);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
     CHECK("S5-H04", g_mc.snap.state == MISSION_ST_LINE_FOLLOW);
@@ -237,10 +237,10 @@ static void test_mission(void)
     tick(100u);
     ev(MISSION_EV_REMOTE_START, 0u, 0);
     ev(MISSION_EV_LINE_LOST, 0u, 0);
-    CHECK("S5-H07", g_mc.snap.state == MISSION_ST_LINE_SEARCH && g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == 600);
+    CHECK("S5-H07", g_mc.snap.state == MISSION_ST_LINE_SEARCH && g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == 600);
     seq = last_seq();
     ev(MISSION_EV_MOTION_DONE, seq, MOTION_SRC_MISSION);
-    CHECK("S5-H07", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == -1200);
+    CHECK("S5-H07", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == -1200);
     g_in.b_on_line = true;
     tick(200u);
     CHECK("S5-H07", g_mc.snap.state == MISSION_ST_LINE_FOLLOW);
@@ -277,19 +277,19 @@ static void test_mission(void)
    box's left side ~20: it depends on the box, so the firmware assumes
    none); a box face d mm ahead of the sensor, w wide, centred c (+ left). */
 static double g_edge_beam = 36.0;
-static uint16_t edge_ping(double d, double w, double c, double phi_deg)
+static uint16_t edge_ping(double diff, double omega, double coef, double phi_deg)
 {
-    double const ph = phi_deg * M_PI / 180.0;
-    double const sx = OBST_US_AHEAD_MM * sin(ph), sy = OBST_US_AHEAD_MM * cos(ph);
-    double best = 1e9, x;
+    double const phase = phi_deg * M_PI / 180.0;
+    double const sum_x = OBST_US_AHEAD_MM * sin(phase), sum_y = OBST_US_AHEAD_MM * cos(phase);
+    double best = 1e9, x_val;
 
-    for (x = c - (w / 2.0); x <= c + (w / 2.0); x += 1.0)
+    for (x_val = coef - (omega / 2.0); x_val <= coef + (omega / 2.0); x_val += 1.0)
     {
-        double const dx = x - sx, dy = (OBST_US_AHEAD_MM + d) - sy;
-        double const ang = atan2(dx, dy) - ph;
-        double const r = sqrt((dx * dx) + (dy * dy));
+        double const delta_x = x_val - sum_x, delta_y = (OBST_US_AHEAD_MM + diff) - sum_y;
+        double const ang = atan2(delta_x, delta_y) - phase;
+        double const radius = sqrt((delta_x * delta_x) + (delta_y * delta_y));
 
-        if ((fabs(ang) <= (g_edge_beam * M_PI / 180.0)) && (r < best)) { best = r; }
+        if ((fabs(ang) <= (g_edge_beam * M_PI / 180.0)) && (radius < best)) { best = radius; }
     }
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
 }
@@ -299,56 +299,56 @@ static uint16_t g_edge_clutter = 0u;    /* range of clutter seen beyond 25 deg r
 static int32_t  g_edge_phi[2];          /* last echo per side (left, right), 0.01 deg */
 static uint16_t g_edge_r[2];
 
-static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
+static void edge_sim(double diff, double omega, double coef, obst_profile_t * p_prof)
 {
-    bool    has[2] = { false, false };
+    bool    b_has[2] = { false, false };
     int32_t lat[2] = { 0, 0 };
-    int32_t mn[2]  = { 0, 0 };
-    int     k;
+    int32_t minimum[2]  = { 0, 0 };
+    int     kdx;
 
-    for (k = 0; k < 2; k++)
+    for (kdx = 0; kdx < 2; kdx++)
     {
-        int32_t const side = (k == 0) ? 1 : -1;
+        int32_t const side = (kdx == 0) ? 1 : -1;
         int32_t       phi  = 0;
         unsigned      miss = 0u;
 
-        int32_t       lo = 0, hi = 0;
+        int32_t       low = 0, high = 0;
         bool          b_past = false;
-        unsigned      it;
+        unsigned      iter;
 
         while ((miss < OBST_EDGE_MISSES) && (abs(phi) < (OBST_EDGE_MAX_DDEG * 10)))
         {
-            uint16_t r;
+            uint16_t ret;
 
             phi += side * OBST_EDGE_STEP_DDEG * 10;
-            r = edge_ping(d, w, c, phi / 100.0);
-            if ((side < 0) && (phi <= -2500) && (g_edge_clutter != 0u)) { r = g_edge_clutter; }   /* something to the right */
-            if (obst_edge_on_face(phi, r, (uint16_t)d))
+            ret = edge_ping(diff, omega, coef, phi / 100.0);
+            if ((side < 0) && (phi <= -2500) && (g_edge_clutter != 0u)) { ret = g_edge_clutter; }   /* something to the right */
+            if (obst_edge_on_face(phi, ret, (uint16_t)diff))
             {
-                if (obst_edge_past_max(obst_edge_wide_lat(phi, r, side), side)) { b_past = true; break; }
-                has[k] = true; lat[k] = obst_edge_wide_lat(phi, r, side); mn[k] = obst_edge_lat(phi); miss = 0u;
-                g_edge_phi[k] = phi; g_edge_r[k] = r; lo = phi;
+                if (obst_edge_past_max(obst_edge_wide_lat(phi, ret, side), side)) { b_past = true; break; }
+                b_has[kdx] = true; lat[kdx] = obst_edge_wide_lat(phi, ret, side); minimum[kdx] = obst_edge_lat(phi); miss = 0u;
+                g_edge_phi[kdx] = phi; g_edge_r[kdx] = ret; low = phi;
             }
-            else { if (miss == 0u) { hi = phi; } miss++; }
+            else { if (miss == 0u) { high = phi; } miss++; }
         }
         /* 7 Nov: refine between the last echo and the first miss, as the task */
-        for (it = 0u; has[k] && !b_past && (miss >= OBST_EDGE_MISSES) && (it < OBST_EDGE_REFINE_ITERS); it++)
+        for (iter = 0u; b_has[kdx] && !b_past && (miss >= OBST_EDGE_MISSES) && (iter < OBST_EDGE_REFINE_ITERS); iter++)
         {
-            uint16_t r;
+            uint16_t ret;
 
-            phi = (lo + hi) / 2;
-            r   = edge_ping(d, w, c, phi / 100.0);
-            if (obst_edge_on_face(phi, r, (uint16_t)d) && !obst_edge_past_max(obst_edge_wide_lat(phi, r, side), side))
+            phi = (low + high) / 2;
+            ret   = edge_ping(diff, omega, coef, phi / 100.0);
+            if (obst_edge_on_face(phi, ret, (uint16_t)diff) && !obst_edge_past_max(obst_edge_wide_lat(phi, ret, side), side))
             {
-                lat[k] = obst_edge_wide_lat(phi, r, side); mn[k] = obst_edge_lat(phi);
-                g_edge_phi[k] = phi; g_edge_r[k] = r; lo = phi;
+                lat[kdx] = obst_edge_wide_lat(phi, ret, side); minimum[kdx] = obst_edge_lat(phi);
+                g_edge_phi[kdx] = phi; g_edge_r[kdx] = ret; low = phi;
             }
-            else { hi = phi; }
-            g_edge_phi[k] = (lo + hi) / 2;      /* the edge is between the last echo and the miss */
+            else { high = phi; }
+            g_edge_phi[kdx] = (low + high) / 2;      /* the edge is between the last echo and the miss */
         }
     }
-    obst_edge_plan(p_prof, has[0], lat[0], has[1], lat[1]);
-    obst_edge_plan_min(p_prof, has[0], mn[0], has[1], mn[1]);
+    obst_edge_plan(p_prof, b_has[0], lat[0], b_has[1], lat[1]);
+    obst_edge_plan_min(p_prof, b_has[0], minimum[0], b_has[1], minimum[1]);
 }
 
 /* 7 Nov step-out leg model: from where the edge scan stopped (box face d
@@ -360,63 +360,63 @@ static void edge_sim(double d, double w, double c, obst_profile_t * p_prof)
    as the 7 Nov edge scans suggest).  A ping every 60 ms
    at the bypass speed.  Returns the axle's lateral (toward s) when the
    leg ends; *p_edge = the box edge on that side (toward s). */
-static int32_t out_sim(double d, double w, double c, int32_t s, int32_t min_lat, double beam_deg,
+static int32_t out_sim(double diff, double omega, double coef, int32_t sign, int32_t min_lat, double beam_deg,
                        double * p_edge)
 {
-    double const th    = 45.0 * M_PI / 180.0;
+    double const theta    = 45.0 * M_PI / 180.0;
     double const shaft = OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM;
-    double const face  = OBST_US_AHEAD_MM + d;          /* ahead of the axle */
-    double const lo    = (s * c) - (w / 2.0), hi = (s * c) + (w / 2.0);   /* box toward s */
+    double const face  = OBST_US_AHEAD_MM + diff;          /* ahead of the axle */
+    double const low    = (sign * coef) - (omega / 2.0), high = (sign * coef) + (omega / 2.0);   /* box toward s */
     double const step  = (OBST_BYPASS_SPEED_MM_S * 60.0) / 1000.0;
-    obst_out_t   o;
-    double       t;
+    obst_out_t   out_state;
+    double       time_s;
 
-    *p_edge = hi;
-    obst_out_start(&o, min_lat);
-    for (t = 0.0; t < 2000.0; t += step)
+    *p_edge = high;
+    obst_out_start(&out_state, min_lat);
+    for (time_s = 0.0; time_s < 2000.0; time_s += step)
     {
-        double const ax = t * sin(th), ay = t * cos(th);
-        double const sx = ax + (shaft * sin(th)), sy = ay + (shaft * cos(th)) + OBST_SERVO_ARM_MM;
-        double       best = 1e9, x;
-        uint16_t     r;
+        double const accel_x = time_s * sin(theta), accel_y = time_s * cos(theta);
+        double const sum_x = accel_x + (shaft * sin(theta)), sum_y = accel_y + (shaft * cos(theta)) + OBST_SERVO_ARM_MM;
+        double       best = 1e9, x_val;
+        uint16_t     ret;
 
-        if (obst_out_done(&o, (int32_t)ax)) { return (int32_t)ax; }
-        for (x = lo; x <= hi; x += 1.0)
+        if (obst_out_done(&out_state, (int32_t)accel_x)) { return (int32_t)accel_x; }
+        for (x_val = low; x_val <= high; x_val += 1.0)
         {
-            double const dx = x - sx, dy = face - sy;
-            double const rr = sqrt((dx * dx) + (dy * dy));
+            double const delta_x = x_val - sum_x, delta_y = face - sum_y;
+            double const radius2 = sqrt((delta_x * delta_x) + (delta_y * delta_y));
 
-            if ((dy > 0.0) && (fabs(atan2(dx, dy)) <= (fmax(beam_deg, 0.2) * M_PI / 180.0)) && (rr < best)) { best = rr; }
+            if ((delta_y > 0.0) && (fabs(atan2(delta_x, delta_y)) <= (fmax(beam_deg, 0.2) * M_PI / 180.0)) && (radius2 < best)) { best = radius2; }
         }
-        r = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
-        obst_out_ping(&o, (int32_t)ax, (int32_t)ay, 4500, r, (int32_t)face);
+        ret = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
+        obst_out_ping(&out_state, (int32_t)accel_x, (int32_t)accel_y, 4500, ret, (int32_t)face);
     }
     return -1;
 }
 
-typedef struct { double d, w, c; } box_t;       /* face distance, width, centre lateral (+ left) */
+typedef struct { double diff, omega, coef; } box_t;       /* face distance, width, centre lateral (+ left) */
 
 static uint16_t ping(box_t const * p_b, int n_b, int angle_deg)
 {
     double best = 1e9;
-    int k;
+    int kdx;
 
-    for (k = 0; k < n_b; k++)
+    for (kdx = 0; kdx < n_b; kdx++)
     {
         double lat;
 
-        for (lat = p_b[k].c - p_b[k].w / 2.0; lat <= p_b[k].c + p_b[k].w / 2.0 + 1e-9; lat += 1.0)
+        for (lat = p_b[kdx].coef - p_b[kdx].omega / 2.0; lat <= p_b[kdx].coef + p_b[kdx].omega / 2.0 + 1e-9; lat += 1.0)
         {
             /* 7 Nov: the sensor faces along the servo horn, OBST_SERVO_ARM_MM
                out from the shaft; box d is from the face with the servo at
                90 deg, so the shaft sits ARM behind that point */
-            double const ar = angle_deg * M_PI / 180.0;
-            double const sx = -OBST_SERVO_ARM_MM * cos(ar);
-            double const sy = OBST_SERVO_ARM_MM * (sin(ar) - 1.0);
-            double a = atan2(p_b[k].d - sy, -(lat - sx)) * 180.0 / M_PI;
-            double r = sqrt((p_b[k].d - sy) * (p_b[k].d - sy) + (lat - sx) * (lat - sx));
+            double const accel_r = angle_deg * M_PI / 180.0;
+            double const sum_x = -OBST_SERVO_ARM_MM * cos(accel_r);
+            double const sum_y = OBST_SERVO_ARM_MM * (sin(accel_r) - 1.0);
+            double val_a = atan2(p_b[kdx].diff - sum_y, -(lat - sum_x)) * 180.0 / M_PI;
+            double radius = sqrt((p_b[kdx].diff - sum_y) * (p_b[kdx].diff - sum_y) + (lat - sum_x) * (lat - sum_x));
 
-            if ((fabs(a - angle_deg) <= 7.5) && (r < best)) { best = r; }
+            if ((fabs(val_a - angle_deg) <= 7.5) && (radius < best)) { best = radius; }
         }
     }
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)lround(best);
@@ -426,16 +426,16 @@ static int g_pings;
 
 static void scan_box(box_t const * p_b, int n_b, obst_profile_t * p_prof)
 {
-    obst_scan_t sc;
+    obst_scan_t scan;
 
-    obst_scan_start(&sc);
+    obst_scan_start(&scan);
     g_pings = 0;
-    while (!obst_scan_done(&sc) && (g_pings < 60))
+    while (!obst_scan_done(&scan) && (g_pings < 60))
     {
-        obst_scan_feed(&sc, ping(p_b, n_b, obst_scan_angle(&sc)));
+        obst_scan_feed(&scan, ping(p_b, n_b, obst_scan_angle(&scan)));
         g_pings++;
     }
-    obst_scan_profile(&sc, p_prof);
+    obst_scan_profile(&scan, p_prof);
 }
 
 static void test_obstacle(void)
@@ -443,7 +443,7 @@ static void test_obstacle(void)
     obst_profile_t prof;
     obst_step_t steps[OBST_BYPASS_MAX_STEPS];
     double worst = 0.0;
-    int w, c;
+    int width, cnt;
 
     /* S5-H09: helpers */
     CHECK("S5-H09", obst_median3(300, 120, 200) == 200 && obst_median3(OBST_RANGE_NONE, 100, 90) == 100);
@@ -452,18 +452,18 @@ static void test_obstacle(void)
 
     /* S5-H10: width of 10-20 cm boxes (instructor, 23 Oct) at 20 cm, centred
        and offset; model error target: within 10 % (grade A) */
-    for (w = 100; w <= 200; w += 50)
+    for (width = 100; width <= 200; width += 50)
     {
-        for (c = -40; c <= 40; c += 40)
+        for (cnt = -40; cnt <= 40; cnt += 40)
         {
-            box_t b = { 200.0, (double)w, (double)c };
+            box_t box = { 200.0, (double)width, (double)cnt };
             double err;
 
-            scan_box(&b, 1, &prof);
-            err = fabs((double)prof.w_mm - w) / w;
+            scan_box(&box, 1, &prof);
+            err = fabs((double)prof.w_mm - width) / width;
             if (err > worst) { worst = err; }
             printf("box %3d mm at %+3d mm: width %3u mm  edges %+d/%+d  closest %u  plan %u  pings %d\n",
-                   w, c, (unsigned)prof.w_mm, prof.left_lat_mm, prof.right_lat_mm,
+                   width, cnt, (unsigned)prof.w_mm, prof.left_lat_mm, prof.right_lat_mm,
                    (unsigned)prof.closest_mm, (unsigned)prof.plan, g_pings);
             CHECK("S5-H10", g_pings <= 30);       /* ~1.8 s of 60 ms pings */
             CHECK("S5-H10", prof.b_valid && prof.closest_mm >= 195u && prof.closest_mm <= 215u);
@@ -475,13 +475,13 @@ static void test_obstacle(void)
 
     /* S5-H11: plan: free both sides -> the side needing less deviation */
     {
-        box_t b = { 200.0, 150.0, 30.0 };       /* centred a little to the left */
-        scan_box(&b, 1, &prof);
+        box_t box = { 200.0, 150.0, 30.0 };       /* centred a little to the left */
+        scan_box(&box, 1, &prof);
         CHECK("S5-H11", prof.plan == OBST_PLAN_RIGHT && prof.deviation_mm < 0);
     }
     {
-        box_t b[2] = { { 200.0, 150.0, 0.0 }, { 260.0, 120.0, -200.0 } };   /* wall on the right */
-        scan_box(b, 2, &prof);
+        box_t box[2] = { { 200.0, 150.0, 0.0 }, { 260.0, 120.0, -200.0 } };   /* wall on the right */
+        scan_box(box, 2, &prof);
         CHECK("S5-H11", prof.plan == OBST_PLAN_LEFT && prof.clr_r_mm < (OBST_ROBOT_WIDTH_MM + 2 * OBST_MARGIN_MM));
     }
     {
@@ -489,18 +489,18 @@ static void test_obstacle(void)
            the line; the box was read as the wall (edges 7 to 40 cm right)
            and the approach drove into the box.  The box in the path is the
            obstacle; never CONTINUE, edges around the box. */
-        int cx;
+        int col;
 
-        for (cx = -40; cx <= 60; cx += 20)
+        for (col = -40; col <= 60; col += 20)
         {
-            box_t b[2] = { { 240.0, 150.0, (double)cx }, { 170.0, 300.0, -330.0 } };   /* wall 18-48 cm right */
+            box_t box[2] = { { 240.0, 150.0, (double)col }, { 170.0, 300.0, -330.0 } };   /* wall 18-48 cm right */
 
-            scan_box(b, 2, &prof);
-            printf("box at %+d mm, wall right: edges %+d / %+d, closest %u, plan %u\n", cx,
+            scan_box(box, 2, &prof);
+            printf("box at %+d mm, wall right: edges %+d / %+d, closest %u, plan %u\n", col,
                    prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.closest_mm, (unsigned)prof.plan);
             CHECK("S5-H24", prof.b_valid && (prof.plan != OBST_PLAN_CONTINUE) &&
                             (prof.closest_mm >= 225u) && (prof.closest_mm <= 260u) &&
-                            (prof.right_lat_mm > (cx - 75 - 60)) && (prof.left_lat_mm < (cx + 75 + 60)));
+                            (prof.right_lat_mm > (col - 75 - 60)) && (prof.left_lat_mm < (col + 75 + 60)));
         }
     }
     {
@@ -508,29 +508,29 @@ static void test_obstacle(void)
            15 cm box 6 cm either side of the line: the car goes the short
            way, and the planned step-out clears the box's near edge
            by half the car + the margin (the step-out leg still pings live) */
-        int cx;
+        int col;
 
-        for (cx = -60; cx <= 60; cx += 60)
+        for (col = -60; col <= 60; col += 60)
         {
-            box_t b = { 200.0, 150.0, (double)cx };
+            box_t box = { 200.0, 150.0, (double)col };
             int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2);
 
             uint16_t w_seen;
 
-            scan_box(&b, 1, &prof);
+            scan_box(&box, 1, &prof);
             w_seen = prof.w_mm;
             obst_edge_plan(&prof, false, 0, false, 0);
             prof.w_mm = w_seen;
             CHECK("S5-H25", abs((int)w_seen - 150) <= 15);
-            printf("single sweep: box at %+d mm -> plan %u, step-out %d mm, width %u\n", cx,
+            printf("single sweep: box at %+d mm -> plan %u, step-out %d mm, width %u\n", col,
                    (unsigned)prof.plan, prof.deviation_mm, (unsigned)prof.w_mm);
-            if (cx > 0)
+            if (col > 0)
             {
-                CHECK("S5-H25", (prof.plan == OBST_PLAN_RIGHT) && (-prof.deviation_mm >= (75 - cx) + extra));
+                CHECK("S5-H25", (prof.plan == OBST_PLAN_RIGHT) && (-prof.deviation_mm >= (75 - col) + extra));
             }
-            else if (cx < 0)
+            else if (col < 0)
             {
-                CHECK("S5-H25", (prof.plan == OBST_PLAN_LEFT) && (prof.deviation_mm >= (75 + cx) + extra));
+                CHECK("S5-H25", (prof.plan == OBST_PLAN_LEFT) && (prof.deviation_mm >= (75 + col) + extra));
             }
             else
             {
@@ -546,21 +546,21 @@ static void test_obstacle(void)
         CHECK("S5-H24", obst_probe_face(330u, 300u) == 330u);               /* the face */
     }
     {
-        box_t b[3] = { { 200.0, 150.0, 0.0 }, { 250.0, 120.0, -200.0 }, { 250.0, 120.0, 200.0 } };
-        scan_box(b, 3, &prof);
+        box_t box[3] = { { 200.0, 150.0, 0.0 }, { 250.0, 120.0, -200.0 }, { 250.0, 120.0, 200.0 } };
+        scan_box(box, 3, &prof);
         CHECK("S5-H11", prof.plan == OBST_PLAN_BLOCKED);
     }
     {
-        box_t b = { 200.0, 100.0, 340.0 };      /* clearly beside the path */
-        scan_box(&b, 1, &prof);
+        box_t box = { 200.0, 100.0, 340.0 };      /* clearly beside the path */
+        scan_box(&box, 1, &prof);
         CHECK("S5-H11", prof.plan == OBST_PLAN_CONTINUE);
     }
     {
         /* 3 Nov: a box 260 mm off the line is only partly seen (unsure),
            but even a 200 mm object centred on what was seen stays out of
            the car's corridor: continue */
-        box_t b = { 200.0, 100.0, 260.0 };
-        scan_box(&b, 1, &prof);
+        box_t box = { 200.0, 100.0, 260.0 };
+        scan_box(&box, 1, &prof);
         CHECK("S5-H11", !prof.b_sure && (prof.plan == OBST_PLAN_CONTINUE) &&
                         (prof.plan_r_mm > (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM));
     }
@@ -584,8 +584,8 @@ static void test_obstacle(void)
         CHECK("S5-H16", prof.b_valid && (prof.closest_mm == 252u) && (prof.plan != OBST_PLAN_CONTINUE));
         /* the scan saw it off to the side and clear: the detection does not override */
         {
-            box_t b = { 200.0, 100.0, 260.0 };
-            scan_box(&b, 1, &prof);
+            box_t box = { 200.0, 100.0, 260.0 };
+            scan_box(&box, 1, &prof);
             CHECK("S5-H16", prof.plan == OBST_PLAN_CONTINUE);
         }
     }
@@ -599,7 +599,7 @@ static void test_obstacle(void)
        the line, more to the left, its left side heard only 20 deg off
        (with a 30 deg correction the car stepped out 10.6 cm and hit it). */
     {
-        static struct { double d, w, c, beam, out_beam; char const * name; } const runs[] = {
+        static struct { double diff, omega, coef, beam, out_beam; char const * p_name; } const runs[] = {
             { 326.0,  95.0,   0.0, 36.0,  0.0, "black 9.5 cm" },
             { 326.0,  95.0,   0.0, 36.0, 15.0, "black, 15 deg beam out" },
             { 326.0,  95.0,   0.0, 36.0, 36.0, "black, 36 deg beam out" },
@@ -612,24 +612,24 @@ static void test_obstacle(void)
             { 250.0, 200.0,   0.0, 36.0,  0.0, "20 cm centred" },
             { 250.0, 200.0,   0.0, 36.0, 15.0, "20 cm centred, 15 deg" },
         };
-        unsigned i;
+        unsigned idx;
 
-        for (i = 0u; i < (sizeof(runs) / sizeof(runs[0])); i++)
+        for (idx = 0u; idx < (sizeof(runs) / sizeof(runs[0])); idx++)
         {
-            int32_t s;
+            int32_t sign;
             int32_t lat;
             double  edge;
 
             memset(&prof, 0, sizeof(prof));
             prof.clr_l_mm = OBST_CLEAR_MAX_MM;
             prof.clr_r_mm = OBST_CLEAR_MAX_MM;
-            g_edge_beam   = runs[i].beam;
-            edge_sim(runs[i].d, runs[i].w, runs[i].c, &prof);
+            g_edge_beam   = runs[idx].beam;
+            edge_sim(runs[idx].diff, runs[idx].omega, runs[idx].coef, &prof);
             g_edge_beam   = 36.0;
-            s   = (prof.plan == OBST_PLAN_LEFT) ? 1 : -1;
-            lat = out_sim(runs[i].d, runs[i].w, runs[i].c, s, abs(prof.deviation_mm), runs[i].out_beam, &edge);
-            printf("step-out %-26s: edges %+4d/%+4d, %s, plan %3d mm, stepped %3d mm, need %3.0f\n", runs[i].name,
-                   prof.left_lat_mm, prof.right_lat_mm, (s > 0) ? "left " : "right", abs(prof.deviation_mm), lat,
+            sign   = (prof.plan == OBST_PLAN_LEFT) ? 1 : -1;
+            lat = out_sim(runs[idx].diff, runs[idx].omega, runs[idx].coef, sign, abs(prof.deviation_mm), runs[idx].out_beam, &edge);
+            printf("step-out %-26s: edges %+4d/%+4d, %s, plan %3d mm, stepped %3d mm, need %3.0f\n", runs[idx].p_name,
+                   prof.left_lat_mm, prof.right_lat_mm, (sign > 0) ? "left " : "right", abs(prof.deviation_mm), lat,
                    edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2));
             CHECK("S5-H21", (prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT));
             CHECK("S5-H21", lat > 0);
@@ -637,7 +637,7 @@ static void test_obstacle(void)
             /* not padded: a flat face answering straight back ends the leg
                within the allowance + a ping or two of the need, or of the
                plan's minimum if that was already further out */
-            CHECK("S5-H21", (runs[i].out_beam > 0.0) ||
+            CHECK("S5-H21", (runs[idx].out_beam > 0.0) ||
                             (lat <= (int32_t)fmax(edge + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + 40.0,
                                                      (double)abs(prof.deviation_mm) + 10.0)));
         }
@@ -649,28 +649,28 @@ static void test_obstacle(void)
        heard much further off the beam reads wide (printed, the known
        limit: it only affects the dashboard number). */
     {
-        static double const ws[3] = { 100.0, 150.0, 200.0 };
-        static double const ds[3] = { 150.0, 250.0, 326.0 };
+        static double const widths[3] = { 100.0, 150.0, 200.0 };
+        static double const dists[3] = { 150.0, 250.0, 326.0 };
         double worst_w = 0.0;
-        int    a, b2;
+        int    val_a, val_b2;
 
-        for (a = 0; a < 3; a++)
+        for (val_a = 0; val_a < 3; val_a++)
         {
-            for (b2 = 0; b2 < 3; b2++)
+            for (val_b2 = 0; val_b2 < 3; val_b2++)
             {
-                uint16_t w;
-                double   e;
+                uint16_t width;
+                double   elem;
 
                 memset(&prof, 0, sizeof(prof));
                 prof.clr_l_mm = OBST_CLEAR_MAX_MM;
                 prof.clr_r_mm = OBST_CLEAR_MAX_MM;
                 g_edge_beam = OBST_WIDTH_BEAM_CDEG / 100.0;
-                edge_sim(ds[b2], ws[a], 0.0, &prof);
+                edge_sim(dists[val_b2], widths[val_a], 0.0, &prof);
                 g_edge_beam = 36.0;
-                w = obst_edge_width(g_edge_phi[0], g_edge_r[0], g_edge_phi[1], g_edge_r[1]);
-                e = fabs(w - ws[a]) / ws[a];
-                if (e > worst_w) { worst_w = e; }
-                printf("width: %3.0f mm box at %3.0f mm -> %3u mm (%4.1f %%)\n", ws[a], ds[b2], (unsigned)w, e * 100.0);
+                width = obst_edge_width(g_edge_phi[0], g_edge_r[0], g_edge_phi[1], g_edge_r[1]);
+                elem = fabs(width - widths[val_a]) / widths[val_a];
+                if (elem > worst_w) { worst_w = elem; }
+                printf("width: %3.0f mm box at %3.0f mm -> %3u mm (%4.1f %%)\n", widths[val_a], dists[val_b2], (unsigned)width, elem * 100.0);
             }
         }
         CHECK("S5-H22", worst_w <= 0.10);
@@ -692,66 +692,66 @@ static void test_obstacle(void)
        run-on than corrected costs 10 mm of width (15 %% on a 10 cm box,
        so OBST_PROBE_EDGE_OVER_MM must be measured); edges within 15 mm. */
     {
-        static double const ws[3] = { 100.0, 150.0, 200.0 };
-        static double const cs[3] = { 0.0, 60.0, -60.0 };
+        static double const widths[3] = { 100.0, 150.0, 200.0 };
+        static double const cos_vals[3] = { 0.0, 60.0, -60.0 };
         static double const runs[3] = { 15.0, 20.0, 25.0 };
         double const th_deg = OBST_PROBE_DDEG / 10.0;
-        int32_t const th = OBST_PROBE_DDEG * 10;
+        int32_t const theta = OBST_PROBE_DDEG * 10;
         double worst = 0.0, worst_off = 0.0;
-        int a2, b3, c4;
+        int val_a2, val_b3, cnt4;
 
-        for (a2 = 0; a2 < 3; a2++)
+        for (val_a2 = 0; val_a2 < 3; val_a2++)
         {
-            for (b3 = 0; b3 < 3; b3++)
+            for (val_b3 = 0; val_b3 < 3; val_b3++)
             {
-                for (c4 = 0; c4 < 3; c4++)
+                for (cnt4 = 0; cnt4 < 3; cnt4++)
                 {
-                    double const w = ws[a2], c = cs[b3], run = runs[c4];
+                    double const omega = widths[val_a2], coef = cos_vals[val_b3], run = runs[cnt4];
                     int32_t const face = OBST_US_AHEAD_MM + OBST_PROBE_FACE_MM;
                     double const step = (OBST_PROBE_SPEED_MM_S * 60.0) / 1000.0;
-                    obst_probe_t pr;
-                    double d = 0.0;
+                    obst_probe_t probe;
+                    double diff = 0.0;
                     int pass;
-                    int32_t l, r;
-                    double e;
+                    int32_t left, ret;
+                    double elem;
 
-                    obst_probe_start(&pr);
+                    obst_probe_start(&probe);
                     for (pass = 0; pass < 2; pass++)
                     {
-                        bool seen = false;
+                        bool b_seen = false;
 
-                        pr.off = 0u;
+                        probe.off = 0u;
                         for (;;)
                         {
-                            int32_t const lat = (int32_t)(d * sin(th_deg * M_PI / 180.0));
-                            int32_t const fwd = (int32_t)(d * cos(th_deg * M_PI / 180.0));
-                            int32_t const sl  = obst_probe_sensor_lat(lat, th);
-                            int32_t const ex  = obst_out_expect_mm(face, fwd, th);
-                            bool const on = (sl <= (c + (w / 2.0) + run)) && (sl >= (c - (w / 2.0) - run));
+                            int32_t const lat = (int32_t)(diff * sin(th_deg * M_PI / 180.0));
+                            int32_t const fwd = (int32_t)(diff * cos(th_deg * M_PI / 180.0));
+                            int32_t const slope  = obst_probe_sensor_lat(lat, theta);
+                            int32_t const expected  = obst_out_expect_mm(face, fwd, theta);
+                            bool const b_on = (slope <= (coef + (omega / 2.0) + run)) && (slope >= (coef - (omega / 2.0) - run));
 
-                            if (obst_probe_ping(&pr, sl, on ? (uint16_t)ex : OBST_RANGE_NONE, ex)) { seen = true; }
+                            if (obst_probe_ping(&probe, slope, b_on ? (uint16_t)expected : OBST_RANGE_NONE, expected)) { b_seen = true; }
                             if (pass == 0)
                             {
-                                if (((pr.off >= OBST_PROBE_OFF) && (lat >= 20)) || (lat >= OBST_PROBE_MAX_MM)) { break; }
-                                d += step;
+                                if (((probe.off >= OBST_PROBE_OFF) && (lat >= 20)) || (lat >= OBST_PROBE_MAX_MM)) { break; }
+                                diff += step;
                             }
                             else
                             {
-                                if ((seen && (pr.off >= OBST_PROBE_OFF)) || (lat <= -OBST_PROBE_MAX_MM)) { break; }
-                                d -= step;
+                                if ((b_seen && (probe.off >= OBST_PROBE_OFF)) || (lat <= -OBST_PROBE_MAX_MM)) { break; }
+                                diff -= step;
                             }
                         }
                     }
-                    CHECK("S5-H23", obst_probe_edges(&pr, &l, &r));
-                    e = fabs((l - r) - w) / w;
-                    if ((c4 == 1) && (e > worst)) { worst = e; }
-                    if ((c4 != 1) && (e > worst_off)) { worst_off = e; }
-                    if ((c4 == 1) || (e > 0.10))
+                    CHECK("S5-H23", obst_probe_edges(&probe, &left, &ret));
+                    elem = fabs((left - ret) - omega) / omega;
+                    if ((cnt4 == 1) && (elem > worst)) { worst = elem; }
+                    if ((cnt4 != 1) && (elem > worst_off)) { worst_off = elem; }
+                    if ((cnt4 == 1) || (elem > 0.10))
                     {
                         printf("probe: %3.0f mm box at %+3.0f, run-on %2.0f -> edges %+4d / %+4d, width %3d (%.1f %%)\n",
-                               w, c, run, (int)l, (int)r, (int)(l - r), e * 100.0);
+                               omega, coef, run, (int)left, (int)ret, (int)(left - ret), elem * 100.0);
                     }
-                    CHECK("S5-H23", (fabs(l - (c + w / 2.0)) <= 15.0) && (fabs(r - (c - w / 2.0)) <= 15.0));
+                    CHECK("S5-H23", (fabs(left - (coef + omega / 2.0)) <= 15.0) && (fabs(ret - (coef - omega / 2.0)) <= 15.0));
                 }
             }
         }
@@ -770,20 +770,20 @@ static void test_obstacle(void)
        7 Nov: the offset is now only the step-out leg's minimum; clearing
        the box end to end is S5-H21. */
     {
-        static double const cs[3] = { 0.0, -62.0, 62.0 };
-        int t;
+        static double const cos_vals[3] = { 0.0, -62.0, 62.0 };
+        int elapsed;
 
-        for (t = 0; t < 3; t++)
+        for (elapsed = 0; elapsed < 3; elapsed++)
         {
             memset(&prof, 0, sizeof(prof));
             prof.clr_l_mm = OBST_CLEAR_MAX_MM;
             prof.clr_r_mm = OBST_CLEAR_MAX_MM;
-            edge_sim(195.0, 154.0, cs[t], &prof);
-            printf("edge scan: box 154 at %+.0f -> edges %+d / %+d, plan %u, offset %d\n", cs[t],
+            edge_sim(195.0, 154.0, cos_vals[elapsed], &prof);
+            printf("edge scan: box 154 at %+.0f -> edges %+d / %+d, plan %u, offset %d\n", cos_vals[elapsed],
                    prof.left_lat_mm, prof.right_lat_mm, (unsigned)prof.plan, prof.deviation_mm);
-            CHECK("S5-H17", prof.b_sure && (prof.left_lat_mm >= (cs[t] + 77.0 - 5.0)));
-            CHECK("S5-H17", prof.right_lat_mm <= (cs[t] - 77.0 + 5.0));
-            CHECK("S5-H17", (cs[t] > 0.0) ? (prof.plan == OBST_PLAN_RIGHT) : (prof.plan == OBST_PLAN_LEFT));
+            CHECK("S5-H17", prof.b_sure && (prof.left_lat_mm >= (cos_vals[elapsed] + 77.0 - 5.0)));
+            CHECK("S5-H17", prof.right_lat_mm <= (cos_vals[elapsed] - 77.0 + 5.0));
+            CHECK("S5-H17", (cos_vals[elapsed] > 0.0) ? (prof.plan == OBST_PLAN_RIGHT) : (prof.plan == OBST_PLAN_LEFT));
             CHECK("S5-H17", abs(prof.deviation_mm) >= (OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
         }
     }
@@ -849,45 +849,45 @@ static void test_obstacle(void)
        line sensors OBST_IR_AHEAD_MM in front, rear LENGTH - US_AHEAD
        behind); JOIN ends where the line sensors reach the line (y = 0). */
     {
-        box_t b = { 200.0, 150.0, 0.0 };
-        uint8_t n, i;
-        double x = -OBST_US_AHEAD_MM, y = 0.0, h = 0.0, max_lat = 0.0;
+        box_t box = { 200.0, 150.0, 0.0 };
+        uint8_t count, idx;
+        double x_val = -OBST_US_AHEAD_MM, y_val = 0.0, height = 0.0, max_lat = 0.0;
         bool b_joined = false;
 
-        scan_box(&b, 1, &prof);
-        n = obst_bypass_plan(&prof, prof.plan, steps);
-        for (i = 0; i < n; i++)
+        scan_box(&box, 1, &prof);
+        count = obst_bypass_plan(&prof, prof.plan, steps);
+        for (idx = 0; idx < count; idx++)
         {
-            double d = ((steps[i].kind == OBST_STEP_TURN) || (steps[i].kind == OBST_STEP_LINESCAN)) ? 0.0
-                                                                                                : (double)steps[i].value;
-            double const c = cos(h * M_PI / 180.0), sn = sin(h * M_PI / 180.0);
+            double diff = ((steps[idx].kind == OBST_STEP_TURN) || (steps[idx].kind == OBST_STEP_LINESCAN)) ? 0.0
+                                                                                                : (double)steps[idx].value;
+            double const coef = cos(height * M_PI / 180.0), sine = sin(height * M_PI / 180.0);
 
-            if (steps[i].kind == OBST_STEP_TURN) { h += steps[i].value / 10.0; }
-            if (steps[i].kind == OBST_STEP_LINESCAN)
+            if (steps[idx].kind == OBST_STEP_TURN) { height += steps[idx].value / 10.0; }
+            if (steps[idx].kind == OBST_STEP_LINESCAN)
             {
                 /* spins toward value's side until parallel to the line */
-                CHECK("S5-H12", ((steps[i].value > 0) == (h < 0)) && (fabs(h) <= fabs(steps[i].value / 10.0)));
-                h = 0.0;
+                CHECK("S5-H12", ((steps[idx].value > 0) == (height < 0)) && (fabs(height) <= fabs(steps[idx].value / 10.0)));
+                height = 0.0;
             }
-            if (steps[i].kind == OBST_STEP_JOIN)
+            if (steps[idx].kind == OBST_STEP_JOIN)
             {
-                d = (-(y + (OBST_IR_AHEAD_MM * sn)) / sn);
-                b_joined = (d >= 0.0) && (d <= steps[i].value);
+                diff = (-(y_val + (OBST_IR_AHEAD_MM * sine)) / sine);
+                b_joined = (diff >= 0.0) && (diff <= steps[idx].value);
             }
-            x += d * c;
-            y += d * sn;
-            if (fabs(y) > max_lat) { max_lat = fabs(y); }
-            if (steps[i].kind == OBST_STEP_PASS)
+            x_val += diff * coef;
+            y_val += diff * sine;
+            if (fabs(y_val) > max_lat) { max_lat = fabs(y_val); }
+            if (steps[idx].kind == OBST_STEP_PASS)
             {
                 /* before turning back in, the rear is past the far side
                    of a 200 mm deep box (face at closest from the sensor) */
-                CHECK("S5-H12", (x - (OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM)) >= ((double)prof.closest_mm + 150.0));
+                CHECK("S5-H12", (x_val - (OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM)) >= ((double)prof.closest_mm + 150.0));
             }
         }
         printf("bypass: %u steps, axle ends (%.0f, %.0f) heading %.1f, max lateral %.0f mm\n",
-               (unsigned)n, x, y, h, max_lat);
-        CHECK("S5-H12", b_joined && (n <= OBST_BYPASS_MAX_STEPS));
-        CHECK("S5-H12", fabs(y) < 2.0 && fabs(h) < 0.1 && x > ((double)prof.closest_mm + 150.0));
+               (unsigned)count, x_val, y_val, height, max_lat);
+        CHECK("S5-H12", b_joined && (count <= OBST_BYPASS_MAX_STEPS));
+        CHECK("S5-H12", fabs(y_val) < 2.0 && fabs(height) < 0.1 && x_val > ((double)prof.closest_mm + 150.0));
         /* FR11: max deviation <= w/2 + robot/2 + 100 mm; clearance >= 50 mm */
         CHECK("S5-H12", max_lat <= 150.0 / 2 + OBST_ROBOT_WIDTH_MM / 2 + 100.0);
         CHECK("S5-H12", max_lat - OBST_ROBOT_WIDTH_MM / 2.0 - 75.0 >= OBST_MARGIN_MM);
@@ -902,19 +902,19 @@ static void test_obstacle(void)
     {
         /* (a) a 60 mm bottle: reported small, but planned as OBST_WIDTH_MAX
            around its nearest point, so the pass clears a 20 cm object */
-        box_t b = { 200.0, 60.0, 0.0 };
+        box_t box = { 200.0, 60.0, 0.0 };
         int32_t const need = (OBST_WIDTH_MAX_MM / 2) + (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
 
-        scan_box(&b, 1, &prof);
+        scan_box(&box, 1, &prof);
         CHECK("S5-H15", prof.b_valid && !prof.b_sure && prof.w_mm < OBST_WIDTH_MIN_MM);
         CHECK("S5-H15", ((prof.plan == OBST_PLAN_LEFT) || (prof.plan == OBST_PLAN_RIGHT)) &&
                         (abs(prof.deviation_mm) >= need));
     }
     {
         /* (b) plan edges are never inside the estimated edges */
-        box_t b = { 200.0, 150.0, 20.0 };
+        box_t box = { 200.0, 150.0, 20.0 };
 
-        scan_box(&b, 1, &prof);
+        scan_box(&box, 1, &prof);
         CHECK("S5-H15", prof.b_sure && (prof.plan_l_mm >= prof.left_lat_mm) &&
                         (prof.plan_r_mm <= prof.right_lat_mm));
     }
@@ -923,12 +923,12 @@ static void test_obstacle(void)
            scan), yet the raw reading straight ahead is
            150 mm: plan a bypass for a 20 cm object, never CONTINUE */
         obst_point_t pts[5];
-        uint8_t k;
+        uint8_t kdx;
 
-        for (k = 0u; k < 5u; k++)
+        for (kdx = 0u; kdx < 5u; kdx++)
         {
-            pts[k].angle_deg = (int16_t)(30 + (30 * k));
-            pts[k].r_mm      = OBST_RANGE_NONE;
+            pts[kdx].angle_deg = (int16_t)(30 + (30 * kdx));
+            pts[kdx].r_mm      = OBST_RANGE_NONE;
         }
         pts[2].r_mm = 150u;                     /* 90 deg */
         obst_profile(pts, 0u, pts, 5u, &prof);  /* no fine scan at all */
@@ -938,12 +938,12 @@ static void test_obstacle(void)
     {
         /* (d) one dropout inside a face does not split it (2-miss edges) */
         obst_point_t pts[13];
-        uint8_t k;
+        uint8_t kdx;
 
-        for (k = 0u; k < 13u; k++)
+        for (kdx = 0u; kdx < 13u; kdx++)
         {
-            pts[k].angle_deg = (int16_t)(60 + (5 * k));
-            pts[k].r_mm      = ((k == 0u) || (k == 12u)) ? OBST_RANGE_NONE : 200u;
+            pts[kdx].angle_deg = (int16_t)(60 + (5 * kdx));
+            pts[kdx].r_mm      = ((kdx == 0u) || (kdx == 12u)) ? OBST_RANGE_NONE : 200u;
         }
         pts[6].r_mm = OBST_RANGE_NONE;          /* the dropout, straight ahead */
         obst_profile(pts, 13u, pts, 0u, &prof);
@@ -956,15 +956,15 @@ static void test_obstacle(void)
     CHECK("S5-H13", !obst_line_accept(500, 0, 2500, 0, 0, 0));
     CHECK("S5-H13", obst_cross_track_mm(0, 100, 0, 0, 9000) == 0 && obst_cross_track_mm(100, 0, 0, 0, 9000) == -100);
     {
-        obst_mask_t m = { false, 0u, 0 };
-        CHECK("S5-H13", !obst_hump_mask(&m, true, 200, 0, 1000u));
-        CHECK("S5-H13", obst_hump_mask(&m, true, 700, 0, 1100u));
-        CHECK("S5-H13", obst_hump_mask(&m, true, 700, 500, 2000u));
-        CHECK("S5-H13", !obst_hump_mask(&m, true, 700, 650, 2100u));           /* > 600 mm: lapsed */
-        CHECK("S5-H13", !obst_hump_mask(&m, true, 700, 700, 2200u));
-        CHECK("S5-H13", !obst_hump_mask(&m, false, 700, 700, 2300u));          /* pitch not valid */
-        CHECK("S5-H13", obst_hump_mask(&m, true, 700, 700, 2400u));            /* re-armed */
-        CHECK("S5-H13", !obst_hump_mask(&m, true, 700, 700, 6500u));           /* > 4 s */
+        obst_mask_t mask = { false, 0u, 0 };
+        CHECK("S5-H13", !obst_hump_mask(&mask, true, 200, 0, 1000u));
+        CHECK("S5-H13", obst_hump_mask(&mask, true, 700, 0, 1100u));
+        CHECK("S5-H13", obst_hump_mask(&mask, true, 700, 500, 2000u));
+        CHECK("S5-H13", !obst_hump_mask(&mask, true, 700, 650, 2100u));           /* > 600 mm: lapsed */
+        CHECK("S5-H13", !obst_hump_mask(&mask, true, 700, 700, 2200u));
+        CHECK("S5-H13", !obst_hump_mask(&mask, false, 700, 700, 2300u));          /* pitch not valid */
+        CHECK("S5-H13", obst_hump_mask(&mask, true, 700, 700, 2400u));            /* re-armed */
+        CHECK("S5-H13", !obst_hump_mask(&mask, true, 700, 700, 6500u));           /* > 4 s */
     }
 }
 
@@ -975,101 +975,101 @@ static void test_bench(void)
     boot_to_idle();
     ev(MISSION_EV_REMOTE_SET, 101u, 500);
     CHECK("S5-H14", find(MISSION_ACT_MOTION, MOTION_CMD_MOVE) >= 0 &&
-                    g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].p0 == 500);
+                    g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].arg0 == 500);
     ev(MISSION_EV_REMOTE_SET, 102u, -900);
-    CHECK("S5-H14", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == -900);
+    CHECK("S5-H14", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].arg0 == -900);
     ev(MISSION_EV_REMOTE_SET, 103u, 300);
-    CHECK("S5-H14", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].p1 == 300);
+    CHECK("S5-H14", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].arg1 == 300);
     CHECK("S5-H14", g_mc.snap.cruise_mm_s == MISSION_CRUISE_MM_S);     /* not a run parameter */
     printf("bench mode checks run\n");
 #else
     /* without APP_BENCH the ids are not parameters at all: nothing happens */
     boot_to_idle();
     ev(MISSION_EV_REMOTE_SET, 101u, 500);
-    CHECK("S5-H14", g_out.n == 0u);
+    CHECK("S5-H14", g_out.n_acts == 0u);
 #endif
 }
 
 /* S5-H26: Change Requirement 1, packed mbf_mission / mbf_scan and snapshots */
 static void test_pack_s5(void)
 {
-    mission_evt_t  e;
-    mission_evt_t  d;
-    scan_req_t     q;
-    scan_req_t     qd;
-    mission_snap_t m;
-    mission_snap_t mr;
-    obst_snap_t    o;
+    mission_evt_t  evt;
+    mission_evt_t  decoded;
+    scan_req_t     req;
+    scan_req_t     req_out;
+    mission_snap_t mission;
+    mission_snap_t mission_r;
+    obst_snap_t    snap_o;
     obst_snap_t    orr;
-    uint32_t       wm[MISSION_SNAP_WORDS];
-    uint32_t       wo[OBST_SNAP_WORDS];
+    uint32_t       words_min[MISSION_SNAP_WORDS];
+    uint32_t       words_out[OBST_SNAP_WORDS];
     static int32_t const datas[] = { 0, -1, 65535, -65536, 'F', 3600, -3600, 0x07FF };
-    unsigned       k;
-    int            ok = 1;
+    unsigned       kdx;
+    int            b_ok = 1;
 
-    for (k = 0u; k < sizeof(datas) / sizeof(datas[0]); k++)
+    for (kdx = 0u; kdx < sizeof(datas) / sizeof(datas[0]); kdx++)
     {
-        e.type = (uint8_t)MISSION_EV_REMOTE_SET; e.src = 5u; e.a = (uint16_t)(k * 15u); e.data = datas[k];
-        mission_evt_unpack(mission_evt_pack(&e), &d);
-        if ((d.type != e.type) || (d.src != e.src) || (d.a != e.a) || (d.data != e.data)) { ok = 0; }
+        evt.type = (uint8_t)MISSION_EV_REMOTE_SET; evt.src = 5u; evt.arg = (uint16_t)(kdx * 15u); evt.data = datas[kdx];
+        mission_evt_unpack(mission_evt_pack(&evt), &decoded);
+        if ((decoded.type != evt.type) || (decoded.src != evt.src) || (decoded.arg != evt.arg) || (decoded.data != evt.data)) { b_ok = 0; }
     }
-    CHECK("S5-H26", ok);
-    e.type = (uint8_t)MISSION_EV_OBSTACLE; e.a = 200u; e.data = 100000;      /* saturate */
-    mission_evt_unpack(mission_evt_pack(&e), &d);
-    CHECK("S5-H26", d.a == 127u && d.data == 65535);
-    e.type = (uint8_t)MISSION_EV_REMOTE_MAP; e.src = 1u; e.a = 0u;
-    e.data = (int32_t)((uint32_t)'A' | ((uint32_t)'F' << 8) | ((uint32_t)'Z' << 16) | ((uint32_t)'%' << 24));
-    mission_evt_unpack(mission_evt_pack(&e), &d);
-    CHECK("S5-H26", d.type == MISSION_EV_REMOTE_MAP && d.data == e.data && d.src == 1u);
+    CHECK("S5-H26", b_ok);
+    evt.type = (uint8_t)MISSION_EV_OBSTACLE; evt.arg = 200u; evt.data = 100000;      /* saturate */
+    mission_evt_unpack(mission_evt_pack(&evt), &decoded);
+    CHECK("S5-H26", decoded.arg == 127u && decoded.data == 65535);
+    evt.type = (uint8_t)MISSION_EV_REMOTE_MAP; evt.src = 1u; evt.arg = 0u;
+    evt.data = (int32_t)((uint32_t)'A' | ((uint32_t)'F' << 8) | ((uint32_t)'Z' << 16) | ((uint32_t)'%' << 24));
+    mission_evt_unpack(mission_evt_pack(&evt), &decoded);
+    CHECK("S5-H26", decoded.type == MISSION_EV_REMOTE_MAP && decoded.data == evt.data && decoded.src == 1u);
     CHECK("S5-H26", (uint32_t)MISSION_EV_COUNT <= 32u);
-    q.type = (uint8_t)SCAN_REQ_STOP; q.seq = 37u; q.param = 180;
-    scan_req_unpack(scan_req_pack(&q), &qd);
-    CHECK("S5-H26", qd.type == q.type && qd.seq == 5u && qd.param == 180);
+    req.type = (uint8_t)SCAN_REQ_STOP; req.seq = 37u; req.param = 180;
+    scan_req_unpack(scan_req_pack(&req), &req_out);
+    CHECK("S5-H26", req_out.type == req.type && req_out.seq == 5u && req_out.param == 180);
 
     CHECK("S5-H26", mission_snap_layout_bits() == MISSION_SNAP_BITS && PK_WORDS(MISSION_SNAP_BITS) == MISSION_SNAP_WORDS &&
                     obst_snap_layout_bits() == OBST_SNAP_BITS && PK_WORDS(OBST_SNAP_BITS) == OBST_SNAP_WORDS);
-    memset(&m, 0, sizeof(m));
-    m.t_ms = 777u; m.fault_bits = 0x0400u | (0xFu << 16); m.cruise_mm_s = 350u; m.speed_cap_mm_s = 150u;
-    m.slow_mm = 600u; m.stop_mm = 400u; m.lost_mm = 150u; m.junction_mm = 40u; m.runs = 12u;
-    m.state = 10u; m.auth = 2u; m.pending_nav = (uint8_t)MISSION_NAV_NONE; m.pending_char = '\0';
-    m.nav_map[0] = 'A'; m.nav_map[1] = 'F'; m.nav_map[2] = 'Z'; m.nav_map[3] = 'W';
-    m.calibrated = 3u; m.cal_phase = 3u; m.cause = 6u;
-    mission_snap_pack(&m, wm);
-    memset(&mr, 0x5A, sizeof(mr));              /* every field must be written */
-    mission_snap_unpack(wm, &mr);
+    memset(&mission, 0, sizeof(mission));
+    mission.t_ms = 777u; mission.fault_bits = 0x0400u | (0xFu << 16); mission.cruise_mm_s = 350u; mission.speed_cap_mm_s = 150u;
+    mission.slow_mm = 600u; mission.stop_mm = 400u; mission.lost_mm = 150u; mission.junction_mm = 40u; mission.runs = 12u;
+    mission.state = 10u; mission.auth = 2u; mission.pending_nav = (uint8_t)MISSION_NAV_NONE; mission.pending_char = '\0';
+    mission.nav_map[0] = 'A'; mission.nav_map[1] = 'F'; mission.nav_map[2] = 'Z'; mission.nav_map[3] = 'W';
+    mission.calibrated = 3u; mission.cal_phase = 3u; mission.cause = 6u;
+    mission_snap_pack(&mission, words_min);
+    memset(&mission_r, 0x5A, sizeof(mission_r));              /* every field must be written */
+    mission_snap_unpack(words_min, &mission_r);
     {
-        uint32_t w2[MISSION_SNAP_WORDS];
+        uint32_t words2[MISSION_SNAP_WORDS];
 
-        mission_snap_pack(&mr, w2);
-        CHECK("S5-H26", memcmp(wm, w2, sizeof(wm)) == 0);
+        mission_snap_pack(&mission_r, words2);
+        CHECK("S5-H26", memcmp(words_min, words2, sizeof(words_min)) == 0);
     }
-    memset(&mr, 0, sizeof(mr));                 /* same padding as m */
-    mission_snap_unpack(wm, &mr);
-    CHECK("S5-H26", memcmp(&m, &mr, sizeof(m)) == 0);
-    m.pending_nav = 2u; m.pending_char = 'Q';
-    mission_snap_pack(&m, wm);
-    mission_snap_unpack(wm, &mr);
-    CHECK("S5-H26", mr.pending_nav == 2u && mr.pending_char == 'Q');
+    memset(&mission_r, 0, sizeof(mission_r));                 /* same padding as m */
+    mission_snap_unpack(words_min, &mission_r);
+    CHECK("S5-H26", memcmp(&mission, &mission_r, sizeof(mission)) == 0);
+    mission.pending_nav = 2u; mission.pending_char = 'Q';
+    mission_snap_pack(&mission, words_min);
+    mission_snap_unpack(words_min, &mission_r);
+    CHECK("S5-H26", mission_r.pending_nav == 2u && mission_r.pending_char == 'Q');
 
-    memset(&o, 0, sizeof(o));
-    o.t_ms = 5u; o.pings = 4000000000u; o.d_mm = OBST_RANGE_NONE; o.w_mm = 1600u; o.closest_mm = 4094u;
-    o.clr_l_mm = OBST_RANGE_NONE; o.clr_r_mm = 500u; o.left_lat_mm = -2047; o.right_lat_mm = 812;
-    o.no_echo = 255u; o.valid = 1u; o.plan = 4u; o.state = 12u; o.retries = 2u;
-    obst_snap_pack(&o, wo);
+    memset(&snap_o, 0, sizeof(snap_o));
+    snap_o.t_ms = 5u; snap_o.pings = 4000000000u; snap_o.d_mm = OBST_RANGE_NONE; snap_o.w_mm = 1600u; snap_o.closest_mm = 4094u;
+    snap_o.clr_l_mm = OBST_RANGE_NONE; snap_o.clr_r_mm = 500u; snap_o.left_lat_mm = -2047; snap_o.right_lat_mm = 812;
+    snap_o.no_echo = 255u; snap_o.valid = 1u; snap_o.plan = 4u; snap_o.state = 12u; snap_o.retries = 2u;
+    obst_snap_pack(&snap_o, words_out);
     memset(&orr, 0x5A, sizeof(orr));            /* every field must be written */
-    obst_snap_unpack(wo, &orr);
+    obst_snap_unpack(words_out, &orr);
     {
-        uint32_t w2[OBST_SNAP_WORDS];
+        uint32_t words2[OBST_SNAP_WORDS];
 
-        obst_snap_pack(&orr, w2);
-        CHECK("S5-H26", memcmp(wo, w2, sizeof(wo)) == 0);
+        obst_snap_pack(&orr, words2);
+        CHECK("S5-H26", memcmp(words_out, words2, sizeof(words_out)) == 0);
     }
     memset(&orr, 0, sizeof(orr));               /* same padding as o */
-    obst_snap_unpack(wo, &orr);
-    CHECK("S5-H26", memcmp(&o, &orr, sizeof(o)) == 0);
-    o.d_mm = 4095u; o.no_echo = 1000u;            /* 4095 is not "none": saturates below it */
-    obst_snap_pack(&o, wo);
-    obst_snap_unpack(wo, &orr);
+    obst_snap_unpack(words_out, &orr);
+    CHECK("S5-H26", memcmp(&snap_o, &orr, sizeof(snap_o)) == 0);
+    snap_o.d_mm = 4095u; snap_o.no_echo = 1000u;            /* 4095 is not "none": saturates below it */
+    obst_snap_pack(&snap_o, words_out);
+    obst_snap_unpack(words_out, &orr);
     CHECK("S5-H26", orr.d_mm == 4094u && orr.no_echo == 255u);
 }
 

@@ -10,28 +10,28 @@
 /* ------------------------------------------------------------------ */
 void line_cal_start(line_cal_t * p_cal)
 {
-    uint8_t ch;
+    uint8_t chan;
 
-    for (ch = 0u; ch < LINE_CH_COUNT; ch++)
+    for (chan = 0u; chan < LINE_CH_COUNT; chan++)
     {
-        p_cal->min[ch] = 0xFFFFu;
-        p_cal->max[ch] = 0u;
+        p_cal->min[chan] = 0xFFFFu;
+        p_cal->max[chan] = 0u;
     }
 }
 
 void line_cal_sample(line_cal_t * p_cal, uint16_t const raw[LINE_CH_COUNT])
 {
-    uint8_t ch;
+    uint8_t chan;
 
-    for (ch = 0u; ch < LINE_CH_COUNT; ch++)
+    for (chan = 0u; chan < LINE_CH_COUNT; chan++)
     {
-        if (raw[ch] < p_cal->min[ch])
+        if (raw[chan] < p_cal->min[chan])
         {
-            p_cal->min[ch] = raw[ch];
+            p_cal->min[chan] = raw[chan];
         }
-        if (raw[ch] > p_cal->max[ch])
+        if (raw[chan] > p_cal->max[chan])
         {
-            p_cal->max[ch] = raw[ch];
+            p_cal->max[chan] = raw[chan];
         }
     }
 }
@@ -42,23 +42,23 @@ bool line_cal_finish(line_cal_t * p_cal)
     uint16_t black[LINE_CH_COUNT];
     uint16_t worst = 0xFFFFu;
     bool     b_ok  = true;
-    uint8_t  ch;
+    uint8_t  chan;
 
-    for (ch = 0u; ch < LINE_CH_COUNT; ch++)
+    for (chan = 0u; chan < LINE_CH_COUNT; chan++)
     {
-        uint32_t lo = p_cal->min[ch];
-        uint32_t hi = p_cal->max[ch];
+        uint32_t low = p_cal->min[chan];
+        uint32_t high = p_cal->max[chan];
         uint32_t contrast;
 
-        if (ch == LINE_CH_BC)
+        if (chan == LINE_CH_BC)
         {
             /* Barcode sensor: fixed levels (line_cfg.h), never judged by
                the spin.  min/max are still kept for LOG 34.            */
-            white[ch] = (uint16_t)LINE_BC_WHITE_RAW;
-            black[ch] = (uint16_t)LINE_BC_BLACK_RAW;
+            white[chan] = (uint16_t)LINE_BC_WHITE_RAW;
+            black[chan] = (uint16_t)LINE_BC_BLACK_RAW;
             continue;
         }
-        if ((lo > hi) || ((hi - lo) < LINE_CAL_MIN_SPAN))
+        if ((low > high) || ((high - low) < LINE_CAL_MIN_SPAN))
         {
             b_ok = false;               /* never saw both black and white */
             contrast = 0u;
@@ -66,11 +66,11 @@ bool line_cal_finish(line_cal_t * p_cal)
         else
         {
             /* AO ratio of the two levels, x 10 (3:1 = 30) */
-            contrast = (lo == 0u) ? 999u : ((hi * 10u) / lo);
+            contrast = (low == 0u) ? 999u : ((high * 10u) / low);
         }
 #if LINE_BLACK_IS_HIGH
-        white[ch] = (uint16_t)lo;
-        black[ch] = (uint16_t)hi;
+        white[chan] = (uint16_t)low;
+        black[chan] = (uint16_t)high;
 #else
         white[ch] = (uint16_t)hi;
         black[ch] = (uint16_t)lo;
@@ -87,28 +87,28 @@ bool line_cal_finish(line_cal_t * p_cal)
     p_cal->contrast_x10 = worst;
     if (b_ok)
     {
-        for (ch = 0u; ch < LINE_CH_COUNT; ch++)
+        for (chan = 0u; chan < LINE_CH_COUNT; chan++)
         {
-            p_cal->white[ch] = white[ch];
-            p_cal->black[ch] = black[ch];
+            p_cal->white[chan] = white[chan];
+            p_cal->black[chan] = black[chan];
         }
         p_cal->b_valid = true;
     }
     return b_ok;
 }
 
-uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t ch, uint16_t raw)
+uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t chan, uint16_t raw)
 {
-    int32_t const w = (int32_t)p_cal->white[ch];
-    int32_t const b = (int32_t)p_cal->black[ch];
-    int32_t       n;
+    int32_t const white = (int32_t)p_cal->white[chan];
+    int32_t const black = (int32_t)p_cal->black[chan];
+    int32_t       norm;
 
-    if (!p_cal->b_valid || (w == b))
+    if (!p_cal->b_valid || (white == black))
     {
         return 0u;
     }
-    n = (((int32_t)raw - w) * 1000) / (b - w);
-    return (uint16_t)app_clamp_i32(n, 0, 1000);
+    norm = (((int32_t)raw - white) * 1000) / (black - white);
+    return (uint16_t)app_clamp_i32(norm, 0, 1000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -128,7 +128,7 @@ void line_track_init(line_track_t * p_t)
     p_t->peak_err          = 0;
     p_t->peak_um           = 0u;
     p_t->omega             = 0;
-    p_t->v                 = 0;
+    p_t->v_mm_s                 = 0;
     p_t->both_black_um     = 0u;
     p_t->both_white_um     = 0u;
     p_t->straight_um       = 0u;
@@ -155,7 +155,7 @@ static bool is_white(bool b_white, uint16_t norm)
 uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
                         uint16_t norm_l, uint16_t norm_r, uint32_t step_um)
 {
-    uint8_t ev  = (uint8_t)LINE_TRK_EV_NONE;
+    uint8_t events  = (uint8_t)LINE_TRK_EV_NONE;
     int32_t sum = (int32_t)norm_l + (int32_t)norm_r;
 
     p_t->b_black_l = is_black(p_t->b_black_l, norm_l);
@@ -187,7 +187,7 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         {
             p_t->b_junction        = true;
             p_t->since_junction_um = 0u;
-            ev |= (uint8_t)LINE_TRK_EV_JUNCTION;
+            events |= (uint8_t)LINE_TRK_EV_JUNCTION;
         }
     }
     else if (p_t->b_white_l && p_t->b_white_r)
@@ -205,7 +205,7 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         if (!p_t->b_lost && (p_t->both_white_um >= p_cfg->lost_um))
         {
             p_t->b_lost = true;
-            ev |= (uint8_t)LINE_TRK_EV_LOST;
+            events |= (uint8_t)LINE_TRK_EV_LOST;
         }
     }
     else
@@ -229,20 +229,20 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     if (p_t->b_lost && (!p_t->b_white_l || !p_t->b_white_r))
     {
         p_t->b_lost = false;
-        ev |= (uint8_t)LINE_TRK_EV_FOUND;
+        events |= (uint8_t)LINE_TRK_EV_FOUND;
     }
 
     /* Output.  Hold the heading (omega = 0) across a junction and across a
        short white gap; stop when lost (MissionTask starts LINE_SEARCH). */
     if (p_t->b_lost)
     {
-        p_t->v     = 0;
+        p_t->v_mm_s     = 0;
         p_t->omega = 0;
     }
     else if ((p_t->both_white_um > 0u) && (app_abs_i32(p_t->exit_err) > LINE_EXIT_ERR))
     {
         /* drifted off one side: turn back toward it, slowly */
-        p_t->v     = (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100;
+        p_t->v_mm_s     = (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100;
         p_t->omega = steer_toward(p_t->omega,
                                   (p_t->exit_err > 0) ? (LINE_STEER_SIGN * LINE_RECOVER_OMEGA)
                                                       : (-LINE_STEER_SIGN * LINE_RECOVER_OMEGA));
@@ -250,7 +250,7 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     else if (p_t->b_junction || (p_t->both_white_um > 0u) || !p_t->b_have_err)
     {
         /* junction or short gap: hold the heading */
-        p_t->v     = p_cfg->cruise_mm_s;
+        p_t->v_mm_s     = p_cfg->cruise_mm_s;
         p_t->omega = 0;
     }
     else
@@ -258,12 +258,12 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         int32_t const derr  = p_t->err - p_t->prev_err;
         int32_t const omega = LINE_STEER_SIGN * (((LINE_KP * p_t->err) / 1000) + (LINE_KD * derr));
         int32_t const slow  = (LINE_SLOW_K * app_abs_i32(p_t->err)) / 1000;
-        int32_t       v     = (p_cfg->cruise_mm_s * (1000 - slow)) / 1000;
+        int32_t       speed     = (p_cfg->cruise_mm_s * (1000 - slow)) / 1000;
 
-        v = app_max_i32(v, (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
+        speed = app_max_i32(speed, (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
         p_t->omega = steer_toward(p_t->omega,
                                   app_clamp_i32(omega, -LINE_OMEGA_MAX, LINE_OMEGA_MAX));
-        p_t->v     = v;
+        p_t->v_mm_s     = speed;
     }
 
     if (app_abs_i32(p_t->omega) >= LINE_STRAIGHT_OMEGA)
@@ -278,64 +278,64 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     {
         /* straight long enough */
     }
-    return ev;
+    return events;
 }
 
 /* ---- Turn slip (3 Nov) ---------------------------------------------- */
 void line_slip_start(line_slip_t * p_s, int32_t heading_cdeg)
 {
-    p_s->n         = 0u;
+    p_s->n_samples         = 0u;
     p_s->prev_cdeg = heading_cdeg;
     p_s->acc_cdeg  = 0;
 }
 
 void line_slip_sample(line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l, uint16_t raw_r)
 {
-    int32_t d = heading_cdeg - p_s->prev_cdeg;
+    int32_t delta = heading_cdeg - p_s->prev_cdeg;
 
-    while (d > 18000)
+    while (delta > 18000)
     {
-        d -= 36000;
+        delta -= 36000;
     }
-    while (d < -18000)
+    while (delta < -18000)
     {
-        d += 36000;
+        delta += 36000;
     }
     p_s->prev_cdeg  = heading_cdeg;
-    p_s->acc_cdeg  += d;
-    if (p_s->n < LINE_SLIP_MAX_BLOCKS)
+    p_s->acc_cdeg  += delta;
+    if (p_s->n_samples < LINE_SLIP_MAX_BLOCKS)
     {
-        p_s->h_ddeg[p_s->n] = (int16_t)app_clamp_i32(app_abs_i32(p_s->acc_cdeg) / 10, 0, 32767);
-        p_s->raw_l[p_s->n]  = raw_l;
-        p_s->raw_r[p_s->n]  = raw_r;
-        p_s->n++;
+        p_s->h_ddeg[p_s->n_samples] = (int16_t)app_clamp_i32(app_abs_i32(p_s->acc_cdeg) / 10, 0, 32767);
+        p_s->raw_l[p_s->n_samples]  = raw_l;
+        p_s->raw_r[p_s->n_samples]  = raw_r;
+        p_s->n_samples++;
     }
 }
 
 /* One sensor: the norm-weighted centre (0.1 deg) of its first dark run
    after LINE_SLIP_SKIP_DDEG that lasts LINE_SLIP_MIN_BLOCKS; -1 if none.
    *p_runs counts the dark runs seen. */
-static int32_t slip_centre(line_slip_t const * p_s, line_cal_t const * p_cal, uint8_t ch,
+static int32_t slip_centre(line_slip_t const * p_s, line_cal_t const * p_cal, uint8_t chan,
                            uint8_t * p_runs)
 {
-    int64_t  sw    = 0;
+    int64_t  sum_weight    = 0;
     int64_t  swh   = 0;
     uint16_t len   = 0u;
     int32_t  found = -1;
-    uint16_t i;
+    uint16_t idx;
 
     *p_runs = 0u;
-    for (i = 0u; i <= p_s->n; i++)
+    for (idx = 0u; idx <= p_s->n_samples; idx++)
     {
-        uint16_t const raw    = (i < p_s->n) ? ((ch == LINE_CH_L) ? p_s->raw_l[i] : p_s->raw_r[i]) : 0u;
-        uint16_t const nv     = (i < p_s->n) ? line_cal_norm(p_cal, ch, raw) : 0u;
-        bool const     b_dark = (i < p_s->n) && (p_s->h_ddeg[i] >= LINE_SLIP_SKIP_DDEG) &&
-                                (nv >= LINE_SLIP_DARK);
+        uint16_t const raw    = (idx < p_s->n_samples) ? ((chan == LINE_CH_L) ? p_s->raw_l[idx] : p_s->raw_r[idx]) : 0u;
+        uint16_t const norm     = (idx < p_s->n_samples) ? line_cal_norm(p_cal, chan, raw) : 0u;
+        bool const     b_dark = (idx < p_s->n_samples) && (p_s->h_ddeg[idx] >= LINE_SLIP_SKIP_DDEG) &&
+                                (norm >= LINE_SLIP_DARK);
 
         if (b_dark)
         {
-            sw  += nv;
-            swh += (int64_t)nv * p_s->h_ddeg[i];
+            sum_weight  += norm;
+            swh += (int64_t)norm * p_s->h_ddeg[idx];
             len++;
         }
         else if (len != 0u)
@@ -343,12 +343,12 @@ static int32_t slip_centre(line_slip_t const * p_s, line_cal_t const * p_cal, ui
             if (len >= LINE_SLIP_MIN_BLOCKS)
             {
                 (*p_runs)++;
-                if ((found < 0) && (sw > 0))
+                if ((found < 0) && (sum_weight > 0))
                 {
-                    found = (int32_t)(swh / sw);
+                    found = (int32_t)(swh / sum_weight);
                 }
             }
-            sw  = 0;
+            sum_weight  = 0;
             swh = 0;
             len = 0u;
         }
@@ -370,7 +370,7 @@ uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal, uint3
     uint8_t       runs_r;
     int32_t const c_l = p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_L, &runs_l) : -1;
     int32_t const c_r = p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_R, &runs_r) : -1;
-    int32_t const tot = (p_s->n > 0u) ? (int32_t)p_s->h_ddeg[p_s->n - 1u] : 0;
+    int32_t const tot = (p_s->n_samples > 0u) ? (int32_t)p_s->h_ddeg[p_s->n_samples - 1u] : 0;
     int32_t       gain;
 
     if (!p_cal->b_valid)
@@ -391,7 +391,7 @@ uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal, uint3
 /* ---------------------------------------------------------------------
  *  Change Requirement 1: data representation of IF-04 (line snapshot).
  * --------------------------------------------------------------------- */
-static pk_field_t const k_line_layout[] =
+static pk_field_t const g_line_layout[] =
 {
     PK_FIELD(line_snap_t, t_ms,          32u, PK_W),
     PK_FIELD(line_snap_t, blocks,        32u, PK_W),   /* counter since boot              */
@@ -412,19 +412,19 @@ static pk_field_t const k_line_layout[] =
     PK_FIELD(line_snap_t, sens,           3u, PK_U)    /* LINE_SENS_* (3 bits)            */
 };
 
-#define LINE_FIELDS     ((uint16_t)(sizeof(k_line_layout) / sizeof(k_line_layout[0])))
+#define LINE_FIELDS     ((uint16_t)(sizeof(g_line_layout) / sizeof(g_line_layout[0])))
 
 void line_snap_pack(line_snap_t const * p_snap, uint32_t * p_words)
 {
-    pk_pack_rec(k_line_layout, LINE_FIELDS, p_snap, p_words, LINE_SNAP_WORDS);
+    pk_pack_rec(g_line_layout, LINE_FIELDS, p_snap, p_words, LINE_SNAP_WORDS);
 }
 
 void line_snap_unpack(uint32_t const * p_words, line_snap_t * p_snap)
 {
-    pk_unpack_rec(k_line_layout, LINE_FIELDS, p_words, p_snap);
+    pk_unpack_rec(g_line_layout, LINE_FIELDS, p_words, p_snap);
 }
 
 uint32_t line_snap_layout_bits(void)
 {
-    return pk_layout_bits(k_line_layout, LINE_FIELDS);
+    return pk_layout_bits(g_line_layout, LINE_FIELDS);
 }

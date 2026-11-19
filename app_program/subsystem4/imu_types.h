@@ -87,7 +87,7 @@ typedef struct
     uint16_t i2c_errors;        /* since boot                             */
     uint8_t  hump_state;        /* imu_hump_state_t                       */
     uint8_t  motion;            /* imu_motion_t                           */
-    uint8_t  ok;                /* 1 = readings valid (no IMU_FAULT)      */
+    uint8_t  b_ok;                /* 1 = readings valid (no IMU_FAULT)      */
     uint8_t  cal;               /* IMU_CAL_* bits                         */
     uint8_t  pitch_valid;       /* 1 = fresh, validated pitch (hump mask) */
     uint8_t  tilt;              /* 1 = beyond 30 deg now (reset refused)  */

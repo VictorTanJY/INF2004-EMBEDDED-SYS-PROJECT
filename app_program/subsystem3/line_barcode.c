@@ -40,7 +40,7 @@ void bc_init(bc_capture_t * p_bc)
     p_bc->total_um    = 0u;
     p_bc->max_elem_um = 0u;
     p_bc->cooldown_um = 0u;
-    p_bc->n           = 0u;
+    p_bc->n_elems           = 0u;
     p_bc->peak        = 0u;
     p_bc->ext         = 0u;
     p_bc->prof_n      = 0u;
@@ -63,32 +63,32 @@ void bc_prof_levels(uint16_t const * p_prof, uint16_t n_bins, uint16_t * p_white
 {
     uint16_t hist[64];
     uint32_t sum = 0u;
-    uint16_t i;
+    uint16_t idx;
     bool     b_white = false;
 
-    for (i = 0u; i < 64u; i++)
+    for (idx = 0u; idx < 64u; idx++)
     {
-        hist[i] = 0u;
+        hist[idx] = 0u;
     }
-    for (i = 0u; i < n_bins; i++)
+    for (idx = 0u; idx < n_bins; idx++)
     {
-        uint16_t const b = (uint16_t)(p_prof[i] / 16u);
+        uint16_t const bin = (uint16_t)(p_prof[idx] / 16u);
 
-        hist[(b < 64u) ? b : 63u]++;
+        hist[(bin < 64u) ? bin : 63u]++;
     }
     *p_white = 0u;
     *p_dark  = 1000u;
-    for (i = 0u; i < 64u; i++)
+    for (idx = 0u; idx < 64u; idx++)
     {
-        sum += hist[i];
+        sum += hist[idx];
         if (!b_white && ((sum * 100u) >= ((uint32_t)n_bins * BC_PROF_WHITE_PCT)))
         {
-            *p_white = (uint16_t)((i * 16u) + 8u);
+            *p_white = (uint16_t)((idx * 16u) + 8u);
             b_white  = true;
         }
         if ((sum * 100u) >= ((uint32_t)n_bins * BC_PROF_DARK_PCT))
         {
-            *p_dark = (uint16_t)((i * 16u) + 8u);
+            *p_dark = (uint16_t)((idx * 16u) + 8u);
             break;
         }
     }
@@ -97,31 +97,31 @@ void bc_prof_levels(uint16_t const * p_prof, uint16_t n_bins, uint16_t * p_white
 /* Runs (in bins, bar first) to widths: runs shorter than
    BC_PROF_MIN_BINS merge into their neighbours (a speck inside a bar or a
    glint inside a space), keeping the bar / space alternation. */
-static uint16_t runs_to_widths(uint16_t * p_runs, uint16_t nr, uint32_t * p_widths, uint16_t max)
+static uint16_t runs_to_widths(uint16_t * p_runs, uint16_t n_runs, uint32_t * p_widths, uint16_t max)
 {
-    uint16_t k = 0u;
-    uint16_t i;
+    uint16_t kdx = 0u;
+    uint16_t idx;
     uint16_t out = 0u;
 
-    while (k < nr)
+    while (kdx < n_runs)
     {
-        if ((p_runs[k] < BC_PROF_MIN_BINS) && (k > 0u) && ((k + 1u) < nr))
+        if ((p_runs[kdx] < BC_PROF_MIN_BINS) && (kdx > 0u) && ((kdx + 1u) < n_runs))
         {
-            p_runs[k - 1u] = (uint16_t)(p_runs[k - 1u] + p_runs[k] + p_runs[k + 1u]);
-            for (i = k; (i + 2u) < nr; i++)
+            p_runs[kdx - 1u] = (uint16_t)(p_runs[kdx - 1u] + p_runs[kdx] + p_runs[kdx + 1u]);
+            for (idx = kdx; (idx + 2u) < n_runs; idx++)
             {
-                p_runs[i] = p_runs[i + 2u];
+                p_runs[idx] = p_runs[idx + 2u];
             }
-            nr = (uint16_t)(nr - 2u);
+            n_runs = (uint16_t)(n_runs - 2u);
         }
         else
         {
-            k++;
+            kdx++;
         }
     }
-    for (k = 0u; (k < nr) && (out < max); k++)
+    for (kdx = 0u; (kdx < n_runs) && (out < max); kdx++)
     {
-        p_widths[out] = (uint32_t)p_runs[k] * BC_PROF_BIN_UM;
+        p_widths[out] = (uint32_t)p_runs[kdx] * BC_PROF_BIN_UM;
         out++;
     }
     return out;
@@ -131,46 +131,46 @@ uint16_t bc_prof_elements(uint16_t const * p_prof, uint16_t n_bins, uint16_t thr
                           uint32_t * p_widths, uint16_t max)
 {
     static uint16_t runs[BC_PROF_BINS / 2u];
-    uint16_t nr = 0u;
-    uint16_t i = 0u;
+    uint16_t n_runs = 0u;
+    uint16_t idx = 0u;
     uint16_t run = 0u;
     bool     b_black = true;
 
     /* skip to the first bar */
-    while ((i < n_bins) && (p_prof[i] < (uint16_t)(thr + hyst)))
+    while ((idx < n_bins) && (p_prof[idx] < (uint16_t)(thr + hyst)))
     {
-        i++;
+        idx++;
     }
-    for (; i < n_bins; i++)
+    for (; idx < n_bins; idx++)
     {
-        bool const b_now = b_black ? (p_prof[i] + hyst >= thr) : (p_prof[i] >= (uint16_t)(thr + hyst));
+        bool const b_now = b_black ? (p_prof[idx] + hyst >= thr) : (p_prof[idx] >= (uint16_t)(thr + hyst));
 
         if ((b_now != b_black) && (run > 0u))
         {
-            if (nr < (uint16_t)(sizeof(runs) / sizeof(runs[0])))
+            if (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0])))
             {
-                runs[nr] = run;
-                nr++;
+                runs[n_runs] = run;
+                n_runs++;
             }
             run     = 0u;
             b_black = b_now;
         }
         run++;
     }
-    if (b_black && (run > 0u) && (nr < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
+    if (b_black && (run > 0u) && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
     {
-        runs[nr] = run;                 /* a bar ran to the end: keep it  */
-        nr++;
+        runs[n_runs] = run;                 /* a bar ran to the end: keep it  */
+        n_runs++;
     }
-    return runs_to_widths(runs, nr, p_widths, max);
+    return runs_to_widths(runs, n_runs, p_widths, max);
 }
 
 uint16_t bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
                        uint32_t * p_widths, uint16_t max)
 {
     static uint16_t runs[BC_PROF_BINS / 2u];
-    uint16_t nr = 0u;
-    uint16_t i;
+    uint16_t n_runs = 0u;
+    uint16_t idx;
     uint16_t run = 0u;
     uint16_t ext;
     bool     b_black = false;
@@ -181,35 +181,35 @@ uint16_t bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
         return 0u;
     }
     ext = p_prof[0];
-    for (i = 0u; i < n_bins; i++)
+    for (idx = 0u; idx < n_bins; idx++)
     {
-        uint16_t const v = p_prof[i];
+        uint16_t const level = p_prof[idx];
         bool           b_now = b_black;
 
         if (b_black)
         {
-            ext = (v > ext) ? v : ext;
-            if (((uint32_t)v + delta) < ext)
+            ext = (level > ext) ? level : ext;
+            if (((uint32_t)level + delta) < ext)
             {
                 b_now = false;
-                ext   = v;
+                ext   = level;
             }
         }
         else
         {
-            ext = (v < ext) ? v : ext;
-            if ((uint32_t)v > ((uint32_t)ext + delta))
+            ext = (level < ext) ? level : ext;
+            if ((uint32_t)level > ((uint32_t)ext + delta))
             {
                 b_now = true;
-                ext   = v;
+                ext   = level;
             }
         }
         if (b_now != b_black)
         {
-            if (b_bar_seen && (nr < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
+            if (b_bar_seen && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
             {
-                runs[nr] = run;
-                nr++;
+                runs[n_runs] = run;
+                n_runs++;
             }
             b_bar_seen = b_bar_seen || b_now;
             run     = 0u;
@@ -217,18 +217,18 @@ uint16_t bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
         }
         run++;
     }
-    if (b_black && (run > 0u) && (nr < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
+    if (b_black && (run > 0u) && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
     {
-        runs[nr] = run;                 /* a bar ran to the end: keep it  */
-        nr++;
+        runs[n_runs] = run;                 /* a bar ran to the end: keep it  */
+        n_runs++;
     }
-    return runs_to_widths(runs, nr, p_widths, max);
+    return runs_to_widths(runs, n_runs, p_widths, max);
 }
 
 /* Elements found again from the darkness profile at threshold k (1 mid,
    2 low for faint thin bars) against this code's own levels, or k 3 by
    swing sized to this code (BC_ADAPT_*); 0 if none or not useful. */
-static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
+static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t kdx, uint32_t * p_w)
 {
     uint16_t white;
     uint16_t dark;
@@ -245,9 +245,9 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
         return 0u;
     }
     span = (uint16_t)(dark - white);
-    if (k >= 3u)
+    if (kdx >= 3u)
     {
-        uint32_t const pct   = (k == 3u) ? BC_ADAPT_PCT : ((k == 4u) ? BC_ADAPT_PCT2 : BC_ADAPT_PCT3);
+        uint32_t const pct   = (kdx == 3u) ? BC_ADAPT_PCT : ((kdx == 4u) ? BC_ADAPT_PCT2 : BC_ADAPT_PCT3);
         uint32_t const noise = (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
         uint32_t       delta = ((uint32_t)span * pct) / 100u;
 
@@ -259,7 +259,7 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
         }
         return bc_prof_swing(p_bc->prof, p_bc->prof_n, (uint16_t)delta, p_w, (uint16_t)BC_MAX_ELEMENTS);
     }
-    thr  = (uint16_t)(white + ((k == 1u) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
+    thr  = (uint16_t)(white + ((kdx == 1u) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
     return bc_prof_elements(p_bc->prof, p_bc->prof_n, thr, (uint16_t)(span / 16u),
                             p_w, (uint16_t)BC_MAX_ELEMENTS);
 }
@@ -271,39 +271,39 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t k, uint32_t * p_w)
    median inner bar is dropped with the space beside it; *p_first is
    where the rest starts, and the count of the rest is returned (n if
    nothing was dropped).  Most bars are narrow, so the median is one. */
-static uint16_t trim_specks(uint32_t const * p_w, uint16_t n, uint16_t * p_first)
+static uint16_t trim_specks(uint32_t const * p_w, uint16_t n_elems, uint16_t * p_first)
 {
-    static uint32_t s[(BC_MAX_ELEMENTS / 2u) + 1u];
-    uint16_t        m = 0u;
-    uint16_t        i;
-    uint16_t        j;
-    uint16_t        last = n;
+    static uint32_t sorted[(BC_MAX_ELEMENTS / 2u) + 1u];
+    uint16_t        mid = 0u;
+    uint16_t        idx;
+    uint16_t        jdx;
+    uint16_t        last = n_elems;
     uint32_t        med;
 
     *p_first = 0u;
-    if ((n < 11u) || ((n % 2u) == 0u))
+    if ((n_elems < 11u) || ((n_elems % 2u) == 0u))
     {
-        return n;                       /* a read starts and ends with a bar */
+        return n_elems;                       /* a read starts and ends with a bar */
     }
-    for (i = 2u; (i + 2u) < n; i += 2u)  /* inner bars, insertion sort */
+    for (idx = 2u; (idx + 2u) < n_elems; idx += 2u)  /* inner bars, insertion sort */
     {
-        uint32_t const v = p_w[i];
+        uint32_t const width = p_w[idx];
 
-        for (j = m; (j > 0u) && (s[j - 1u] > v); j--)
+        for (jdx = mid; (jdx > 0u) && (sorted[jdx - 1u] > width); jdx--)
         {
-            s[j] = s[j - 1u];
+            sorted[jdx] = sorted[jdx - 1u];
         }
-        s[j] = v;
-        m++;
+        sorted[jdx] = width;
+        mid++;
     }
-    med = s[m / 2u];
+    med = sorted[mid / 2u];
     if (((uint64_t)p_w[0] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
     {
         *p_first = 2u;
     }
-    if (((uint64_t)p_w[n - 1u] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
+    if (((uint64_t)p_w[n_elems - 1u] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
     {
-        last = (uint16_t)(n - 2u);
+        last = (uint16_t)(n_elems - 2u);
     }
     return (uint16_t)(last - *p_first);
 }
@@ -311,25 +311,25 @@ static uint16_t trim_specks(uint32_t const * p_w, uint16_t n, uint16_t * p_first
 /* Exact decode (with the end repair) of one reading; if it fails, again
    without an end speck.  *p_b_trim says the second one decoded.  The
    first result is returned on failure (NOT_BARCODE must stay itself). */
-static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n, char * p_ch, bool * p_b_rev,
-                                    bool * p_b_trim)
+static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n_elems, char * p_ch, bool * pb_rev,
+                                    bool * pb_trim)
 {
-    code39_result_t r = code39_decode_one_repair(p_w, n, BC_RATIO_MIN_X10, p_ch, p_b_rev);
+    code39_result_t result = code39_decode_one_repair(p_w, n_elems, BC_RATIO_MIN_X10, p_ch, pb_rev);
 
-    *p_b_trim = false;
-    if ((r != CODE39_OK) && (r != CODE39_NOT_BARCODE))
+    *pb_trim = false;
+    if ((result != CODE39_OK) && (result != CODE39_NOT_BARCODE))
     {
         uint16_t       first;
-        uint16_t const n2 = trim_specks(p_w, n, &first);
+        uint16_t const n_read = trim_specks(p_w, n_elems, &first);
 
-        if ((n2 != n) &&
-            (code39_decode_one_repair(&p_w[first], n2, BC_RATIO_MIN_X10, p_ch, p_b_rev) == CODE39_OK))
+        if ((n_read != n_elems) &&
+            (code39_decode_one_repair(&p_w[first], n_read, BC_RATIO_MIN_X10, p_ch, pb_rev) == CODE39_OK))
         {
-            *p_b_trim = true;
-            r = CODE39_OK;
+            *pb_trim = true;
+            result = CODE39_OK;
         }
     }
-    return r;
+    return result;
 }
 
 /* The trailing white run ended the code: decode what was captured.
@@ -350,72 +350,72 @@ static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n, char * p_c
    once right after reading the A). */
 static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
 {
-    static uint32_t w2[BC_MAX_ELEMENTS + 1u];
-    code39_result_t r;
-    uint8_t         k;
+    static uint32_t read_widths[BC_MAX_ELEMENTS + 1u];
+    code39_result_t result;
+    uint8_t         kdx;
     bool            b_trim;
 
-    p_out->elements  = p_bc->n;
+    p_out->elements  = p_bc->n_elems;
     p_out->length_um = p_bc->total_um - p_bc->run_um;   /* without the trailing white */
     p_out->peak_norm = p_bc->peak;
     p_bc->pass       = 0u;
-    r = decode_exact(p_bc->widths, p_bc->n, &p_out->ch, &p_out->b_reversed, &b_trim);
+    result = decode_exact(p_bc->widths, p_bc->n_elems, &p_out->chr, &p_out->b_reversed, &b_trim);
     if (b_trim)
     {
         p_bc->pass = 5u;
     }
-    for (k = 1u; (k <= 5u) && (r != CODE39_OK); k++)
+    for (kdx = 1u; (kdx <= 5u) && (result != CODE39_OK); kdx++)
     {
-        uint16_t const n2 = prof_read(p_bc, k, w2);
-        char           ch;
+        uint16_t const n_read = prof_read(p_bc, kdx, read_widths);
+        char           chr;
         bool           b_rev;
 
-        if ((n2 > 0u) && (decode_exact(w2, n2, &ch, &b_rev, &b_trim) == CODE39_OK))
+        if ((n_read > 0u) && (decode_exact(read_widths, n_read, &chr, &b_rev, &b_trim) == CODE39_OK))
         {
-            p_out->ch         = ch;
+            p_out->chr         = chr;
             p_out->b_reversed = b_rev;
-            p_out->elements   = n2;
-            p_bc->pass        = b_trim ? 5u : ((k > 3u) ? 3u : k);
-            r = CODE39_OK;
+            p_out->elements   = n_read;
+            p_bc->pass        = b_trim ? 5u : ((kdx > 3u) ? 3u : kdx);
+            result = CODE39_OK;
         }
     }
-    if ((r != CODE39_OK) && (r != CODE39_NOT_BARCODE))
+    if ((result != CODE39_OK) && (result != CODE39_NOT_BARCODE))
     {
         uint8_t  k_pick = BC_READINGS;
         uint16_t d_pick = 0xFFFFu;
 
-        for (k = 0u; k < BC_READINGS; k++)
+        for (kdx = 0u; kdx < BC_READINGS; kdx++)
         {
             uint16_t       first;
-            uint16_t const n2 = bc_reading(p_bc, k, w2);
-            uint16_t const nt = trim_specks(w2, n2, &first);
-            uint16_t const d  = (nt > 29u) ? (uint16_t)(nt - 29u) : (uint16_t)(29u - nt);
+            uint16_t const n_read = bc_reading(p_bc, kdx, read_widths);
+            uint16_t const n_trim = trim_specks(read_widths, n_read, &first);
+            uint16_t const diff  = (n_trim > 29u) ? (uint16_t)(n_trim - 29u) : (uint16_t)(29u - n_trim);
 
-            if ((nt >= 25u) && (nt <= 33u) && ((nt % 2u) != 0u) && (d < d_pick))
+            if ((n_trim >= 25u) && (n_trim <= 33u) && ((n_trim % 2u) != 0u) && (diff < d_pick))
             {
-                d_pick = d;
-                k_pick = k;
+                d_pick = diff;
+                k_pick = kdx;
             }
         }
         if (k_pick < BC_READINGS)
         {
             uint16_t       first;
-            uint16_t const n2 = bc_reading(p_bc, k_pick, w2);
-            uint16_t const nt = trim_specks(w2, n2, &first);
-            char           ch;
+            uint16_t const n_read = bc_reading(p_bc, k_pick, read_widths);
+            uint16_t const n_trim = trim_specks(read_widths, n_read, &first);
+            char           chr;
             bool           b_rev;
 
-            if (code39_decode_one_best(&w2[first], nt, &ch, &b_rev) == CODE39_OK)
+            if (code39_decode_one_best(&read_widths[first], n_trim, &chr, &b_rev) == CODE39_OK)
             {
-                p_out->ch         = ch;
+                p_out->chr         = chr;
                 p_out->b_reversed = b_rev;
-                p_out->elements   = nt;
-                p_bc->pass        = (nt != n2) ? 6u : 4u;
-                r = CODE39_OK;
+                p_out->elements   = n_trim;
+                p_bc->pass        = (n_trim != n_read) ? 6u : 4u;
+                result = CODE39_OK;
             }
         }
     }
-    if (r == CODE39_NOT_BARCODE)
+    if (result == CODE39_NOT_BARCODE)
     {
         /* A crossing line or a speck: not a barcode, not an error.  The
            white that ended it already counts as the next quiet zone. */
@@ -423,25 +423,25 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
         return BC_NONE;
     }
     start_cooldown(p_bc);
-    if (r == CODE39_OK)
+    if (result == CODE39_OK)
     {
         return BC_VALID;
     }
-    p_out->reason = (uint8_t)r;
+    p_out->reason = (uint8_t)result;
     return BC_REJECT;
 }
 
 uint16_t bc_reading(bc_capture_t const * p_bc, uint8_t reading, uint32_t * p_widths)
 {
-    uint16_t k;
+    uint16_t kdx;
 
     if (reading == 0u)
     {
-        for (k = 0u; (k < p_bc->n) && (k <= BC_MAX_ELEMENTS); k++)
+        for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
         {
-            p_widths[k] = p_bc->widths[k];
+            p_widths[kdx] = p_bc->widths[kdx];
         }
-        return k;
+        return kdx;
     }
     return prof_read(p_bc, reading, p_widths);
 }
@@ -512,19 +512,19 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um, bc_o
             }
             if (p_bc->b_black)
             {
-                uint16_t k;
+                uint16_t kdx;
 
                 p_bc->state       = (uint8_t)LINE_BC_CAPTURING;
-                p_bc->n           = 0u;
+                p_bc->n_elems           = 0u;
                 p_bc->run_um      = step_um;
                 p_bc->total_um    = step_um;
                 p_bc->max_elem_um = 0u;
                 p_bc->peak        = norm;
                 /* the darkness record starts with what came just before,
                    oldest first (faint leading bars) */
-                for (k = 0u; k < p_bc->pre_n; k++)
+                for (kdx = 0u; kdx < p_bc->pre_n; kdx++)
                 {
-                    p_bc->prof[k] = p_bc->pre[(uint16_t)((p_bc->pre_i + BC_PRE_BINS - p_bc->pre_n + k) % BC_PRE_BINS)];
+                    p_bc->prof[kdx] = p_bc->pre[(uint16_t)((p_bc->pre_i + BC_PRE_BINS - p_bc->pre_n + kdx) % BC_PRE_BINS)];
                 }
                 p_bc->prof[p_bc->pre_n] = norm;
                 p_bc->prof_n      = (uint16_t)(p_bc->pre_n + 1u);
@@ -562,16 +562,16 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um, bc_o
             else
             {
                 /* run ended: store it as an element */
-                if (p_bc->n >= BC_MAX_ELEMENTS)
+                if (p_bc->n_elems >= BC_MAX_ELEMENTS)
                 {
                     p_out->reason    = (uint8_t)CODE39_ERR_TOO_MANY;
-                    p_out->elements  = p_bc->n;
+                    p_out->elements  = p_bc->n_elems;
                     p_out->length_um = p_bc->total_um;
                     start_cooldown(p_bc);
                     return BC_REJECT;
                 }
-                p_bc->widths[p_bc->n] = p_bc->run_um;
-                p_bc->n++;
+                p_bc->widths[p_bc->n_elems] = p_bc->run_um;
+                p_bc->n_elems++;
                 if (p_bc->run_um > p_bc->max_elem_um)
                 {
                     p_bc->max_elem_um = p_bc->run_um;
@@ -594,7 +594,7 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um, bc_o
             if (p_bc->total_um > BC_MAX_LEN_UM)
             {
                 p_out->reason    = (uint8_t)CODE39_ERR_TOO_LONG;
-                p_out->elements  = p_bc->n;
+                p_out->elements  = p_bc->n_elems;
                 p_out->length_um = p_bc->total_um;
                 start_cooldown(p_bc);
                 return BC_REJECT;

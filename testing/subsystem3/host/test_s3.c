@@ -30,9 +30,9 @@ static int g_fail;
     do { if (cond) { g_pass++; } else { g_fail++; \
         printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); } } while (0)
 
-#define N_SLIDES ((int)(sizeof(k_slides) / sizeof(k_slides[0])))
+#define N_SLIDES ((int)(sizeof(g_slides) / sizeof(g_slides[0])))
 
-static char const k_data_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
+static char const g_data_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
 static uint32_t g_rng = 12345u;
 static uint32_t rnd(void) { g_rng = g_rng * 1103515245u + 12345u; return (g_rng >> 8) & 0xFFFFu; }
@@ -40,39 +40,39 @@ static uint32_t rnd(void) { g_rng = g_rng * 1103515245u + 12345u; return (g_rng 
 static double rndu(void) { return ((double)rnd() / 32767.5) - 1.0; }
 
 /* Widths of *c* with the given narrow width, ratio and +-jitter. */
-static uint16_t make_code(char c, uint32_t narrow, double ratio, double jitter, uint32_t * p_w)
+static uint16_t make_code(char chr, uint32_t narrow, double ratio, double jitter, uint32_t * p_w)
 {
-    char const seq[3] = { '*', c, '*' };
-    uint16_t n = 0u;
-    int k;
-    int e;
+    char const seq[3] = { '*', chr, '*' };
+    uint16_t n_elems = 0u;
+    int kdx;
+    int elem;
 
-    for (k = 0; k < 3; k++)
+    for (kdx = 0; kdx < 3; kdx++)
     {
-        uint16_t pat = code39_pattern(seq[k]);
+        uint16_t pat = code39_pattern(seq[kdx]);
 
-        for (e = 0; e < 9; e++)
+        for (elem = 0; elem < 9; elem++)
         {
-            double w = (double)narrow * (((pat >> (8 - e)) & 1u) ? ratio : 1.0);
-            p_w[n++] = (uint32_t)(w * (1.0 + jitter * rndu()));
+            double omega = (double)narrow * (((pat >> (8 - elem)) & 1u) ? ratio : 1.0);
+            p_w[n_elems++] = (uint32_t)(omega * (1.0 + jitter * rndu()));
         }
-        if (k < 2)
+        if (kdx < 2)
         {
-            p_w[n++] = (uint32_t)((double)narrow * (1.0 + jitter * rndu()));   /* gap */
+            p_w[n_elems++] = (uint32_t)((double)narrow * (1.0 + jitter * rndu()));   /* gap */
         }
     }
-    return n;
+    return n_elems;
 }
 
-static void reverse(uint32_t * p_w, uint16_t n)
+static void reverse(uint32_t * p_w, uint16_t n_elems)
 {
-    uint16_t i;
+    uint16_t idx;
 
-    for (i = 0u; i < n / 2u; i++)
+    for (idx = 0u; idx < n_elems / 2u; idx++)
     {
-        uint32_t t = p_w[i];
-        p_w[i] = p_w[n - 1u - i];
-        p_w[n - 1u - i] = t;
+        uint32_t elapsed = p_w[idx];
+        p_w[idx] = p_w[n_elems - 1u - idx];
+        p_w[n_elems - 1u - idx] = elapsed;
     }
 }
 
@@ -89,7 +89,7 @@ static uint8_t  g_last_pass = 0u;    /* which reading decoded in the last run_pa
 static uint32_t g_thin_black = 0u;   /* S3-H19: level of bars narrower than g_thin_um (0 = g_black) */
 static uint32_t g_thin_um    = 0u;
 
-static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
+static uint16_t profile_at(uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
 {
     uint32_t const lead = 60000u;
     uint32_t       spot;
@@ -99,22 +99,22 @@ static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
     for (spot = 0u; spot < g_spot_um; spot += 100u)
     {
         taps++;
-        uint32_t x = x_um + spot;
+        uint32_t x_val = x_um + spot;
         uint32_t pos = lead;
-        uint16_t e;
+        uint16_t elem;
         uint32_t here = g_white;
 
-        for (e = 0u; e < n; e++)
+        for (elem = 0u; elem < n_elems; elem++)
         {
-            if ((x >= pos) && (x < pos + p_w[e]))
+            if ((x_val >= pos) && (x_val < pos + p_w[elem]))
             {
-                if ((e % 2u) == 0u)
+                if ((elem % 2u) == 0u)
                 {
-                    here = ((g_thin_black != 0u) && (p_w[e] < g_thin_um)) ? g_thin_black : g_black;
+                    here = ((g_thin_black != 0u) && (p_w[elem] < g_thin_um)) ? g_thin_black : g_black;
                 }
                 break;
             }
-            pos += p_w[e];
+            pos += p_w[elem];
         }
         level += here;
     }
@@ -122,32 +122,32 @@ static uint16_t profile_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
 }
 
 /* Run one pass at v_mm_s; returns the result and fills *p_out. */
-static bc_result_t run_pass(uint32_t const * p_w, uint16_t n, uint32_t v_mm_s, int noise, bc_out_t * p_out)
+static bc_result_t run_pass(uint32_t const * p_w, uint16_t n_elems, uint32_t v_mm_s, int noise, bc_out_t * p_out)
 {
-    static bc_capture_t bc;
-    uint32_t     x;
+    static bc_capture_t capture;
+    uint32_t     x_val;
     uint32_t     step = v_mm_s;     /* um per 1 ms sample = mm/s */
     bc_result_t  found = BC_NONE;
 
     g_last_pass = 0u;
-    bc_init(&bc);
-    for (x = 0u; x < TRACK_LEN_UM; x += step)
+    bc_init(&capture);
+    for (x_val = 0u; x_val < TRACK_LEN_UM; x_val += step)
     {
-        int32_t  s = (int32_t)profile_at(p_w, n, x) + (int32_t)(noise * rndu());
+        int32_t  sample = (int32_t)profile_at(p_w, n_elems, x_val) + (int32_t)(noise * rndu());
         bc_out_t out;
-        bc_result_t r;
+        bc_result_t result;
 
-        if (s < 0) { s = 0; }
-        if (s > 1000) { s = 1000; }
+        if (sample < 0) { sample = 0; }
+        if (sample > 1000) { sample = 1000; }
         memset(&out, 0, sizeof(out));
-        r = bc_sample(&bc, (uint16_t)s, step, &out);
-        if ((r != BC_NONE) && (found == BC_NONE))
+        result = bc_sample(&capture, (uint16_t)sample, step, &out);
+        if ((result != BC_NONE) && (found == BC_NONE))
         {
-            found = r;
+            found = result;
             *p_out = out;
-            g_last_pass = bc.pass;
+            g_last_pass = capture.pass;
         }
-        else if (r != BC_NONE)
+        else if (result != BC_NONE)
         {
             return BC_REJECT;           /* more than one result per code */
         }
@@ -157,50 +157,50 @@ static bc_result_t run_pass(uint32_t const * p_w, uint16_t n, uint32_t v_mm_s, i
 
 static void test_table(void)
 {
-    size_t i;
-    size_t j;
-    int    ok = 1;
+    size_t idx;
+    size_t jdx;
+    int    b_ok = 1;
 
-    for (i = 0u; i < sizeof(k_data_chars) - 1u; i++)
+    for (idx = 0u; idx < sizeof(g_data_chars) - 1u; idx++)
     {
-        uint16_t p = code39_pattern(k_data_chars[i]);
-        int wide = 0, wide_sp = 0, b;
+        uint16_t pos = code39_pattern(g_data_chars[idx]);
+        int wide = 0, wide_sp = 0, val_b;
 
-        for (b = 0; b < 9; b++)
+        for (val_b = 0; val_b < 9; val_b++)
         {
-            if ((p >> (8 - b)) & 1u) { wide++; if (b % 2) { wide_sp++; } }
+            if ((pos >> (8 - val_b)) & 1u) { wide++; if (val_b % 2) { wide_sp++; } }
         }
-        if ((p == 0u) || (wide != 3) || ((wide_sp != 1) && (wide_sp != 3))) { ok = 0; }
-        if (code39_char(p) != k_data_chars[i]) { ok = 0; }
-        for (j = 0u; j < i; j++)
+        if ((pos == 0u) || (wide != 3) || ((wide_sp != 1) && (wide_sp != 3))) { b_ok = 0; }
+        if (code39_char(pos) != g_data_chars[idx]) { b_ok = 0; }
+        for (jdx = 0u; jdx < idx; jdx++)
         {
-            if (code39_pattern(k_data_chars[j]) == p) { ok = 0; }
+            if (code39_pattern(g_data_chars[jdx]) == pos) { b_ok = 0; }
         }
     }
-    CHECK("S3-H01", ok);
+    CHECK("S3-H01", b_ok);
     CHECK("S3-H01", code39_pattern('*') == 0x094u && code39_char(0x1FFu) == '\0');
 }
 
 static void test_slides(void)
 {
-    int s;
+    int step;
 
-    for (s = 0; s < N_SLIDES; s++)
+    for (step = 0; step < N_SLIDES; step++)
     {
-        uint32_t w[29];
-        char     ch;
+        uint32_t widths[29];
+        char     chr;
         bool     b_rev;
-        int      k;
+        int      kdx;
         double   scale;
 
         for (scale = 1.0; scale > 0.5; scale -= (1.0 - 297.0 / 338.67))   /* screen, A4 */
         {
-            for (k = 0; k < 29; k++) { w[k] = (uint32_t)(k_slides[s].p_w[k] * scale); }
-            CHECK("S3-H02", code39_decode_one(w, 29, 15, &ch, &b_rev) == CODE39_OK &&
-                            ch == k_slides[s].ch && !b_rev);
-            reverse(w, 29);
-            CHECK("S3-H02", code39_decode_one(w, 29, 15, &ch, &b_rev) == CODE39_OK &&
-                            ch == k_slides[s].ch && b_rev);
+            for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = (uint32_t)(g_slides[step].p_w[kdx] * scale); }
+            CHECK("S3-H02", code39_decode_one(widths, 29, 15, &chr, &b_rev) == CODE39_OK &&
+                            chr == g_slides[step].chr && !b_rev);
+            reverse(widths, 29);
+            CHECK("S3-H02", code39_decode_one(widths, 29, 15, &chr, &b_rev) == CODE39_OK &&
+                            chr == g_slides[step].chr && b_rev);
             if (scale < 1.0) { break; }
         }
     }
@@ -209,130 +209,130 @@ static void test_slides(void)
 static void test_synthetic(void)
 {
     uint32_t const narrows[3] = { 3000u, 5100u, 6900u };
-    int ok = 1, wrong = 0;
-    size_t i;
-    int a, r, d;
+    int b_ok = 1, wrong = 0;
+    size_t idx;
+    int val_a, ret, diff;
 
-    for (i = 0u; i < sizeof(k_data_chars) - 1u; i++)
+    for (idx = 0u; idx < sizeof(g_data_chars) - 1u; idx++)
     {
-        for (a = 0; a < 3; a++)
+        for (val_a = 0; val_a < 3; val_a++)
         {
-            for (r = 0; r < 3; r++)
+            for (ret = 0; ret < 3; ret++)
             {
-                double const ratio = (r == 0) ? 2.2 : ((r == 1) ? 2.5 : 3.0);
+                double const ratio = (ret == 0) ? 2.2 : ((ret == 1) ? 2.5 : 3.0);
 
-                for (d = 0; d < 2; d++)
+                for (diff = 0; diff < 2; diff++)
                 {
-                    uint32_t w[29];
-                    uint16_t n = make_code(k_data_chars[i], narrows[a], ratio, 0.15, w);
-                    char ch;
+                    uint32_t widths[29];
+                    uint16_t n_elems = make_code(g_data_chars[idx], narrows[val_a], ratio, 0.15, widths);
+                    char chr;
                     bool b_rev;
                     code39_result_t res;
 
-                    if (d) { reverse(w, n); }
-                    res = code39_decode_one(w, n, 15, &ch, &b_rev);
-                    if (res != CODE39_OK) { ok = 0; }
-                    else if (ch != k_data_chars[i]) { wrong++; }
+                    if (diff) { reverse(widths, n_elems); }
+                    res = code39_decode_one(widths, n_elems, 15, &chr, &b_rev);
+                    if (res != CODE39_OK) { b_ok = 0; }
+                    else if (chr != g_data_chars[idx]) { wrong++; }
                 }
             }
         }
     }
-    CHECK("S3-H03", ok && (wrong == 0));
+    CHECK("S3-H03", b_ok && (wrong == 0));
 }
 
 static void test_rejects(void)
 {
-    uint32_t w[40];
-    uint16_t n;
-    char ch;
+    uint32_t widths[40];
+    uint16_t n_elems;
+    char chr;
     bool b_rev;
-    int  i, wrong = 0;
+    int  idx, wrong = 0;
 
     /* a wide bar printed narrow: rejected, never a different character */
-    for (i = 0; i < (int)(sizeof(k_data_chars) - 1u); i++)
+    for (idx = 0; idx < (int)(sizeof(g_data_chars) - 1u); idx++)
     {
-        int e;
-        for (e = 10; e < 19; e++)
+        int elem;
+        for (elem = 10; elem < 19; elem++)
         {
-            uint16_t pat = code39_pattern(k_data_chars[i]);
+            uint16_t pat = code39_pattern(g_data_chars[idx]);
 
-            n = make_code(k_data_chars[i], 3000u, 3.0, 0.0, w);
-            if ((pat >> (8 - (e - 10))) & 1u)
+            n_elems = make_code(g_data_chars[idx], 3000u, 3.0, 0.0, widths);
+            if ((pat >> (8 - (elem - 10))) & 1u)
             {
-                w[e] = 3000u;           /* wide -> narrow */
-                if (code39_decode_one(w, n, 15, &ch, &b_rev) == CODE39_OK) { wrong++; }
+                widths[elem] = 3000u;           /* wide -> narrow */
+                if (code39_decode_one(widths, n_elems, 15, &chr, &b_rev) == CODE39_OK) { wrong++; }
             }
         }
     }
     CHECK("S3-H04", wrong == 0);
-    n = make_code('A', 3000u, 3.0, 0.0, w);
-    CHECK("S3-H04", code39_decode_one(w, 28, 15, &ch, &b_rev) == CODE39_ERR_COUNT);
-    n = make_code('A', 3000u, 1.3, 0.0, w);
-    CHECK("S3-H04", code39_decode_one(w, n, 15, &ch, &b_rev) == CODE39_ERR_RATIO);
-    CHECK("S3-H04", code39_decode_one(w, 5, 15, &ch, &b_rev) == CODE39_NOT_BARCODE);
+    n_elems = make_code('A', 3000u, 3.0, 0.0, widths);
+    CHECK("S3-H04", code39_decode_one(widths, 28, 15, &chr, &b_rev) == CODE39_ERR_COUNT);
+    n_elems = make_code('A', 3000u, 1.3, 0.0, widths);
+    CHECK("S3-H04", code39_decode_one(widths, n_elems, 15, &chr, &b_rev) == CODE39_ERR_RATIO);
+    CHECK("S3-H04", code39_decode_one(widths, 5, 15, &chr, &b_rev) == CODE39_NOT_BARCODE);
     {
         /* "*AB*": valid Code 39 but two data characters */
-        uint32_t w2[40];
+        uint32_t words_out[40];
         char const seq[4] = { '*', 'A', 'B', '*' };
-        int k, e;
-        n = 0u;
-        for (k = 0; k < 4; k++)
+        int kdx, elem;
+        n_elems = 0u;
+        for (kdx = 0; kdx < 4; kdx++)
         {
-            uint16_t pat = code39_pattern(seq[k]);
-            for (e = 0; e < 9; e++) { w2[n++] = ((pat >> (8 - e)) & 1u) ? 9000u : 3000u; }
-            if (k < 3) { w2[n++] = 3000u; }
+            uint16_t pat = code39_pattern(seq[kdx]);
+            for (elem = 0; elem < 9; elem++) { words_out[n_elems++] = ((pat >> (8 - elem)) & 1u) ? 9000u : 3000u; }
+            if (kdx < 3) { words_out[n_elems++] = 3000u; }
         }
-        CHECK("S3-H04", code39_decode_one(w2, n, 15, &ch, &b_rev) == CODE39_ERR_LENGTH);
+        CHECK("S3-H04", code39_decode_one(words_out, n_elems, 15, &chr, &b_rev) == CODE39_ERR_LENGTH);
     }
 }
 
 static void test_capture(void)
 {
     uint32_t const speeds[2] = { 150u, 300u };      /* NFR3 speeds, mm/s */
-    int s, v, d, pass;
+    int step, value, diff, pass;
     int good = 0, total = 0, wrong = 0;
 
     /* every slide, both speeds, both directions, clean */
-    for (s = 0; s < N_SLIDES; s++)
+    for (step = 0; step < N_SLIDES; step++)
     {
-        for (v = 0; v < 2; v++)
+        for (value = 0; value < 2; value++)
         {
-            for (d = 0; d < 2; d++)
+            for (diff = 0; diff < 2; diff++)
             {
-                uint32_t w[29];
+                uint32_t widths[29];
                 bc_out_t out;
-                int k;
+                int kdx;
 
-                for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
-                if (d) { reverse(w, 29); }
+                for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = g_slides[step].p_w[kdx] * 297u / 339u; }
+                if (diff) { reverse(widths, 29); }
                 memset(&out, 0, sizeof(out));
-                CHECK("S3-H05", run_pass(w, 29, speeds[v], 0, &out) == BC_VALID && out.ch == k_slides[s].ch);
+                CHECK("S3-H05", run_pass(widths, 29, speeds[value], 0, &out) == BC_VALID && out.chr == g_slides[step].chr);
             }
         }
     }
 
     /* NFR3-style: 20 noisy passes per character per speed and direction */
-    for (s = 0; s < N_SLIDES; s += 3)
+    for (step = 0; step < N_SLIDES; step += 3)
     {
-        for (v = 0; v < 2; v++)
+        for (value = 0; value < 2; value++)
         {
             for (pass = 0; pass < 20; pass++)
             {
-                uint32_t w[29];
+                uint32_t widths[29];
                 bc_out_t out;
-                bc_result_t r;
-                int k;
+                bc_result_t result;
+                int kdx;
 
-                for (k = 0; k < 29; k++)
+                for (kdx = 0; kdx < 29; kdx++)
                 {
-                    w[k] = (uint32_t)((double)k_slides[s].p_w[k] * 297.0 / 338.67 * (1.0 + 0.10 * rndu()));
+                    widths[kdx] = (uint32_t)((double)g_slides[step].p_w[kdx] * 297.0 / 338.67 * (1.0 + 0.10 * rndu()));
                 }
-                if (pass % 2) { reverse(w, 29); }
+                if (pass % 2) { reverse(widths, 29); }
                 memset(&out, 0, sizeof(out));
-                r = run_pass(w, 29, speeds[v], 120, &out);
+                result = run_pass(widths, 29, speeds[value], 120, &out);
                 total++;
-                if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { good++; }
-                else if (r == BC_VALID) { wrong++; }
+                if ((result == BC_VALID) && (out.chr == g_slides[step].chr)) { good++; }
+                else if (result == BC_VALID) { wrong++; }
             }
         }
     }
@@ -348,50 +348,50 @@ static void test_capture(void)
        decode, never a wrong character (old levels: none, all too long). */
     {
         uint32_t const spots[2] = { 3500u, 4000u };
-        int sp;
+        int setpoint;
         int blur_good = 0, blur_total = 0, blur_wrong = 0;
         int weak_good = 0, weak_total = 0, weak_wrong = 0;
 
-        for (sp = 0; sp < 2; sp++)
+        for (setpoint = 0; setpoint < 2; setpoint++)
         {
-            g_spot_um = spots[sp];
-            for (s = 0; s < N_SLIDES; s++)
+            g_spot_um = spots[setpoint];
+            for (step = 0; step < N_SLIDES; step++)
             {
-                for (v = 0; v < 2; v++)
+                for (value = 0; value < 2; value++)
                 {
-                    for (d = 0; d < 2; d++)
+                    for (diff = 0; diff < 2; diff++)
                     {
-                        uint32_t w[29];
+                        uint32_t widths[29];
                         bc_out_t out;
-                        bc_result_t r;
-                        int k;
+                        bc_result_t result;
+                        int kdx;
 
-                        for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
-                        if (d) { reverse(w, 29); }
+                        for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = g_slides[step].p_w[kdx] * 297u / 339u; }
+                        if (diff) { reverse(widths, 29); }
                         memset(&out, 0, sizeof(out));
-                        r = run_pass(w, 29, speeds[v], (d ? 60 : 0), &out);
+                        result = run_pass(widths, 29, speeds[value], (diff ? 60 : 0), &out);
                         blur_total++;
-                        if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { blur_good++; }
-                        else if (r == BC_VALID) { blur_wrong++; }
+                        if ((result == BC_VALID) && (out.chr == g_slides[step].chr)) { blur_good++; }
+                        else if (result == BC_VALID) { blur_wrong++; }
                     }
                 }
             }
         }
         g_spot_um = 4000u;  g_white = 250u;  g_black = 800u;
-        for (s = 0; s < N_SLIDES; s++)
+        for (step = 0; step < N_SLIDES; step++)
         {
-            uint32_t w[29];
+            uint32_t widths[29];
             bc_out_t out;
-            int k;
+            int kdx;
 
-            for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
-            bc_result_t r;
+            for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = g_slides[step].p_w[kdx] * 297u / 339u; }
+            bc_result_t result;
 
             memset(&out, 0, sizeof(out));
-            r = run_pass(w, 29, 150u, 0, &out);
+            result = run_pass(widths, 29, 150u, 0, &out);
             weak_total++;
-            if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { weak_good++; }
-            else if (r == BC_VALID) { weak_wrong++; }
+            if ((result == BC_VALID) && (out.chr == g_slides[step].chr)) { weak_good++; }
+            else if (result == BC_VALID) { weak_wrong++; }
         }
         g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;
         printf("blurred passes: %d / %d decoded, %d wrong; weak sensor %d / %d, %d wrong\n",
@@ -408,26 +408,26 @@ static void test_capture(void)
        reading alone, never a wrong letter. */
     {
         int good = 0, total = 0, wrong = 0;
-        int k;
+        int kdx;
 
-        for (s = 0; s < N_SLIDES; s++)
+        for (step = 0; step < N_SLIDES; step++)
         {
-            for (d = 0; d < 2; d++)
+            for (diff = 0; diff < 2; diff++)
             {
                 int cut;
 
                 for (cut = 0; cut < 2; cut++)
                 {
-                    uint32_t w[29];
-                    char ch;
+                    uint32_t widths[29];
+                    char chr;
                     bool b_rev;
 
-                    for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k]; }
-                    if (d) { reverse(w, 29); }
+                    for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = g_slides[step].p_w[kdx]; }
+                    if (diff) { reverse(widths, 29); }
                     total++;
-                    if (code39_decode_one_repair(cut ? w : &w[2], 27, 15, &ch, &b_rev) == CODE39_OK)
+                    if (code39_decode_one_repair(cut ? widths : &widths[2], 27, 15, &chr, &b_rev) == CODE39_OK)
                     {
-                        if (ch == k_slides[s].ch) { good++; } else { wrong++; }
+                        if (chr == g_slides[step].chr) { good++; } else { wrong++; }
                     }
                 }
             }
@@ -437,24 +437,24 @@ static void test_capture(void)
 
         good = 0; total = 0; wrong = 0;
         {
-            size_t i;
+            size_t idx;
 
-            for (i = 0u; i < 26u; i++)
+            for (idx = 0u; idx < 26u; idx++)
             {
-                uint32_t w[29];
-                uint16_t n = make_code((char)('A' + i), 3000u, 2.5, 0.0, w);
-                char ch;
+                uint32_t widths[29];
+                uint16_t n_elems = make_code((char)('A' + idx), 3000u, 2.5, 0.0, widths);
+                char chr;
                 bool b_rev;
-                uint16_t e;
+                uint16_t elem;
 
-                for (e = 0u; e < n; e++)
+                for (elem = 0u; elem < n_elems; elem++)
                 {
-                    w[e] = ((e % 2u) == 0u) ? (w[e] + 1200u) : ((w[e] > 1200u) ? (w[e] - 1200u) : 100u);
+                    widths[elem] = ((elem % 2u) == 0u) ? (widths[elem] + 1200u) : ((widths[elem] > 1200u) ? (widths[elem] - 1200u) : 100u);
                 }
                 total++;
-                if (code39_decode_one(w, n, 15, &ch, &b_rev) == CODE39_OK)
+                if (code39_decode_one(widths, n_elems, 15, &chr, &b_rev) == CODE39_OK)
                 {
-                    if (ch == (char)('A' + i)) { good++; } else { wrong++; }
+                    if (chr == (char)('A' + idx)) { good++; } else { wrong++; }
                 }
             }
         }
@@ -463,27 +463,27 @@ static void test_capture(void)
 
         {
             uint32_t const spots[2] = { 5000u, 6000u };
-            int sp, pass2 = 0;
+            int setpoint, pass2 = 0;
 
             good = 0; total = 0; wrong = 0;
-            for (sp = 0; sp < 2; sp++)
+            for (setpoint = 0; setpoint < 2; setpoint++)
             {
-                g_spot_um = spots[sp];
-                for (s = 0; s < N_SLIDES; s++)
+                g_spot_um = spots[setpoint];
+                for (step = 0; step < N_SLIDES; step++)
                 {
-                    for (d = 0; d < 2; d++)
+                    for (diff = 0; diff < 2; diff++)
                     {
-                        uint32_t w[29];
+                        uint32_t widths[29];
                         bc_out_t out;
-                        bc_result_t r;
+                        bc_result_t result;
 
-                        for (k = 0; k < 29; k++) { w[k] = k_slides[s].p_w[k] * 297u / 339u; }
-                        if (d) { reverse(w, 29); }
+                        for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = g_slides[step].p_w[kdx] * 297u / 339u; }
+                        if (diff) { reverse(widths, 29); }
                         memset(&out, 0, sizeof(out));
-                        r = run_pass(w, 29, 90u, 0, &out);
+                        result = run_pass(widths, 29, 90u, 0, &out);
                         total++;
-                        if ((r == BC_VALID) && (out.ch == k_slides[s].ch)) { good++; }
-                        else if (r == BC_VALID) { wrong++; }
+                        if ((result == BC_VALID) && (out.chr == g_slides[step].chr)) { good++; }
+                        else if (result == BC_VALID) { wrong++; }
                         pass2 += (g_last_pass != 0u) ? 1 : 0;
                     }
                 }
@@ -502,36 +502,36 @@ static void test_capture(void)
        With the 40 mm end the whole code is kept and the darkness record
        (low threshold) finds the faint bars. */
     {
-        int s, d, good = 0, total = 0, wrong = 0;
+        int step, diff, good = 0, total = 0, wrong = 0;
         int noise;
 
         g_spot_um = 1500u;  g_white = 20u;  g_black = 690u;  g_thin_black = 240u;
         for (noise = 0; noise <= 40; noise += 40)
         {
-            for (s = 0; s < N_SLIDES; s++)
+            for (step = 0; step < N_SLIDES; step++)
             {
-                if (k_slides[s].ch != 'Z') { continue; }
-                for (d = 0; d < 2; d++)
+                if (g_slides[step].chr != 'Z') { continue; }
+                for (diff = 0; diff < 2; diff++)
                 {
-                    uint32_t w[29];
+                    uint32_t widths[29];
                     bc_out_t out;
-                    bc_result_t r;
-                    int k;
+                    bc_result_t result;
+                    int kdx;
 
                     uint32_t wmin = 0xFFFFFFFFu;
 
                     /* printed at the specified size: 3 mm narrow (~141 mm code) */
-                    for (k = 0; k < 29; k++) { wmin = (k_slides[s].p_w[k] < wmin) ? k_slides[s].p_w[k] : wmin; }
-                    for (k = 0; k < 29; k++) { w[k] = (k_slides[s].p_w[k] * 3000u) / wmin; }
+                    for (kdx = 0; kdx < 29; kdx++) { wmin = (g_slides[step].p_w[kdx] < wmin) ? g_slides[step].p_w[kdx] : wmin; }
+                    for (kdx = 0; kdx < 29; kdx++) { widths[kdx] = (g_slides[step].p_w[kdx] * 3000u) / wmin; }
                     g_thin_um = 6000u;          /* bars under 6 mm are the faint narrow ones */
-                    if (d) { reverse(w, 29); }
+                    if (diff) { reverse(widths, 29); }
                     memset(&out, 0, sizeof(out));
-                    r = run_pass(w, 29, 90u, noise, &out);
+                    result = run_pass(widths, 29, 90u, noise, &out);
                     total++;
-                    if ((r == BC_VALID) && (out.ch == 'Z')) { good++; }
-                    else if (r == BC_VALID) { wrong++; }
-                    else { printf("  Z slide %d dir %d noise %d: result %d, %u elements, %u mm\n", k_slides[s].slide, d,
-                                  noise, (int)r, (unsigned)out.elements, (unsigned)(out.length_um / 1000u)); }
+                    if ((result == BC_VALID) && (out.chr == 'Z')) { good++; }
+                    else if (result == BC_VALID) { wrong++; }
+                    else { printf("  Z slide %d dir %d noise %d: result %d, %u elements, %u mm\n", g_slides[step].slide, diff,
+                                  noise, (int)result, (unsigned)out.elements, (unsigned)(out.length_um / 1000u)); }
                 }
             }
         }
@@ -555,27 +555,27 @@ static void test_capture(void)
             1400u, 2600u, 3000u, 8600u, 3400u, 2400u, 10000u, 2000u, 2400u, 1000u, 9600u, 2400u, 2600u,
             2000u, 10000u, 3000u, 2400u, 3400u, 3600u, 9600u, 2400u, 3600u, 8200u, 3600u, 2400u,
             9600u, 3000u, 3400u, 8600u, 3400u, 9000u, 3400u, 3400u };
-        int d, noise, good = 0, total = 0, wrong = 0;
+        int diff, noise, good = 0, total = 0, wrong = 0;
 
         g_spot_um = 1000u;  g_white = 25u;  g_black = 1000u;
         for (noise = 0; noise <= 30; noise += 30)
         {
-            for (d = 0; d < 4; d++)
+            for (diff = 0; diff < 4; diff++)
             {
-                uint32_t       w[33];
-                uint16_t const n = (d < 2) ? 31u : 33u;
+                uint32_t       widths[33];
+                uint16_t const n_elems = (diff < 2) ? 31u : 33u;
                 bc_out_t       out;
-                bc_result_t    r;
+                bc_result_t    result;
 
-                memcpy(w, (d < 2) ? k_r1 : k_r2, n * sizeof(uint32_t));
-                if ((d % 2) != 0) { reverse(w, n); }
+                memcpy(widths, (diff < 2) ? k_r1 : k_r2, n_elems * sizeof(uint32_t));
+                if ((diff % 2) != 0) { reverse(widths, n_elems); }
                 memset(&out, 0, sizeof(out));
-                r = run_pass(w, n, 90u, noise, &out);
+                result = run_pass(widths, n_elems, 90u, noise, &out);
                 total++;
-                if ((r == BC_VALID) && (out.ch == 'A') && (out.b_reversed == ((d % 2) != 0))) { good++; }
-                else if (r == BC_VALID) { wrong++; }
-                else { printf("  14 Nov read %d dir %d noise %d: result %d reason %u, %u elements\n", d / 2 + 1, d % 2,
-                              noise, (int)r, (unsigned)out.reason, (unsigned)out.elements); }
+                if ((result == BC_VALID) && (out.chr == 'A') && (out.b_reversed == ((diff % 2) != 0))) { good++; }
+                else if (result == BC_VALID) { wrong++; }
+                else { printf("  14 Nov read %d dir %d noise %d: result %d reason %u, %u elements\n", diff / 2 + 1, diff % 2,
+                              noise, (int)result, (unsigned)out.reason, (unsigned)out.elements); }
             }
         }
         g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;
@@ -585,97 +585,97 @@ static void test_capture(void)
 
     /* S3-H06: a crossing line (18 mm black) is not a barcode and not an error */
     {
-        uint32_t w[1] = { 18000u };
+        uint32_t widths[1] = { 18000u };
         bc_out_t out;
-        CHECK("S3-H06", run_pass(w, 1, 300u, 0, &out) == BC_NONE);
+        CHECK("S3-H06", run_pass(widths, 1, 300u, 0, &out) == BC_NONE);
     }
     /* S3-H07: a long dark patch is rejected, never decoded */
     {
-        uint32_t w[1] = { 500000u };
+        uint32_t widths[1] = { 500000u };
         bc_out_t out;
         memset(&out, 0, sizeof(out));
-        CHECK("S3-H07", run_pass(w, 1, 300u, 0, &out) == BC_REJECT && out.reason == CODE39_ERR_TOO_LONG);
+        CHECK("S3-H07", run_pass(widths, 1, 300u, 0, &out) == BC_REJECT && out.reason == CODE39_ERR_TOO_LONG);
     }
 }
 
 /* ---- line tracking ---------------------------------------------------- */
-static line_trk_cfg_t const k_cfg = { 20000u, 80000u, 300 };
+static line_trk_cfg_t const g_cfg = { 20000u, 80000u, 300 };
 
 /* Feed blocks of 3 mm (0.3 m/s x 10 ms) for dist_um; returns OR of events. */
-static uint8_t feed(line_track_t * p_t, uint16_t l, uint16_t r, uint32_t dist_um)
+static uint8_t feed(line_track_t * p_t, uint16_t left, uint16_t ret, uint32_t dist_um)
 {
-    uint8_t ev = 0u;
-    uint32_t d;
+    uint8_t events = 0u;
+    uint32_t diff;
 
-    for (d = 0u; d < dist_um; d += 3000u) { ev |= line_track_step(p_t, &k_cfg, l, r, 3000u); }
-    return ev;
+    for (diff = 0u; diff < dist_um; diff += 3000u) { events |= line_track_step(p_t, &g_cfg, left, ret, 3000u); }
+    return events;
 }
 
 static void test_track(void)
 {
-    line_track_t t;
-    uint8_t ev;
+    line_track_t track;
+    uint8_t events;
 
     /* S3-H10: steering sign: line under the left sensor -> turn left */
-    line_track_init(&t);
-    (void)feed(&t, 500u, 500u, 60000u);
-    CHECK("S3-H10", t.err == 0 && t.omega == 0 && t.v == 300);
-    (void)line_track_step(&t, &k_cfg, 800u, 200u, 3000u);
-    CHECK("S3-H10", t.err == 600 && t.omega > 0 && t.v < 300);
-    (void)feed(&t, 200u, 800u, 9000u);
-    CHECK("S3-H10", t.omega < 0);
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 60000u);
+    CHECK("S3-H10", track.err == 0 && track.omega == 0 && track.v_mm_s == 300);
+    (void)line_track_step(&track, &g_cfg, 800u, 200u, 3000u);
+    CHECK("S3-H10", track.err == 600 && track.omega > 0 && track.v_mm_s < 300);
+    (void)feed(&track, 200u, 800u, 9000u);
+    CHECK("S3-H10", track.omega < 0);
 
     /* S3-H08: junction on a straight approach, once; not on a tight curve */
-    line_track_init(&t);
-    (void)feed(&t, 500u, 500u, 60000u);
-    ev = feed(&t, 1000u, 1000u, 15000u);
-    CHECK("S3-H08", (ev & LINE_TRK_EV_JUNCTION) == 0u);
-    ev = feed(&t, 1000u, 1000u, 15000u);
-    CHECK("S3-H08", (ev & LINE_TRK_EV_JUNCTION) != 0u && t.omega == 0);
-    ev = feed(&t, 1000u, 1000u, 30000u);
-    CHECK("S3-H08", (ev & LINE_TRK_EV_JUNCTION) == 0u);
-    line_track_init(&t);
-    (void)feed(&t, 950u, 300u, 30000u);        /* hard steering on a curve */
-    ev = feed(&t, 1000u, 1000u, 30000u);
-    CHECK("S3-H08", (ev & LINE_TRK_EV_JUNCTION) == 0u);
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 60000u);
+    events = feed(&track, 1000u, 1000u, 15000u);
+    CHECK("S3-H08", (events & LINE_TRK_EV_JUNCTION) == 0u);
+    events = feed(&track, 1000u, 1000u, 15000u);
+    CHECK("S3-H08", (events & LINE_TRK_EV_JUNCTION) != 0u && track.omega == 0);
+    events = feed(&track, 1000u, 1000u, 30000u);
+    CHECK("S3-H08", (events & LINE_TRK_EV_JUNCTION) == 0u);
+    line_track_init(&track);
+    (void)feed(&track, 950u, 300u, 30000u);        /* hard steering on a curve */
+    events = feed(&track, 1000u, 1000u, 30000u);
+    CHECK("S3-H08", (events & LINE_TRK_EV_JUNCTION) == 0u);
 
     /* S3-H09: 50 mm gap bridged (NFR11, heading held), 90 mm -> LOST once, then FOUND */
-    line_track_init(&t);
-    (void)feed(&t, 500u, 500u, 60000u);
-    ev = feed(&t, 50u, 50u, 50000u);
-    CHECK("S3-H09", (ev & LINE_TRK_EV_LOST) == 0u && t.omega == 0 && t.v == 300);
-    (void)feed(&t, 500u, 500u, 30000u);
-    ev = feed(&t, 50u, 50u, 90000u);
-    CHECK("S3-H09", (ev & LINE_TRK_EV_LOST) != 0u && t.b_lost && t.v == 0);
-    ev = feed(&t, 50u, 50u, 90000u);
-    CHECK("S3-H09", (ev & LINE_TRK_EV_LOST) == 0u);
-    ev = feed(&t, 600u, 400u, 3000u);
-    CHECK("S3-H09", (ev & LINE_TRK_EV_FOUND) != 0u && !t.b_lost);
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 60000u);
+    events = feed(&track, 50u, 50u, 50000u);
+    CHECK("S3-H09", (events & LINE_TRK_EV_LOST) == 0u && track.omega == 0 && track.v_mm_s == 300);
+    (void)feed(&track, 500u, 500u, 30000u);
+    events = feed(&track, 50u, 50u, 90000u);
+    CHECK("S3-H09", (events & LINE_TRK_EV_LOST) != 0u && track.b_lost && track.v_mm_s == 0);
+    events = feed(&track, 50u, 50u, 90000u);
+    CHECK("S3-H09", (events & LINE_TRK_EV_LOST) == 0u);
+    events = feed(&track, 600u, 400u, 3000u);
+    CHECK("S3-H09", (events & LINE_TRK_EV_FOUND) != 0u && !track.b_lost);
 
     /* S3-H11: drifting off the right of the line -> keeps turning back left */
-    line_track_init(&t);
-    (void)feed(&t, 500u, 500u, 60000u);
-    (void)feed(&t, 950u, 80u, 6000u);          /* line under the left sensor only */
-    (void)feed(&t, 60u, 60u, 9000u);           /* ... then past it */
-    CHECK("S3-H11", t.omega > 0 && t.v < 300);
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 60000u);
+    (void)feed(&track, 950u, 80u, 6000u);          /* line under the left sensor only */
+    (void)feed(&track, 60u, 60u, 9000u);           /* ... then past it */
+    CHECK("S3-H11", track.omega > 0 && track.v_mm_s < 300);
 
     /* S3-H14: right curve, the line slides out past the right sensor and
        the error FADES (-1000 -> -300) before both read white: still a turn
        back right (was: taken for a gap, straight on); an old strong error
        (more than LINE_EXIT_PEAK_UM ago) does not count, a gap stays a gap */
-    line_track_init(&t);
-    (void)feed(&t, 500u, 500u, 60000u);
-    (void)feed(&t, 0u, 1000u, 6000u);          /* line under the right sensor */
-    (void)feed(&t, 0u, 300u, 6000u);           /* sliding out: error fades */
-    CHECK("S3-H14", t.err == -300);
-    (void)line_track_step(&t, &k_cfg, 60u, 60u, 3000u);   /* both white */
-    CHECK("S3-H14", t.exit_err == -1000 && t.omega < 0 && t.v < 300);
-    line_track_init(&t);
-    (void)feed(&t, 500u, 500u, 60000u);
-    (void)feed(&t, 0u, 1000u, 6000u);
-    (void)feed(&t, 500u, 500u, 45000u);        /* centred again for 45 mm */
-    (void)feed(&t, 60u, 60u, 9000u);           /* a gap */
-    CHECK("S3-H14", t.omega == 0 && t.v == 300);
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 60000u);
+    (void)feed(&track, 0u, 1000u, 6000u);          /* line under the right sensor */
+    (void)feed(&track, 0u, 300u, 6000u);           /* sliding out: error fades */
+    CHECK("S3-H14", track.err == -300);
+    (void)line_track_step(&track, &g_cfg, 60u, 60u, 3000u);   /* both white */
+    CHECK("S3-H14", track.exit_err == -1000 && track.omega < 0 && track.v_mm_s < 300);
+    line_track_init(&track);
+    (void)feed(&track, 500u, 500u, 60000u);
+    (void)feed(&track, 0u, 1000u, 6000u);
+    (void)feed(&track, 500u, 500u, 45000u);        /* centred again for 45 mm */
+    (void)feed(&track, 60u, 60u, 9000u);           /* a gap */
+    CHECK("S3-H14", track.omega == 0 && track.v_mm_s == 300);
 
     /* S3-H13: steering ramp: the error flips full left / full right every
        10 ms (the weaving seen on 2 Nov); the turn command never moves more
@@ -683,51 +683,51 @@ static void test_track(void)
        command within 850 / 50 = 17 blocks */
     {
         int32_t prev;
-        int32_t i;
+        int32_t idx;
         int32_t max_jump = 0;
 
-        line_track_init(&t);
-        (void)feed(&t, 500u, 500u, 30000u);
-        prev = t.omega;
-        for (i = 0; i < 40; i++)
+        line_track_init(&track);
+        (void)feed(&track, 500u, 500u, 30000u);
+        prev = track.omega;
+        for (idx = 0; idx < 40; idx++)
         {
-            if ((i & 1) == 0) { (void)line_track_step(&t, &k_cfg, 1000u, 0u, 3000u); }
-            else              { (void)line_track_step(&t, &k_cfg, 0u, 1000u, 3000u); }
-            max_jump = (app_abs_i32(t.omega - prev) > max_jump) ? app_abs_i32(t.omega - prev) : max_jump;
-            prev = t.omega;
+            if ((idx & 1) == 0) { (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u); }
+            else              { (void)line_track_step(&track, &g_cfg, 0u, 1000u, 3000u); }
+            max_jump = (app_abs_i32(track.omega - prev) > max_jump) ? app_abs_i32(track.omega - prev) : max_jump;
+            prev = track.omega;
         }
         CHECK("S3-H13", max_jump <= LINE_OMEGA_STEP);
 
-        line_track_init(&t);
-        (void)feed(&t, 500u, 500u, 30000u);
-        for (i = 0; i < 17; i++) { (void)line_track_step(&t, &k_cfg, 1000u, 0u, 3000u); }
-        CHECK("S3-H13", t.omega == LINE_STEER_SIGN * LINE_KP);
-        (void)line_track_step(&t, &k_cfg, 500u, 500u, 3000u);   /* back on centre */
-        CHECK("S3-H13", t.omega == LINE_STEER_SIGN * app_max_i32(LINE_KP - LINE_OMEGA_STEP, 0));
+        line_track_init(&track);
+        (void)feed(&track, 500u, 500u, 30000u);
+        for (idx = 0; idx < 17; idx++) { (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u); }
+        CHECK("S3-H13", track.omega == LINE_STEER_SIGN * LINE_KP);
+        (void)line_track_step(&track, &g_cfg, 500u, 500u, 3000u);   /* back on centre */
+        CHECK("S3-H13", track.omega == LINE_STEER_SIGN * app_max_i32(LINE_KP - LINE_OMEGA_STEP, 0));
     }
 
     /* S3-H12: calibration: contrast check and normalisation */
     {
         line_cal_t cal;
         uint16_t raw[3];
-        int i;
+        int idx;
 
         memset(&cal, 0, sizeof(cal));
         line_cal_start(&cal);
-        for (i = 0; i < 100; i++)
+        for (idx = 0; idx < 100; idx++)
         {
-            raw[0] = (uint16_t)((i < 50) ? 300 : 3000);  /* white 300, black 3000 */
-            raw[1] = (uint16_t)((i < 50) ? 350 : 2900);
-            raw[2] = (uint16_t)((i < 50) ? 250 : 2500);
+            raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);  /* white 300, black 3000 */
+            raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
+            raw[2] = (uint16_t)((idx < 50) ? 250 : 2500);
             line_cal_sample(&cal, raw);
         }
         CHECK("S3-H12", line_cal_finish(&cal) && cal.contrast_x10 >= 30);
         CHECK("S3-H12", line_cal_norm(&cal, 0, 300) == 0 && line_cal_norm(&cal, 0, 3000) == 1000);
         CHECK("S3-H12", line_cal_norm(&cal, 0, 1650) == 500 && line_cal_norm(&cal, 0, 4095) == 1000);
         line_cal_start(&cal);
-        for (i = 0; i < 100; i++)
+        for (idx = 0; idx < 100; idx++)
         {
-            raw[0] = (uint16_t)((i < 50) ? 1000 : 2000);  /* 2:1 only */
+            raw[0] = (uint16_t)((idx < 50) ? 1000 : 2000);  /* 2:1 only */
             raw[1] = 1000; raw[2] = 1000;
             line_cal_sample(&cal, raw);
         }
@@ -735,10 +735,10 @@ static void test_track(void)
         /* the barcode sensor does not take part: fixed levels from
            line_cfg.h, even when it saw no contrast during the spin */
         line_cal_start(&cal);
-        for (i = 0; i < 100; i++)
+        for (idx = 0; idx < 100; idx++)
         {
-            raw[0] = (uint16_t)((i < 50) ? 300 : 3000);
-            raw[1] = (uint16_t)((i < 50) ? 350 : 2900);
+            raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);
+            raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
             raw[2] = 3700;                                  /* stuck */
             line_cal_sample(&cal, raw);
         }
@@ -756,43 +756,43 @@ static void test_track(void)
    rotation; a sensor reads the fraction of its 8 mm spot on black. */
 static double g_slip_half = 9.0;    /* sensor offset from the centreline, mm */
 
-static uint16_t slip_raw(double x, double y)
+static uint16_t slip_raw(double x_val, double y_val)
 {
     double const half = 9.0;
-    double       f;
+    double       factor;
 
-    (void)x;
-    f = (half - fabs(y) + 4.0) / 8.0;
-    f = (f < 0.0) ? 0.0 : ((f > 1.0) ? 1.0 : f);
-    return (uint16_t)(300.0 + (f * 2700.0));
+    (void)x_val;
+    factor = (half - fabs(y_val) + 4.0) / 8.0;
+    factor = (factor < 0.0) ? 0.0 : ((factor > 1.0) ? 1.0 : factor);
+    return (uint16_t)(300.0 + (factor * 2700.0));
 }
 
 static uint16_t slip_run(int gain_pm, bool b_line, int start_cdeg)
 {
     static line_slip_t slip;
     line_cal_t         cal;
-    int                k;
+    int                kdx;
 
     memset(&cal, 0, sizeof(cal));
     line_cal_start(&cal);
     line_slip_start(&slip, start_cdeg);
-    for (k = 1; k <= 400; k++)
+    for (kdx = 1; kdx <= 400; kdx++)
     {
-        double const enc  = 360.0 * k / 400.0;
+        double const enc  = 360.0 * kdx / 400.0;
         double const real = enc * 1000.0 / gain_pm * M_PI / 180.0;
-        double const xs   = 120.0 * cos(real);
-        double const yl   = (120.0 * sin(real)) + (g_slip_half * cos(real));
-        double const yr   = (120.0 * sin(real)) - (g_slip_half * cos(real));
+        double const x_start   = 120.0 * cos(real);
+        double const y_left   = (120.0 * sin(real)) + (g_slip_half * cos(real));
+        double const y_right   = (120.0 * sin(real)) - (g_slip_half * cos(real));
         uint16_t     raw[3];
-        int          h    = start_cdeg + (int)(enc * 100.0);
+        int          height    = start_cdeg + (int)(enc * 100.0);
 
-        while (h > 18000) { h -= 36000; }
-        raw[0] = b_line ? slip_raw(xs, yl) : 300u;
-        raw[1] = b_line ? slip_raw(xs, yr) : 300u;
+        while (height > 18000) { height -= 36000; }
+        raw[0] = b_line ? slip_raw(x_start, y_left) : 300u;
+        raw[1] = b_line ? slip_raw(x_start, y_right) : 300u;
         raw[2] = 300u;
-        if (!b_line && (k == 200)) { raw[0] = 3000u; raw[1] = 3000u; }   /* contrast for the cal */
+        if (!b_line && (kdx == 200)) { raw[0] = 3000u; raw[1] = 3000u; }   /* contrast for the cal */
         line_cal_sample(&cal, raw);
-        line_slip_sample(&slip, h, raw[0], raw[1]);
+        line_slip_sample(&slip, height, raw[0], raw[1]);
     }
     (void)line_cal_finish(&cal);
     {
@@ -804,24 +804,24 @@ static uint16_t slip_run(int gain_pm, bool b_line, int start_cdeg)
 static void test_slip(void)
 {
     int const gains[4] = { 1000, 1200, 1500, 1800 };
-    int       i;
+    int       idx;
 
-    for (i = 0; i < 4; i++)
+    for (idx = 0; idx < 4; idx++)
     {
-        uint16_t const g = slip_run(gains[i], true, 17000);
+        uint16_t const gap = slip_run(gains[idx], true, 17000);
 
-        printf("turn slip: real gain %d -> measured %u\n", gains[i], (unsigned)g);
-        CHECK("S3-H16", abs((int)g - gains[i]) <= 25);
+        printf("turn slip: real gain %d -> measured %u\n", gains[idx], (unsigned)gap);
+        CHECK("S3-H16", abs((int)gap - gains[idx]) <= 25);
     }
     CHECK("S3-H16", slip_run(1500, true, -9000) != 0u);
     /* sensors 25 mm either side: they cross the line one after the other */
     g_slip_half = 25.0;
-    for (i = 0; i < 4; i++)
+    for (idx = 0; idx < 4; idx++)
     {
-        uint16_t const g = slip_run(gains[i], true, 0);
+        uint16_t const gap = slip_run(gains[idx], true, 0);
 
-        printf("turn slip, wide sensors: real gain %d -> measured %u\n", gains[i], (unsigned)g);
-        CHECK("S3-H16", abs((int)g - gains[i]) <= 25);
+        printf("turn slip, wide sensors: real gain %d -> measured %u\n", gains[idx], (unsigned)gap);
+        CHECK("S3-H16", abs((int)gap - gains[idx]) <= 25);
     }
     g_slip_half = 9.0;
     /* no line under the car: not measured */
@@ -835,115 +835,115 @@ static void test_slip(void)
    a lost end with a split; every character, both directions, 3 mm
    narrow, black bleeding +0.8 mm.  Never a wrong letter, also over
    random widths and over codes with more damage than it may repair. */
-static uint16_t split_at(uint32_t const * p_in, uint16_t n, uint16_t at, uint32_t speck, uint32_t * p_out)
+static uint16_t split_at(uint32_t const * p_in, uint16_t n_elems, uint16_t at_idx, uint32_t speck, uint32_t * p_out)
 {
-    uint16_t o = 0u;
-    uint16_t i;
+    uint16_t out_n = 0u;
+    uint16_t idx;
 
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < n_elems; idx++)
     {
-        if (i == at)
+        if (idx == at_idx)
         {
-            uint32_t const a = (p_in[i] - speck) / 2u;
+            uint32_t const val_a = (p_in[idx] - speck) / 2u;
 
-            p_out[o++] = a;
-            p_out[o++] = speck;
-            p_out[o++] = p_in[i] - speck - a;
+            p_out[out_n++] = val_a;
+            p_out[out_n++] = speck;
+            p_out[out_n++] = p_in[idx] - speck - val_a;
         }
         else
         {
-            p_out[o++] = p_in[i];
+            p_out[out_n++] = p_in[idx];
         }
     }
-    return o;
+    return out_n;
 }
 
-static uint16_t merge_at(uint32_t const * p_in, uint16_t n, uint16_t at, uint32_t * p_out)
+static uint16_t merge_at(uint32_t const * p_in, uint16_t n_elems, uint16_t at_idx, uint32_t * p_out)
 {
-    uint16_t o = 0u;
-    uint16_t i;
+    uint16_t out_n = 0u;
+    uint16_t idx;
 
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < n_elems; idx++)
     {
-        if ((i == at) && ((i + 2u) < n))
+        if ((idx == at_idx) && ((idx + 2u) < n_elems))
         {
-            p_out[o++] = p_in[i] + p_in[i + 1u] + p_in[i + 2u];
-            i = (uint16_t)(i + 2u);
+            p_out[out_n++] = p_in[idx] + p_in[idx + 1u] + p_in[idx + 2u];
+            idx = (uint16_t)(idx + 2u);
         }
         else
         {
-            p_out[o++] = p_in[i];
+            p_out[out_n++] = p_in[idx];
         }
     }
-    return o;
+    return out_n;
 }
 
 /* the merges the sensor makes: a thin space (or bar) between two of the
    other kind, at least one of them thin */
-static bool thin_triplet(uint32_t const * p_w, uint16_t at, uint32_t narrow)
+static bool thin_triplet(uint32_t const * p_w, uint16_t at_idx, uint32_t narrow)
 {
-    return (p_w[at + 1u] < (narrow * 3u / 2u)) &&
-           ((p_w[at] < (narrow * 3u / 2u)) || (p_w[at + 2u] < (narrow * 3u / 2u)));
+    return (p_w[at_idx + 1u] < (narrow * 3u / 2u)) &&
+           ((p_w[at_idx] < (narrow * 3u / 2u)) || (p_w[at_idx + 2u] < (narrow * 3u / 2u)));
 }
 
 static void test_best(void)
 {
-    size_t c;
+    size_t cnt;
     int    good = 0, total = 0, wrong = 0, kind;
 
     for (kind = 0; kind < 4; kind++)
     {
         int kgood = 0, ktotal = 0;
 
-        for (c = 0u; c < (sizeof(k_data_chars) - 1u); c++)
+        for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
-            uint16_t at;
+            uint16_t at_idx;
 
-            for (at = 1u; at < 28u; at++)
+            for (at_idx = 1u; at_idx < 28u; at_idx++)
             {
-                int d;
+                int diff;
 
-                for (d = 0; d < 2; d++)
+                for (diff = 0; diff < 2; diff++)
                 {
-                    uint32_t w[29], a[40], b[40];
-                    uint16_t n = make_code(k_data_chars[c], 3000u, 2.5, 0.08, w), e, m;
-                    char     ch;
+                    uint32_t widths[29], accel[40], buf[40];
+                    uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths), elem, mid;
+                    char     chr;
                     bool     b_rev;
 
-                    for (e = 0u; e < n; e++)
+                    for (elem = 0u; elem < n_elems; elem++)
                     {
-                        w[e] = ((e % 2u) == 0u) ? (w[e] + 800u) : (w[e] - 800u);
+                        widths[elem] = ((elem % 2u) == 0u) ? (widths[elem] + 800u) : (widths[elem] - 800u);
                     }
-                    if (d) { reverse(w, n); }
+                    if (diff) { reverse(widths, n_elems); }
                     if (kind == 0)
                     {
-                        if ((at % 2u) != 0u) { continue; }     /* a speck in a bar */
-                        m = split_at(w, n, at, 1000u, a);
+                        if ((at_idx % 2u) != 0u) { continue; }     /* a speck in a bar */
+                        mid = split_at(widths, n_elems, at_idx, 1000u, accel);
                     }
                     else if (kind == 1)
                     {
-                        if ((at > 26u) || !thin_triplet(w, at, 3000u)) { continue; }
-                        m = merge_at(w, n, at, a);
+                        if ((at_idx > 26u) || !thin_triplet(widths, at_idx, 3000u)) { continue; }
+                        mid = merge_at(widths, n_elems, at_idx, accel);
                     }
                     else if (kind == 2)
                     {
-                        uint16_t const sp = (uint16_t)((at + 12u) % 27u);
+                        uint16_t const setpoint = (uint16_t)((at_idx + 12u) % 27u);
 
-                        if ((at > 26u) || !thin_triplet(w, at, 3000u) || ((sp % 2u) != 0u) ||
-                            ((sp + 2u) >= at && sp <= (at + 2u))) { continue; }
-                        m = merge_at(w, n, at, b);
-                        m = split_at(b, m, (sp < at) ? sp : (uint16_t)(sp - 2u), 1000u, a);
+                        if ((at_idx > 26u) || !thin_triplet(widths, at_idx, 3000u) || ((setpoint % 2u) != 0u) ||
+                            ((setpoint + 2u) >= at_idx && setpoint <= (at_idx + 2u))) { continue; }
+                        mid = merge_at(widths, n_elems, at_idx, buf);
+                        mid = split_at(buf, mid, (setpoint < at_idx) ? setpoint : (uint16_t)(setpoint - 2u), 1000u, accel);
                     }
                     else
                     {
-                        if (((at % 2u) != 0u) || (at < 2u)) { continue; }   /* first bar lost, speck in a bar */
-                        m = split_at(&w[2], (uint16_t)(n - 2u), (uint16_t)(at - 2u), 1000u, a);
+                        if (((at_idx % 2u) != 0u) || (at_idx < 2u)) { continue; }   /* first bar lost, speck in a bar */
+                        mid = split_at(&widths[2], (uint16_t)(n_elems - 2u), (uint16_t)(at_idx - 2u), 1000u, accel);
                     }
                     ktotal++;
-                    if (code39_decode_one_best(a, m, &ch, &b_rev) == CODE39_OK)
+                    if (code39_decode_one_best(accel, mid, &chr, &b_rev) == CODE39_OK)
                     {
-                        if (ch == k_data_chars[c]) { kgood++; } else { wrong++;
-                            printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n", kind, k_data_chars[c], (unsigned)at, d, ch); }
+                        if (chr == g_data_chars[cnt]) { kgood++; } else { wrong++;
+                            printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n", kind, g_data_chars[cnt], (unsigned)at_idx, diff, chr); }
                     }
                 }
             }
@@ -959,41 +959,41 @@ static void test_best(void)
 
     /* random widths and heavier damage: never accepted as a wrong letter */
     {
-        int r, accepted = 0, bad = 0, tries = 0;
+        int ret, accepted = 0, bad = 0, tries = 0;
 
-        for (r = 0; r < 20000; r++)
+        for (ret = 0; ret < 20000; ret++)
         {
-            uint32_t w[60];
-            uint16_t n = (uint16_t)(25u + 2u * (rnd() % 5u)), e;
-            char     ch;
+            uint32_t widths[60];
+            uint16_t n_elems = (uint16_t)(25u + 2u * (rnd() % 5u)), elem;
+            char     chr;
             bool     b_rev;
 
-            for (e = 0u; e < n; e++) { w[e] = 1500u + (uint32_t)(rnd() % 9000u); }
+            for (elem = 0u; elem < n_elems; elem++) { widths[elem] = 1500u + (uint32_t)(rnd() % 9000u); }
             tries++;
-            if (code39_decode_one_best(w, n, &ch, &b_rev) == CODE39_OK) { accepted++; }
+            if (code39_decode_one_best(widths, n_elems, &chr, &b_rev) == CODE39_OK) { accepted++; }
         }
-        for (c = 0u; c < (sizeof(k_data_chars) - 1u); c++)
+        for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
-            for (r = 0; r < 40; r++)
+            for (ret = 0; ret < 40; ret++)
             {
-                uint32_t w[29], a[60], b[60];
-                uint16_t n = make_code(k_data_chars[c], 3000u, 2.5, 0.08, w), m, q, e;
-                char     ch;
+                uint32_t widths[29], accel[60], buf[60];
+                uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths), mid, proj, elem;
+                char     chr;
                 bool     b_rev;
 
                 /* three random merges or splits: more than it may repair */
-                m = n;
-                for (e = 0u; e < 29u; e++) { a[e] = w[e]; }
-                for (q = 0u; q < 3u; q++)
+                mid = n_elems;
+                for (elem = 0u; elem < 29u; elem++) { accel[elem] = widths[elem]; }
+                for (proj = 0u; proj < 3u; proj++)
                 {
-                    uint16_t const at = (uint16_t)(1u + (rnd() % (m - 4u)));
-                    uint16_t       x;
+                    uint16_t const at_idx = (uint16_t)(1u + (rnd() % (mid - 4u)));
+                    uint16_t       x_val;
 
-                    m = ((rnd() & 1u) != 0u) ? merge_at(a, m, at, b) : split_at(a, m, at, 900u, b);
-                    for (x = 0u; x < m; x++) { a[x] = b[x]; }
+                    mid = ((rnd() & 1u) != 0u) ? merge_at(accel, mid, at_idx, buf) : split_at(accel, mid, at_idx, 900u, buf);
+                    for (x_val = 0u; x_val < mid; x_val++) { accel[x_val] = buf[x_val]; }
                 }
                 tries++;
-                if ((code39_decode_one_best(a, m, &ch, &b_rev) == CODE39_OK) && (ch != k_data_chars[c])) { bad++; }
+                if ((code39_decode_one_best(accel, mid, &chr, &b_rev) == CODE39_OK) && (chr != g_data_chars[cnt])) { bad++; }
             }
         }
         printf("best match: random widths accepted %d / 20000, over-damaged codes wrong %d\n", accepted, bad);
@@ -1003,36 +1003,36 @@ static void test_best(void)
 
     /* the slide samples through the whole capture with a speck in a wide bar */
     {
-        int s2, d2, g2 = 0, t2 = 0, w2n = 0, p3 = 0;
+        int step2, diff2, gap2 = 0, elapsed2 = 0, w2n = 0, pos3 = 0;
 
         g_spot_um = 300u;               /* sharp enough that the speck reads as a gap */
 
-        for (s2 = 0; s2 < N_SLIDES; s2++)
+        for (step2 = 0; step2 < N_SLIDES; step2++)
         {
-            for (d2 = 0; d2 < 2; d2++)
+            for (diff2 = 0; diff2 < 2; diff2++)
             {
-                uint32_t w[29], a[31], wmin = 0xFFFFFFFFu;
-                uint16_t k, at = 0u;
+                uint32_t widths[29], accel[31], wmin = 0xFFFFFFFFu;
+                uint16_t kdx, at_idx = 0u;
                 bc_out_t out;
-                bc_result_t rr;
+                bc_result_t result2;
 
-                for (k = 0u; k < 29u; k++) { wmin = (k_slides[s2].p_w[k] < wmin) ? k_slides[s2].p_w[k] : wmin; }
-                for (k = 0u; k < 29u; k++) { w[k] = (k_slides[s2].p_w[k] * 3000u) / wmin; }
-                if (d2) { reverse(w, 29); }
-                for (k = 10u; k < 19u; k += 2u) { at = (w[k] > w[at]) ? k : at; }   /* widest bar of X */
-                (void)split_at(w, 29, at, 1200u, a);
+                for (kdx = 0u; kdx < 29u; kdx++) { wmin = (g_slides[step2].p_w[kdx] < wmin) ? g_slides[step2].p_w[kdx] : wmin; }
+                for (kdx = 0u; kdx < 29u; kdx++) { widths[kdx] = (g_slides[step2].p_w[kdx] * 3000u) / wmin; }
+                if (diff2) { reverse(widths, 29); }
+                for (kdx = 10u; kdx < 19u; kdx += 2u) { at_idx = (widths[kdx] > widths[at_idx]) ? kdx : at_idx; }   /* widest bar of X */
+                (void)split_at(widths, 29, at_idx, 1200u, accel);
                 memset(&out, 0, sizeof(out));
-                rr = run_pass(a, 31, 150u, 0, &out);
-                t2++;
-                if ((rr == BC_VALID) && (out.ch == k_slides[s2].ch)) { g2++; p3 += (g_last_pass == 4u) ? 1 : 0; }
-                else if (rr == BC_VALID) { w2n++; }
-                else { printf("  speck slide %d dir %d: result %d reason %d, %u elements\n", k_slides[s2].slide, d2,
-                              (int)rr, (int)out.reason, (unsigned)out.elements); }
+                result2 = run_pass(accel, 31, 150u, 0, &out);
+                elapsed2++;
+                if ((result2 == BC_VALID) && (out.chr == g_slides[step2].chr)) { gap2++; pos3 += (g_last_pass == 4u) ? 1 : 0; }
+                else if (result2 == BC_VALID) { w2n++; }
+                else { printf("  speck slide %d dir %d: result %d reason %d, %u elements\n", g_slides[step2].slide, diff2,
+                              (int)result2, (int)out.reason, (unsigned)out.elements); }
             }
         }
         g_spot_um = 1500u;
-        printf("capture with a speck in a wide bar: %d / %d decoded (%d by best match), %d wrong\n", g2, t2, p3, w2n);
-        CHECK("S3-H20", (w2n == 0) && ((g2 * 100) >= (t2 * 90)) && (p3 > 0));
+        printf("capture with a speck in a wide bar: %d / %d decoded (%d by best match), %d wrong\n", gap2, elapsed2, pos3, w2n);
+        CHECK("S3-H20", (w2n == 0) && ((gap2 * 100) >= (elapsed2 * 90)) && (pos3 > 0));
     }
 }
 
@@ -1046,48 +1046,48 @@ static void test_light_print(void)
 {
     uint32_t const spots[3]  = { 3000u, 4000u, 5000u };
     uint32_t const thin[3]   = { 300u, 230u, 170u };   /* 3 mm bars: rise under BC_DELTA */
-    int th;
+    int theta;
     uint32_t const speeds[3] = { 90u, 150u, 250u };
-    int sp, v, d, good = 0, total = 0, wrong = 0, by_adapt = 0, before = 0;
-    size_t c;
+    int setpoint, value, diff, good = 0, total = 0, wrong = 0, by_adapt = 0, before = 0;
+    size_t cnt;
 
     g_white = 7u;  g_black = 715u;  g_thin_um = 6000u;
-    for (th = 0; th < 3; th++)
-    for (sp = 0; sp < 3; sp++)
+    for (theta = 0; theta < 3; theta++)
+    for (setpoint = 0; setpoint < 3; setpoint++)
     {
-        g_spot_um = spots[sp];  g_thin_black = thin[th];
-        for (c = 0u; c < (sizeof(k_data_chars) - 1u); c++)
+        g_spot_um = spots[setpoint];  g_thin_black = thin[theta];
+        for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
-            for (v = 0; v < 3; v++)
+            for (value = 0; value < 3; value++)
             {
-                for (d = 0; d < 2; d++)
+                for (diff = 0; diff < 2; diff++)
                 {
-                    uint32_t w[29];
-                    uint16_t n = make_code(k_data_chars[c], 3000u, 3.0, 0.05, w);
+                    uint32_t widths[29];
+                    uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 3.0, 0.05, widths);
                     bc_out_t out;
-                    bc_result_t r;
+                    bc_result_t result;
 
-                    if (d) { reverse(w, n); }
+                    if (diff) { reverse(widths, n_elems); }
                     memset(&out, 0, sizeof(out));
-                    r = run_pass(w, n, speeds[v], 25, &out);
+                    result = run_pass(widths, n_elems, speeds[value], 25, &out);
                     total++;
-                    if ((r == BC_VALID) && (out.ch == k_data_chars[c]))
+                    if ((result == BC_VALID) && (out.chr == g_data_chars[cnt]))
                     {
                         good++;
                         by_adapt += (g_last_pass == 3u) ? 1 : 0;
                         before   += (g_last_pass < 3u) ? 1 : 0;
                     }
-                    else if (r == BC_VALID)
+                    else if (result == BC_VALID)
                     {
                         wrong++;
-                        printf("  WRONG light '%c' spot %u v %u d %d -> '%c' pass %u\n", k_data_chars[c],
-                               (unsigned)spots[sp], (unsigned)speeds[v], d, out.ch, (unsigned)g_last_pass);
+                        printf("  WRONG light '%c' spot %u v %u d %d -> '%c' pass %u\n", g_data_chars[cnt],
+                               (unsigned)spots[setpoint], (unsigned)speeds[value], diff, out.chr, (unsigned)g_last_pass);
                     }
                 }
             }
         }
         printf("light print, thin bars %u, %u mm spot: %d / %d so far (%d by the adaptive swing, %d by the first three readings)\n",
-               (unsigned)thin[th], (unsigned)(spots[sp] / 1000u), good, total, by_adapt, before);
+               (unsigned)thin[theta], (unsigned)(spots[setpoint] / 1000u), good, total, by_adapt, before);
     }
     g_spot_um = 1500u;  g_white = 80u;  g_black = 920u;  g_thin_black = 0u;  g_thin_um = 0u;
     printf("light print: %d / %d decoded (%d by the adaptive swing), %d wrong\n", good, total, by_adapt, wrong);
@@ -1097,33 +1097,33 @@ static void test_light_print(void)
 /* S3-H22: Change Requirement 1, the packed line snapshot */
 static void test_pack_s3(void)
 {
-    line_snap_t s;
-    line_snap_t r;
-    uint32_t    w[LINE_SNAP_WORDS];
+    line_snap_t snap;
+    line_snap_t ret;
+    uint32_t    widths[LINE_SNAP_WORDS];
 
     CHECK("S3-H22", line_snap_layout_bits() == LINE_SNAP_BITS && PK_WORDS(LINE_SNAP_BITS) == LINE_SNAP_WORDS &&
-                    sizeof(w) < sizeof(s));
-    memset(&s, 0, sizeof(s));
-    s.t_ms = 123456u; s.blocks = 4000000000u; s.missed_blocks = 3u; s.err = -1000; s.omega_mrad_s = 2000;
-    s.raw_l = 1000u; s.raw_r = 0u; s.raw_bc = 512u; s.barcode_ok = 7u; s.barcode_err = 65535u;
-    s.contrast_x10 = 31u; s.flags = 0x7Fu; s.bc_state = 3u; s.last_barcode = 'Z'; s.last_reject = 8u;
-    s.turn_gain_pm = 1180u; s.sens = 7u;
-    line_snap_pack(&s, w);
-    memset(&r, 0x5A, sizeof(r));                /* every field must be written */
-    line_snap_unpack(w, &r);
+                    sizeof(widths) < sizeof(snap));
+    memset(&snap, 0, sizeof(snap));
+    snap.t_ms = 123456u; snap.blocks = 4000000000u; snap.missed_blocks = 3u; snap.err = -1000; snap.omega_mrad_s = 2000;
+    snap.raw_l = 1000u; snap.raw_r = 0u; snap.raw_bc = 512u; snap.barcode_ok = 7u; snap.barcode_err = 65535u;
+    snap.contrast_x10 = 31u; snap.flags = 0x7Fu; snap.bc_state = 3u; snap.last_barcode = 'Z'; snap.last_reject = 8u;
+    snap.turn_gain_pm = 1180u; snap.sens = 7u;
+    line_snap_pack(&snap, widths);
+    memset(&ret, 0x5A, sizeof(ret));                /* every field must be written */
+    line_snap_unpack(widths, &ret);
     {
-        uint32_t w2[LINE_SNAP_WORDS];
+        uint32_t words_out[LINE_SNAP_WORDS];
 
-        line_snap_pack(&r, w2);
-        CHECK("S3-H22", memcmp(w, w2, sizeof(w)) == 0);
+        line_snap_pack(&ret, words_out);
+        CHECK("S3-H22", memcmp(widths, words_out, sizeof(widths)) == 0);
     }
-    memset(&r, 0, sizeof(r));                   /* same padding as s */
-    line_snap_unpack(w, &r);
-    CHECK("S3-H22", memcmp(&s, &r, sizeof(s)) == 0);
-    s.last_barcode = '\0'; s.contrast_x10 = 5000u; s.omega_mrad_s = -6000;
-    line_snap_pack(&s, w);
-    line_snap_unpack(w, &r);
-    CHECK("S3-H22", r.last_barcode == '\0' && r.contrast_x10 == 1023u && r.omega_mrad_s == -2048);
+    memset(&ret, 0, sizeof(ret));                   /* same padding as s */
+    line_snap_unpack(widths, &ret);
+    CHECK("S3-H22", memcmp(&snap, &ret, sizeof(snap)) == 0);
+    snap.last_barcode = '\0'; snap.contrast_x10 = 5000u; snap.omega_mrad_s = -6000;
+    line_snap_pack(&snap, widths);
+    line_snap_unpack(widths, &ret);
+    CHECK("S3-H22", ret.last_barcode == '\0' && ret.contrast_x10 == 1023u && ret.omega_mrad_s == -2048);
 }
 
 int main(void)

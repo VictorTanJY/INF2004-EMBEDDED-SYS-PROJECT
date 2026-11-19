@@ -9,18 +9,18 @@
 #include "app_pack.h"
 
 /* Code 39 data characters; a symbol index is the position here + 1. */
-static char const k_sym[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
+static char const g_symbols[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
-typedef char pk_check_sym[((sizeof(k_sym) - 1u) == PK_SYM_COUNT) ? 1 : -1];
+typedef char pk_check_sym_t[((sizeof(g_symbols) - 1u) == PK_SYM_COUNT) ? 1 : -1];
 
 /* ---- Byte streams, LSB first ---------------------------------------- */
 void pk_writer_init(pk_writer_t *p_w, uint8_t *p_buf, uint16_t cap)
 {
-	uint16_t i;
+	uint16_t idx;
 
-	for (i = 0u; i < cap; i++)
+	for (idx = 0u; idx < cap; idx++)
 	{
-		p_buf[i] = 0u;
+		p_buf[idx] = 0u;
 	}
 	p_w->p_buf      = p_buf;
 	p_w->cap        = cap;
@@ -31,16 +31,16 @@ void pk_writer_init(pk_writer_t *p_w, uint8_t *p_buf, uint16_t cap)
 /* Append the low width bits (1..32) of value. */
 void pk_put(pk_writer_t *p_w, uint32_t value, uint8_t width)
 {
-	uint8_t i;
+	uint8_t idx;
 
 	if ((width > 32u) || (((uint32_t)p_w->bits + width) > ((uint32_t)p_w->cap * 8u)))
 	{
 		p_w->b_overflow = true;
 		return;
 	}
-	for (i = 0u; i < width; i++)
+	for (idx = 0u; idx < width; idx++)
 	{
-		if (((value >> i) & 1u) != 0u)
+		if (((value >> idx) & 1u) != 0u)
 		{
 			p_w->p_buf[p_w->bits >> 3] |= (uint8_t)(1u << (p_w->bits & 7u));
 		}
@@ -66,18 +66,18 @@ void pk_reader_init(pk_reader_t *p_r, uint8_t const *p_buf, uint16_t len)
 uint32_t pk_take(pk_reader_t *p_r, uint8_t width)
 {
 	uint32_t value = 0u;
-	uint8_t  i;
+	uint8_t  idx;
 
 	if ((width > 32u) || (((uint32_t)p_r->bits + width) > ((uint32_t)p_r->len * 8u)))
 	{
 		p_r->b_short = true;
 		return 0u;
 	}
-	for (i = 0u; i < width; i++)
+	for (idx = 0u; idx < width; idx++)
 	{
 		if ((p_r->p_buf[p_r->bits >> 3] & (uint8_t)(1u << (p_r->bits & 7u))) != 0u)
 		{
-			value |= (1uL << i);
+			value |= (1uL << idx);
 		}
 		p_r->bits++;
 	}
@@ -85,15 +85,15 @@ uint32_t pk_take(pk_reader_t *p_r, uint8_t width)
 }
 
 /* ---- Code 39 data character in 6 bits (index 1..43, 0 = none) ------- */
-uint8_t pk_sym_index(char c)
+uint8_t pk_sym_index(char chr)
 {
-	uint8_t i;
+	uint8_t idx;
 
-	for (i = 0u; i < PK_SYM_COUNT; i++)
+	for (idx = 0u; idx < PK_SYM_COUNT; idx++)
 	{
-		if (k_sym[i] == c)
+		if (g_symbols[idx] == chr)
 		{
-			return (uint8_t)(i + 1u);
+			return (uint8_t)(idx + 1u);
 		}
 	}
 	return 0u;
@@ -101,32 +101,32 @@ uint8_t pk_sym_index(char c)
 
 char pk_sym_char(uint8_t index)
 {
-	return ((index >= 1u) && (index <= PK_SYM_COUNT)) ? k_sym[index - 1u] : '\0';
+	return ((index >= 1u) && (index <= PK_SYM_COUNT)) ? g_symbols[index - 1u] : '\0';
 }
 
 /* ---- Records: table-driven packing of a struct into words ------------ */
-uint32_t pk_layout_bits(pk_field_t const *p_f, uint16_t n)
+uint32_t pk_layout_bits(pk_field_t const *p_f, uint16_t n_fields)
 {
 	uint32_t bits = 0u;
-	uint16_t i;
+	uint16_t idx;
 
-	for (i = 0u; i < n; i++)
+	for (idx = 0u; idx < n_fields; idx++)
 	{
-		bits += p_f[i].width;
+		bits += p_f[idx].width;
 	}
 	return bits;
 }
 
-static void pk_word_put(uint32_t *p_w, uint32_t *p_pos, uint32_t v, uint8_t width)
+static void pk_word_put(uint32_t *p_w, uint32_t *p_pos, uint32_t value, uint8_t width)
 {
 	uint32_t const word = *p_pos >> 5;
 	uint32_t const bit  = *p_pos & 31u;
 
-	v &= pk_mask(width);
-	p_w[word] |= v << bit;
+	value &= pk_mask(width);
+	p_w[word] |= value << bit;
 	if ((bit + width) > 32u)
 	{
-		p_w[word + 1u] |= v >> (32u - bit);
+		p_w[word + 1u] |= value >> (32u - bit);
 	}
 	*p_pos += width;
 }
@@ -135,156 +135,156 @@ static uint32_t pk_word_take(uint32_t const *p_w, uint32_t *p_pos, uint8_t width
 {
 	uint32_t const word = *p_pos >> 5;
 	uint32_t const bit  = *p_pos & 31u;
-	uint32_t       v    = p_w[word] >> bit;
+	uint32_t       value    = p_w[word] >> bit;
 
 	if ((bit + width) > 32u)
 	{
-		v |= p_w[word + 1u] << (32u - bit);
+		value |= p_w[word + 1u] << (32u - bit);
 	}
 	*p_pos += width;
-	return v & pk_mask(width);
+	return value & pk_mask(width);
 }
 
 /* Read a member of size 1, 2 or 4 as unsigned / signed. */
 static uint32_t pk_member_u(void const *p_rec, pk_field_t const *p_f)
 {
-	uint8_t const *p = (uint8_t const *)p_rec + p_f->offset;
-	uint32_t v = 0u;
+	uint8_t const *p_byte = (uint8_t const *)p_rec + p_f->offset;
+	uint32_t value = 0u;
 
 	if (p_f->size == 1u)
 	{
-		uint8_t b;
+		uint8_t byte;
 
-		(void)memcpy(&b, p, 1u);
-		v = b;
+		(void)memcpy(&byte, p_byte, 1u);
+		value = byte;
 	}
 	else if (p_f->size == 2u)
 	{
-		uint16_t h;
+		uint16_t half;
 
-		(void)memcpy(&h, p, 2u);
-		v = h;
+		(void)memcpy(&half, p_byte, 2u);
+		value = half;
 	}
 	else
 	{
-		(void)memcpy(&v, p, 4u);
+		(void)memcpy(&value, p_byte, 4u);
 	}
-	return v;
+	return value;
 }
 
 static int32_t pk_member_s(void const *p_rec, pk_field_t const *p_f)
 {
-	uint32_t const u = pk_member_u(p_rec, p_f);
+	uint32_t const raw = pk_member_u(p_rec, p_f);
 
 	if (p_f->size == 1u)
 	{
-		return (int32_t)(int8_t)(uint8_t)u;
+		return (int32_t)(int8_t)(uint8_t)raw;
 	}
 	if (p_f->size == 2u)
 	{
-		return (int32_t)(int16_t)(uint16_t)u;
+		return (int32_t)(int16_t)(uint16_t)raw;
 	}
-	return (int32_t)u;
+	return (int32_t)raw;
 }
 
-static void pk_member_set(void *p_rec, pk_field_t const *p_f, uint32_t v)
+static void pk_member_set(void *p_rec, pk_field_t const *p_f, uint32_t value)
 {
-	uint8_t *p = (uint8_t *)p_rec + p_f->offset;
+	uint8_t *p_byte = (uint8_t *)p_rec + p_f->offset;
 
 	if (p_f->size == 1u)
 	{
-		uint8_t const b = (uint8_t)v;
+		uint8_t const byte = (uint8_t)value;
 
-		(void)memcpy(p, &b, 1u);
+		(void)memcpy(p_byte, &byte, 1u);
 	}
 	else if (p_f->size == 2u)
 	{
-		uint16_t const h = (uint16_t)v;
+		uint16_t const half = (uint16_t)value;
 
-		(void)memcpy(p, &h, 2u);
+		(void)memcpy(p_byte, &half, 2u);
 	}
 	else
 	{
-		(void)memcpy(p, &v, 4u);
+		(void)memcpy(p_byte, &value, 4u);
 	}
 }
 
 /* Pack every field of p_rec into p_words (nwords, cleared first). */
-void pk_pack_rec(pk_field_t const *p_f, uint16_t n, void const *p_rec,
+void pk_pack_rec(pk_field_t const *p_f, uint16_t n_fields, void const *p_rec,
 			       uint32_t *p_words, uint16_t nwords)
 {
 	uint32_t pos = 0u;
-	uint16_t i;
+	uint16_t idx;
 
-	for (i = 0u; i < nwords; i++)
+	for (idx = 0u; idx < nwords; idx++)
 	{
-		p_words[i] = 0u;
+		p_words[idx] = 0u;
 	}
-	for (i = 0u; i < n; i++)
+	for (idx = 0u; idx < n_fields; idx++)
 	{
-		uint8_t const  w = p_f[i].width;
-		uint32_t const u = pk_member_u(p_rec, &p_f[i]);
-		uint32_t       v;
+		uint8_t const  width = p_f[idx].width;
+		uint32_t const raw = pk_member_u(p_rec, &p_f[idx]);
+		uint32_t       value;
 
-		switch (p_f[i].kind)
+		switch (p_f[idx].kind)
 		{
 			case PK_S:
-				v = pk_off_s(pk_member_s(p_rec, &p_f[i]), w);
+				value = pk_off_s(pk_member_s(p_rec, &p_f[idx]), width);
 				break;
 			case PK_W:
-				v = u;
+				value = raw;
 				break;
 			case PK_UN:
 			{
-				uint32_t const none = (p_f[i].size >= 4u) ? 0xFFFFFFFFuL
-						    : ((1uL << (8u * p_f[i].size)) - 1uL);
+				uint32_t const none = (p_f[idx].size >= 4u) ? 0xFFFFFFFFuL
+						    : ((1uL << (8u * p_f[idx].size)) - 1uL);
 
-				v = (u == none) ? pk_mask(w) : pk_sat_u(u, w);
-				if ((u != none) && (v == pk_mask(w)))
+				value = (raw == none) ? pk_mask(width) : pk_sat_u(raw, width);
+				if ((raw != none) && (value == pk_mask(width)))
 				{
-					v = pk_mask(w) - 1u;
+					value = pk_mask(width) - 1u;
 				}
 				break;
 			}
 			case PK_SYM:
-				v = pk_sym_index((char)(uint8_t)u);
+				value = pk_sym_index((char)(uint8_t)raw);
 				break;
 			default:	/* PK_U */
-				v = pk_sat_u(u, w);
+				value = pk_sat_u(raw, width);
 				break;
 		}
-		pk_word_put(p_words, &pos, v, w);
+		pk_word_put(p_words, &pos, value, width);
 	}
 }
 
 /* Unpack p_words into the fields of p_rec (other bytes are left as they are). */
-void pk_unpack_rec(pk_field_t const *p_f, uint16_t n, uint32_t const *p_words,
+void pk_unpack_rec(pk_field_t const *p_f, uint16_t n_fields, uint32_t const *p_words,
 				 void *p_rec)
 {
 	uint32_t pos = 0u;
-	uint16_t i;
+	uint16_t idx;
 
-	for (i = 0u; i < n; i++)
+	for (idx = 0u; idx < n_fields; idx++)
 	{
-		uint8_t const  w = p_f[i].width;
-		uint32_t const v = pk_word_take(p_words, &pos, w);
-		uint32_t       u;
+		uint8_t const  width = p_f[idx].width;
+		uint32_t const value = pk_word_take(p_words, &pos, width);
+		uint32_t       raw;
 
-		switch (p_f[i].kind)
+		switch (p_f[idx].kind)
 		{
 			case PK_S:
-				u = (uint32_t)pk_unoff_s(v, w);
+				raw = (uint32_t)pk_unoff_s(value, width);
 				break;
 			case PK_UN:
-				u = (v == pk_mask(w)) ? 0xFFFFFFFFuL : v;
+				raw = (value == pk_mask(width)) ? 0xFFFFFFFFuL : value;
 				break;
 			case PK_SYM:
-				u = (uint8_t)pk_sym_char((uint8_t)v);
+				raw = (uint8_t)pk_sym_char((uint8_t)value);
 				break;
 			default:	/* PK_U, PK_W */
-				u = v;
+				raw = value;
 				break;
 		}
-		pk_member_set(p_rec, &p_f[i], u);
+		pk_member_set(p_rec, &p_f[idx], raw);
 	}
 }

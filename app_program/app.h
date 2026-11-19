@@ -147,15 +147,15 @@ Inline UW app_time_us(void)
 Inline UD app_time_us64(void)
 {
 	UW hi0;
-	UW lo;
+	UW low;
 	UW hi1;
 
 	do {
 		hi0 = in_w(TIMER_TIMERAWH);
-		lo  = in_w(TIMER_TIMERAWL);
+		low  = in_w(TIMER_TIMERAWL);
 		hi1 = in_w(TIMER_TIMERAWH);
 	} while (hi0 != hi1);
-	return ((UD)hi0 << 32) | lo;
+	return ((UD)hi0 << 32) | low;
 }
 
 /* Milliseconds from the 1 us timer (32 bits, wraps after 49.7 days):
@@ -177,7 +177,7 @@ Inline void app_reset_release(UW mask)
 
 /* Create and start a task.  prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or
    0 for "any core".  Defined in app_main.c. */
-IMPORT ID app_start_task(FP entry, PRI pri, UW prc, const char *name);
+IMPORT ID app_start_task(FP entry, PRI pri, UW prc, const char *p_name);
 
 /* ---------------------------------------------------------------------
  *  Every subsystem provides these.  usermain() calls ALL the _init()

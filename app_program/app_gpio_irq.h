@@ -39,7 +39,7 @@
 typedef void (*app_gpio_cb_t)(uint32_t pin, uint32_t events, uint32_t t_us);
 
 IMPORT ER   app_gpio_irq_init(void);
-IMPORT ER   app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t cb);
+IMPORT ER   app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t p_callback);
 IMPORT void app_gpio_irq_detach(uint32_t pin);
 
 /* Number of bank-0 interrupts taken since boot (diagnostics). */

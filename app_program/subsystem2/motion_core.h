@@ -115,7 +115,7 @@ typedef struct
     uint8_t  fail_count;
 
     /* events of the current cycle */
-    motion_event_t ev[MOTION_EV_QUEUE_LEN];
+    motion_event_t events[MOTION_EV_QUEUE_LEN];
     uint8_t        ev_count;
 } motion_core_t;
 

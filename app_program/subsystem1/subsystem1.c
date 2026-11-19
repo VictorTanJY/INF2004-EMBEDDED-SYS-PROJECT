@@ -19,21 +19,21 @@ static UW g_telem_drops;
 EXPORT ER subsystem1_init(void)
 {
     T_CMBF  cmbf = {0};
-    ID      id;
+    ID      obj_id;
 
     cmbf.mbfatr = TA_TFIFO;
     cmbf.bufsz  = S1_MBF_TELEM_BYTES;
     cmbf.maxmsz = sizeof(comms_rec_t);
-    id = tk_cre_mbf(&cmbf);
-    if (id < E_OK)
+    obj_id = tk_cre_mbf(&cmbf);
+    if (obj_id < E_OK)
     {
-        return id;
+        return obj_id;
     }
     /* The WiFi task may already be polling (it starts before usermain).
        comms_service.c keeps only zero-initialised static state and does
        nothing until it sees a valid ID here, so publishing the ID is the
        only hand-over needed: one aligned word store. */
-    g_mbf_telem = id;
+    g_mbf_telem = obj_id;
     return E_OK;
 }
 

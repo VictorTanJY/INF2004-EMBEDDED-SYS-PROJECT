@@ -34,7 +34,7 @@ IMPORT ID g_mbf_mission;        /* mbf_mission in the design documents */
 
 /* Post an event without waiting.  E_OK, or E_TMOUT when full (dropped and
    counted; MissionTask treats a drop as a fault, Week 6 8.3). */
-IMPORT ER       mission_post(uint8_t type, uint8_t src, uint16_t a, int32_t data);
+IMPORT ER       mission_post(uint8_t type, uint8_t src, uint16_t arg, int32_t data);
 IMPORT uint32_t mission_post_drops(void);
 
 /* ---------------------------------------------------------------------

@@ -8,12 +8,12 @@
 
 typedef struct
 {
-    char        c;
+    char        chr;
     char const *p_bits;         /* 9 elements, bar first: 1 = wide */
 } code39_entry_t;
 
 /* Code 39 character set (ISO/IEC 16388), element order b s b s b s b s b. */
-static code39_entry_t const k_table[] =
+static code39_entry_t const g_code39_table[] =
 {
     { '0', "000110100" }, { '1', "100100001" }, { '2', "001100001" }, { '3', "101100000" },
     { '4', "000110001" }, { '5', "100110000" }, { '6', "001110000" }, { '7', "000100101" },
@@ -29,29 +29,29 @@ static code39_entry_t const k_table[] =
     { '$', "010101000" }, { '/', "010100010" }, { '+', "010001010" }, { '%', "000101010" }
 };
 
-#define TABLE_LEN   (sizeof(k_table) / sizeof(k_table[0]))
+#define TABLE_LEN   (sizeof(g_code39_table) / sizeof(g_code39_table[0]))
 
 static uint16_t bits_of(char const * p_bits)
 {
-    uint16_t p = 0u;
-    uint8_t  i;
+    uint16_t pattern = 0u;
+    uint8_t  idx;
 
-    for (i = 0u; i < 9u; i++)
+    for (idx = 0u; idx < 9u; idx++)
     {
-        p = (uint16_t)((p << 1) | ((p_bits[i] == '1') ? 1u : 0u));
+        pattern = (uint16_t)((pattern << 1) | ((p_bits[idx] == '1') ? 1u : 0u));
     }
-    return p;
+    return pattern;
 }
 
-uint16_t code39_pattern(char c)
+uint16_t code39_pattern(char chr)
 {
-    size_t i;
+    size_t idx;
 
-    for (i = 0u; i < TABLE_LEN; i++)
+    for (idx = 0u; idx < TABLE_LEN; idx++)
     {
-        if (k_table[i].c == c)
+        if (g_code39_table[idx].chr == chr)
         {
-            return bits_of(k_table[i].p_bits);
+            return bits_of(g_code39_table[idx].p_bits);
         }
     }
     return 0u;
@@ -59,44 +59,44 @@ uint16_t code39_pattern(char c)
 
 char code39_char(uint16_t pattern)
 {
-    size_t i;
+    size_t idx;
 
-    for (i = 0u; i < TABLE_LEN; i++)
+    for (idx = 0u; idx < TABLE_LEN; idx++)
     {
-        if (bits_of(k_table[i].p_bits) == pattern)
+        if (bits_of(g_code39_table[idx].p_bits) == pattern)
         {
-            return k_table[i].c;
+            return g_code39_table[idx].chr;
         }
     }
     return '\0';
 }
 
 /* Width of element k, read forwards or backwards. */
-static uint32_t width_at(uint32_t const * p_w, uint16_t n, uint16_t k, bool b_rev)
+static uint32_t width_at(uint32_t const * p_w, uint16_t n_elems, uint16_t pos, bool b_rev)
 {
-    return b_rev ? p_w[n - 1u - k] : p_w[k];
+    return b_rev ? p_w[n_elems - 1u - pos] : p_w[pos];
 }
 
 /* The k-th widest (k = 0, 1, ...) of the elements of one kind: bars at
    even indexes 0..8, spaces at odd ones 1..7. */
-static uint32_t kth_widest(uint32_t const * p_w, uint8_t first, uint8_t k, uint8_t * p_idx)
+static uint32_t kth_widest(uint32_t const * p_w, uint8_t first, uint8_t rank, uint8_t * p_idx)
 {
     uint32_t used = 0u;
     uint32_t best = 0u;
-    uint8_t  r;
-    uint8_t  i;
+    uint8_t  rank_idx;
+    uint8_t  idx;
 
     *p_idx = first;
-    for (r = 0u; r <= k; r++)
+    for (rank_idx = 0u; rank_idx <= rank; rank_idx++)
     {
         bool b_any = false;
 
-        for (i = first; i < 9u; i += 2u)
+        for (idx = first; idx < 9u; idx += 2u)
         {
-            if (((used & (1u << i)) == 0u) && (!b_any || (p_w[i] > best)))
+            if (((used & (1u << idx)) == 0u) && (!b_any || (p_w[idx] > best)))
             {
-                best   = p_w[i];
-                *p_idx = i;
+                best   = p_w[idx];
+                *p_idx = idx;
                 b_any  = true;
             }
         }
@@ -110,10 +110,10 @@ static uint32_t kth_widest(uint32_t const * p_w, uint8_t first, uint8_t k, uint8
    standing out from the rest of its kind by ratio_min.  Under the sensor's
    spot black reads wider and white narrower, so ranking all 9 together
    could take a fat narrow bar for the wide space. */
-static code39_result_t classify(uint32_t const * p_w, uint16_t n, uint16_t first, bool b_rev,
+static code39_result_t classify(uint32_t const * p_w, uint16_t n_elems, uint16_t first, bool b_rev,
                                 uint16_t ratio_min_x10, uint16_t * p_pattern)
 {
-    uint32_t w[9];
+    uint32_t widths[9];
     uint32_t wide = 0u;
     uint16_t pattern = 0u;
     uint8_t  ib1;
@@ -121,24 +121,24 @@ static code39_result_t classify(uint32_t const * p_w, uint16_t n, uint16_t first
     uint8_t  ib3;
     uint8_t  is1;
     uint8_t  is2;
-    uint32_t b2;
-    uint32_t b3;
-    uint32_t s1;
-    uint32_t s2;
-    uint8_t  i;
+    uint32_t bar_w2;
+    uint32_t bar_w3;
+    uint32_t space_w1;
+    uint32_t space_w2;
+    uint8_t  idx;
 
-    for (i = 0u; i < 9u; i++)
+    for (idx = 0u; idx < 9u; idx++)
     {
-        w[i] = width_at(p_w, n, (uint16_t)(first + i), b_rev);
+        widths[idx] = width_at(p_w, n_elems, (uint16_t)(first + idx), b_rev);
     }
-    (void)kth_widest(w, 0u, 0u, &ib1);
-    b2 = kth_widest(w, 0u, 1u, &ib2);
-    b3 = kth_widest(w, 0u, 2u, &ib3);           /* widest narrow bar   */
-    s1 = kth_widest(w, 1u, 0u, &is1);
-    s2 = kth_widest(w, 1u, 1u, &is2);           /* widest narrow space */
-    if ((b3 != 0u) && (s2 != 0u) &&
-        (((uint64_t)b2 * 10u) >= ((uint64_t)b3 * ratio_min_x10)) &&
-        (((uint64_t)s1 * 10u) >= ((uint64_t)s2 * ratio_min_x10)))
+    (void)kth_widest(widths, 0u, 0u, &ib1);
+    bar_w2 = kth_widest(widths, 0u, 1u, &ib2);
+    bar_w3 = kth_widest(widths, 0u, 2u, &ib3);           /* widest narrow bar   */
+    space_w1 = kth_widest(widths, 1u, 0u, &is1);
+    space_w2 = kth_widest(widths, 1u, 1u, &is2);           /* widest narrow space */
+    if ((bar_w3 != 0u) && (space_w2 != 0u) &&
+        (((uint64_t)bar_w2 * 10u) >= ((uint64_t)bar_w3 * ratio_min_x10)) &&
+        (((uint64_t)space_w1 * 10u) >= ((uint64_t)space_w2 * ratio_min_x10)))
     {
         wide = (1u << ib1) | (1u << ib2) | (1u << is1);
     }
@@ -151,63 +151,63 @@ static code39_result_t classify(uint32_t const * p_w, uint16_t n, uint16_t first
         uint8_t        is3;
         uint8_t        is4;
         uint8_t        ib5;
-        uint32_t const s3 = kth_widest(w, 1u, 2u, &is3);
-        uint32_t const s4 = kth_widest(w, 1u, 3u, &is4);
-        uint32_t const b1 = kth_widest(w, 0u, 0u, &ib1);
-        uint32_t const b5 = kth_widest(w, 0u, 4u, &ib5);
+        uint32_t const space_w3 = kth_widest(widths, 1u, 2u, &is3);
+        uint32_t const space_w4 = kth_widest(widths, 1u, 3u, &is4);
+        uint32_t const bar_w1 = kth_widest(widths, 0u, 0u, &ib1);
+        uint32_t const bar_w5 = kth_widest(widths, 0u, 4u, &ib5);
 
-        if ((s4 == 0u) || (((uint64_t)s3 * 10u) < ((uint64_t)s4 * ratio_min_x10)) ||
-            (((uint64_t)b1 * 10u) >= ((uint64_t)b5 * ratio_min_x10)))
+        if ((space_w4 == 0u) || (((uint64_t)space_w3 * 10u) < ((uint64_t)space_w4 * ratio_min_x10)) ||
+            (((uint64_t)bar_w1 * 10u) >= ((uint64_t)bar_w5 * ratio_min_x10)))
         {
             return CODE39_ERR_RATIO;
         }
-        (void)s2;
+        (void)space_w2;
         wide = (1u << is1) | (1u << is2) | (1u << is3);
     }
-    for (i = 0u; i < 9u; i++)
+    for (idx = 0u; idx < 9u; idx++)
     {
-        pattern = (uint16_t)((pattern << 1) | (((wide & (1u << i)) != 0u) ? 1u : 0u));
+        pattern = (uint16_t)((pattern << 1) | (((wide & (1u << idx)) != 0u) ? 1u : 0u));
     }
     *p_pattern = pattern;
     return CODE39_OK;
 }
 
-static code39_result_t decode_dir(uint32_t const * p_w, uint16_t n, uint16_t ratio_min_x10,
+static code39_result_t decode_dir(uint32_t const * p_w, uint16_t n_elems, uint16_t ratio_min_x10,
                                   bool b_rev, char * p_text)
 {
-    uint16_t const chars = (uint16_t)((n + 1u) / 10u);
-    uint16_t       c;
+    uint16_t const chars = (uint16_t)((n_elems + 1u) / 10u);
+    uint16_t       char_idx;
     uint16_t       out = 0u;
 
-    for (c = 0u; c < chars; c++)
+    for (char_idx = 0u; char_idx < chars; char_idx++)
     {
         uint16_t        pattern = 0u;
-        code39_result_t r = classify(p_w, n, (uint16_t)(c * 10u), b_rev, ratio_min_x10, &pattern);
-        char            ch;
+        code39_result_t result = classify(p_w, n_elems, (uint16_t)(char_idx * 10u), b_rev, ratio_min_x10, &pattern);
+        char            chr;
 
-        if (r != CODE39_OK)
+        if (result != CODE39_OK)
         {
-            return r;
+            return result;
         }
-        ch = code39_char(pattern);
-        if (ch == '\0')
+        chr = code39_char(pattern);
+        if (chr == '\0')
         {
             return CODE39_ERR_PATTERN;
         }
-        if ((c == 0u) || (c == (chars - 1u)))
+        if ((char_idx == 0u) || (char_idx == (chars - 1u)))
         {
-            if (ch != '*')
+            if (chr != '*')
             {
                 return CODE39_ERR_START_STOP;
             }
         }
         else
         {
-            if (ch == '*')
+            if (chr == '*')
             {
                 return CODE39_ERR_PATTERN;  /* '*' only frames the code */
             }
-            p_text[out] = ch;
+            p_text[out] = chr;
             out++;
         }
     }
@@ -215,36 +215,36 @@ static code39_result_t decode_dir(uint32_t const * p_w, uint16_t n, uint16_t rat
     return CODE39_OK;
 }
 
-code39_result_t code39_decode(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
-                              char * p_text, bool * p_b_reversed)
+code39_result_t code39_decode(uint32_t const * p_widths, uint16_t n_elems, uint16_t ratio_min_x10,
+                              char * p_text, bool * pb_reversed)
 {
     code39_result_t fwd;
     code39_result_t rev;
 
     p_text[0]     = '\0';
-    *p_b_reversed = false;
-    if (n < 9u)
+    *pb_reversed = false;
+    if (n_elems < 9u)
     {
         return CODE39_NOT_BARCODE;
     }
-    if (((n + 1u) / 10u) > CODE39_MAX_CHARS)
+    if (((n_elems + 1u) / 10u) > CODE39_MAX_CHARS)
     {
         return CODE39_ERR_TOO_MANY;
     }
-    if ((((n + 1u) % 10u) != 0u) || (n < 29u))
+    if ((((n_elems + 1u) % 10u) != 0u) || (n_elems < 29u))
     {
         return CODE39_ERR_COUNT;            /* also "**" with no data */
     }
 
-    fwd = decode_dir(p_widths, n, ratio_min_x10, false, p_text);
+    fwd = decode_dir(p_widths, n_elems, ratio_min_x10, false, p_text);
     if (fwd == CODE39_OK)
     {
         return CODE39_OK;
     }
-    rev = decode_dir(p_widths, n, ratio_min_x10, true, p_text);
+    rev = decode_dir(p_widths, n_elems, ratio_min_x10, true, p_text);
     if (rev == CODE39_OK)
     {
-        *p_b_reversed = true;
+        *pb_reversed = true;
         return CODE39_OK;
     }
     p_text[0] = '\0';
@@ -252,16 +252,16 @@ code39_result_t code39_decode(uint32_t const * p_widths, uint16_t n, uint16_t ra
     return (fwd == CODE39_ERR_START_STOP) ? rev : fwd;
 }
 
-code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
-                                  char * p_char, bool * p_b_reversed)
+code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n_elems, uint16_t ratio_min_x10,
+                                  char * p_char, bool * pb_reversed)
 {
     char            text[CODE39_MAX_CHARS];
-    code39_result_t r = code39_decode(p_widths, n, ratio_min_x10, text, p_b_reversed);
+    code39_result_t result = code39_decode(p_widths, n_elems, ratio_min_x10, text, pb_reversed);
 
     *p_char = '\0';
-    if (r != CODE39_OK)
+    if (result != CODE39_OK)
     {
-        return r;
+        return result;
     }
     if ((text[0] == '\0') || (text[1] != '\0'))
     {
@@ -278,69 +278,69 @@ code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n, uint16_
    zone, so 2 elements are gone.  Each of the four ways of putting them
    back is tried (front / back, either reading direction); the read is
    kept only if every way that decodes gives the same character. */
-code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, uint16_t ratio_min_x10,
-                                         char * p_char, bool * p_b_reversed)
+code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n_elems, uint16_t ratio_min_x10,
+                                         char * p_char, bool * pb_reversed)
 {
-    static uint32_t w[CODE39_MAX_CHARS * 10u];
-    code39_result_t r = code39_decode_one(p_widths, n, ratio_min_x10, p_char, p_b_reversed);
+    static uint32_t widths[CODE39_MAX_CHARS * 10u];
+    code39_result_t result = code39_decode_one(p_widths, n_elems, ratio_min_x10, p_char, pb_reversed);
     uint32_t        narrow = 0xFFFFFFFFu;
     uint32_t        widest = 0u;
     char            got = '\0';
     bool            b_got_rev = false;
-    uint16_t        i;
-    uint8_t         k;
+    uint16_t        idx;
+    uint8_t         kdx;
 
-    if ((r == CODE39_OK) || (r == CODE39_NOT_BARCODE) || ((n + 2u) > (CODE39_MAX_CHARS * 10u)) ||
-        (((n + 3u) % 10u) != 0u))
+    if ((result == CODE39_OK) || (result == CODE39_NOT_BARCODE) || ((n_elems + 2u) > (CODE39_MAX_CHARS * 10u)) ||
+        (((n_elems + 3u) % 10u) != 0u))
     {
-        return r;
+        return result;
     }
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < n_elems; idx++)
     {
-        narrow = (p_widths[i] < narrow) ? p_widths[i] : narrow;
-        widest = (p_widths[i] > widest) ? p_widths[i] : widest;
+        narrow = (p_widths[idx] < narrow) ? p_widths[idx] : narrow;
+        widest = (p_widths[idx] > widest) ? p_widths[idx] : widest;
     }
-    for (k = 0u; k < 4u; k++)
+    for (kdx = 0u; kdx < 4u; kdx++)
     {
-        bool const     b_front = (k < 2u);
-        uint32_t const e0 = (k == 0u) ? narrow : ((k == 3u) ? widest : narrow);   /* first added */
-        uint32_t const e1 = (k == 0u) ? widest : narrow;                          /* second added */
-        char           ch;
+        bool const     b_front = (kdx < 2u);
+        uint32_t const add_first = (kdx == 0u) ? narrow : ((kdx == 3u) ? widest : narrow);   /* first added */
+        uint32_t const add_second = (kdx == 0u) ? widest : narrow;                          /* second added */
+        char           chr;
         bool           b_rev;
-        uint16_t       o = 0u;
+        uint16_t       out_n = 0u;
 
         if (b_front)
         {
-            w[o++] = e0;
-            w[o++] = e1;
+            widths[out_n++] = add_first;
+            widths[out_n++] = add_second;
         }
-        for (i = 0u; i < n; i++)
+        for (idx = 0u; idx < n_elems; idx++)
         {
-            w[o++] = p_widths[i];
+            widths[out_n++] = p_widths[idx];
         }
         if (!b_front)
         {
-            w[o++] = (k == 2u) ? narrow : widest;       /* k 2: space n, bar n; k 3: space W, bar n */
-            w[o++] = narrow;
+            widths[out_n++] = (kdx == 2u) ? narrow : widest;       /* k 2: space n, bar n; k 3: space W, bar n */
+            widths[out_n++] = narrow;
         }
-        if (code39_decode_one(w, o, ratio_min_x10, &ch, &b_rev) == CODE39_OK)
+        if (code39_decode_one(widths, out_n, ratio_min_x10, &chr, &b_rev) == CODE39_OK)
         {
-            if ((got != '\0') && (ch != got))
+            if ((got != '\0') && (chr != got))
             {
                 *p_char = '\0';
                 return CODE39_ERR_PATTERN;              /* repairs disagree */
             }
-            got       = ch;
+            got       = chr;
             b_got_rev = b_rev;
         }
     }
     if (got == '\0')
     {
         *p_char = '\0';
-        return r;
+        return result;
     }
     *p_char       = got;
-    *p_b_reversed = b_got_rev;
+    *pb_reversed = b_got_rev;
     return CODE39_OK;
 }
 
@@ -374,58 +374,58 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n, 
 #define BEST_INF        0x3FFFFFFFu
 #define BEST_BOUND_MAX  (((BEST_ELEM_MAX * BEST_T) * BEST_MARGIN_X10) / 10u)
 
-static uint32_t median_of(uint32_t * p_v, uint16_t n)
+static uint32_t median_of(uint32_t * p_v, uint16_t n_elems)
 {
-    uint16_t i;
-    uint16_t j;
+    uint16_t idx;
+    uint16_t jdx;
 
-    for (i = 1u; i < n; i++)            /* insertion sort, n <= 33 */
+    for (idx = 1u; idx < n_elems; idx++)            /* insertion sort, n <= 33 */
     {
-        uint32_t const v = p_v[i];
+        uint32_t const value = p_v[idx];
 
-        for (j = i; (j > 0u) && (p_v[j - 1u] > v); j--)
+        for (jdx = idx; (jdx > 0u) && (p_v[jdx - 1u] > value); jdx--)
         {
-            p_v[j] = p_v[j - 1u];
+            p_v[jdx] = p_v[jdx - 1u];
         }
-        p_v[j] = v;
+        p_v[jdx] = value;
     }
-    return (n == 0u) ? 0u : p_v[n / 2u];
+    return (n_elems == 0u) ? 0u : p_v[n_elems / 2u];
 }
 
 /* This read's widths of narrow and wide bars and spaces: the median
    narrow and wide of each kind, split half-way between the median of
    all elements (most are narrow) and the median of the widest third. */
-static void best_levels(uint32_t const * p_w, uint16_t n, uint32_t * p_lv)
+static void best_levels(uint32_t const * p_w, uint16_t n_elems, uint32_t * p_lv)
 {
-    static uint32_t s[BEST_N_MAX];   /* n <= BEST_N_MAX here */
+    static uint32_t sorted[BEST_N_MAX];   /* n <= BEST_N_MAX here */
     uint32_t        nar;
     uint32_t        wid;
     uint32_t        thr;
-    uint16_t        m;
-    uint16_t        i;
+    uint16_t        mid;
+    uint16_t        idx;
     uint8_t         kind;
     uint8_t         wide;
 
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < n_elems; idx++)
     {
-        s[i] = p_w[i];
+        sorted[idx] = p_w[idx];
     }
-    nar = median_of(s, n);
-    wid = s[n - 1u - ((n / 3u) / 2u)];   /* median of the widest third (sorted) */
+    nar = median_of(sorted, n_elems);
+    wid = sorted[n_elems - 1u - ((n_elems / 3u) / 2u)];   /* median of the widest third (sorted) */
     thr = (nar + wid) / 2u;
     for (kind = 0u; kind < 2u; kind++)
     {
         for (wide = 0u; wide < 2u; wide++)
         {
-            m = 0u;
-            for (i = kind; i < n; i += 2u)
+            mid = 0u;
+            for (idx = kind; idx < n_elems; idx += 2u)
             {
-                if ((p_w[i] >= thr) == (wide != 0u))
+                if ((p_w[idx] >= thr) == (wide != 0u))
                 {
-                    s[m++] = p_w[i];
+                    sorted[mid++] = p_w[idx];
                 }
             }
-            p_lv[(kind * 2u) + wide] = (m > 0u) ? median_of(s, m) : ((wide != 0u) ? wid : nar);
+            p_lv[(kind * 2u) + wide] = (mid > 0u) ? median_of(sorted, mid) : ((wide != 0u) ? wid : nar);
         }
     }
 }
@@ -435,29 +435,29 @@ static void best_levels(uint32_t const * p_w, uint16_t n, uint32_t * p_lv)
    runs about 50 000 times per read. */
 static uint32_t sq_err(uint32_t meas, uint32_t expect, uint32_t inv)
 {
-    uint32_t const d = (meas > expect) ? (meas - expect) : (expect - meas);
-    uint32_t       e;
+    uint32_t const diff = (meas > expect) ? (meas - expect) : (expect - meas);
+    uint32_t       scaled;
 
-    if (d > 0x3FFFFu)
+    if (diff > 0x3FFFFu)
     {
         return 1000000u;
     }
-    e = (d * inv) >> 16;
-    return (e > 1000u) ? 1000000u : (e * e);
+    scaled = (diff * inv) >> 16;
+    return (scaled > 1000u) ? 1000000u : (scaled * scaled);
 }
 
-static bool in_band(uint16_t i, uint16_t j)
+static bool in_band(uint16_t idx, uint16_t jdx)
 {
-    uint16_t const d = (i > j) ? (uint16_t)(i - j) : (uint16_t)(j - i);
+    uint16_t const diff = (idx > jdx) ? (uint16_t)(idx - jdx) : (uint16_t)(jdx - idx);
 
-    return (d <= BEST_BAND);
+    return (diff <= BEST_BAND);
 }
 
-static bool is_speck(uint32_t w, uint16_t i, uint32_t const * p_lv)
+static bool is_speck(uint32_t width, uint16_t idx, uint32_t const * p_lv)
 {
-    uint32_t const narrow = p_lv[((i % 2u) != 0u) ? 2u : 0u];
+    uint32_t const narrow = p_lv[((idx % 2u) != 0u) ? 2u : 0u];
 
-    return ((uint64_t)w * 100u) < ((uint64_t)narrow * BEST_SPECK_PCT);
+    return ((uint64_t)width * 100u) < ((uint64_t)narrow * BEST_SPECK_PCT);
 }
 
 /* Cost of lining p_w up with the printed widths p_e (BEST_T of them);
@@ -465,203 +465,203 @@ static bool is_speck(uint32_t w, uint16_t i, uint32_t const * p_lv)
    14 Nov: gives up (BEST_INF) once every open path costs bound or more:
    such a fit can change neither the best nor the runner-up (a car read
    took over 50 ms and tripped the line task's heartbeat). */
-static uint32_t best_fit(uint32_t const * p_w, uint16_t n, uint32_t const * p_e, bool const * p_wide,
+static uint32_t best_fit(uint32_t const * p_w, uint16_t n_elems, uint32_t const * p_e, bool const * p_wide,
                          bool const * p_speck, uint32_t inv, uint32_t bound)
 {
-    static uint32_t dp[BEST_N_MAX + 1u][BEST_T + 1u];
-    static uint8_t  ed[BEST_N_MAX + 1u][BEST_T + 1u];
+    static uint32_t cost_tbl[BEST_N_MAX + 1u][BEST_T + 1u];
+    static uint8_t  edit_tbl[BEST_N_MAX + 1u][BEST_T + 1u];
     static uint32_t rmin[BEST_N_MAX + 1u];     /* smallest cost in each row */
     uint32_t        best;
-    uint16_t        i;
-    uint16_t        j;
+    uint16_t        idx;
+    uint16_t        jdx;
 
     /* Every defect moves the two indexes apart by 2, so only a band of
        cells can be reached; only those are used. */
-    for (i = 0u; i <= n; i++)
+    for (idx = 0u; idx <= n_elems; idx++)
     {
-        for (j = (i > BEST_BAND) ? (uint16_t)(i - BEST_BAND) : 0u; (j <= BEST_T) && (j <= (i + BEST_BAND)); j++)
+        for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u; (jdx <= BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
         {
-            dp[i][j] = BEST_INF;
-            ed[i][j] = 0u;
+            cost_tbl[idx][jdx] = BEST_INF;
+            edit_tbl[idx][jdx] = 0u;
         }
-        rmin[i] = BEST_INF;
+        rmin[idx] = BEST_INF;
     }
-    dp[0][0] = 0u;
+    cost_tbl[0][0] = 0u;
     rmin[0]  = 0u;
-    dp[0][2] = BEST_EDIT;               /* first bar and space lost */
-    ed[0][2] = 1u;
-    for (i = 0u; i < n; i++)
+    cost_tbl[0][2] = BEST_EDIT;               /* first bar and space lost */
+    edit_tbl[0][2] = 1u;
+    for (idx = 0u; idx < n_elems; idx++)
     {
         /* Every path to the end passes a filled cell of row i, i + 1 or
            i + 2 (a step moves on 1 or 3 measured elements, and rows
            before i are done); costs only grow along a path. */
-        uint32_t c_open = rmin[i];
+        uint32_t c_open = rmin[idx];
 
-        c_open = (((i + 1u) <= n) && (rmin[i + 1u] < c_open)) ? rmin[i + 1u] : c_open;
-        c_open = (((i + 2u) <= n) && (rmin[i + 2u] < c_open)) ? rmin[i + 2u] : c_open;
+        c_open = (((idx + 1u) <= n_elems) && (rmin[idx + 1u] < c_open)) ? rmin[idx + 1u] : c_open;
+        c_open = (((idx + 2u) <= n_elems) && (rmin[idx + 2u] < c_open)) ? rmin[idx + 2u] : c_open;
         if (c_open >= bound)
         {
             return BEST_INF;
         }
-        for (j = (i > BEST_BAND) ? (uint16_t)(i - BEST_BAND) : 0u; (j < BEST_T) && (j <= (i + BEST_BAND)); j++)
+        for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u; (jdx < BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
         {
-            uint32_t const c0 = dp[i][j];
-            uint8_t const  e0 = ed[i][j];
+            uint32_t const cost_here = cost_tbl[idx][jdx];
+            uint8_t const  edits = edit_tbl[idx][jdx];
 
-            if (c0 >= BEST_INF)
+            if (cost_here >= BEST_INF)
             {
                 continue;
             }
-            if (!p_speck[i])
+            if (!p_speck[idx])
             {   /* 1 : 1 */
-                uint32_t const c = c0 + sq_err(p_w[i], p_e[j], inv);
+                uint32_t const cost = cost_here + sq_err(p_w[idx], p_e[jdx], inv);
 
-                if (c < dp[i + 1u][j + 1u])
+                if (cost < cost_tbl[idx + 1u][jdx + 1u])
                 {
-                    dp[i + 1u][j + 1u] = c;
-                    rmin[i + 1u] = (c < rmin[i + 1u]) ? c : rmin[i + 1u];
-                    ed[i + 1u][j + 1u] = e0;
+                    cost_tbl[idx + 1u][jdx + 1u] = cost;
+                    rmin[idx + 1u] = (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
+                    edit_tbl[idx + 1u][jdx + 1u] = edits;
                 }
             }
-            if ((e0 < BEST_MAX_EDITS) && ((i + 3u) <= n) && in_band((uint16_t)(i + 3u), (uint16_t)(j + 1u)) &&
-                p_speck[i + 1u])
+            if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= n_elems) && in_band((uint16_t)(idx + 3u), (uint16_t)(jdx + 1u)) &&
+                p_speck[idx + 1u])
             {   /* 3 measured : 1 printed */
-                uint32_t const c = c0 + BEST_EDIT +
-                                   sq_err(p_w[i] + p_w[i + 1u] + p_w[i + 2u], p_e[j], inv);
+                uint32_t const cost = cost_here + BEST_EDIT +
+                                   sq_err(p_w[idx] + p_w[idx + 1u] + p_w[idx + 2u], p_e[jdx], inv);
 
-                if (c < dp[i + 3u][j + 1u])
+                if (cost < cost_tbl[idx + 3u][jdx + 1u])
                 {
-                    dp[i + 3u][j + 1u] = c;
-                    rmin[i + 3u] = (c < rmin[i + 3u]) ? c : rmin[i + 3u];
-                    ed[i + 3u][j + 1u] = (uint8_t)(e0 + 1u);
+                    cost_tbl[idx + 3u][jdx + 1u] = cost;
+                    rmin[idx + 3u] = (cost < rmin[idx + 3u]) ? cost : rmin[idx + 3u];
+                    edit_tbl[idx + 3u][jdx + 1u] = (uint8_t)(edits + 1u);
                 }
             }
-            if ((e0 < BEST_MAX_EDITS) && ((j + 3u) <= BEST_T) && in_band((uint16_t)(i + 1u), (uint16_t)(j + 3u)) &&
-                !p_wide[j + 1u])
+            if ((edits < BEST_MAX_EDITS) && ((jdx + 3u) <= BEST_T) && in_band((uint16_t)(idx + 1u), (uint16_t)(jdx + 3u)) &&
+                !p_wide[jdx + 1u])
             {   /* 1 measured : 3 printed */
-                uint32_t const c = c0 + BEST_EDIT +
-                                   sq_err(p_w[i], p_e[j] + p_e[j + 1u] + p_e[j + 2u], inv);
+                uint32_t const cost = cost_here + BEST_EDIT +
+                                   sq_err(p_w[idx], p_e[jdx] + p_e[jdx + 1u] + p_e[jdx + 2u], inv);
 
-                if (c < dp[i + 1u][j + 3u])
+                if (cost < cost_tbl[idx + 1u][jdx + 3u])
                 {
-                    dp[i + 1u][j + 3u] = c;
-                    rmin[i + 1u] = (c < rmin[i + 1u]) ? c : rmin[i + 1u];
-                    ed[i + 1u][j + 3u] = (uint8_t)(e0 + 1u);
+                    cost_tbl[idx + 1u][jdx + 3u] = cost;
+                    rmin[idx + 1u] = (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
+                    edit_tbl[idx + 1u][jdx + 3u] = (uint8_t)(edits + 1u);
                 }
             }
         }
     }
-    best = in_band(n, BEST_T) ? dp[n][BEST_T] : BEST_INF;
-    if (in_band(n, (uint16_t)(BEST_T - 2u)) && (ed[n][BEST_T - 2u] < BEST_MAX_EDITS) &&
-        (dp[n][BEST_T - 2u] < BEST_INF) &&
-        ((dp[n][BEST_T - 2u] + BEST_EDIT) < best))
+    best = in_band(n_elems, BEST_T) ? cost_tbl[n_elems][BEST_T] : BEST_INF;
+    if (in_band(n_elems, (uint16_t)(BEST_T - 2u)) && (edit_tbl[n_elems][BEST_T - 2u] < BEST_MAX_EDITS) &&
+        (cost_tbl[n_elems][BEST_T - 2u] < BEST_INF) &&
+        ((cost_tbl[n_elems][BEST_T - 2u] + BEST_EDIT) < best))
     {
-        best = dp[n][BEST_T - 2u] + BEST_EDIT;      /* last space and bar lost */
+        best = cost_tbl[n_elems][BEST_T - 2u] + BEST_EDIT;      /* last space and bar lost */
     }
     return best;
 }
 
-code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n,
-                                       char * p_char, bool * p_b_reversed)
+code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_elems,
+                                       char * p_char, bool * pb_reversed)
 {
-    uint32_t       lv[4];               /* bar n, bar W, space n, space W */
-    uint32_t       e[BEST_T];
-    bool           wd[BEST_T];
-    bool           sp[BEST_N_MAX];      /* measured element is a speck */
+    uint32_t       levels[4];               /* bar n, bar W, space n, space W */
+    uint32_t       expect[BEST_T];
+    bool           b_wide[BEST_T];
+    bool           b_speck[BEST_N_MAX];      /* measured element is a speck */
     uint16_t const star = code39_pattern('*');
     uint32_t       nar;
     uint32_t       inv;
-    uint32_t       c1 = BEST_INF;       /* best cost and its character */
-    uint32_t       c2 = BEST_INF;       /* best cost of any other character */
+    uint32_t       best_cost = BEST_INF;       /* best cost and its character */
+    uint32_t       next_cost = BEST_INF;       /* best cost of any other character */
     char           ch1 = '\0';
     bool           b_rev1 = false;
-    size_t         t;
-    uint8_t        d;
+    size_t         entry;
+    uint8_t        dir;
 
     *p_char       = '\0';
-    *p_b_reversed = false;
-    if (n < 9u)
+    *pb_reversed = false;
+    if (n_elems < 9u)
     {
         return CODE39_NOT_BARCODE;
     }
-    if ((n < BEST_N_MIN) || (n > BEST_N_MAX) || ((n % 2u) == 0u))
+    if ((n_elems < BEST_N_MIN) || (n_elems > BEST_N_MAX) || ((n_elems % 2u) == 0u))
     {
         return CODE39_ERR_COUNT;        /* a read starts and ends with a bar */
     }
-    best_levels(p_widths, n, lv);
-    nar = (lv[0] + lv[2]) / 2u;
-    if ((nar == 0u) || (lv[1] <= lv[0]) || (lv[3] <= lv[2]))
+    best_levels(p_widths, n_elems, levels);
+    nar = (levels[0] + levels[2]) / 2u;
+    if ((nar == 0u) || (levels[1] <= levels[0]) || (levels[3] <= levels[2]))
     {
         return CODE39_ERR_RATIO;
     }
     inv = (100u << 16) / nar;
-    for (t = 0u; t < n; t++)
+    for (entry = 0u; entry < n_elems; entry++)
     {
-        sp[t] = is_speck(p_widths[t], (uint16_t)t, lv);
+        b_speck[entry] = is_speck(p_widths[entry], (uint16_t)entry, levels);
     }
-    for (t = 0u; t < TABLE_LEN; t++)
+    for (entry = 0u; entry < TABLE_LEN; entry++)
     {
-        uint16_t const pat = bits_of(k_table[t].p_bits);
-        uint8_t        k;
+        uint16_t const pat = bits_of(g_code39_table[entry].p_bits);
+        uint8_t        kdx;
 
-        if (k_table[t].c == '*')
+        if (g_code39_table[entry].chr == '*')
         {
             continue;
         }
         /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
-        for (k = 0u; k < BEST_T; k++)
+        for (kdx = 0u; kdx < BEST_T; kdx++)
         {
-            uint8_t const  c   = (uint8_t)(k / 10u);
-            uint8_t const  pos = (uint8_t)(k % 10u);
-            uint16_t const p   = (c == 1u) ? pat : star;
-            bool const     b_w = (pos < 9u) && (((p >> (8u - pos)) & 1u) != 0u);
+            uint8_t const  char_idx   = (uint8_t)(kdx / 10u);
+            uint8_t const  pos = (uint8_t)(kdx % 10u);
+            uint16_t const pattern   = (char_idx == 1u) ? pat : star;
+            bool const     b_w = (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
 
-            e[k]  = lv[(((k % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
-            wd[k] = b_w;
+            expect[kdx]  = levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
+            b_wide[kdx] = b_w;
         }
-        for (d = 0u; d < 2u; d++)
+        for (dir = 0u; dir < 2u; dir++)
         {
             uint32_t cost;
 
-            if (d == 1u)
+            if (dir == 1u)
             {
-                for (k = 0u; k < (BEST_T / 2u); k++)
+                for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
                 {
-                    uint32_t const x  = e[k];
-                    bool const     bx = wd[k];
+                    uint32_t const exp_width  = expect[kdx];
+                    bool const     b_expect_wide = b_wide[kdx];
 
-                    e[k]  = e[BEST_T - 1u - k];
-                    wd[k] = wd[BEST_T - 1u - k];
-                    e[BEST_T - 1u - k]  = x;
-                    wd[BEST_T - 1u - k] = bx;
+                    expect[kdx]  = expect[BEST_T - 1u - kdx];
+                    b_wide[kdx] = b_wide[BEST_T - 1u - kdx];
+                    expect[BEST_T - 1u - kdx]  = exp_width;
+                    b_wide[BEST_T - 1u - kdx] = b_expect_wide;
                 }
             }
             /* A fit costing c2 or more changes neither result, and the
                runner-up only matters below the margin times the largest
                best that is accepted. */
-            cost = best_fit(p_widths, n, e, wd, sp, inv, (c2 < BEST_BOUND_MAX) ? c2 : BEST_BOUND_MAX);
-            if (cost < c1)
+            cost = best_fit(p_widths, n_elems, expect, b_wide, b_speck, inv, (next_cost < BEST_BOUND_MAX) ? next_cost : BEST_BOUND_MAX);
+            if (cost < best_cost)
             {
-                if (k_table[t].c != ch1)
+                if (g_code39_table[entry].chr != ch1)
                 {
-                    c2 = c1;
+                    next_cost = best_cost;
                 }
-                c1     = cost;
-                ch1    = k_table[t].c;
-                b_rev1 = (d == 1u);
+                best_cost     = cost;
+                ch1    = g_code39_table[entry].chr;
+                b_rev1 = (dir == 1u);
             }
-            else if ((cost < c2) && (k_table[t].c != ch1))
+            else if ((cost < next_cost) && (g_code39_table[entry].chr != ch1))
             {
-                c2 = cost;
+                next_cost = cost;
             }
         }
     }
-    if ((ch1 == '\0') || (c1 > ((uint32_t)BEST_ELEM_MAX * BEST_T)) ||
-        (((uint64_t)c2 * 10u) < ((uint64_t)c1 * BEST_MARGIN_X10)))
+    if ((ch1 == '\0') || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T)) ||
+        (((uint64_t)next_cost * 10u) < ((uint64_t)best_cost * BEST_MARGIN_X10)))
     {
         return CODE39_ERR_PATTERN;
     }
     *p_char       = ch1;
-    *p_b_reversed = b_rev1;
+    *pb_reversed = b_rev1;
     return CODE39_OK;
 }

@@ -81,17 +81,17 @@ EXPORT ER motion_send(motion_cmd_t const * p_cmd)
     return tk_snd_mbf(g_mbf_motion, &word, sizeof(word), TMO_POL);
 }
 
-EXPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1)
+EXPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0, int16_t arg1)
 {
-    motion_cmd_t c;
+    motion_cmd_t msg;
 
-    c.src      = src;
-    c.seq      = seq;
-    c.cmd      = cmd;
-    c.reserved = 0u;
-    c.p0       = p0;
-    c.p1       = p1;
-    return motion_send(&c);
+    msg.src      = src;
+    msg.seq      = seq;
+    msg.cmd      = cmd;
+    msg.reserved = 0u;
+    msg.arg0       = arg0;
+    msg.arg1       = arg1;
+    return motion_send(&msg);
 }
 
 /* The snapshot is stored packed (MOTION_ODOM_WORDS words).  Writer and
@@ -99,29 +99,29 @@ EXPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t
    the lock, so no task ever does a read-modify-write on the shared words. */
 EXPORT void motion_get_odom(motion_odom_t * p_out)
 {
-    uint32_t w[MOTION_ODOM_WORDS];
+    uint32_t words[MOTION_ODOM_WORDS];
     UINT     sts = app_lock(&g_odom_lock);
-    uint32_t i;
+    uint32_t idx;
 
-    for (i = 0u; i < MOTION_ODOM_WORDS; i++)
+    for (idx = 0u; idx < MOTION_ODOM_WORDS; idx++)
     {
-        w[i] = g_odom[i];
+        words[idx] = g_odom[idx];
     }
     app_unlock(&g_odom_lock, sts);
-    motion_odom_unpack(w, p_out);
+    motion_odom_unpack(words, p_out);
 }
 
 EXPORT void motion_put_odom(motion_odom_t const * p_in)
 {
-    uint32_t w[MOTION_ODOM_WORDS];
+    uint32_t words[MOTION_ODOM_WORDS];
     UINT     sts;
-    uint32_t i;
+    uint32_t idx;
 
-    motion_odom_pack(p_in, w);
+    motion_odom_pack(p_in, words);
     sts = app_lock(&g_odom_lock);
-    for (i = 0u; i < MOTION_ODOM_WORDS; i++)
+    for (idx = 0u; idx < MOTION_ODOM_WORDS; idx++)
     {
-        g_odom[i] = w[i];
+        g_odom[idx] = words[idx];
     }
     app_unlock(&g_odom_lock, sts);
 }
@@ -157,7 +157,7 @@ EXPORT bool motion_estop_latched(void)
  * SafetyTask's latched-fault word is zero, so a fault raised meanwhile
  * cannot be undone by a reconnect already in progress.
  */
-EXPORT bool motion_estop_clear_and_reconnect(void)
+EXPORT bool motion_estop_clear_reconnect(void)
 {
     bool b_ok = false;
     UINT intsts;

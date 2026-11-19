@@ -27,79 +27,79 @@ static int g_fail;
         printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); } } while (0)
 
 /* Build a command frame the way the laptop does (picocar_codec.py). */
-static uint16_t cmd_frame(uint8_t * p_buf, uint8_t id, uint8_t cmd, int index, int32_t value,
+static uint16_t cmd_frame(uint8_t * p_buf, uint8_t ident, uint8_t cmd, int index, int32_t value,
                           char const * p_map)
 {
-    pk_writer_t w;
-    int         k;
+    pk_writer_t writer;
+    int         kdx;
 
-    pk_writer_init(&w, p_buf, 8u);
-    pk_put(&w, COMMS_FT_CMD, 5u);
-    pk_put(&w, COMMS_FRAME_VERSION, 3u);
-    pk_put(&w, id, 8u);
-    pk_put(&w, cmd, 3u);
+    pk_writer_init(&writer, p_buf, 8u);
+    pk_put(&writer, COMMS_FT_CMD, 5u);
+    pk_put(&writer, COMMS_FRAME_VERSION, 3u);
+    pk_put(&writer, ident, 8u);
+    pk_put(&writer, cmd, 3u);
     if (cmd == COMMS_CMD_SET)
     {
-        pk_put(&w, (uint32_t)index, 4u);
-        pk_put(&w, (uint32_t)(value + 32768) & 0xFFFFu, 16u);
+        pk_put(&writer, (uint32_t)index, 4u);
+        pk_put(&writer, (uint32_t)(value + 32768) & 0xFFFFu, 16u);
     }
     if (cmd == COMMS_CMD_MAP)
     {
-        for (k = 0; k < 4; k++)
+        for (kdx = 0; kdx < 4; kdx++)
         {
-            pk_put(&w, comms_symbol_index(p_map[k]), 6u);
+            pk_put(&writer, comms_symbol_index(p_map[kdx]), 6u);
         }
     }
-    return pk_writer_len(&w);
+    return pk_writer_len(&writer);
 }
 
-static comms_err_t parse(uint8_t id, uint8_t cmd, int index, int32_t value, char const * p_map,
+static comms_err_t parse(uint8_t ident, uint8_t cmd, int index, int32_t value, char const * p_map,
                          comms_cmd_t * p_cmd)
 {
     uint8_t  buf[8];
-    uint16_t n = cmd_frame(buf, id, cmd, index, value, p_map);
+    uint16_t count = cmd_frame(buf, ident, cmd, index, value, p_map);
 
-    return comms_parse_cmd(buf, n, p_cmd);
+    return comms_parse_cmd(buf, count, p_cmd);
 }
 
 static int param_index(char const * p_name)
 {
-    static char const * const names[] = { "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm",
+    static char const * const p_names[] = { "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm",
                                           "bench_move", "bench_turn", "bench_speed" };
-    int i;
+    int idx;
 
-    for (i = 0; i < 9; i++)
+    for (idx = 0; idx < 9; idx++)
     {
-        if (strcmp(names[i], p_name) == 0)
+        if (strcmp(p_names[idx], p_name) == 0)
         {
-            return i;
+            return idx;
         }
     }
     return 15;
 }
 
 /* Skip n bits (any number). */
-static void skip(pk_reader_t * p_r, unsigned n)
+static void skip(pk_reader_t * p_r, unsigned count)
 {
-    while (n > 0u)
+    while (count > 0u)
     {
-        unsigned const k = (n > 32u) ? 32u : n;
+        unsigned const kdx = (count > 32u) ? 32u : count;
 
-        (void)pk_take(p_r, (uint8_t)k);
-        n -= k;
+        (void)pk_take(p_r, (uint8_t)kdx);
+        count -= kdx;
     }
 }
 
-static int hex_eq(uint8_t const * p_buf, uint16_t n, char const * p_hex)
+static int hex_eq(uint8_t const * p_buf, uint16_t count, char const * p_hex)
 {
     char     text[2 * COMMS_FRAME_MAX + 1];
-    uint16_t i;
+    uint16_t idx;
 
-    for (i = 0u; i < n; i++)
+    for (idx = 0u; idx < count; idx++)
     {
-        snprintf(&text[2u * i], 3u, "%02x", p_buf[i]);
+        snprintf(&text[2u * idx], 3u, "%02x", p_buf[idx]);
     }
-    text[2u * n] = '\0';
+    text[2u * count] = '\0';
     if (strcmp(text, p_hex) != 0)
     {
         printf("  got %s\n  expected %s\n", text, p_hex);
@@ -112,45 +112,45 @@ static int hex_eq(uint8_t const * p_buf, uint16_t n, char const * p_hex)
 static void test_writer(void)
 {
     uint8_t     buf[8];
-    pk_writer_t w;
-    pk_reader_t r;
+    pk_writer_t writer;
+    pk_reader_t reader;
 
     /* LSB first: 3 bits 0b101, 7 bits 0x7F, 1 bit 0, 5 bits 0b10011 */
-    pk_writer_init(&w, buf, sizeof(buf));
-    pk_put(&w, 5u, 3u);
-    pk_put(&w, 0x7Fu, 7u);
-    pk_put(&w, 0u, 1u);
-    pk_put(&w, 0x13u, 5u);
-    CHECK("S1-H01", pk_writer_len(&w) == 2u && hex_eq(buf, 2u, "fd9b"));
-    pk_reader_init(&r, buf, 2u);
-    CHECK("S1-H01", pk_take(&r, 3u) == 5u && pk_take(&r, 7u) == 0x7Fu && pk_take(&r, 1u) == 0u &&
-                    pk_take(&r, 5u) == 0x13u && !r.b_short);
-    CHECK("S1-H01", pk_take(&r, 1u) == 0u && r.b_short);
+    pk_writer_init(&writer, buf, sizeof(buf));
+    pk_put(&writer, 5u, 3u);
+    pk_put(&writer, 0x7Fu, 7u);
+    pk_put(&writer, 0u, 1u);
+    pk_put(&writer, 0x13u, 5u);
+    CHECK("S1-H01", pk_writer_len(&writer) == 2u && hex_eq(buf, 2u, "fd9b"));
+    pk_reader_init(&reader, buf, 2u);
+    CHECK("S1-H01", pk_take(&reader, 3u) == 5u && pk_take(&reader, 7u) == 0x7Fu && pk_take(&reader, 1u) == 0u &&
+                    pk_take(&reader, 5u) == 0x13u && !reader.b_short);
+    CHECK("S1-H01", pk_take(&reader, 1u) == 0u && reader.b_short);
 
     /* Never writes past cap, for every cap; overflow returns 0. */
     {
-        comms_telem_t t;
+        comms_telem_t telem;
         uint16_t      full;
         uint16_t      cap;
         uint8_t       big[64];
 
-        memset(&t, 0, sizeof(t));
-        t.obst_d_mm = COMMS_D_NONE;
-        full = comms_build_telemetry(&t, big, sizeof(big));
+        memset(&telem, 0, sizeof(telem));
+        telem.obst_d_mm = COMMS_D_NONE;
+        full = comms_build_telemetry(&telem, big, sizeof(big));
         for (cap = 0u; cap <= (uint16_t)(full + 2u); cap++)
         {
             uint8_t  area[80];
             uint16_t len;
-            uint16_t i;
-            int      ok = 1;
+            uint16_t idx;
+            int      b_ok = 1;
 
             memset(area, 0x5A, sizeof(area));
-            len = comms_build_telemetry(&t, area, cap);
-            for (i = cap; i < sizeof(area); i++)
+            len = comms_build_telemetry(&telem, area, cap);
+            for (idx = cap; idx < sizeof(area); idx++)
             {
-                if (area[i] != 0x5Au) { ok = 0; }
+                if (area[idx] != 0x5Au) { b_ok = 0; }
             }
-            CHECK("S1-H02", ok);
+            CHECK("S1-H02", b_ok);
             CHECK("S1-H02", (cap >= full) ? (len == full) : (len == 0u));
         }
     }
@@ -159,62 +159,62 @@ static void test_writer(void)
 static void test_telemetry(void)
 {
     uint8_t       buf[COMMS_FRAME_MAX];
-    comms_telem_t t;
+    comms_telem_t telem;
     uint16_t      len;
-    pk_reader_t   r;
+    pk_reader_t   reader;
 
     /* S1-H03: golden frame (decoded by test_codec.py) */
-    memset(&t, 0, sizeof(t));
-    t.seq = 12u;  t.t_ms = 3400u;  t.state = 3u;
-    t.v_l_mm_s = 250;  t.v_r_mm_s = -10;
-    t.enc_l = 1000;  t.enc_r = 990;  t.dist_mm = 555;
-    t.line_err = -120;  t.b_line_lost = false;  t.barcode = 'A';
-    t.pitch_cdeg = -1234;  t.roll_cdeg = 875;  t.hump_max_mm = 25u;
-    t.obst_d_mm = 384u;  t.b_obst_valid = false;
-    len = comms_build_telemetry(&t, buf, sizeof(buf));
+    memset(&telem, 0, sizeof(telem));
+    telem.seq = 12u;  telem.t_ms = 3400u;  telem.state = 3u;
+    telem.v_l_mm_s = 250;  telem.v_r_mm_s = -10;
+    telem.enc_l = 1000;  telem.enc_r = 990;  telem.dist_mm = 555;
+    telem.line_err = -120;  telem.b_line_lost = false;  telem.barcode = 'A';
+    telem.pitch_cdeg = -1234;  telem.roll_cdeg = 875;  telem.hump_max_mm = 25u;
+    telem.obst_d_mm = 384u;  telem.b_obst_valid = false;
+    len = comms_build_telemetry(&telem, buf, sizeof(buf));
     CHECK("S1-H03", len == 27u);
     CHECK("S1-H03", hex_eq(buf, len, GOLD_TELEMETRY));
-    pk_reader_init(&r, buf, len);
-    CHECK("S1-H03", pk_take(&r, 5u) == COMMS_FT_TELEMETRY && pk_take(&r, 3u) == COMMS_FRAME_VERSION);
-    CHECK("S1-H03", pk_take(&r, 8u) == 12u && pk_take(&r, 24u) == 340u && pk_take(&r, 4u) == 3u);
-    CHECK("S1-H03", pk_unoff_s(pk_take(&r, 10u), 10u) == 250 && pk_unoff_s(pk_take(&r, 10u), 10u) == -10);
-    CHECK("S1-H03", pk_take(&r, 16u) == 1000u && pk_take(&r, 16u) == 990u && pk_take(&r, 16u) == 555u);
-    CHECK("S1-H03", pk_unoff_s(pk_take(&r, 11u), 11u) == -120 && pk_take(&r, 1u) == 0u && pk_take(&r, 10u) == 0u);
-    CHECK("S1-H03", comms_symbol_char((uint8_t)pk_take(&r, 6u)) == 'A' && pk_take(&r, 6u) == 0u);
-    CHECK("S1-H03", pk_unoff_s(pk_take(&r, 11u), 11u) == -123 && pk_unoff_s(pk_take(&r, 12u), 12u) == 88);
-    CHECK("S1-H03", pk_take(&r, 8u) == 25u && pk_take(&r, 9u) == 38u && pk_take(&r, 10u) == 1023u);
-    CHECK("S1-H03", pk_take(&r, 7u) == 127u && pk_take(&r, 7u) == 127u && !r.b_short && r.bits == 210u);
+    pk_reader_init(&reader, buf, len);
+    CHECK("S1-H03", pk_take(&reader, 5u) == COMMS_FT_TELEMETRY && pk_take(&reader, 3u) == COMMS_FRAME_VERSION);
+    CHECK("S1-H03", pk_take(&reader, 8u) == 12u && pk_take(&reader, 24u) == 340u && pk_take(&reader, 4u) == 3u);
+    CHECK("S1-H03", pk_unoff_s(pk_take(&reader, 10u), 10u) == 250 && pk_unoff_s(pk_take(&reader, 10u), 10u) == -10);
+    CHECK("S1-H03", pk_take(&reader, 16u) == 1000u && pk_take(&reader, 16u) == 990u && pk_take(&reader, 16u) == 555u);
+    CHECK("S1-H03", pk_unoff_s(pk_take(&reader, 11u), 11u) == -120 && pk_take(&reader, 1u) == 0u && pk_take(&reader, 10u) == 0u);
+    CHECK("S1-H03", comms_symbol_char((uint8_t)pk_take(&reader, 6u)) == 'A' && pk_take(&reader, 6u) == 0u);
+    CHECK("S1-H03", pk_unoff_s(pk_take(&reader, 11u), 11u) == -123 && pk_unoff_s(pk_take(&reader, 12u), 12u) == 88);
+    CHECK("S1-H03", pk_take(&reader, 8u) == 25u && pk_take(&reader, 9u) == 38u && pk_take(&reader, 10u) == 1023u);
+    CHECK("S1-H03", pk_take(&reader, 7u) == 127u && pk_take(&reader, 7u) == 127u && !reader.b_short && reader.bits == 210u);
 
     /* S1-H04: none codes, rounding, a valid profile */
-    t.obst_d_mm = COMMS_D_NONE;  t.barcode = '\0';  t.pitch_cdeg = 5;  t.roll_cdeg = -1049;
-    t.b_obst_valid = true;  t.obst_w_mm = 147u;  t.clr_l_mm = 204u;  t.clr_r_mm = 5000u;  t.nav = 'F';
-    len = comms_build_telemetry(&t, buf, sizeof(buf));
-    pk_reader_init(&r, buf, len);
-    skip(&r, 8u + 8u + 24u + 4u + 10u + 10u + 16u + 16u + 16u + 11u + 1u + 10u);
-    CHECK("S1-H04", pk_take(&r, 6u) == 0u && comms_symbol_char((uint8_t)pk_take(&r, 6u)) == 'F');
-    CHECK("S1-H04", pk_unoff_s(pk_take(&r, 11u), 11u) == 1 && pk_unoff_s(pk_take(&r, 12u), 12u) == -105);
-    (void)pk_take(&r, 8u);
-    CHECK("S1-H04", pk_take(&r, 9u) == 511u && pk_take(&r, 10u) == 147u);
-    CHECK("S1-H04", pk_take(&r, 7u) == 20u && pk_take(&r, 7u) == 126u);    /* 500 cm caps at 126 */
+    telem.obst_d_mm = COMMS_D_NONE;  telem.barcode = '\0';  telem.pitch_cdeg = 5;  telem.roll_cdeg = -1049;
+    telem.b_obst_valid = true;  telem.obst_w_mm = 147u;  telem.clr_l_mm = 204u;  telem.clr_r_mm = 5000u;  telem.nav = 'F';
+    len = comms_build_telemetry(&telem, buf, sizeof(buf));
+    pk_reader_init(&reader, buf, len);
+    skip(&reader, 8u + 8u + 24u + 4u + 10u + 10u + 16u + 16u + 16u + 11u + 1u + 10u);
+    CHECK("S1-H04", pk_take(&reader, 6u) == 0u && comms_symbol_char((uint8_t)pk_take(&reader, 6u)) == 'F');
+    CHECK("S1-H04", pk_unoff_s(pk_take(&reader, 11u), 11u) == 1 && pk_unoff_s(pk_take(&reader, 12u), 12u) == -105);
+    (void)pk_take(&reader, 8u);
+    CHECK("S1-H04", pk_take(&reader, 9u) == 511u && pk_take(&reader, 10u) == 147u);
+    CHECK("S1-H04", pk_take(&reader, 7u) == 20u && pk_take(&reader, 7u) == 126u);    /* 500 cm caps at 126 */
 
     /* S1-H05: worst case: every field saturates, still 27 bytes */
-    t.seq = 4294967295u;  t.t_ms = 4294967295u;  t.state = 15u;
-    t.v_l_mm_s = -32768;  t.v_r_mm_s = 32767;
-    t.enc_l = -2147483647 - 1;  t.enc_r = -2147483647 - 1;  t.dist_mm = -2147483647 - 1;
-    t.line_err = -32768;  t.b_line_lost = true;  t.barcode = 'Z';  t.line_bc = 65535u;
-    t.pitch_cdeg = -32768;  t.roll_cdeg = 32767;  t.hump_max_mm = 65535u;  t.obst_d_mm = 65534u;
-    t.b_obst_valid = true;  t.obst_w_mm = 65535u;  t.clr_l_mm = 65535u;  t.clr_r_mm = 65535u;
-    t.nav = '%';
-    len = comms_build_telemetry(&t, buf, sizeof(buf));
-    pk_reader_init(&r, buf, len);
-    skip(&r, 8u + 8u + 24u + 4u);
+    telem.seq = 4294967295u;  telem.t_ms = 4294967295u;  telem.state = 15u;
+    telem.v_l_mm_s = -32768;  telem.v_r_mm_s = 32767;
+    telem.enc_l = -2147483647 - 1;  telem.enc_r = -2147483647 - 1;  telem.dist_mm = -2147483647 - 1;
+    telem.line_err = -32768;  telem.b_line_lost = true;  telem.barcode = 'Z';  telem.line_bc = 65535u;
+    telem.pitch_cdeg = -32768;  telem.roll_cdeg = 32767;  telem.hump_max_mm = 65535u;  telem.obst_d_mm = 65534u;
+    telem.b_obst_valid = true;  telem.obst_w_mm = 65535u;  telem.clr_l_mm = 65535u;  telem.clr_r_mm = 65535u;
+    telem.nav = '%';
+    len = comms_build_telemetry(&telem, buf, sizeof(buf));
+    pk_reader_init(&reader, buf, len);
+    skip(&reader, 8u + 8u + 24u + 4u);
     CHECK("S1-H05", len == 27u);
-    CHECK("S1-H05", pk_unoff_s(pk_take(&r, 10u), 10u) == -512 && pk_unoff_s(pk_take(&r, 10u), 10u) == 511);
-    skip(&r, 48u);
-    CHECK("S1-H05", pk_unoff_s(pk_take(&r, 11u), 11u) == -1024 && pk_take(&r, 1u) == 1u && pk_take(&r, 10u) == 1023u);
-    (void)pk_take(&r, 12u);
-    CHECK("S1-H05", pk_unoff_s(pk_take(&r, 11u), 11u) == -1024 && pk_unoff_s(pk_take(&r, 12u), 12u) == 2047);
-    CHECK("S1-H05", pk_take(&r, 8u) == 255u && pk_take(&r, 9u) == 510u && pk_take(&r, 10u) == 1022u);
+    CHECK("S1-H05", pk_unoff_s(pk_take(&reader, 10u), 10u) == -512 && pk_unoff_s(pk_take(&reader, 10u), 10u) == 511);
+    skip(&reader, 48u);
+    CHECK("S1-H05", pk_unoff_s(pk_take(&reader, 11u), 11u) == -1024 && pk_take(&reader, 1u) == 1u && pk_take(&reader, 10u) == 1023u);
+    (void)pk_take(&reader, 12u);
+    CHECK("S1-H05", pk_unoff_s(pk_take(&reader, 11u), 11u) == -1024 && pk_unoff_s(pk_take(&reader, 12u), 12u) == 2047);
+    CHECK("S1-H05", pk_take(&reader, 8u) == 255u && pk_take(&reader, 9u) == 510u && pk_take(&reader, 10u) == 1022u);
     printf("info: telemetry frame = %u B (+%u B topic); the JSON it replaces was 297 B typical, 340 B worst case\n",
            (unsigned)len, (unsigned)strlen("picocar/is23/telemetry"));
 }
@@ -222,43 +222,43 @@ static void test_telemetry(void)
 static void test_event_status_ack(void)
 {
     uint8_t       buf[COMMS_FRAME_MAX];
-    comms_event_t ev;
+    comms_event_t event;
     comms_rec_t   rec;
     comms_cmd_t   cmd;
     uint16_t      len;
 
     /* S1-H06: events, the data width follows the value */
-    ev.kind = COMMS_KIND_EVENT;  ev.src = 3u;  ev.code = 8u;  ev.data = 'B';  ev.t_ms = 770u;
-    len = comms_build_event(&ev, 5u, buf, sizeof(buf));
+    event.kind = COMMS_KIND_EVENT;  event.src = 3u;  event.code = 8u;  event.data = 'B';  event.t_ms = 770u;
+    len = comms_build_event(&event, 5u, buf, sizeof(buf));
     CHECK("S1-H06", len == 8u && hex_eq(buf, len, GOLD_EVENT_BARCODE));
-    ev.kind = COMMS_KIND_STATE;  ev.code = 10u;  ev.data = 0;
-    CHECK("S1-H06", comms_build_event(&ev, 6u, buf, sizeof(buf)) == 7u);
-    ev.kind = COMMS_KIND_FAULT;  ev.code = 0u;  ev.data = 0x0214;
-    CHECK("S1-H06", comms_build_event(&ev, 7u, buf, sizeof(buf)) == 9u);
-    ev.kind = COMMS_KIND_LOG;  ev.code = 81u;  ev.data = 0x12345678;
-    len = comms_build_event(&ev, 8u, buf, sizeof(buf));
+    event.kind = COMMS_KIND_STATE;  event.code = 10u;  event.data = 0;
+    CHECK("S1-H06", comms_build_event(&event, 6u, buf, sizeof(buf)) == 7u);
+    event.kind = COMMS_KIND_FAULT;  event.code = 0u;  event.data = 0x0214;
+    CHECK("S1-H06", comms_build_event(&event, 7u, buf, sizeof(buf)) == 9u);
+    event.kind = COMMS_KIND_LOG;  event.code = 81u;  event.data = 0x12345678;
+    len = comms_build_event(&event, 8u, buf, sizeof(buf));
     CHECK("S1-H06", len == 11u && hex_eq(buf, len, GOLD_EVENT_LOG));
-    ev.data = -1;
-    CHECK("S1-H06", comms_build_event(&ev, 9u, buf, sizeof(buf)) == 8u);
-    ev.code = 999u;                                     /* saturates at 127 */
-    len = comms_build_event(&ev, 9u, buf, sizeof(buf));
+    event.data = -1;
+    CHECK("S1-H06", comms_build_event(&event, 9u, buf, sizeof(buf)) == 8u);
+    event.code = 999u;                                     /* saturates at 127 */
+    len = comms_build_event(&event, 9u, buf, sizeof(buf));
     {
-        pk_reader_t r;
+        pk_reader_t reader;
 
-        pk_reader_init(&r, buf, len);
-        skip(&r, 8u + 8u + 24u + 2u + 3u);
-        CHECK("S1-H06", pk_take(&r, 7u) == 127u);
+        pk_reader_init(&reader, buf, len);
+        skip(&reader, 8u + 8u + 24u + 2u + 3u);
+        CHECK("S1-H06", pk_take(&reader, 7u) == 127u);
     }
 
     /* S1-H06: the packed mbf_telem record (8 B) and its time */
     CHECK("S1-H06", sizeof(comms_rec_t) == 8u);
     comms_rec_pack(&rec, COMMS_KIND_LOG, 4u, 79u, -123456, 123456u);
-    comms_rec_unpack(&rec, 125000u, &ev);
-    CHECK("S1-H06", ev.kind == COMMS_KIND_LOG && ev.src == 4u && ev.code == 79u &&
-                    ev.data == -123456 && ev.t_ms == 123450u);
+    comms_rec_unpack(&rec, 125000u, &event);
+    CHECK("S1-H06", event.kind == COMMS_KIND_LOG && event.src == 4u && event.code == 79u &&
+                    event.data == -123456 && event.t_ms == 123450u);
     comms_rec_pack(&rec, COMMS_KIND_EVENT, 9u, 300u, 7, 10485755u);  /* src, code saturate */
-    comms_rec_unpack(&rec, 10485755u + 2000u, &ev);    /* across the 20-bit (2.9 h) wrap */
-    CHECK("S1-H06", ev.kind == COMMS_KIND_EVENT && ev.src == 7u && ev.code == 127u && ev.t_ms == 10485750u);
+    comms_rec_unpack(&rec, 10485755u + 2000u, &event);    /* across the 20-bit (2.9 h) wrap */
+    CHECK("S1-H06", event.kind == COMMS_KIND_EVENT && event.src == 7u && event.code == 127u && event.t_ms == 10485750u);
 
     /* S1-H07: status, with and without the map; the Last Will */
     len = comms_build_status(61u, -58, 3u, NULL, buf, sizeof(buf));
@@ -271,11 +271,11 @@ static void test_event_status_ack(void)
     }
     len = comms_build_status(200000u, -300, 9999u, NULL, buf, sizeof(buf));   /* saturates */
     {
-        pk_reader_t r;
+        pk_reader_t reader;
 
-        pk_reader_init(&r, buf, len);
-        (void)pk_take(&r, 8u);
-        CHECK("S1-H07", pk_take(&r, 17u) == 131071u && pk_take(&r, 7u) == 127u && pk_take(&r, 8u) == 255u);
+        pk_reader_init(&reader, buf, len);
+        (void)pk_take(&reader, 8u);
+        CHECK("S1-H07", pk_take(&reader, 17u) == 131071u && pk_take(&reader, 7u) == 127u && pk_take(&reader, 8u) == 255u);
     }
     CHECK("S1-H07", strlen(COMMS_WILL_MSG) == 1u && (uint8_t)COMMS_WILL_MSG[0] == 0x23u);
 
@@ -291,52 +291,52 @@ static void test_event_status_ack(void)
 static void test_parser(void)
 {
     comms_cmd_t cmd;
-    uint8_t     f[8];
-    uint16_t    n;
+    uint8_t     frame[8];
+    uint16_t    count;
 
-    CHECK("S1-H09", parse(1u, COMMS_CMD_START, 0, 0, NULL, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_START && cmd.id == 1u);
-    CHECK("S1-H09", parse(255u, COMMS_CMD_STOP, 0, 0, NULL, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_STOP && cmd.id == 255u);
+    CHECK("S1-H09", parse(1u, COMMS_CMD_START, 0, 0, NULL, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_START && cmd.cmd_id == 1u);
+    CHECK("S1-H09", parse(255u, COMMS_CMD_STOP, 0, 0, NULL, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_STOP && cmd.cmd_id == 255u);
     CHECK("S1-H09", parse(4u, COMMS_CMD_RESET, 0, 0, NULL, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_RESET);
     CHECK("S1-H09", parse(3u, 3u, 0, 0, NULL, &cmd) == COMMS_ERR_BAD_CMD);      /* 3: E-stop, removed 14 Nov */
     CHECK("S1-H09", parse(3u, 7u, 0, 0, NULL, &cmd) == COMMS_ERR_BAD_CMD);
     CHECK("S1-H09", parse(5u, COMMS_CMD_SET, param_index("stop_cm"), 25, NULL, &cmd) == COMMS_ERR_NONE
                     && cmd.cmd == COMMS_CMD_SET && cmd.param_id == 3u && cmd.value == 25);
-    n = cmd_frame(f, 9u, COMMS_CMD_SET, param_index("speed_mm_s"), 250, NULL);
-    CHECK("S1-H09", n == 5u && hex_eq(f, n, GOLD_CMD_SET));
-    n = cmd_frame(f, 7u, COMMS_CMD_START, 0, 0, NULL);
-    CHECK("S1-H09", n == 3u && hex_eq(f, n, GOLD_CMD_START));
+    count = cmd_frame(frame, 9u, COMMS_CMD_SET, param_index("speed_mm_s"), 250, NULL);
+    CHECK("S1-H09", count == 5u && hex_eq(frame, count, GOLD_CMD_SET));
+    count = cmd_frame(frame, 7u, COMMS_CMD_START, 0, 0, NULL);
+    CHECK("S1-H09", count == 3u && hex_eq(frame, count, GOLD_CMD_START));
 
     /* S1-H10: boundaries of every whitelisted parameter */
     {
-        static char const * const names[] = { "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm" };
-        unsigned i;
+        static char const * const p_names[] = { "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm" };
+        unsigned idx;
 
-        for (i = 0u; i < 5u; i++)
+        for (idx = 0u; idx < 5u; idx++)
         {
-            comms_param_t const * p = comms_param_by_index((uint8_t)i);
+            comms_param_t const * p_param = comms_param_by_index((uint8_t)idx);
 
-            CHECK("S1-H10", p != NULL && strcmp(p->p_name, names[i]) == 0 && comms_param_by_id(p->id) == p);
-            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)i, p->min, NULL, &cmd) == COMMS_ERR_NONE && cmd.value == p->min);
-            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)i, p->max, NULL, &cmd) == COMMS_ERR_NONE && cmd.value == p->max);
-            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)i, p->min - 1, NULL, &cmd) == COMMS_ERR_RANGE);
-            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)i, p->max + 1, NULL, &cmd) == COMMS_ERR_RANGE);
+            CHECK("S1-H10", p_param != NULL && strcmp(p_param->p_name, p_names[idx]) == 0 && comms_param_by_id(p_param->param_id) == p_param);
+            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)idx, p_param->min, NULL, &cmd) == COMMS_ERR_NONE && cmd.value == p_param->min);
+            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)idx, p_param->max, NULL, &cmd) == COMMS_ERR_NONE && cmd.value == p_param->max);
+            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)idx, p_param->min - 1, NULL, &cmd) == COMMS_ERR_RANGE);
+            CHECK("S1-H10", parse(9u, COMMS_CMD_SET, (int)idx, p_param->max + 1, NULL, &cmd) == COMMS_ERR_RANGE);
         }
         CHECK("S1-H10", parse(9u, COMMS_CMD_SET, 0, -32768, NULL, &cmd) == COMMS_ERR_RANGE && cmd.value == -32768);
     }
 
     /* S1-H11: rejections, each with its reason */
-    CHECK("S1-H11", comms_parse_cmd(f, 0u, &cmd) == COMMS_ERR_BAD_FRAME);
-    n = cmd_frame(f, 1u, COMMS_CMD_START, 0, 0, NULL);
-    f[0] = 0x21u;                                                   /* telemetry type */
-    CHECK("S1-H11", comms_parse_cmd(f, n, &cmd) == COMMS_ERR_BAD_FRAME);
-    f[0] = 0x45u;                                                   /* version 2 */
-    CHECK("S1-H11", comms_parse_cmd(f, n, &cmd) == COMMS_ERR_BAD_FRAME);
-    f[0] = 0x25u;
-    CHECK("S1-H11", comms_parse_cmd(f, 1u, &cmd) == COMMS_ERR_NO_ID && !cmd.b_has_id);
-    CHECK("S1-H11", comms_parse_cmd(f, 2u, &cmd) == COMMS_ERR_BAD_FRAME && cmd.b_has_id && cmd.id == 1u);
-    CHECK("S1-H11", comms_parse_cmd(f, 4u, &cmd) == COMMS_ERR_BAD_FRAME);       /* START is 3 B */
-    n = cmd_frame(f, 1u, COMMS_CMD_SET, 2, 20, NULL);
-    CHECK("S1-H11", comms_parse_cmd(f, (uint16_t)(n - 1u), &cmd) == COMMS_ERR_BAD_FRAME);
+    CHECK("S1-H11", comms_parse_cmd(frame, 0u, &cmd) == COMMS_ERR_BAD_FRAME);
+    count = cmd_frame(frame, 1u, COMMS_CMD_START, 0, 0, NULL);
+    frame[0] = 0x21u;                                                   /* telemetry type */
+    CHECK("S1-H11", comms_parse_cmd(frame, count, &cmd) == COMMS_ERR_BAD_FRAME);
+    frame[0] = 0x45u;                                                   /* version 2 */
+    CHECK("S1-H11", comms_parse_cmd(frame, count, &cmd) == COMMS_ERR_BAD_FRAME);
+    frame[0] = 0x25u;
+    CHECK("S1-H11", comms_parse_cmd(frame, 1u, &cmd) == COMMS_ERR_NO_ID && !cmd.b_has_id);
+    CHECK("S1-H11", comms_parse_cmd(frame, 2u, &cmd) == COMMS_ERR_BAD_FRAME && cmd.b_has_id && cmd.cmd_id == 1u);
+    CHECK("S1-H11", comms_parse_cmd(frame, 4u, &cmd) == COMMS_ERR_BAD_FRAME);       /* START is 3 B */
+    count = cmd_frame(frame, 1u, COMMS_CMD_SET, 2, 20, NULL);
+    CHECK("S1-H11", comms_parse_cmd(frame, (uint16_t)(count - 1u), &cmd) == COMMS_ERR_BAD_FRAME);
     CHECK("S1-H11", parse(1u, COMMS_CMD_SET, 15, 20, NULL, &cmd) == COMMS_ERR_BAD_PARAM);
 #if !APP_BENCH
     CHECK("S1-H11", parse(1u, COMMS_CMD_SET, 5, 20, NULL, &cmd) == COMMS_ERR_BAD_PARAM);
@@ -344,10 +344,10 @@ static void test_parser(void)
     CHECK("S1-H11", parse(1u, COMMS_CMD_SET, 2, 99, NULL, &cmd) == COMMS_ERR_RANGE);
 
     /* S1-H12: the length is exact: one byte more or less is a bad frame */
-    n = cmd_frame(f, 1u, COMMS_CMD_STOP, 0, 0, NULL);
-    f[n] = 0u;
-    CHECK("S1-H12", comms_parse_cmd(f, (uint16_t)(n + 1u), &cmd) == COMMS_ERR_BAD_FRAME);
-    CHECK("S1-H12", comms_parse_cmd(f, n, &cmd) == COMMS_ERR_NONE);
+    count = cmd_frame(frame, 1u, COMMS_CMD_STOP, 0, 0, NULL);
+    frame[count] = 0u;
+    CHECK("S1-H12", comms_parse_cmd(frame, (uint16_t)(count + 1u), &cmd) == COMMS_ERR_BAD_FRAME);
+    CHECK("S1-H12", comms_parse_cmd(frame, count, &cmd) == COMMS_ERR_NONE);
 
     /* S1-H13: state rule (FR14) */
     (void)parse(1u, COMMS_CMD_SET, 2, 20, NULL, &cmd);
@@ -359,24 +359,24 @@ static void test_parser(void)
     /* S1-H14: random bytes and every truncation never crash (ASan/UBSan) */
     {
         uint8_t  junk[64];
-        unsigned k;
-        unsigned m;
+        unsigned kdx;
+        unsigned mid;
 
-        n = cmd_frame(f, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
-        for (m = 0u; m <= n; m++)
+        count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
+        for (mid = 0u; mid <= count; mid++)
         {
-            (void)comms_parse_cmd(f, (uint16_t)m, &cmd);
+            (void)comms_parse_cmd(frame, (uint16_t)mid, &cmd);
         }
         srand(1234);
-        for (k = 0u; k < 20000u; k++)
+        for (kdx = 0u; kdx < 20000u; kdx++)
         {
             unsigned len = (unsigned)rand() % sizeof(junk);
 
-            for (m = 0u; m < len; m++)
+            for (mid = 0u; mid < len; mid++)
             {
-                junk[m] = (uint8_t)rand();
+                junk[mid] = (uint8_t)rand();
             }
-            if ((k & 1u) && (len > 0u))
+            if ((kdx & 1u) && (len > 0u))
             {
                 junk[0] = 0x25u;                /* a valid header, junk after it */
             }
@@ -391,21 +391,21 @@ static void test_ring(void)
     comms_ring_t ring;
     comms_rec_t  rec;
     uint8_t      seq;
-    uint32_t     i;
+    uint32_t     idx;
     int          overwrote = 0;
 
     comms_ring_init(&ring);
     CHECK("S1-H15", !comms_ring_peek(&ring, &rec, &seq));
     memset(&rec, 0, sizeof(rec));
-    for (i = 1u; i <= 20u; i++)
+    for (idx = 1u; idx <= 20u; idx++)
     {
-        rec.data = (int32_t)i;
-        overwrote += comms_ring_push(&ring, &rec, (uint8_t)(i + 250u)) ? 1 : 0;   /* seq wraps */
+        rec.data = (int32_t)idx;
+        overwrote += comms_ring_push(&ring, &rec, (uint8_t)(idx + 250u)) ? 1 : 0;   /* seq wraps */
     }
     CHECK("S1-H15", overwrote == 4 && ring.count == COMMS_RING_LEN);
-    for (i = 5u; i <= 20u; i++)
+    for (idx = 5u; idx <= 20u; idx++)
     {
-        CHECK("S1-H15", comms_ring_peek(&ring, &rec, &seq) && seq == (uint8_t)(i + 250u) && rec.data == (int32_t)i);
+        CHECK("S1-H15", comms_ring_peek(&ring, &rec, &seq) && seq == (uint8_t)(idx + 250u) && rec.data == (int32_t)idx);
         comms_ring_pop(&ring);
     }
     CHECK("S1-H15", ring.count == 0u && !comms_ring_peek(&ring, &rec, &seq));
@@ -419,111 +419,111 @@ static int run_button(char const * p_pattern, uint16_t long_ms, char * p_events)
     /* One char per 20 ms sample: '1' pressed, '0' released.
        Output: P press, S short, L long. */
     hmi_btn_t btn;
-    int       n = 0;
+    int       count = 0;
 
     hmi_btn_init(&btn);
     for (; *p_pattern != '\0'; p_pattern++)
     {
-        hmi_btn_ev_t ev = hmi_btn_update(&btn, *p_pattern == '1', 20u, long_ms);
+        hmi_btn_ev_t event = hmi_btn_update(&btn, *p_pattern == '1', 20u, long_ms);
 
-        if (ev == HMI_BTN_EV_PRESS) { p_events[n++] = 'P'; }
-        if (ev == HMI_BTN_EV_SHORT) { p_events[n++] = 'S'; }
-        if (ev == HMI_BTN_EV_LONG)  { p_events[n++] = 'L'; }
+        if (event == HMI_BTN_EV_PRESS) { p_events[count++] = 'P'; }
+        if (event == HMI_BTN_EV_SHORT) { p_events[count++] = 'S'; }
+        if (event == HMI_BTN_EV_LONG)  { p_events[count++] = 'L'; }
     }
-    p_events[n] = '\0';
-    return n;
+    p_events[count] = '\0';
+    return count;
 }
 
 static void test_button(void)
 {
-    char ev[32];
+    char ev_name[32];
     char pattern[200];
 
-    (void)run_button("0101010000", 2000u, ev);           /* bounce only          */
-    CHECK("S1-H16", strcmp(ev, "") == 0);
-    (void)run_button("0110000", 2000u, ev);              /* 40 ms press          */
-    CHECK("S1-H16", strcmp(ev, "PS") == 0);
-    (void)run_button("01111101111100", 2000u, ev);       /* 1-sample drop inside */
-    CHECK("S1-H16", strcmp(ev, "PS") == 0);
+    (void)run_button("0101010000", 2000u, ev_name);           /* bounce only          */
+    CHECK("S1-H16", strcmp(ev_name, "") == 0);
+    (void)run_button("0110000", 2000u, ev_name);              /* 40 ms press          */
+    CHECK("S1-H16", strcmp(ev_name, "PS") == 0);
+    (void)run_button("01111101111100", 2000u, ev_name);       /* 1-sample drop inside */
+    CHECK("S1-H16", strcmp(ev_name, "PS") == 0);
 
     memset(pattern, '1', 150);                           /* 3 s hold             */
     pattern[0] = '0';
     strcpy(&pattern[150], "000");
-    (void)run_button(pattern, 2000u, ev);
-    CHECK("S1-H17", strcmp(ev, "PL") == 0);              /* one LONG, no SHORT   */
+    (void)run_button(pattern, 2000u, ev_name);
+    CHECK("S1-H17", strcmp(ev_name, "PL") == 0);              /* one LONG, no SHORT   */
 
     memset(pattern, '1', 99);                            /* release at 1.96 s    */
     pattern[0] = '0';
     strcpy(&pattern[99], "00");
-    (void)run_button(pattern, 2000u, ev);
-    CHECK("S1-H17", strcmp(ev, "PS") == 0);
+    (void)run_button(pattern, 2000u, ev_name);
+    CHECK("S1-H17", strcmp(ev_name, "PS") == 0);
 }
 
 static void test_dedup(void)
 {
-    comms_dedup_t dd;
-    comms_cmd_t   a, b, stop;
-    unsigned      i;
+    comms_dedup_t dedup;
+    comms_cmd_t   cmd_a, cmd_b, stop;
+    unsigned      idx;
 
-    comms_dedup_init(&dd);
-    (void)parse(7u, COMMS_CMD_START, 0, 0, NULL, &a);
-    (void)parse(7u, COMMS_CMD_RESET, 0, 0, NULL, &b);
+    comms_dedup_init(&dedup);
+    (void)parse(7u, COMMS_CMD_START, 0, 0, NULL, &cmd_a);
+    (void)parse(7u, COMMS_CMD_RESET, 0, 0, NULL, &cmd_b);
     (void)parse(9u, COMMS_CMD_STOP, 0, 0, NULL, &stop);
 
-    CHECK("S1-H18", comms_dedup_check(&dd, &a, 1000u) == COMMS_DEDUP_NEW);
-    comms_dedup_add(&dd, &a, 1000u);
+    CHECK("S1-H18", comms_dedup_check(&dedup, &cmd_a, 1000u) == COMMS_DEDUP_NEW);
+    comms_dedup_add(&dedup, &cmd_a, 1000u);
     /* delayed redelivery after other commands, inside the window */
-    for (i = 0u; i < 5u; i++)
+    for (idx = 0u; idx < 5u; idx++)
     {
         comms_cmd_t other;
 
-        (void)parse((uint8_t)(100u + i), COMMS_CMD_START, 0, 0, NULL, &other);
-        comms_dedup_add(&dd, &other, 2000u + i);
+        (void)parse((uint8_t)(100u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
+        comms_dedup_add(&dedup, &other, 2000u + idx);
     }
-    CHECK("S1-H18", comms_dedup_check(&dd, &a, 30000u) == COMMS_DEDUP_REPEAT);
-    CHECK("S1-H18", comms_dedup_check(&dd, &b, 30000u) == COMMS_DEDUP_CONFLICT);
+    CHECK("S1-H18", comms_dedup_check(&dedup, &cmd_a, 30000u) == COMMS_DEDUP_REPEAT);
+    CHECK("S1-H18", comms_dedup_check(&dedup, &cmd_b, 30000u) == COMMS_DEDUP_CONFLICT);
     /* outside the window the id may be used again */
-    CHECK("S1-H18", comms_dedup_check(&dd, &a, 1000u + COMMS_DEDUP_WINDOW_MS) == COMMS_DEDUP_NEW);
+    CHECK("S1-H18", comms_dedup_check(&dedup, &cmd_a, 1000u + COMMS_DEDUP_WINDOW_MS) == COMMS_DEDUP_NEW);
     /* the window works across the 32-bit millisecond wrap */
-    comms_dedup_init(&dd);
-    comms_dedup_add(&dd, &a, 0xFFFFFF00u);
-    CHECK("S1-H18", comms_dedup_check(&dd, &a, 0x00000100u) == COMMS_DEDUP_REPEAT);
+    comms_dedup_init(&dedup);
+    comms_dedup_add(&dedup, &cmd_a, 0xFFFFFF00u);
+    CHECK("S1-H18", comms_dedup_check(&dedup, &cmd_a, 0x00000100u) == COMMS_DEDUP_REPEAT);
     /* only the last COMMS_DEDUP_LEN commands are kept */
-    comms_dedup_init(&dd);
-    comms_dedup_add(&dd, &a, 0u);
-    for (i = 0u; i < COMMS_DEDUP_LEN; i++)
+    comms_dedup_init(&dedup);
+    comms_dedup_add(&dedup, &cmd_a, 0u);
+    for (idx = 0u; idx < COMMS_DEDUP_LEN; idx++)
     {
         comms_cmd_t other;
 
-        (void)parse((uint8_t)(200u + i), COMMS_CMD_START, 0, 0, NULL, &other);
-        comms_dedup_add(&dd, &other, 10u + i);
+        (void)parse((uint8_t)(200u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
+        comms_dedup_add(&dedup, &other, 10u + idx);
     }
-    CHECK("S1-H18", comms_dedup_check(&dd, &a, 100u) == COMMS_DEDUP_NEW);
-    CHECK("S1-H18", dd.count == COMMS_DEDUP_LEN);
+    CHECK("S1-H18", comms_dedup_check(&dedup, &cmd_a, 100u) == COMMS_DEDUP_NEW);
+    CHECK("S1-H18", dedup.count == COMMS_DEDUP_LEN);
     /* STOP is always safe to repeat */
-    CHECK("S1-H18", comms_cmd_repeat_safe(stop.cmd) && !comms_cmd_repeat_safe(a.cmd));
+    CHECK("S1-H18", comms_cmd_repeat_safe(stop.cmd) && !comms_cmd_repeat_safe(cmd_a.cmd));
 }
 
 static void test_map(void)
 {
     comms_cmd_t cmd;
-    uint8_t     f[8];
-    uint16_t    n;
+    uint8_t     frame[8];
+    uint16_t    count;
     uint32_t const afzw = (uint32_t)'A' | ((uint32_t)'F' << 8) | ((uint32_t)'Z' << 16) | ((uint32_t)'W' << 24);
 
     /* S1-H19: the barcode map arrives over MQTT (not hard-coded) */
-    n = cmd_frame(f, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
-    CHECK("S1-H19", n == 6u && hex_eq(f, n, GOLD_CMD_MAP));
-    CHECK("S1-H19", comms_parse_cmd(f, n, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_MAP &&
+    count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
+    CHECK("S1-H19", count == 6u && hex_eq(frame, count, GOLD_CMD_MAP));
+    CHECK("S1-H19", comms_parse_cmd(frame, count, &cmd) == COMMS_ERR_NONE && cmd.cmd == COMMS_CMD_MAP &&
                     (uint32_t)cmd.value == afzw);
     CHECK("S1-H19", parse(5u, COMMS_CMD_MAP, 0, 0, "AAZW", &cmd) == COMMS_ERR_BAD_MAP);   /* used twice */
-    f[2] = (uint8_t)(f[2] & 0x07u);             /* left symbol 0 (none) */
-    f[3] = (uint8_t)(f[3] & 0xFEu);
-    CHECK("S1-H19", comms_parse_cmd(f, n, &cmd) == COMMS_ERR_BAD_MAP);
-    n = cmd_frame(f, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
-    f[2] = (uint8_t)(f[2] | 0xF8u);             /* left symbol 63: not a symbol */
-    f[3] = (uint8_t)(f[3] | 0x01u);
-    CHECK("S1-H19", comms_parse_cmd(f, n, &cmd) == COMMS_ERR_BAD_MAP);
+    frame[2] = (uint8_t)(frame[2] & 0x07u);             /* left symbol 0 (none) */
+    frame[3] = (uint8_t)(frame[3] & 0xFEu);
+    CHECK("S1-H19", comms_parse_cmd(frame, count, &cmd) == COMMS_ERR_BAD_MAP);
+    count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
+    frame[2] = (uint8_t)(frame[2] | 0xF8u);             /* left symbol 63: not a symbol */
+    frame[3] = (uint8_t)(frame[3] | 0x01u);
+    CHECK("S1-H19", comms_parse_cmd(frame, count, &cmd) == COMMS_ERR_BAD_MAP);
     (void)parse(5u, COMMS_CMD_MAP, 0, 0, "AFZW", &cmd);
     CHECK("S1-H19", comms_check_cmd(&cmd, false) == COMMS_ERR_BUSY && comms_check_cmd(&cmd, true) == COMMS_ERR_NONE);
     CHECK("S1-H19", comms_map_char_ok('Z') && comms_map_char_ok('7') && !comms_map_char_ok('*') && !comms_map_char_ok('a'));

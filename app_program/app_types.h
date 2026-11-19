@@ -26,29 +26,29 @@ static inline int32_t app_abs_i32(int32_t value)
     return (value < 0) ? -value : value;
 }
 
-static inline int32_t app_clamp_i32(int32_t value, int32_t lo, int32_t hi)
+static inline int32_t app_clamp_i32(int32_t value, int32_t low, int32_t high)
 {
     int32_t result = value;
 
-    if (result < lo)
+    if (result < low)
     {
-        result = lo;
+        result = low;
     }
-    if (result > hi)
+    if (result > high)
     {
-        result = hi;
+        result = high;
     }
     return result;
 }
 
-static inline int32_t app_min_i32(int32_t a, int32_t b)
+static inline int32_t app_min_i32(int32_t lhs, int32_t rhs)
 {
-    return (a < b) ? a : b;
+    return (lhs < rhs) ? lhs : rhs;
 }
 
-static inline int32_t app_max_i32(int32_t a, int32_t b)
+static inline int32_t app_max_i32(int32_t lhs, int32_t rhs)
 {
-    return (a > b) ? a : b;
+    return (lhs > rhs) ? lhs : rhs;
 }
 
 /* Time comparisons that survive the 32-bit millisecond wrap. */

@@ -27,22 +27,22 @@
 
 static uint32_t cc_for(int32_t duty, int32_t sign)
 {
-    int32_t  d  = duty * sign;
+    int32_t  drive  = duty * sign;
     uint32_t mag;
 
-    if (d > MOTION_DUTY_MAX)
+    if (drive > MOTION_DUTY_MAX)
     {
-        d = MOTION_DUTY_MAX;
+        drive = MOTION_DUTY_MAX;
     }
-    if (d < -MOTION_DUTY_MAX)
+    if (drive < -MOTION_DUTY_MAX)
     {
-        d = -MOTION_DUTY_MAX;
+        drive = -MOTION_DUTY_MAX;
     }
-    mag = (uint32_t)((d < 0) ? -d : d);
+    mag = (uint32_t)((drive < 0) ? -drive : drive);
     mag = (mag * (MOTION_PWM_TOP + 1u)) / (uint32_t)MOTION_DUTY_MAX;
 
     /* channel A in bits 15:0, channel B in bits 31:16 */
-    return (d >= 0) ? mag : (mag << 16);
+    return (drive >= 0) ? mag : (mag << 16);
 }
 
 EXPORT ER drv_motor_init(void)
@@ -50,29 +50,29 @@ EXPORT ER drv_motor_init(void)
     uint32_t const pins[4] = { S2_PIN_MOT_L_A, S2_PIN_MOT_L_B, S2_PIN_MOT_R_A, S2_PIN_MOT_R_B };
     uint32_t const slices[2] = { SLICE_L, SLICE_R };
     UINT           intsts;
-    uint32_t       i;
+    uint32_t       idx;
 
     /* 1. Brake first: GP8-GP11 SIO outputs, LOW (BOOT order, Section 5). */
     DI(intsts);
     out_w(GPIO_OUT_CLR, MOTOR_PIN_MASK);
     out_w(GPIO_OE_SET, MOTOR_PIN_MASK);
-    for (i = 0u; i < 4u; i++)
+    for (idx = 0u; idx < 4u; idx++)
     {
-        clr_w(GPIO(pins[i]), GPIO_OD);
-        out_w(GPIO_CTRL(pins[i]), GPIO_CTRL_FUNCSEL_SIO);
+        clr_w(GPIO(pins[idx]), GPIO_OD);
+        out_w(GPIO_CTRL(pins[idx]), GPIO_CTRL_FUNCSEL_SIO);
     }
     EI(intsts);
 
     /* 2. PWM block out of reset, slices 4 and 5 at 20 kHz, duty 0. */
     app_reset_release(RESETS_RESET_PWM);
-    for (i = 0u; i < 2u; i++)
+    for (idx = 0u; idx < 2u; idx++)
     {
-        out_w(PWM_CH_CSR(slices[i]), 0u);
-        out_w(PWM_CH_DIV(slices[i]), PWM_DIV_INT_1);
-        out_w(PWM_CH_TOP(slices[i]), MOTION_PWM_TOP);
-        out_w(PWM_CH_CC(slices[i]), 0u);
-        out_w(PWM_CH_CTR(slices[i]), 0u);
-        out_w(PWM_CH_CSR(slices[i]), PWM_CH_CSR_EN);
+        out_w(PWM_CH_CSR(slices[idx]), 0u);
+        out_w(PWM_CH_DIV(slices[idx]), PWM_DIV_INT_1);
+        out_w(PWM_CH_TOP(slices[idx]), MOTION_PWM_TOP);
+        out_w(PWM_CH_CC(slices[idx]), 0u);
+        out_w(PWM_CH_CTR(slices[idx]), 0u);
+        out_w(PWM_CH_CSR(slices[idx]), PWM_CH_CSR_EN);
     }
 
     /* Read back: the block really left reset and took the settings. */

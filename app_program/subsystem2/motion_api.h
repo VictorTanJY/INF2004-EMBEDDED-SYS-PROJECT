@@ -32,7 +32,7 @@
 #define MOTION_API_MAX_RATE     511         /* mm/s or deg/s (9-bit field)          */
 
 /* Posts one raw command (subsystem2.c on the robot). */
-int motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1);
+int motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0, int16_t arg1);
 
 /* moveForward(distance): drive distance_mm forward at speed_mm_s, then brake. */
 int motion_move_forward(uint8_t src, uint8_t seq, uint16_t distance_mm, uint16_t speed_mm_s);

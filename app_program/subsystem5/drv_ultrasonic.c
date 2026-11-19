@@ -27,7 +27,7 @@
 
 static volatile uint32_t g_echo;
 static volatile uint32_t g_rise_us;     /* ISR only, between the two edges */
-static volatile bool     g_b_rise;
+static volatile bool     gb_rise;
 
 #if US_PINS_FREE
 /* echo_isr: bank-0 callback on core 1. */
@@ -37,9 +37,9 @@ static void echo_isr(uint32_t pin, uint32_t events, uint32_t t_us)
     if ((events & APP_GPIO_EDGE_RISE) != 0u)
     {
         g_rise_us = t_us;
-        g_b_rise  = true;
+        gb_rise  = true;
     }
-    if (((events & APP_GPIO_EDGE_FALL) != 0u) && g_b_rise)
+    if (((events & APP_GPIO_EDGE_FALL) != 0u) && gb_rise)
     {
         uint32_t width = t_us - g_rise_us;
 
@@ -48,7 +48,7 @@ static void echo_isr(uint32_t pin, uint32_t events, uint32_t t_us)
             width = (1uL << ECHO_WIDTH_BITS) - 1uL;
         }
         g_echo   = ECHO_DONE | width;
-        g_b_rise = false;
+        gb_rise = false;
         (void)tk_set_flg(g_flg_obst, OBST_FLG_ECHO);
     }
 }
@@ -82,17 +82,17 @@ EXPORT ER drv_us_attach(void)
 
 EXPORT void drv_us_trigger(void)
 {
-    UW t0;
+    UW t_start;
 
 #if !US_PINS_FREE
     (void)t0;
     return;
 #endif
-    g_b_rise = false;
+    gb_rise = false;
     g_echo   = 0u;
     out_w(GPIO_OUT_SET, 1uL << S5_PIN_US_TRIG);
-    t0 = app_time_us();
-    while ((UW)(app_time_us() - t0) < 12u)
+    t_start = app_time_us();
+    while ((UW)(app_time_us() - t_start) < 12u)
     {
         ;                               /* >= 10 us (datasheet) */
     }

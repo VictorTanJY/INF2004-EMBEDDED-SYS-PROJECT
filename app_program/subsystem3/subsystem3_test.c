@@ -27,101 +27,101 @@
 
 static bc_capture_t g_t_bc;             /* ~3 KB: kept off the task stack */
 
-static uint16_t make_star_code(char c, uint32_t * p_w)
+static uint16_t make_star_code(char chr, uint32_t * p_w)
 {
-    char const seq[3] = { '*', c, '*' };
-    uint16_t   n = 0u;
-    int        k;
-    int        e;
+    char const seq[3] = { '*', chr, '*' };
+    uint16_t   n_elems = 0u;
+    int        kdx;
+    int        elem;
 
-    for (k = 0; k < 3; k++)
+    for (kdx = 0; kdx < 3; kdx++)
     {
-        uint16_t const pat = code39_pattern(seq[k]);
+        uint16_t const pat = code39_pattern(seq[kdx]);
 
-        for (e = 0; e < 9; e++)
+        for (elem = 0; elem < 9; elem++)
         {
-            p_w[n++] = (((pat >> (8 - e)) & 1u) != 0u) ? T_WIDE_UM : T_NARROW_UM;
+            p_w[n_elems++] = (((pat >> (8 - elem)) & 1u) != 0u) ? T_WIDE_UM : T_NARROW_UM;
         }
-        if (k < 2)
+        if (kdx < 2)
         {
-            p_w[n++] = T_NARROW_UM;     /* gap between characters */
+            p_w[n_elems++] = T_NARROW_UM;     /* gap between characters */
         }
     }
-    return n;
+    return n_elems;
 }
 
-static uint16_t level_at(uint32_t const * p_w, uint16_t n, uint32_t x_um)
+static uint16_t level_at(uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
 {
     uint32_t pos = T_LEAD_UM;
-    uint16_t e;
+    uint16_t elem;
 
-    for (e = 0u; e < n; e++)
+    for (elem = 0u; elem < n_elems; elem++)
     {
-        if ((x_um >= pos) && (x_um < (pos + p_w[e])))
+        if ((x_um >= pos) && (x_um < (pos + p_w[elem])))
         {
-            return ((e % 2u) == 0u) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
+            return ((elem % 2u) == 0u) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
         }
-        pos += p_w[e];
+        pos += p_w[elem];
     }
     return (uint16_t)T_WHITE;
 }
 
 EXPORT void subsystem3_test(void)
 {
-    line_snap_t a;
-    line_snap_t b;
-    uint32_t    w[29];
-    char        ch = '\0';
+    line_snap_t snap_a;
+    line_snap_t snap_b;
+    uint32_t    elem_widths[29];
+    char        chr = '\0';
     bool        b_rev = false;
-    uint16_t    n = 0u;
+    uint16_t    n_elems = 0u;
     char const  seq[3] = { '*', 'F', '*' };
-    int         k;
-    int         e;
+    int         kdx;
+    int         elem;
 
     TEST_INIT();
 
-    line_get_snap(&a);
+    line_get_snap(&snap_a);
     (void)tk_dly_tsk(100);
-    line_get_snap(&b);
-    TEST_CHECK("S3-U02", b.t_ms != a.t_ms, "LineBarcodeTask publishes its snapshot");
-    TEST_CHECK("S3-U03", ((b.flags & LINE_FLAG_HW_OK) != 0u) && ((b.blocks - a.blocks) >= 8u) &&
-                         ((b.blocks - a.blocks) <= 12u),
+    line_get_snap(&snap_b);
+    TEST_CHECK("S3-U02", snap_b.t_ms != snap_a.t_ms, "LineBarcodeTask publishes its snapshot");
+    TEST_CHECK("S3-U03", ((snap_b.flags & LINE_FLAG_HW_OK) != 0u) && ((snap_b.blocks - snap_a.blocks) >= 8u) &&
+                         ((snap_b.blocks - snap_a.blocks) <= 12u),
                "ADC + DMA deliver ~10 blocks per 100 ms (1 kHz per channel)");
 
     /* Decoder on the target CPU (same code as the host tests). */
-    for (k = 0; k < 3; k++)
+    for (kdx = 0; kdx < 3; kdx++)
     {
-        uint16_t pat = code39_pattern(seq[k]);
+        uint16_t pat = code39_pattern(seq[kdx]);
 
-        for (e = 0; e < 9; e++)
+        for (elem = 0; elem < 9; elem++)
         {
-            w[n++] = ((pat >> (8 - e)) & 1u) ? 9000u : 3000u;
+            elem_widths[n_elems++] = ((pat >> (8 - elem)) & 1u) ? 9000u : 3000u;
         }
-        if (k < 2)
+        if (kdx < 2)
         {
-            w[n++] = 3000u;
+            elem_widths[n_elems++] = 3000u;
         }
     }
-    TEST_CHECK("S3-U04", (code39_decode_one(w, n, 15u, &ch, &b_rev) == CODE39_OK) && (ch == 'F'),
+    TEST_CHECK("S3-U04", (code39_decode_one(elem_widths, n_elems, 15u, &chr, &b_rev) == CODE39_OK) && (chr == 'F'),
                "Code 39 *F* decodes on target");
 
     /* ---- S3-U05: no ADC block lost in 1 s; live readings (NFR2) ---- */
-    line_get_snap(&a);
+    line_get_snap(&snap_a);
     (void)tk_dly_tsk(1000);
-    line_get_snap(&b);
+    line_get_snap(&snap_b);
     tm_printf((UB *)"[INFO] S3-U05 blocks %d in 1 s, lost %d; IR now L %d R %d barcode %d (0..1000, 1000 = black)\n",
-              (INT)(b.blocks - a.blocks), (INT)(b.missed_blocks - a.missed_blocks),
-              (INT)b.raw_l, (INT)b.raw_r, (INT)b.raw_bc);
-    TEST_CHECK("S3-U05", ((b.flags & LINE_FLAG_HW_OK) != 0u) && ((b.blocks - a.blocks) >= 95u) &&
-                         ((b.blocks - a.blocks) <= 105u) && (b.missed_blocks == a.missed_blocks) &&
-                         (b.raw_l <= 1000u) && (b.raw_r <= 1000u) && (b.raw_bc <= 1000u),
+              (INT)(snap_b.blocks - snap_a.blocks), (INT)(snap_b.missed_blocks - snap_a.missed_blocks),
+              (INT)snap_b.raw_l, (INT)snap_b.raw_r, (INT)snap_b.raw_bc);
+    TEST_CHECK("S3-U05", ((snap_b.flags & LINE_FLAG_HW_OK) != 0u) && ((snap_b.blocks - snap_a.blocks) >= 95u) &&
+                         ((snap_b.blocks - snap_a.blocks) <= 105u) && (snap_b.missed_blocks == snap_a.missed_blocks) &&
+                         (snap_b.raw_l <= 1000u) && (snap_b.raw_r <= 1000u) && (snap_b.raw_bc <= 1000u),
                "100 ADC blocks per second, none lost; readings in 0..1000");
 
     /* ---- S3-U07: whole barcode pipeline on the target, timed -------- */
     {
         uint32_t    widths[29];
-        uint16_t    nw = make_star_code('A', widths);
-        uint32_t    x;
+        uint16_t    n_widths = make_star_code('A', widths);
+        uint32_t    x_val;
         uint32_t    worst_us = 0u;
         uint32_t    total_us = 0u;
         uint32_t    samples  = 0u;
@@ -130,33 +130,33 @@ EXPORT void subsystem3_test(void)
         bc_out_t    out_ok   = {0};
 
         bc_init(&g_t_bc);
-        for (x = 0u; x < T_TRACK_UM; x += T_STEP_UM)
+        for (x_val = 0u; x_val < T_TRACK_UM; x_val += T_STEP_UM)
         {
             bc_out_t       out = {0};
-            uint32_t const t0  = (uint32_t)app_time_us();
-            bc_result_t    r   = bc_sample(&g_t_bc, level_at(widths, nw, x), T_STEP_UM, &out);
-            uint32_t const dt  = (uint32_t)app_time_us() - t0;
+            uint32_t const t_start  = (uint32_t)app_time_us();
+            bc_result_t    result   = bc_sample(&g_t_bc, level_at(widths, n_widths, x_val), T_STEP_UM, &out);
+            uint32_t const elapsed  = (uint32_t)app_time_us() - t_start;
 
-            total_us += dt;
+            total_us += elapsed;
             samples++;
-            if (dt > worst_us)
+            if (elapsed > worst_us)
             {
-                worst_us = dt;
+                worst_us = elapsed;
             }
-            if (r != BC_NONE)
+            if (result != BC_NONE)
             {
                 results++;
                 if (found == BC_NONE)
                 {
-                    found  = r;
+                    found  = result;
                     out_ok = out;
                 }
             }
         }
         tm_printf((UB *)"[INFO] S3-U07 result %d char '%c' pass %d; worst sample %d us, mean %d us over %d samples\n",
-                  (INT)found, (INT)((out_ok.ch != '\0') ? out_ok.ch : '?'), (INT)g_t_bc.pass,
+                  (INT)found, (INT)((out_ok.chr != '\0') ? out_ok.chr : '?'), (INT)g_t_bc.pass,
                   (INT)worst_us, (INT)(total_us / samples), (INT)samples);
-        TEST_CHECK("S3-U07", (found == BC_VALID) && (out_ok.ch == 'A') && (results == 1u) &&
+        TEST_CHECK("S3-U07", (found == BC_VALID) && (out_ok.chr == 'A') && (results == 1u) &&
                              (worst_us < T_BLOCK_US),
                    "barcode *A* decodes once through bc_sample; slowest call fits a 10 ms block");
     }

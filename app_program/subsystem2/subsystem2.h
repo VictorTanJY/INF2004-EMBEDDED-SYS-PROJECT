@@ -44,7 +44,7 @@ IMPORT ID g_mbf_motion;         /* mbf_motion in the design documents */
 IMPORT ER motion_send(motion_cmd_t const * p_cmd);
 
 /* Helper for senders: fills and posts one command. */
-IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t p0, int16_t p1);
+IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0, int16_t arg1);
 
 /* The named API (FR5): motion_move_forward / _backward, motion_turn_left /
    _right, motion_stop, motion_drive.  Use these; motion_post stays for
@@ -88,6 +88,6 @@ IMPORT volatile uint32_t g_estop_test_us;
 
 /* Private to subsystem 2 */
 IMPORT void motion_task(INT stacd, void * p_exinf);
-IMPORT bool motion_estop_clear_and_reconnect(void);   /* MotionTask only */
+IMPORT bool motion_estop_clear_reconnect(void);   /* MotionTask only */
 
 #endif /* SUBSYSTEM2_H */

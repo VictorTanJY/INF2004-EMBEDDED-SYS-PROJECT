@@ -12,10 +12,10 @@
 #include "comms_proto.h"
 #include "../app_pack.h"
 
-typedef char comms_check_symbols[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
+typedef char comms_check_symbols_t[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
 
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
-static comms_param_t const k_params[COMMS_PARAM_COUNT] =
+static comms_param_t const g_params[COMMS_PARAM_COUNT] =
 {
     { "speed_mm_s",  1u, 150, 350 },  /* cruise speed, NFR11 (Buddy 2/3)       */
     { "slow_cm",     2u,  25,  60 },  /* slow-down range, FR9, default 40 (B5) */
@@ -39,9 +39,9 @@ static comms_param_t const k_params[COMMS_PARAM_COUNT] =
 /* ---------------------------------------------------------------------
  *  Helpers
  * --------------------------------------------------------------------- */
-uint8_t comms_symbol_index(char c)
+uint8_t comms_symbol_index(char chr)
 {
-    return pk_sym_index(c);
+    return pk_sym_index(chr);
 }
 
 char comms_symbol_char(uint8_t index)
@@ -58,22 +58,22 @@ static void put_header(pk_writer_t * p_w, comms_frame_type_t type)
 /* centi-degrees -> tenths of a degree, rounded half away from zero. */
 static int32_t cdeg_to_tenths(int16_t cdeg)
 {
-    int32_t c = (int32_t)cdeg;
+    int32_t value = (int32_t)cdeg;
 
-    return (c >= 0) ? ((c + 5) / 10) : -((5 - c) / 10);
+    return (value >= 0) ? ((value + 5) / 10) : -((5 - value) / 10);
 }
 
 /* mm -> cm, rounded; none_code if absent or too large for the field. */
-static uint32_t mm_to_cm_field(uint16_t mm, bool b_valid, uint32_t none_code)
+static uint32_t mm_to_cm_field(uint16_t value_mm, bool b_valid, uint32_t none_code)
 {
-    uint32_t cm;
+    uint32_t value_cm;
 
-    if (!b_valid || (mm == COMMS_D_NONE))
+    if (!b_valid || (value_mm == COMMS_D_NONE))
     {
         return none_code;
     }
-    cm = ((uint32_t)mm + 5u) / 10u;
-    return (cm >= none_code) ? (none_code - 1u) : cm;
+    value_cm = ((uint32_t)value_mm + 5u) / 10u;
+    return (value_cm >= none_code) ? (none_code - 1u) : value_cm;
 }
 
 /* ---------------------------------------------------------------------
@@ -82,14 +82,14 @@ static uint32_t mm_to_cm_field(uint16_t mm, bool b_valid, uint32_t none_code)
 void comms_rec_pack(comms_rec_t * p_rec, uint8_t kind, uint8_t src, uint16_t code,
                     int32_t data, uint32_t now_ms)
 {
-    uint32_t w = 0u;
-    uint32_t const k = ((kind >= 1u) && (kind <= 4u)) ? (uint32_t)(kind - 1u) : 3u;   /* unknown -> LOG */
+    uint32_t word = 0u;
+    uint32_t const kind_idx = ((kind >= 1u) && (kind <= 4u)) ? (uint32_t)(kind - 1u) : 3u;   /* unknown -> LOG */
 
-    w = pk_set(w, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS, k);
-    w = pk_set(w, COMMS_REC_SRC_SHIFT,  COMMS_REC_SRC_BITS,  pk_sat_u(src, COMMS_REC_SRC_BITS));
-    w = pk_set(w, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS, pk_sat_u(code, COMMS_REC_CODE_BITS));
-    w = pk_set(w, COMMS_REC_T_SHIFT,    COMMS_REC_T_BITS,    (now_ms / 10u) & pk_mask(COMMS_REC_T_BITS));
-    p_rec->hdr  = w;
+    word = pk_set(word, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS, kind_idx);
+    word = pk_set(word, COMMS_REC_SRC_SHIFT,  COMMS_REC_SRC_BITS,  pk_sat_u(src, COMMS_REC_SRC_BITS));
+    word = pk_set(word, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS, pk_sat_u(code, COMMS_REC_CODE_BITS));
+    word = pk_set(word, COMMS_REC_T_SHIFT,    COMMS_REC_T_BITS,    (now_ms / 10u) & pk_mask(COMMS_REC_T_BITS));
+    p_rec->hdr  = word;
     p_rec->data = data;
 }
 
@@ -111,53 +111,53 @@ void comms_rec_unpack(comms_rec_t const * p_rec, uint32_t now_ms, comms_event_t 
  * --------------------------------------------------------------------- */
 uint16_t comms_build_telemetry(comms_telem_t const * p_t, uint8_t * p_buf, uint16_t cap)
 {
-    pk_writer_t w;
+    pk_writer_t writer;
     bool const  b_prof = p_t->b_obst_valid;
 
-    pk_writer_init(&w, p_buf, cap);
-    put_header(&w, COMMS_FT_TELEMETRY);
-    pk_put(&w, p_t->seq, 8u);
-    pk_put(&w, p_t->t_ms / 10u, T10_BITS);
-    pk_put(&w, pk_sat_u(p_t->state, COMMS_STATE_BITS), COMMS_STATE_BITS);
-    pk_put(&w, pk_off_s(p_t->v_l_mm_s, 10u), 10u);
-    pk_put(&w, pk_off_s(p_t->v_r_mm_s, 10u), 10u);
-    pk_put(&w, (uint32_t)p_t->enc_l, 16u);
-    pk_put(&w, (uint32_t)p_t->enc_r, 16u);
-    pk_put(&w, (uint32_t)p_t->dist_mm, 16u);
-    pk_put(&w, pk_off_s(p_t->line_err, 11u), 11u);
-    pk_put(&w, p_t->b_line_lost ? 1u : 0u, 1u);
-    pk_put(&w, pk_sat_u(p_t->line_bc, 10u), 10u);
-    pk_put(&w, comms_symbol_index(p_t->barcode), 6u);
-    pk_put(&w, comms_symbol_index(p_t->nav), 6u);
-    pk_put(&w, pk_off_s(cdeg_to_tenths(p_t->pitch_cdeg), 11u), 11u);
-    pk_put(&w, pk_off_s(cdeg_to_tenths(p_t->roll_cdeg), 12u), 12u);
-    pk_put(&w, pk_sat_u(p_t->hump_max_mm, 8u), 8u);
-    pk_put(&w, mm_to_cm_field(p_t->obst_d_mm, true, NONE_D_CM), 9u);
-    pk_put(&w, b_prof ? ((p_t->obst_w_mm >= NONE_W_MM) ? (NONE_W_MM - 1u) : p_t->obst_w_mm)
+    pk_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_TELEMETRY);
+    pk_put(&writer, p_t->seq, 8u);
+    pk_put(&writer, p_t->t_ms / 10u, T10_BITS);
+    pk_put(&writer, pk_sat_u(p_t->state, COMMS_STATE_BITS), COMMS_STATE_BITS);
+    pk_put(&writer, pk_off_s(p_t->v_l_mm_s, 10u), 10u);
+    pk_put(&writer, pk_off_s(p_t->v_r_mm_s, 10u), 10u);
+    pk_put(&writer, (uint32_t)p_t->enc_l, 16u);
+    pk_put(&writer, (uint32_t)p_t->enc_r, 16u);
+    pk_put(&writer, (uint32_t)p_t->dist_mm, 16u);
+    pk_put(&writer, pk_off_s(p_t->line_err, 11u), 11u);
+    pk_put(&writer, p_t->b_line_lost ? 1u : 0u, 1u);
+    pk_put(&writer, pk_sat_u(p_t->line_bc, 10u), 10u);
+    pk_put(&writer, comms_symbol_index(p_t->barcode), 6u);
+    pk_put(&writer, comms_symbol_index(p_t->nav), 6u);
+    pk_put(&writer, pk_off_s(cdeg_to_tenths(p_t->pitch_cdeg), 11u), 11u);
+    pk_put(&writer, pk_off_s(cdeg_to_tenths(p_t->roll_cdeg), 12u), 12u);
+    pk_put(&writer, pk_sat_u(p_t->hump_max_mm, 8u), 8u);
+    pk_put(&writer, mm_to_cm_field(p_t->obst_d_mm, true, NONE_D_CM), 9u);
+    pk_put(&writer, b_prof ? ((p_t->obst_w_mm >= NONE_W_MM) ? (NONE_W_MM - 1u) : p_t->obst_w_mm)
                       : NONE_W_MM, 10u);
-    pk_put(&w, mm_to_cm_field(p_t->clr_l_mm, b_prof, NONE_CLR_CM), 7u);
-    pk_put(&w, mm_to_cm_field(p_t->clr_r_mm, b_prof, NONE_CLR_CM), 7u);
-    return pk_writer_len(&w);
+    pk_put(&writer, mm_to_cm_field(p_t->clr_l_mm, b_prof, NONE_CLR_CM), 7u);
+    pk_put(&writer, mm_to_cm_field(p_t->clr_r_mm, b_prof, NONE_CLR_CM), 7u);
+    return pk_writer_len(&writer);
 }
 
 uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p_buf, uint16_t cap)
 {
-    pk_writer_t   w;
-    int32_t const d = p_ev->data;
+    pk_writer_t   writer;
+    int32_t const data = p_ev->data;
     uint8_t       dlen;
     uint8_t       width;
 
-    if (d == 0)
+    if (data == 0)
     {
         dlen  = 0u;
         width = 0u;
     }
-    else if ((d >= -128) && (d <= 127))
+    else if ((data >= -128) && (data <= 127))
     {
         dlen  = 1u;
         width = 8u;
     }
-    else if ((d >= -32768) && (d <= 32767))
+    else if ((data >= -32768) && (data <= 32767))
     {
         dlen  = 2u;
         width = 16u;
@@ -168,56 +168,56 @@ uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p
         width = 32u;
     }
 
-    pk_writer_init(&w, p_buf, cap);
-    put_header(&w, COMMS_FT_EVENT);
-    pk_put(&w, seq, 8u);
-    pk_put(&w, p_ev->t_ms / 10u, T10_BITS);
-    pk_put(&w, ((p_ev->kind >= 1u) && (p_ev->kind <= 4u)) ? (uint32_t)(p_ev->kind - 1u) : 3u, 2u);
-    pk_put(&w, pk_sat_u(p_ev->src, COMMS_SRC_BITS), COMMS_SRC_BITS);
-    pk_put(&w, pk_sat_u(p_ev->code, COMMS_REC_CODE_BITS), COMMS_REC_CODE_BITS);
-    pk_put(&w, dlen, 2u);
+    pk_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_EVENT);
+    pk_put(&writer, seq, 8u);
+    pk_put(&writer, p_ev->t_ms / 10u, T10_BITS);
+    pk_put(&writer, ((p_ev->kind >= 1u) && (p_ev->kind <= 4u)) ? (uint32_t)(p_ev->kind - 1u) : 3u, 2u);
+    pk_put(&writer, pk_sat_u(p_ev->src, COMMS_SRC_BITS), COMMS_SRC_BITS);
+    pk_put(&writer, pk_sat_u(p_ev->code, COMMS_REC_CODE_BITS), COMMS_REC_CODE_BITS);
+    pk_put(&writer, dlen, 2u);
     if (width > 0u)
     {
-        pk_put(&w, (uint32_t)d, width);     /* two's complement, low bits */
+        pk_put(&writer, (uint32_t)data, width);     /* two's complement, low bits */
     }
-    return pk_writer_len(&w);
+    return pk_writer_len(&writer);
 }
 
 uint16_t comms_build_status(uint32_t uptime_s, int32_t rssi, uint32_t drops,
                             char const * p_map, uint8_t * p_buf, uint16_t cap)
 {
-    pk_writer_t w;
+    pk_writer_t writer;
     uint32_t    neg_rssi = (rssi < 0) ? (uint32_t)(-(int64_t)rssi) : 0u;
     bool const  b_map    = (p_map != NULL) && (p_map[0] != '\0');
-    uint8_t     k;
+    uint8_t     kdx;
 
-    pk_writer_init(&w, p_buf, cap);
-    put_header(&w, COMMS_FT_STATUS);
-    pk_put(&w, pk_sat_u(uptime_s, 17u), 17u);
-    pk_put(&w, pk_sat_u(neg_rssi, 7u), 7u);
-    pk_put(&w, pk_sat_u(drops, 8u), 8u);
-    pk_put(&w, b_map ? 1u : 0u, 1u);
+    pk_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_STATUS);
+    pk_put(&writer, pk_sat_u(uptime_s, 17u), 17u);
+    pk_put(&writer, pk_sat_u(neg_rssi, 7u), 7u);
+    pk_put(&writer, pk_sat_u(drops, 8u), 8u);
+    pk_put(&writer, b_map ? 1u : 0u, 1u);
     if (b_map)
     {
-        for (k = 0u; k < 4u; k++)
+        for (kdx = 0u; kdx < 4u; kdx++)
         {
-            pk_put(&w, comms_symbol_index(p_map[k]), 6u);
+            pk_put(&writer, comms_symbol_index(p_map[kdx]), 6u);
         }
     }
-    return pk_writer_len(&w);
+    return pk_writer_len(&writer);
 }
 
 uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
                          uint8_t * p_buf, uint16_t cap)
 {
-    pk_writer_t w;
+    pk_writer_t writer;
 
-    pk_writer_init(&w, p_buf, cap);
-    put_header(&w, COMMS_FT_ACK);
-    pk_put(&w, p_cmd->b_has_id ? 1u : 0u, 1u);
-    pk_put(&w, p_cmd->b_has_id ? p_cmd->id : 0u, COMMS_ID_BITS);
-    pk_put(&w, pk_sat_u((uint32_t)err, COMMS_ERR_BITS), COMMS_ERR_BITS);
-    return pk_writer_len(&w);
+    pk_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_ACK);
+    pk_put(&writer, p_cmd->b_has_id ? 1u : 0u, 1u);
+    pk_put(&writer, p_cmd->b_has_id ? p_cmd->cmd_id : 0u, COMMS_ID_BITS);
+    pk_put(&writer, pk_sat_u((uint32_t)err, COMMS_ERR_BITS), COMMS_ERR_BITS);
+    return pk_writer_len(&writer);
 }
 
 /* ---------------------------------------------------------------------
@@ -225,18 +225,18 @@ uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
  * --------------------------------------------------------------------- */
 comms_param_t const * comms_param_by_index(uint8_t index)
 {
-    return (index < COMMS_PARAM_COUNT) ? &k_params[index] : NULL;
+    return (index < COMMS_PARAM_COUNT) ? &g_params[index] : NULL;
 }
 
-comms_param_t const * comms_param_by_id(uint8_t id)
+comms_param_t const * comms_param_by_id(uint8_t param_id)
 {
-    uint8_t i;
+    uint8_t idx;
 
-    for (i = 0u; i < COMMS_PARAM_COUNT; i++)
+    for (idx = 0u; idx < COMMS_PARAM_COUNT; idx++)
     {
-        if (k_params[i].id == id)
+        if (g_params[idx].param_id == param_id)
         {
-            return &k_params[i];
+            return &g_params[idx];
         }
     }
     return NULL;
@@ -244,31 +244,31 @@ comms_param_t const * comms_param_by_id(uint8_t id)
 
 comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd)
 {
-    pk_reader_t r;
+    pk_reader_t reader;
     uint32_t    type;
     uint32_t    version;
 
-    p_cmd->id       = 0u;
+    p_cmd->cmd_id       = 0u;
     p_cmd->b_has_id = false;
     p_cmd->cmd      = (uint8_t)COMMS_CMD_NONE;
     p_cmd->param_id = 0u;
     p_cmd->value    = 0;
 
-    pk_reader_init(&r, p_data, len);
-    type    = pk_take(&r, 5u);
-    version = pk_take(&r, 3u);
-    if (r.b_short || (type != (uint32_t)COMMS_FT_CMD) || (version != COMMS_FRAME_VERSION))
+    pk_reader_init(&reader, p_data, len);
+    type    = pk_take(&reader, 5u);
+    version = pk_take(&reader, 3u);
+    if (reader.b_short || (type != (uint32_t)COMMS_FT_CMD) || (version != COMMS_FRAME_VERSION))
     {
         return COMMS_ERR_BAD_FRAME;
     }
-    p_cmd->id = (uint8_t)pk_take(&r, COMMS_ID_BITS);
-    if (r.b_short)
+    p_cmd->cmd_id = (uint8_t)pk_take(&reader, COMMS_ID_BITS);
+    if (reader.b_short)
     {
         return COMMS_ERR_NO_ID;
     }
     p_cmd->b_has_id = true;
-    p_cmd->cmd      = (uint8_t)pk_take(&r, COMMS_CMD_BITS);
-    if (r.b_short)
+    p_cmd->cmd      = (uint8_t)pk_take(&reader, COMMS_CMD_BITS);
+    if (reader.b_short)
     {
         return COMMS_ERR_BAD_FRAME;
     }
@@ -293,14 +293,14 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
             {
                 return COMMS_ERR_BAD_FRAME;
             }
-            index         = pk_take(&r, COMMS_PARAM_BITS);
-            p_cmd->value  = pk_unoff_s(pk_take(&r, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
+            index         = pk_take(&reader, COMMS_PARAM_BITS);
+            p_cmd->value  = pk_unoff_s(pk_take(&reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
             p_param       = comms_param_by_index((uint8_t)index);
             if (p_param == NULL)
             {
                 return COMMS_ERR_BAD_PARAM;
             }
-            p_cmd->param_id = p_param->id;
+            p_cmd->param_id = p_param->param_id;
             if ((p_cmd->value < p_param->min) || (p_cmd->value > p_param->max))
             {
                 return COMMS_ERR_RANGE;
@@ -310,30 +310,30 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
 
         case COMMS_CMD_MAP:
         {
-            char     ch[4];
+            char     chars[4];
             uint32_t packed = 0u;
-            uint8_t  k;
-            uint8_t  j;
+            uint8_t  kdx;
+            uint8_t  jdx;
 
             if (len != 6u)
             {
                 return COMMS_ERR_BAD_FRAME;
             }
-            for (k = 0u; k < 4u; k++)
+            for (kdx = 0u; kdx < 4u; kdx++)
             {
-                ch[k] = comms_symbol_char((uint8_t)pk_take(&r, 6u));
-                if (ch[k] == '\0')
+                chars[kdx] = comms_symbol_char((uint8_t)pk_take(&reader, 6u));
+                if (chars[kdx] == '\0')
                 {
                     return COMMS_ERR_BAD_MAP;
                 }
-                for (j = 0u; j < k; j++)
+                for (jdx = 0u; jdx < kdx; jdx++)
                 {
-                    if (ch[j] == ch[k])
+                    if (chars[jdx] == chars[kdx])
                     {
                         return COMMS_ERR_BAD_MAP;
                     }
                 }
-                packed |= ((uint32_t)(uint8_t)ch[k]) << (8u * k);
+                packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
             }
             p_cmd->value = (int32_t)packed;
             break;
@@ -345,9 +345,9 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
     return COMMS_ERR_NONE;
 }
 
-bool comms_map_char_ok(char c)
+bool comms_map_char_ok(char chr)
 {
-    return (pk_sym_index(c) != 0u);
+    return (pk_sym_index(chr) != 0u);
 }
 
 comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)
@@ -387,14 +387,14 @@ bool comms_cmd_repeat_safe(uint8_t cmd)
 comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
                                        comms_cmd_t const * p_cmd, uint32_t now_ms)
 {
-    uint8_t i;
+    uint8_t idx;
 
-    for (i = 0u; i < p_dd->count; i++)
+    for (idx = 0u; idx < p_dd->count; idx++)
     {
-        comms_dedup_entry_t const * p_e = &p_dd->e[i];
+        comms_dedup_entry_t const * p_e = &p_dd->entries[idx];
 
         /* Unsigned difference: correct across the 32-bit ms wrap. */
-        if ((p_e->id == p_cmd->id) && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
+        if ((p_e->cmd_id == p_cmd->cmd_id) && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
         {
             if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id) &&
                 (p_e->value == p_cmd->value))
@@ -409,9 +409,9 @@ comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
 
 void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd, uint32_t now_ms)
 {
-    comms_dedup_entry_t * p_e = &p_dd->e[p_dd->next];
+    comms_dedup_entry_t * p_e = &p_dd->entries[p_dd->next];
 
-    p_e->id       = p_cmd->id;
+    p_e->cmd_id       = p_cmd->cmd_id;
     p_e->t_ms     = now_ms;
     p_e->cmd      = p_cmd->cmd;
     p_e->param_id = p_cmd->param_id;

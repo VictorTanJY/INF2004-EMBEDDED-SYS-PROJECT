@@ -107,7 +107,7 @@ typedef enum
 
 /* Code 39 data symbols, index 1..43 (0 = none). */
 #define COMMS_SYMBOL_COUNT      43u
-uint8_t comms_symbol_index(char c);     /* 0 if c is not a data symbol */
+uint8_t comms_symbol_index(char chr);     /* 0 if c is not a data symbol */
 char    comms_symbol_char(uint8_t index); /* '\0' for 0 or out of range */
 
 /* ---------------------------------------------------------------------
@@ -190,7 +190,7 @@ typedef enum
 /* Unpacked command (task-local). */
 typedef struct
 {
-    uint8_t  id;
+    uint8_t  cmd_id;
     bool     b_has_id;
     uint8_t  cmd;               /* comms_cmd_code_t                       */
     uint8_t  param_id;          /* set only: comms_param_t.id             */
@@ -207,7 +207,7 @@ comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle);
 comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated);
 
 /* A character the map may use: any Code 39 data character (not '*'). */
-bool        comms_map_char_ok(char c);
+bool        comms_map_char_ok(char chr);
 
 uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
                          uint8_t * p_buf, uint16_t cap);
@@ -217,7 +217,7 @@ uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
 typedef struct
 {
     char const * p_name;
-    uint8_t      id;
+    uint8_t      param_id;
     int32_t      min;
     int32_t      max;
 } comms_param_t;
@@ -228,7 +228,7 @@ typedef struct
 #define COMMS_PARAM_COUNT       5u
 #endif
 comms_param_t const * comms_param_by_index(uint8_t index);  /* frame index */
-comms_param_t const * comms_param_by_id(uint8_t id);
+comms_param_t const * comms_param_by_id(uint8_t param_id);
 
 /* ---------------------------------------------------------------------
  *  Duplicate suppression (Tribunal 1 Version C gap 9).
@@ -250,14 +250,14 @@ typedef struct
 {
     uint32_t t_ms;
     int32_t  value;
-    uint8_t  id;
+    uint8_t  cmd_id;
     uint8_t  cmd;
     uint8_t  param_id;
 } comms_dedup_entry_t;
 
 typedef struct
 {
-    comms_dedup_entry_t e[COMMS_DEDUP_LEN];
+    comms_dedup_entry_t entries[COMMS_DEDUP_LEN];
     uint8_t             next;       /* slot to overwrite next          */
     uint8_t             count;
 } comms_dedup_t;

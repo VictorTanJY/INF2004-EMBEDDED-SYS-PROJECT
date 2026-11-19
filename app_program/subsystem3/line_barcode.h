@@ -27,7 +27,7 @@ typedef enum
 
 typedef struct
 {
-    char     ch;
+    char     chr;
     uint8_t  reason;            /* code39_result_t */
     bool     b_reversed;
     uint16_t elements;
@@ -44,7 +44,7 @@ typedef struct
     uint32_t total_um;
     uint32_t max_elem_um;
     uint32_t cooldown_um;
-    uint16_t n;
+    uint16_t n_elems;
     uint16_t peak;
     uint16_t ext;               /* extreme of the current element (BC_DELTA) */
     uint32_t widths[BC_MAX_ELEMENTS + 1u];

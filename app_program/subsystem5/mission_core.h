@@ -43,8 +43,8 @@ typedef struct
     uint8_t kind;                   /* mission_act_kind_t */
     uint8_t cmd;
     uint8_t seq;
-    int16_t p0;
-    int16_t p1;
+    int16_t arg0;
+    int16_t arg1;
 } mission_act_t;
 
 #define MISSION_ACT_MAX     12u
@@ -52,7 +52,7 @@ typedef struct
 typedef struct
 {
     mission_act_t act[MISSION_ACT_MAX];
-    uint8_t       n;
+    uint8_t       n_acts;
 } mission_out_t;
 
 /* What the tick needs to know about the rest of the system. */
@@ -92,10 +92,10 @@ void mission_core_tick(mission_core_t * p_mc, mission_inputs_t const * p_in, uin
                        mission_out_t * p_out);
 
 /* Helpers shared with CommsTask's validation and the tests. */
-bool mission_map_char_ok(char c);
+bool mission_map_char_ok(char chr);
 bool mission_map_unpack(int32_t packed, char map[MISSION_NAV_COUNT]);
 int32_t mission_map_pack(char const map[MISSION_NAV_COUNT]);
-uint8_t mission_nav_for(mission_snap_t const * p_snap, char c);
+uint8_t mission_nav_for(mission_snap_t const * p_snap, char chr);
 
 /* ---------------------------------------------------------------------
  *  Change Requirement 1 (minimum-bit data): mbf_mission events, mbf_scan

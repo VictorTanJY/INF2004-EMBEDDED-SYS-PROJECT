@@ -37,22 +37,22 @@
 
 IMPORT volatile uint32_t g_safety_latched;   /* subsystem4.c */
 
-static volatile bool g_b_tick_ok;
-static volatile bool g_b_tick_checked;
+static volatile bool gb_tick_ok;
+static volatile bool gb_tick_checked;
 EXPORT volatile UW   g_safety_tick_us;  /* measured us per 100 ms of kernel time */
 
 EXPORT bool safety_timer_tick_ok(void)
 {
-    return g_b_tick_checked && g_b_tick_ok;
+    return gb_tick_checked && gb_tick_ok;
 }
 
 static void read_heartbeats(uint32_t counts[SAFETY_HB_COUNT])
 {
-    uint8_t k;
+    uint8_t kdx;
 
-    for (k = 0u; k < (uint8_t)SAFETY_HB_COUNT; k++)
+    for (kdx = 0u; kdx < (uint8_t)SAFETY_HB_COUNT; kdx++)
     {
-        counts[k] = safety_heartbeat_count((safety_hb_t)k);
+        counts[kdx] = safety_heartbeat_count((safety_hb_t)kdx);
     }
 }
 
@@ -123,7 +123,7 @@ static void check_timer_tick(void)
     UW       prev;
     UW       acc = 0u;
     UW       us0;
-    UW       du;
+    UW       delta_us;
     UW       guard = 0u;
     UINT     intsts;
     bool     b_borrowed = false;
@@ -147,7 +147,7 @@ static void check_timer_tick(void)
         prev = cur;
         guard++;
     }
-    du = app_time_us() - us0;
+    delta_us = app_time_us() - us0;
     if (b_borrowed)
     {
         out_w(CHK_SYST_CSR, 0u);                        /* back to the kernel's state */
@@ -155,14 +155,14 @@ static void check_timer_tick(void)
     }
     EI(intsts);
 
-    g_safety_tick_us = (UW)(((UD)du * 100000u) / 2000u);   /* scaled to us per 100 ms */
-    g_b_tick_ok      = (acc >= CHK_SYS_COUNTS) && (du > 1900u) && (du < 2100u);
-    g_b_tick_checked = true;
+    g_safety_tick_us = (UW)(((UD)delta_us * 100000u) / 2000u);   /* scaled to us per 100 ms */
+    gb_tick_ok      = (acc >= CHK_SYS_COUNTS) && (delta_us > 1900u) && (delta_us < 2100u);
+    gb_tick_checked = true;
 }
 
 EXPORT void safety_task(INT stacd, void * p_exinf)
 {
-    safety_hb_state_t hb = {0};
+    safety_hb_state_t hb_state = {0};
     uint32_t          counts[SAFETY_HB_COUNT];
     uint32_t          missed_logged = 0u;
 
@@ -177,29 +177,29 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
     drv_watchdog_enable(SAFETY_WD_TIMEOUT_MS);
 
     read_heartbeats(counts);
-    safety_hb_start(&hb, counts, (uint32_t)app_time_ms());
+    safety_hb_start(&hb_state, counts, (uint32_t)app_time_ms());
 
     for (;;)
     {
         UINT     ptn = 0u;
-        ER       er;
+        ER       err;
         uint32_t now_ms;
         uint32_t missed;
 
-        er = tk_wai_flg(g_flg_safety,
+        err = tk_wai_flg(g_flg_safety,
                         SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
                         TWF_ORW | TWF_BITCLR, &ptn, S4_SAFETY_PERIOD_MS);
         drv_watchdog_feed();
         now_ms = (uint32_t)app_time_ms();
 
-        if ((er == E_OK) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
+        if ((err == E_OK) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
         {
             motor_estop();                          /* NFR8: brake first */
             latch(ptn & SAFETY_BRAKE_MASK, now_ms);
         }
 
         read_heartbeats(counts);
-        missed = safety_hb_check(&hb, counts, now_ms);
+        missed = safety_hb_check(&hb_state, counts, now_ms);
         if (missed != 0u)
         {
             motor_estop();
@@ -212,16 +212,16 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
             }
         }
 
-        if ((er == E_OK) && ((ptn & SAFETY_REQ_RESET) != 0u))
+        if ((err == E_OK) && ((ptn & SAFETY_REQ_RESET) != 0u))
         {
-            uint32_t const live = live_causes(&hb, now_ms);
+            uint32_t const live = live_causes(&hb_state, now_ms);
 
             if (live == 0u)
             {
                 g_safety_latched = 0u;
                 missed_logged    = 0u;
                 read_heartbeats(counts);
-                safety_hb_start(&hb, counts, now_ms);
+                safety_hb_start(&hb_state, counts, now_ms);
                 (void)mission_post((uint8_t)MISSION_EV_SAFETY_OK, (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
             }
             else

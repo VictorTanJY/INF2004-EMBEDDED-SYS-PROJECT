@@ -33,7 +33,7 @@ void     line_cal_sample(line_cal_t * p_cal, uint16_t const raw[LINE_CH_COUNT]);
    Keeps the previous calibration if it fails. */
 bool     line_cal_finish(line_cal_t * p_cal);
 /* Raw 12-bit -> 0..1000, 1000 = black. */
-uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t ch, uint16_t raw);
+uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t chan, uint16_t raw);
 /* After each barcode read: move the barcode channel's black level toward
    the darkest bar seen (its spin calibration only sees the line). */
 
@@ -62,7 +62,7 @@ typedef struct
     int32_t  peak_err;          /* strongest err of the last LINE_EXIT_PEAK_UM */
     uint32_t peak_um;           /* distance since peak_err was set    */
     int32_t  omega;             /* mrad/s */
-    int32_t  v;                 /* mm/s   */
+    int32_t  v_mm_s;                 /* mm/s   */
     uint32_t both_black_um;
     uint32_t both_white_um;
     uint32_t straight_um;       /* distance since |omega| last exceeded 0.5 rad/s */
@@ -88,7 +88,7 @@ typedef struct
     int16_t  h_ddeg[LINE_SLIP_MAX_BLOCKS];  /* encoder heading turned since the start */
     uint16_t raw_l[LINE_SLIP_MAX_BLOCKS];   /* block means, raw ADC                    */
     uint16_t raw_r[LINE_SLIP_MAX_BLOCKS];
-    uint16_t n;
+    uint16_t n_samples;
     int32_t  prev_cdeg;
     int32_t  acc_cdeg;
 } line_slip_t;

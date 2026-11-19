@@ -16,7 +16,7 @@ typedef struct
     uint8_t value;
 } reg_init_t;
 
-static reg_init_t const k_init[] =
+static reg_init_t const g_reg_init[] =
 {
     {0x22u, 0x00u}, /* Nothing routed to INT1 (14 Nov: impact interrupt removed). */
     {0x30u, 0x00u}, /* Interrupt generator 1 off. */
@@ -39,12 +39,12 @@ static uint32_t g_diag;
  * bits 15..8:  observed WHO_AM_I value
  * bits 7..0:   reserved
  */
-static ER init_result(uint8_t stage, ER er, uint8_t id)
+static ER init_result(uint8_t stage, ER err, uint8_t chip_id)
 {
     g_diag = ((uint32_t)stage << 24)
-           | (((uint32_t)(-er) & 0xFFu) << 16)
-           | ((uint32_t)id << 8);
-    return er;
+           | (((uint32_t)(-err) & 0xFFu) << 16)
+           | ((uint32_t)chip_id << 8);
+    return err;
 }
 
 EXPORT uint32_t drv_lsm303_diag(void)
@@ -63,11 +63,11 @@ EXPORT uint32_t drv_lsm303_diag(void)
 
 /* Sleep in 10 ms steps and keep ImuTask's heartbeat (100 ms timeout)
    alive: a reboot and retry take up to ~150 ms. */
-static void wait_ms(uint32_t ms)
+static void wait_ms(uint32_t delay_ms)
 {
-    uint32_t t;
+    uint32_t elapsed;
 
-    for (t = 0u; t < ms; t += 10u)
+    for (elapsed = 0u; elapsed < delay_ms; elapsed += 10u)
     {
         (void)tk_dly_tsk(10);
         safety_heartbeat(SAFETY_HB_IMU);
@@ -76,73 +76,73 @@ static void wait_ms(uint32_t ms)
 
 static ER init_once(void)
 {
-    uint8_t id = 0u;
+    uint8_t chip_id = 0u;
     int32_t acc[3];
-    uint32_t i;
-    ER er;
+    uint32_t idx;
+    ER err;
 
     g_diag = 0u;
 
-    er = drv_i2c1_read(SENSOR_ADDR, 0x0Fu, &id, 1u);
-    if (er != E_OK)
-        return init_result(1u, er, id);
+    err = drv_i2c1_read(SENSOR_ADDR, 0x0Fu, &chip_id, 1u);
+    if (err != E_OK)
+        return init_result(1u, err, chip_id);
 
-    if (id != 0x49u)
-        return init_result(2u, E_OBJ, id);
+    if (chip_id != 0x49u)
+        return init_result(2u, E_OBJ, chip_id);
 
     /* Reboot the chip's memory content first (CTRL0 BOOT). */
-    er = drv_i2c1_write_reg(SENSOR_ADDR, 0x1Fu, 0x80u);
-    if (er != E_OK)
-        return init_result(4u, er, id);
+    err = drv_i2c1_write_reg(SENSOR_ADDR, 0x1Fu, 0x80u);
+    if (err != E_OK)
+        return init_result(4u, err, chip_id);
     wait_ms(BOOT_WAIT_MS);
 
-    for (i = 0u; i < sizeof(k_init) / sizeof(k_init[0]); ++i)
+    for (idx = 0u; idx < sizeof(g_reg_init) / sizeof(g_reg_init[0]); ++idx)
     {
         uint8_t check = 0u;
 
-        er = drv_i2c1_write_reg(
-            SENSOR_ADDR, k_init[i].reg, k_init[i].value);
-        if (er != E_OK)
-            return init_result(4u, er, id);
+        err = drv_i2c1_write_reg(
+            SENSOR_ADDR, g_reg_init[idx].reg, g_reg_init[idx].value);
+        if (err != E_OK)
+            return init_result(4u, err, chip_id);
 
-        er = drv_i2c1_read(
-            SENSOR_ADDR, k_init[i].reg, &check, 1u);
-        if (er != E_OK)
-            return init_result(4u, er, id);
+        err = drv_i2c1_read(
+            SENSOR_ADDR, g_reg_init[idx].reg, &check, 1u);
+        if (err != E_OK)
+            return init_result(4u, err, chip_id);
 
-        if (check != k_init[i].value)
-            return init_result(4u, E_IO, id);
+        if (check != g_reg_init[idx].value)
+            return init_result(4u, E_IO, chip_id);
     }
 
     /* First readings: an axis at full scale means the output is stuck. */
     wait_ms(FIRST_DATA_WAIT_MS);
-    er = drv_lsm303_read_accel(acc);
-    if (er != E_OK)
-        return init_result(4u, er, id);
-    for (i = 0u; i < 3u; ++i)
+    err = drv_lsm303_read_accel(acc);
+    if (err != E_OK)
+        return init_result(4u, err, chip_id);
+    for (idx = 0u; idx < 3u; ++idx)
     {
-        if ((acc[i] >= STUCK_MG) || (acc[i] <= -STUCK_MG))
-            return init_result(5u, E_IO, id);
+        if ((acc[idx] >= STUCK_MG) || (acc[idx] <= -STUCK_MG))
+            return init_result(5u, E_IO, chip_id);
     }
 
-    return init_result(0u, E_OK, id);
+    return init_result(0u, E_OK, chip_id);
 }
 
 EXPORT ER drv_lsm303_init(void)
 {
-    ER er = init_once();
+    ER err = init_once();
 
-    if ((er != E_OK) && ((g_diag >> 24) == 5u))
+    if ((err != E_OK) && ((g_diag >> 24) == 5u))
     {
-        er = init_once();               /* stuck: reboot and try once more */
+        err = init_once();               /* stuck: reboot and try once more */
     }
-    return er;
+    return err;
 }
 
-static int16_t le16(uint8_t lo, uint8_t hi)
+static int16_t le16(uint8_t low, uint8_t high)
 {
     uint16_t const word =
-        (uint16_t)((uint16_t)lo | ((uint16_t)hi << 8));
+        (uint16_t)((uint16_t)low | ((uint16_t)high << 8));
 
     /* Avoid implementation-defined unsigned-to-signed overflow. */
     return (int16_t)((word & 0x8000u)
@@ -152,20 +152,20 @@ static int16_t le16(uint8_t lo, uint8_t hi)
 
 EXPORT ER drv_lsm303_read_accel(int32_t acc_mg[3])
 {
-    uint8_t b[6];
-    uint8_t k;
-    ER er;
+    uint8_t raw[6];
+    uint8_t kdx;
+    ER err;
 
-    er = drv_i2c1_read(
-        SENSOR_ADDR, (uint8_t)(0x28u | AUTO_INC), b, 6u);
-    if (er != E_OK)
-        return er;
+    err = drv_i2c1_read(
+        SENSOR_ADDR, (uint8_t)(0x28u | AUTO_INC), raw, 6u);
+    if (err != E_OK)
+        return err;
 
-    for (k = 0u; k < 3u; ++k)
+    for (kdx = 0u; kdx < 3u; ++kdx)
     {
         /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
-        acc_mg[k] =
-            ((int32_t)le16(b[2u * k], b[2u * k + 1u]) * 122)
+        acc_mg[kdx] =
+            ((int32_t)le16(raw[2u * kdx], raw[2u * kdx + 1u]) * 122)
             / 1000;
     }
 
@@ -174,17 +174,17 @@ EXPORT ER drv_lsm303_read_accel(int32_t acc_mg[3])
 
 EXPORT ER drv_lsm303_read_mag(int16_t mag[3])
 {
-    uint8_t b[6];
-    uint8_t k;
-    ER er;
+    uint8_t raw[6];
+    uint8_t kdx;
+    ER err;
 
-    er = drv_i2c1_read(
-        SENSOR_ADDR, (uint8_t)(0x08u | AUTO_INC), b, 6u);
-    if (er != E_OK)
-        return er;
+    err = drv_i2c1_read(
+        SENSOR_ADDR, (uint8_t)(0x08u | AUTO_INC), raw, 6u);
+    if (err != E_OK)
+        return err;
 
-    for (k = 0u; k < 3u; ++k)
-        mag[k] = le16(b[2u * k], b[2u * k + 1u]);
+    for (kdx = 0u; kdx < 3u; ++kdx)
+        mag[kdx] = le16(raw[2u * kdx], raw[2u * kdx + 1u]);
 
     return E_OK;
 }

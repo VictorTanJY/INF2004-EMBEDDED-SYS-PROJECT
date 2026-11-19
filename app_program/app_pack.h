@@ -57,21 +57,21 @@ static inline uint32_t pk_sat_u(uint32_t value, uint8_t width)
 static inline uint32_t pk_off_s(int32_t value, uint8_t width)
 {
 	int64_t const half = (int64_t)1 << (width - 1u);
-	int64_t       v    = (int64_t)value;
+	int64_t       clamped    = (int64_t)value;
 
-	if (v < -half)
+	if (clamped < -half)
 	{
-		v = -half;
+		clamped = -half;
 	}
-	else if (v > (half - 1))
+	else if (clamped > (half - 1))
 	{
-		v = half - 1;
+		clamped = half - 1;
 	}
 	else
 	{
 		/* in range */
 	}
-	return (uint32_t)(uint64_t)(v + half);
+	return (uint32_t)(uint64_t)(clamped + half);
 }
 
 /* Offset-binary field -> signed value. */
@@ -84,20 +84,20 @@ static inline int32_t pk_unoff_s(uint32_t field, uint8_t width)
 
 /* Difference a - b of two width-bit wrapping counters, as a signed value
    (correct while the true difference is within +-2^(width-1)). */
-static inline int32_t pk_wrap_diff(uint32_t a, uint32_t b, uint8_t width)
+static inline int32_t pk_wrap_diff(uint32_t lhs, uint32_t rhs, uint8_t width)
 {
-	uint32_t const d    = (a - b) & pk_mask(width);
+	uint32_t const diff    = (lhs - rhs) & pk_mask(width);
 	uint32_t const half = 1uL << (width - 1u);
 
-	return (d >= half) ? (int32_t)((int64_t)d - ((int64_t)1 << width)) : (int32_t)d;
+	return (diff >= half) ? (int32_t)((int64_t)diff - ((int64_t)1 << width)) : (int32_t)diff;
 }
 
 /* ---- Fields in a word: value already in range (saturate first) ------ */
 static inline uint32_t pk_set(uint32_t word, uint8_t shift, uint8_t width, uint32_t value)
 {
-	uint32_t const m = pk_mask(width) << shift;
+	uint32_t const mask = pk_mask(width) << shift;
 
-	return (word & ~m) | ((value << shift) & m);
+	return (word & ~mask) | ((value << shift) & mask);
 }
 
 static inline uint32_t pk_get(uint32_t word, uint8_t shift, uint8_t width)
@@ -130,7 +130,7 @@ uint32_t pk_take(pk_reader_t *p_r, uint8_t width);                  /* 0 and b_s
 
 /* ---- Code 39 data character in 6 bits (index 1..43, 0 = none) ------- */
 #define PK_SYM_COUNT	43u
-uint8_t  pk_sym_index(char c);
+uint8_t  pk_sym_index(char chr);
 char     pk_sym_char(uint8_t index);
 
 /* ---- Records: table-driven packing of a struct into words ------------ */
@@ -159,11 +159,11 @@ typedef struct
 /* Words needed for a number of bits. */
 #define PK_WORDS(bits)	(((bits) + 31u) / 32u)
 
-uint32_t pk_layout_bits(pk_field_t const *p_f, uint16_t n);
+uint32_t pk_layout_bits(pk_field_t const *p_f, uint16_t n_fields);
 /* Pack every field of p_rec into p_words (nwords, cleared first). */
-void     pk_pack_rec(pk_field_t const *p_f, uint16_t n, void const *p_rec,
+void     pk_pack_rec(pk_field_t const *p_f, uint16_t n_fields, void const *p_rec,
 		     uint32_t *p_words, uint16_t nwords);
 /* Unpack p_words into the fields of p_rec (other bytes are left as they are). */
-void     pk_unpack_rec(pk_field_t const *p_f, uint16_t n, uint32_t const *p_words, void *p_rec);
+void     pk_unpack_rec(pk_field_t const *p_f, uint16_t n_fields, uint32_t const *p_words, void *p_rec);
 
 #endif /* APP_PACK_H */

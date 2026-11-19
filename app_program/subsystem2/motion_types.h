@@ -59,8 +59,8 @@ typedef struct
     uint8_t seq;                /* sender's sequence number, 5 bits, wraps */
     uint8_t cmd;                /* motion_cmd_code_t                     */
     uint8_t reserved;           /* 0                                     */
-    int16_t p0;                 /* see motion_cmd_code_t                 */
-    int16_t p1;
+    int16_t arg0;                 /* see motion_cmd_code_t                 */
+    int16_t arg1;
 } motion_cmd_t;
 
 /* Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */

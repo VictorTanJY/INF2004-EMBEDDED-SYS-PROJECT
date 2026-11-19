@@ -40,22 +40,22 @@
 #define T_NO_TURN_MS        400             /* no counts by then: wheels idle  */
 #define T_SEQ               20u             /* 5-bit seq, not one MissionTask is waiting for */
 
-static int32_t iabs(int32_t v)
+static int32_t iabs(int32_t value)
 {
-    return (v < 0) ? -v : v;
+    return (value < 0) ? -value : value;
 }
 
 /* MissionTask idle and no brake latched, so MotionTask accepts MISSION
    moves and nothing else commands the wheels. */
 static bool wait_idle(uint32_t max_ms)
 {
-    mission_snap_t ms;
-    uint32_t       t;
+    mission_snap_t mission;
+    uint32_t       elapsed;
 
-    for (t = 0u; t < max_ms; t += 50u)
+    for (elapsed = 0u; elapsed < max_ms; elapsed += 50u)
     {
-        mission_get_snap(&ms);
-        if ((ms.state == (uint8_t)MISSION_ST_IDLE) && !motion_estop_latched())
+        mission_get_snap(&mission);
+        if ((mission.state == (uint8_t)MISSION_ST_IDLE) && !motion_estop_latched())
         {
             return true;
         }
@@ -67,9 +67,9 @@ static bool wait_idle(uint32_t max_ms)
 /* Wait until the MOVE/TURN posted after p_start completes; false on timeout. */
 static bool wait_done(motion_odom_t const * p_start, uint32_t max_ms, motion_odom_t * p_end)
 {
-    uint32_t t;
+    uint32_t elapsed;
 
-    for (t = 0u; t < max_ms; t += 20u)
+    for (elapsed = 0u; elapsed < max_ms; elapsed += 20u)
     {
         (void)tk_dly_tsk(20);
         motion_get_odom(p_end);
@@ -85,48 +85,48 @@ static bool wait_done(motion_odom_t const * p_start, uint32_t max_ms, motion_odo
 EXPORT void subsystem2_test(void)
 {
     T_RMBF               rmbf;
-    motion_odom_t        a;
-    motion_odom_t        b;
-    motion_test_timing_t tt;
+    motion_odom_t        snap_a;
+    motion_odom_t        snap_b;
+    motion_test_timing_t timing;
 
     TEST_INIT();
 
     TEST_CHECK("S2-U01", tk_ref_mbf(g_mbf_motion, &rmbf) == E_OK, "mbf_motion exists");
 
-    motion_get_odom(&a);
+    motion_get_odom(&snap_a);
     (void)tk_dly_tsk(50);
-    motion_get_odom(&b);
-    TEST_CHECK("S2-U03", b.t_ms != a.t_ms, "MotionTask publishes odometry every cycle");
-    TEST_CHECK("S2-U04", (b.hw_ok == 1u) && (in_w(PWM_TOP_SLICE4) == MOTION_PWM_TOP) &&
+    motion_get_odom(&snap_b);
+    TEST_CHECK("S2-U03", snap_b.t_ms != snap_a.t_ms, "MotionTask publishes odometry every cycle");
+    TEST_CHECK("S2-U04", (snap_b.hw_ok == 1u) && (in_w(PWM_TOP_SLICE4) == MOTION_PWM_TOP) &&
                          ((in_w(PIO0_CTRL_REG) & 0x3u) == 0x3u),
                "PWM 20 kHz configured, PIO0 SM0/SM1 counting");
-    TEST_CHECK("S2-U05", (b.state == (uint8_t)MOTION_ST_IDLE_BRAKED) && (b.duty_l == 0) &&
-                         (b.duty_r == 0),
+    TEST_CHECK("S2-U05", (snap_b.state == (uint8_t)MOTION_ST_IDLE_BRAKED) && (snap_b.duty_l == 0) &&
+                         (snap_b.duty_r == 0),
                "boots braked (duty 0/0)");
 
     (void)motion_drive((uint8_t)MOTION_SRC_LINE, 1u, 100, 0);
     (void)tk_dly_tsk(30);
-    motion_get_odom(&a);
-    TEST_CHECK("S2-U06", (a.rejected > b.rejected) && (a.state == (uint8_t)MOTION_ST_IDLE_BRAKED),
+    motion_get_odom(&snap_a);
+    TEST_CHECK("S2-U06", (snap_a.rejected > snap_b.rejected) && (snap_a.state == (uint8_t)MOTION_ST_IDLE_BRAKED),
                "DRIVE without LINE authority rejected");
 
     /* ---- S2-U07: loop period and run time over 1 s (NFR1) ---------- */
     motion_test_timing_restart();
     (void)tk_dly_tsk(1000);
-    motion_test_timing(&tt);
+    motion_test_timing(&timing);
     tm_printf((UB *)"[INFO] S2-U07 period min %d us, max %d us, run time max %d us, %d cycles\n",
-              (INT)tt.per_min_us, (INT)tt.per_max_us, (INT)tt.exec_max_us, (INT)tt.cycles);
-    TEST_CHECK("S2-U07", (tt.cycles >= 90u) && (tt.per_min_us >= T_PER_LO_US) &&
-                         (tt.per_max_us <= T_PER_HI_US) && (tt.exec_max_us <= T_EXEC_MAX_US),
+              (INT)timing.per_min_us, (INT)timing.per_max_us, (INT)timing.exec_max_us, (INT)timing.cycles);
+    TEST_CHECK("S2-U07", (timing.cycles >= 90u) && (timing.per_min_us >= T_PER_LO_US) &&
+                         (timing.per_max_us <= T_PER_HI_US) && (timing.exec_max_us <= T_EXEC_MAX_US),
                "MotionTask runs every 10 ms +-1 ms, work under 5 ms");
 
     /* ---- S2-U08..U11: the wheels turn -------------------------------- */
     if (!wait_idle(8000u))
     {
-        mission_snap_t ms;
+        mission_snap_t mission;
 
-        mission_get_snap(&ms);
-        tm_printf((UB *)"[INFO] S2-U08 mission state %d (1 = IDLE; 10 = FAULT, e.g. no IMU)\n", (INT)ms.state);
+        mission_get_snap(&mission);
+        tm_printf((UB *)"[INFO] S2-U08 mission state %d (1 = IDLE; 10 = FAULT, e.g. no IMU)\n", (INT)mission.state);
         TEST_SKIP("S2-U08", "speed step 0 -> 200 mm/s", "MissionTask not IDLE");
         TEST_SKIP("S2-U09", "left and right wheels match", "MissionTask not IDLE");
         TEST_SKIP("S2-U10", "MOVE backward: both encoders count down", "MissionTask not IDLE");
@@ -134,14 +134,14 @@ EXPORT void subsystem2_test(void)
     }
     else
     {
-        motion_odom_t o0;
-        motion_odom_t o;
+        motion_odom_t odom_start;
+        motion_odom_t odom;
         motion_odom_t o_lo = {0};
         motion_odom_t o_hi = {0};
         int32_t       t_lo = 0;
         int32_t       t_hi = 0;
-        uint32_t      t0;
-        int32_t       el     = 0;
+        uint32_t      t_start;
+        int32_t       elapsed     = 0;
         int32_t       peak   = 0;
         int32_t       settle = 0;
         int32_t       diff_sum = 0;
@@ -151,53 +151,53 @@ EXPORT void subsystem2_test(void)
         bool          b_done = false;
         int32_t const band   = (T_SPEED_MM_S * T_BAND_PCT) / 100;
 
-        motion_get_odom(&o0);
-        t0 = (uint32_t)app_time_ms();
+        motion_get_odom(&odom_start);
+        t_start = (uint32_t)app_time_ms();
         (void)motion_move_forward((uint8_t)MOTION_SRC_MISSION, T_SEQ, (uint16_t)T_DIST_MM,
                                   (uint16_t)T_SPEED_MM_S);
         for (;;)
         {
-            int32_t v;
+            int32_t value;
 
             (void)tk_dly_tsk(10);
-            motion_get_odom(&o);
-            el = (int32_t)((uint32_t)app_time_ms() - t0);
-            v  = ((int32_t)o.v_l_mm_s + (int32_t)o.v_r_mm_s) / 2;
-            if (el <= T_WIN_HI_MS)
+            motion_get_odom(&odom);
+            elapsed = (int32_t)((uint32_t)app_time_ms() - t_start);
+            value  = ((int32_t)odom.v_l_mm_s + (int32_t)odom.v_r_mm_s) / 2;
+            if (elapsed <= T_WIN_HI_MS)
             {
-                if (v > peak)
+                if (value > peak)
                 {
-                    peak = v;
+                    peak = value;
                 }
-                if (iabs(v - T_SPEED_MM_S) > band)
+                if (iabs(value - T_SPEED_MM_S) > band)
                 {
-                    settle = el;            /* last time outside the band */
+                    settle = elapsed;            /* last time outside the band */
                 }
             }
-            if ((el >= T_WIN_LO_MS) && (el <= T_WIN_HI_MS))
+            if ((elapsed >= T_WIN_LO_MS) && (elapsed <= T_WIN_HI_MS))
             {
                 if (!b_lo)
                 {
-                    o_lo = o;
-                    t_lo = el;
+                    o_lo = odom;
+                    t_lo = elapsed;
                     b_lo = true;
                 }
-                o_hi = o;
-                t_hi = el;
-                diff_sum += iabs((int32_t)o.v_l_mm_s - (int32_t)o.v_r_mm_s);
+                o_hi = odom;
+                t_hi = elapsed;
+                diff_sum += iabs((int32_t)odom.v_l_mm_s - (int32_t)odom.v_r_mm_s);
                 n_win++;
             }
-            if ((el >= T_NO_TURN_MS) && (o.enc_l == o0.enc_l) && (o.enc_r == o0.enc_r))
+            if ((elapsed >= T_NO_TURN_MS) && (odom.enc_l == odom_start.enc_l) && (odom.enc_r == odom_start.enc_r))
             {
                 b_turn = false;
                 break;
             }
-            if ((o.done_count != o0.done_count) && (o.state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+            if ((odom.done_count != odom_start.done_count) && (odom.state == (uint8_t)MOTION_ST_IDLE_BRAKED))
             {
                 b_done = true;
                 break;
             }
-            if (el > 5000)
+            if (elapsed > 5000)
             {
                 break;
             }
@@ -216,28 +216,28 @@ EXPORT void subsystem2_test(void)
         }
         else
         {
-            int32_t const dist = o.dist_mm - o0.dist_mm;
+            int32_t const dist = odom.dist_mm - odom_start.dist_mm;
             int32_t const over = ((peak - T_SPEED_MM_S) * 100) / T_SPEED_MM_S;
 
             tm_printf((UB *)"[INFO] S2-U08 settle %d ms (within +-%d mm/s), peak %d mm/s, overshoot %d %%\n",
                       (INT)settle, (INT)band, (INT)peak, (INT)((over > 0) ? over : 0));
             tm_printf((UB *)"[INFO] S2-U08 distance %d mm (asked %d), encoders L %d R %d counts\n",
-                      (INT)dist, (INT)T_DIST_MM, (INT)(o.enc_l - o0.enc_l), (INT)(o.enc_r - o0.enc_r));
+                      (INT)dist, (INT)T_DIST_MM, (INT)(odom.enc_l - odom_start.enc_l), (INT)(odom.enc_r - odom_start.enc_r));
             TEST_CHECK("S2-U08", b_done && (settle <= T_SETTLE_MAX_MS) &&
                                  (iabs(dist - (int32_t)T_DIST_MM) <= (int32_t)T_DIST_TOL_MM) &&
-                                 (o.enc_l > o0.enc_l) && (o.enc_r > o0.enc_r),
+                                 (odom.enc_l > odom_start.enc_l) && (odom.enc_r > odom_start.enc_r),
                        "speed step 0 -> 200 mm/s settles in 500 ms; MOVE 300 mm ends within 3 %");
 
             if (b_lo && (n_win > 0) && (t_hi > t_lo))
             {
                 int32_t const diff = diff_sum / n_win;
-                int32_t const dt   = t_hi - t_lo;
+                int32_t const delta_ms   = t_hi - t_lo;
 
                 tm_printf((UB *)"[INFO] S2-U09 mean |vL - vR| %d mm/s over %d samples; "
                           "encoders L %d R %d counts/s at 200 mm/s\n",
                           (INT)diff, (INT)n_win,
-                          (INT)(((o_hi.enc_l - o_lo.enc_l) * 1000) / dt),
-                          (INT)(((o_hi.enc_r - o_lo.enc_r) * 1000) / dt));
+                          (INT)(((o_hi.enc_l - o_lo.enc_l) * 1000) / delta_ms),
+                          (INT)(((o_hi.enc_r - o_lo.enc_r) * 1000) / delta_ms));
                 TEST_CHECK("S2-U09", diff <= band, "left and right wheels match within 10 % at 200 mm/s");
             }
             else
@@ -246,24 +246,24 @@ EXPORT void subsystem2_test(void)
             }
 
             /* Reverse */
-            motion_get_odom(&o0);
+            motion_get_odom(&odom_start);
             (void)motion_move_backward((uint8_t)MOTION_SRC_MISSION, (uint8_t)(T_SEQ + 1u),
                                        (uint16_t)T_DIST_MM, (uint16_t)T_BACK_SPEED_MM_S);
-            b_done = wait_done(&o0, 5000u, &o);
+            b_done = wait_done(&odom_start, 5000u, &odom);
             tm_printf((UB *)"[INFO] S2-U10 distance %d mm, encoders L %d R %d counts\n",
-                      (INT)(o.dist_mm - o0.dist_mm), (INT)(o.enc_l - o0.enc_l), (INT)(o.enc_r - o0.enc_r));
-            TEST_CHECK("S2-U10", b_done && (o.enc_l < o0.enc_l) && (o.enc_r < o0.enc_r) &&
-                                 (iabs((o.dist_mm - o0.dist_mm) + (int32_t)T_DIST_MM) <= (int32_t)T_DIST_TOL_MM),
+                      (INT)(odom.dist_mm - odom_start.dist_mm), (INT)(odom.enc_l - odom_start.enc_l), (INT)(odom.enc_r - odom_start.enc_r));
+            TEST_CHECK("S2-U10", b_done && (odom.enc_l < odom_start.enc_l) && (odom.enc_r < odom_start.enc_r) &&
+                                 (iabs((odom.dist_mm - odom_start.dist_mm) + (int32_t)T_DIST_MM) <= (int32_t)T_DIST_TOL_MM),
                        "MOVE backward 300 mm: both encoders count down, ends within 3 %");
 
             /* Spin left */
-            motion_get_odom(&o0);
+            motion_get_odom(&odom_start);
             (void)motion_turn_left((uint8_t)MOTION_SRC_MISSION, (uint8_t)(T_SEQ + 2u),
                                    (uint16_t)T_TURN_DDEG, (uint16_t)T_TURN_RATE_DEG_S);
-            b_done = wait_done(&o0, 6000u, &o);
+            b_done = wait_done(&odom_start, 6000u, &odom);
             tm_printf((UB *)"[INFO] S2-U11 encoders L %d R %d counts\n",
-                      (INT)(o.enc_l - o0.enc_l), (INT)(o.enc_r - o0.enc_r));
-            TEST_CHECK("S2-U11", b_done && (o.enc_l < o0.enc_l) && (o.enc_r > o0.enc_r),
+                      (INT)(odom.enc_l - odom_start.enc_l), (INT)(odom.enc_r - odom_start.enc_r));
+            TEST_CHECK("S2-U11", b_done && (odom.enc_l < odom_start.enc_l) && (odom.enc_r > odom_start.enc_r),
                        "TURN left 90 deg: left wheel back, right wheel forward");
         }
     }

@@ -34,29 +34,29 @@ EXPORT ER subsystem3_start(void)
 
 EXPORT void line_get_snap(line_snap_t * p_out)
 {
-    uint32_t w[LINE_SNAP_WORDS];
-    uint32_t i;
+    uint32_t words[LINE_SNAP_WORDS];
+    uint32_t idx;
     UINT     sts = app_lock(&g_line_lock);
 
-    for (i = 0u; i < LINE_SNAP_WORDS; i++)
+    for (idx = 0u; idx < LINE_SNAP_WORDS; idx++)
     {
-        w[i] = g_line_snap[i];
+        words[idx] = g_line_snap[idx];
     }
     app_unlock(&g_line_lock, sts);
-    line_snap_unpack(w, p_out);
+    line_snap_unpack(words, p_out);
 }
 
 EXPORT void line_put_snap(line_snap_t const * p_in)
 {
-    uint32_t w[LINE_SNAP_WORDS];
-    uint32_t i;
+    uint32_t words[LINE_SNAP_WORDS];
+    uint32_t idx;
     UINT     sts;
 
-    line_snap_pack(p_in, w);
+    line_snap_pack(p_in, words);
     sts = app_lock(&g_line_lock);
-    for (i = 0u; i < LINE_SNAP_WORDS; i++)
+    for (idx = 0u; idx < LINE_SNAP_WORDS; idx++)
     {
-        g_line_snap[i] = w[i];
+        g_line_snap[idx] = words[idx];
     }
     app_unlock(&g_line_lock, sts);
 }

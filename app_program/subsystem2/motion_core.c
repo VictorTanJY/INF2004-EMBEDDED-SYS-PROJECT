@@ -20,9 +20,9 @@ static void push_event(motion_core_t * p_mc, uint8_t code, uint8_t seq, uint8_t 
 {
     if (p_mc->ev_count < MOTION_EV_QUEUE_LEN)
     {
-        p_mc->ev[p_mc->ev_count].code = code;
-        p_mc->ev[p_mc->ev_count].seq  = seq;
-        p_mc->ev[p_mc->ev_count].src  = src;
+        p_mc->events[p_mc->ev_count].code = code;
+        p_mc->events[p_mc->ev_count].seq  = seq;
+        p_mc->events[p_mc->ev_count].src  = src;
         p_mc->ev_count++;
     }
 }
@@ -95,7 +95,7 @@ uint32_t motion_core_expected_ms(int64_t distance_um, int32_t vmax_mm_s)
 static void start_maneuver(motion_core_t * p_mc, motion_cmd_t const * p_cmd,
                            int64_t target_um, int32_t vmax, int8_t dir, uint32_t now_ms)
 {
-    int32_t v0;
+    int32_t speed_start;
 
     p_mc->m_cmd       = p_cmd->cmd;
     p_mc->m_seq       = p_cmd->seq;
@@ -109,8 +109,8 @@ static void start_maneuver(motion_core_t * p_mc, motion_cmd_t const * p_cmd,
     p_mc->m_timeout_ms = (2u * motion_core_expected_ms(target_um, vmax)) + MOTION_TIMEOUT_MARGIN_MS;
 
     /* A straight MOVE continues smoothly from the current forward speed. */
-    v0 = (p_cmd->cmd == (uint8_t)MOTION_CMD_MOVE) ? (p_mc->sp_v * dir) : 0;
-    p_mc->m_prof_v = app_clamp_i32(v0, 0, vmax);
+    speed_start = (p_cmd->cmd == (uint8_t)MOTION_CMD_MOVE) ? (p_mc->sp_v * dir) : 0;
+    p_mc->m_prof_v = app_clamp_i32(speed_start, 0, vmax);
     p_mc->phase    = (uint8_t)MOTION_PH_ACCEL;
     p_mc->state    = (uint8_t)MOTION_ST_MANEUVER;
 }
@@ -119,11 +119,11 @@ static void start_maneuver(motion_core_t * p_mc, motion_cmd_t const * p_cmd,
 void motion_core_init(motion_core_t * p_mc, uint32_t now_ms)
 {
     uint8_t * p_byte = (uint8_t *)p_mc;
-    size_t    i;
+    size_t    idx;
 
-    for (i = 0u; i < sizeof(*p_mc); i++)
+    for (idx = 0u; idx < sizeof(*p_mc); idx++)
     {
-        p_byte[i] = 0u;
+        p_byte[idx] = 0u;
     }
     p_mc->state   = (uint8_t)MOTION_ST_IDLE_BRAKED;
     p_mc->auth    = (uint8_t)MOTION_SRC_MISSION;
@@ -163,13 +163,13 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
             {
                 res = MOTION_RES_REJECTED_AUTH;
             }
-            else if ((p_cmd->p0 < 0) || (p_cmd->p0 >= (int16_t)MOTION_SRC_COUNT))
+            else if ((p_cmd->arg0 < 0) || (p_cmd->arg0 >= (int16_t)MOTION_SRC_COUNT))
             {
                 res = MOTION_RES_INVALID;
             }
             else
             {
-                p_mc->auth = (uint8_t)p_cmd->p0;
+                p_mc->auth = (uint8_t)p_cmd->arg0;
             }
             break;
 
@@ -197,8 +197,8 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
             else
             {
                 end_maneuver(p_mc, false);
-                p_mc->drive_v       = app_clamp_i32(p_cmd->p0, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
-                p_mc->drive_w       = app_clamp_i32(p_cmd->p1, -6000, 6000);
+                p_mc->drive_v       = app_clamp_i32(p_cmd->arg0, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
+                p_mc->drive_w       = app_clamp_i32(p_cmd->arg1, -6000, 6000);
                 p_mc->last_drive_ms = now_ms;
                 p_mc->state         = (uint8_t)MOTION_ST_VELOCITY_TRACK;
             }
@@ -210,27 +210,27 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
             {
                 res = MOTION_RES_REJECTED_AUTH;
             }
-            else if (p_cmd->p1 <= 0)
+            else if (p_cmd->arg1 <= 0)
             {
                 res = MOTION_RES_INVALID;
             }
             else
             {
-                int8_t  dir = (p_cmd->p0 < 0) ? (int8_t)-1 : (int8_t)1;
+                int8_t  dir = (p_cmd->arg0 < 0) ? (int8_t)-1 : (int8_t)1;
                 int64_t target;
                 int32_t vmax;
 
                 end_maneuver(p_mc, false);
                 if (p_cmd->cmd == (uint8_t)MOTION_CMD_MOVE)
                 {
-                    target = (int64_t)app_abs_i32(p_cmd->p0) * 1000;
-                    vmax   = app_min_i32(p_cmd->p1, MOTION_V_MAX_MM_S);
+                    target = (int64_t)app_abs_i32(p_cmd->arg0) * 1000;
+                    vmax   = app_min_i32(p_cmd->arg1, MOTION_V_MAX_MM_S);
                 }
                 else
                 {
                     /* p0 in 0.1 deg; p1 in deg/s -> wheel speed in mm/s */
-                    target = turn_arc_um((int32_t)p_cmd->p0 * 10);
-                    vmax   = (int32_t)(((int64_t)p_cmd->p1 * MOTION_TRACK_MM * PI_E6) / 360000000);
+                    target = turn_arc_um((int32_t)p_cmd->arg0 * 10);
+                    vmax   = (int32_t)(((int64_t)p_cmd->arg1 * MOTION_TRACK_MM * PI_E6) / 360000000);
                     vmax   = app_clamp_i32(vmax, MOTION_PROFILE_V_MIN, MOTION_V_MAX_MM_S);
                 }
                 start_maneuver(p_mc, p_cmd, target, vmax, dir, now_ms);
@@ -274,20 +274,20 @@ static int32_t ramp(int32_t value, int32_t target, int32_t step)
     return app_max_i32(value - step, target);
 }
 
-static int16_t pid_wheel(int32_t sp, int32_t v, int32_t * p_integ_um, int8_t * p_dir,
+static int16_t pid_wheel(int32_t setpoint, int32_t speed, int32_t * p_integ_um, int8_t * p_dir,
                          uint32_t dt_ms)
 {
     int32_t const integ_max = (int32_t)(((int64_t)MOTION_I_MAX * 1000000) / MOTION_KI_MILLI);
-    int8_t const  dir       = (sp > 0) ? (int8_t)1 : (int8_t)-1;
-    int32_t       e;
-    int32_t       ff;
-    int32_t       u;
+    int8_t const  dir       = (setpoint > 0) ? (int8_t)1 : (int8_t)-1;
+    int32_t       error;
+    int32_t       feedfwd;
+    int32_t       output;
 
     /* Below a minimum target the wheel is simply braked: otherwise the
        static-friction offset flips between + and - MOTION_MIN_DUTY while
        the steering asks the inner wheel for about 0 mm/s (a jolt each
        time). */
-    if (app_abs_i32(sp) < MOTION_MIN_TARGET_MM_S)
+    if (app_abs_i32(setpoint) < MOTION_MIN_TARGET_MM_S)
     {
         *p_integ_um = 0;
         *p_dir      = 0;
@@ -299,65 +299,65 @@ static int16_t pid_wheel(int32_t sp, int32_t v, int32_t * p_integ_um, int8_t * p
         *p_integ_um = 0;
         *p_dir      = dir;
     }
-    e  = sp - v;
-    ff = ((MOTION_KFF_MILLI * sp) / 1000) + ((sp > 0) ? MOTION_MIN_DUTY : -MOTION_MIN_DUTY);
-    u  = ff + ((MOTION_KP_MILLI * e) / 1000) +
+    error  = setpoint - speed;
+    feedfwd = ((MOTION_KFF_MILLI * setpoint) / 1000) + ((setpoint > 0) ? MOTION_MIN_DUTY : -MOTION_MIN_DUTY);
+    output  = feedfwd + ((MOTION_KP_MILLI * error) / 1000) +
          (int32_t)(((int64_t)MOTION_KI_MILLI * *p_integ_um) / 1000000);
 
     /* Anti-windup: integrate only while not saturated, or when the error
        pulls the output back out of saturation. */
-    if ((app_abs_i32(u) < MOTION_DUTY_MAX) || ((e > 0) != (u > 0)))
+    if ((app_abs_i32(output) < MOTION_DUTY_MAX) || ((error > 0) != (output > 0)))
     {
-        *p_integ_um = app_clamp_i32(*p_integ_um + (e * (int32_t)dt_ms), -integ_max, integ_max);
-        u = ff + ((MOTION_KP_MILLI * e) / 1000) +
+        *p_integ_um = app_clamp_i32(*p_integ_um + (error * (int32_t)dt_ms), -integ_max, integ_max);
+        output = feedfwd + ((MOTION_KP_MILLI * error) / 1000) +
             (int32_t)(((int64_t)MOTION_KI_MILLI * *p_integ_um) / 1000000);
     }
-    return (int16_t)app_clamp_i32(u, -MOTION_DUTY_MAX, MOTION_DUTY_MAX);
+    return (int16_t)app_clamp_i32(output, -MOTION_DUTY_MAX, MOTION_DUTY_MAX);
 }
 
 static void update_odometry(motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
                             uint32_t dt_ms, uint32_t now_ms)
 {
-    int32_t const l = MOTION_ENC_SIGN_L * raw_l;
-    int32_t const r = MOTION_ENC_SIGN_R * raw_r;
+    int32_t const enc_left = MOTION_ENC_SIGN_L * raw_l;
+    int32_t const enc_right = MOTION_ENC_SIGN_R * raw_r;
     int32_t       dcl;
     int32_t       dcr;
-    int64_t       dl;
-    int64_t       dr;
-    int64_t       ds;
+    int64_t       delta_left;
+    int64_t       delta_right;
+    int64_t       delta_mid;
     int32_t       h_old;
     int32_t       h_mid;
     int32_t       vraw;
 
     if (!p_mc->b_have_prev)
     {
-        p_mc->enc_l       = l;
-        p_mc->enc_r       = r;
+        p_mc->enc_l       = enc_left;
+        p_mc->enc_r       = enc_right;
         p_mc->b_have_prev = true;
         return;
     }
     /* Modular difference: correct across the 32-bit counter wrap. */
-    dcl = (int32_t)((uint32_t)l - (uint32_t)p_mc->enc_l);
-    dcr = (int32_t)((uint32_t)r - (uint32_t)p_mc->enc_r);
-    p_mc->enc_l = l;
-    p_mc->enc_r = r;
+    dcl = (int32_t)((uint32_t)enc_left - (uint32_t)p_mc->enc_l);
+    dcr = (int32_t)((uint32_t)enc_right - (uint32_t)p_mc->enc_r);
+    p_mc->enc_l = enc_left;
+    p_mc->enc_r = enc_right;
 
-    dl = counts_to_um(dcl);
-    dr = counts_to_um(dcr);
-    p_mc->dist_l_um += dl;
-    p_mc->dist_r_um += dr;
+    delta_left = counts_to_um(dcl);
+    delta_right = counts_to_um(dcr);
+    p_mc->dist_l_um += delta_left;
+    p_mc->dist_r_um += delta_right;
 
     h_old = p_mc->heading_cdeg;
     p_mc->heading_cdeg = (int32_t)(((p_mc->dist_r_um - p_mc->dist_l_um) * 18000000) /
                                    ((int64_t)PI_E6 * MOTION_TRACK_MM));
     h_mid = h_old + ((p_mc->heading_cdeg - h_old) / 2);
-    ds    = (dl + dr) / 2;
-    p_mc->x_um += (ds * app_cos_q15(h_mid)) / 32768;
-    p_mc->y_um += (ds * app_sin_q15(h_mid)) / 32768;
+    delta_mid    = (delta_left + delta_right) / 2;
+    p_mc->x_um += (delta_mid * app_cos_q15(h_mid)) / 32768;
+    p_mc->y_um += (delta_mid * app_sin_q15(h_mid)) / 32768;
 
-    vraw = (int32_t)(dl / (int64_t)dt_ms);         /* um / ms = mm/s */
+    vraw = (int32_t)(delta_left / (int64_t)dt_ms);         /* um / ms = mm/s */
     p_mc->v_l += (vraw - p_mc->v_l) / 2;
-    vraw = (int32_t)(dr / (int64_t)dt_ms);
+    vraw = (int32_t)(delta_right / (int64_t)dt_ms);
     p_mc->v_r += (vraw - p_mc->v_r) / 2;
     vraw = ((p_mc->heading_cdeg - h_old) * 1000) / (int32_t)dt_ms;
     p_mc->yaw_rate_cdeg_s += (vraw - p_mc->yaw_rate_cdeg_s) / YAW_FILTER_DIV;
@@ -418,7 +418,7 @@ static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms, uint32_t dt_ms)
     int64_t       tol;
     int32_t       v_acc;
     int32_t       v_dec;
-    int32_t       v;
+    int32_t       speed;
 
     if (p_mc->phase == (uint8_t)MOTION_PH_SETTLE)
     {
@@ -453,9 +453,9 @@ static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms, uint32_t dt_ms)
        remaining distance still allows braking, and by the cruise speed. */
     v_acc = p_mc->m_prof_v + (int32_t)(((uint32_t)MOTION_ACCEL_MM_S2 * dt_ms) / 1000u);
     v_dec = (int32_t)app_isqrt64((uint64_t)((2 * (int64_t)MOTION_ACCEL_MM_S2 * remaining) / 1000));
-    v     = app_min_i32(app_min_i32(v_acc, v_dec), p_mc->m_vmax);
-    v     = app_max_i32(v, MOTION_PROFILE_V_MIN);
-    if (v >= p_mc->m_vmax)
+    speed     = app_min_i32(app_min_i32(v_acc, v_dec), p_mc->m_vmax);
+    speed     = app_max_i32(speed, MOTION_PROFILE_V_MIN);
+    if (speed >= p_mc->m_vmax)
     {
         p_mc->phase = (uint8_t)MOTION_PH_CRUISE;
     }
@@ -467,19 +467,19 @@ static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms, uint32_t dt_ms)
     {
         p_mc->phase = (uint8_t)MOTION_PH_ACCEL;
     }
-    p_mc->m_prof_v = v;
+    p_mc->m_prof_v = speed;
 
     if (b_move)
     {
         /* Straight-line correction: steer against the wheel-distance difference. */
-        p_mc->sp_v = p_mc->m_dir * v;
+        p_mc->sp_v = p_mc->m_dir * speed;
         p_mc->sp_w = app_clamp_i32((int32_t)(((rel_l - rel_r) * MOTION_STRAIGHT_K) / 1000),
                                    -1000, 1000);
     }
     else
     {
         /* Spin about the centre; pull any translation back to zero. */
-        p_mc->sp_w = (int32_t)(((int64_t)p_mc->m_dir * v * 2000) / MOTION_TRACK_MM);
+        p_mc->sp_w = (int32_t)(((int64_t)p_mc->m_dir * speed * 2000) / MOTION_TRACK_MM);
         p_mc->sp_v = (int32_t)((-4 * ((rel_l + rel_r) / 2)) / 1000);
     }
     return true;
@@ -527,11 +527,11 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
         case MOTION_ST_STOPPING:
         {
-            int32_t const dv = (int32_t)(((uint32_t)MOTION_STOP_DECEL_MM_S2 * dt_ms) / 1000u);
-            int32_t const dw = (dv * 2000) / MOTION_TRACK_MM;
+            int32_t const dv_step = (int32_t)(((uint32_t)MOTION_STOP_DECEL_MM_S2 * dt_ms) / 1000u);
+            int32_t const dw_step = (dv_step * 2000) / MOTION_TRACK_MM;
 
-            p_mc->sp_v = ramp(p_mc->sp_v, 0, dv);
-            p_mc->sp_w = ramp(p_mc->sp_w, 0, dw);
+            p_mc->sp_v = ramp(p_mc->sp_v, 0, dv_step);
+            p_mc->sp_w = ramp(p_mc->sp_w, 0, dw_step);
             if ((p_mc->sp_v == 0) && (p_mc->sp_w == 0))
             {
                 brake(p_mc);
@@ -590,16 +590,16 @@ void motion_core_snapshot(motion_core_t const * p_mc, motion_odom_t * p_out)
 
 bool motion_core_pop_event(motion_core_t * p_mc, motion_event_t * p_ev)
 {
-    uint8_t i;
+    uint8_t idx;
 
     if (p_mc->ev_count == 0u)
     {
         return false;
     }
-    *p_ev = p_mc->ev[0];
-    for (i = 1u; i < p_mc->ev_count; i++)
+    *p_ev = p_mc->events[0];
+    for (idx = 1u; idx < p_mc->ev_count; idx++)
     {
-        p_mc->ev[i - 1u] = p_mc->ev[i];
+        p_mc->events[idx - 1u] = p_mc->events[idx];
     }
     p_mc->ev_count--;
     return true;
@@ -635,58 +635,58 @@ static uint8_t p0_bits(uint8_t cmd)
 uint32_t motion_cmd_pack(motion_cmd_t const * p_cmd)
 {
     uint8_t const cmd = p_cmd->cmd;
-    uint8_t const b0  = p0_bits(cmd);
-    uint32_t      w   = 0u;
+    uint8_t const arg0_bits  = p0_bits(cmd);
+    uint32_t      word   = 0u;
 
-    w = pk_set(w, CMD_SRC_SHIFT, CMD_SRC_BITS, pk_sat_u(p_cmd->src, CMD_SRC_BITS));
-    w = pk_set(w, CMD_CMD_SHIFT, CMD_CMD_BITS, pk_sat_u(cmd, CMD_CMD_BITS));
-    w = pk_set(w, CMD_SEQ_SHIFT, MOTION_SEQ_BITS, (uint32_t)p_cmd->seq & MOTION_SEQ_MASK);
+    word = pk_set(word, CMD_SRC_SHIFT, CMD_SRC_BITS, pk_sat_u(p_cmd->src, CMD_SRC_BITS));
+    word = pk_set(word, CMD_CMD_SHIFT, CMD_CMD_BITS, pk_sat_u(cmd, CMD_CMD_BITS));
+    word = pk_set(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS, (uint32_t)p_cmd->seq & MOTION_SEQ_MASK);
     if (cmd == (uint8_t)MOTION_CMD_DRIVE)
     {
-        w = pk_set(w, CMD_P0_SHIFT, DRIVE_V_BITS, pk_off_s(p_cmd->p0, DRIVE_V_BITS));
-        w = pk_set(w, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS, pk_off_s(p_cmd->p1, DRIVE_W_BITS));
+        word = pk_set(word, CMD_P0_SHIFT, DRIVE_V_BITS, pk_off_s(p_cmd->arg0, DRIVE_V_BITS));
+        word = pk_set(word, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS, pk_off_s(p_cmd->arg1, DRIVE_W_BITS));
     }
-    else if (b0 == AMOUNT_BITS)
+    else if (arg0_bits == AMOUNT_BITS)
     {
-        w = pk_set(w, CMD_P0_SHIFT, AMOUNT_BITS, pk_off_s(p_cmd->p0, AMOUNT_BITS));
-        w = pk_set(w, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS,
-                   pk_sat_u((p_cmd->p1 < 0) ? 0u : (uint32_t)p_cmd->p1, RATE_BITS));
+        word = pk_set(word, CMD_P0_SHIFT, AMOUNT_BITS, pk_off_s(p_cmd->arg0, AMOUNT_BITS));
+        word = pk_set(word, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS,
+                   pk_sat_u((p_cmd->arg1 < 0) ? 0u : (uint32_t)p_cmd->arg1, RATE_BITS));
     }
-    else if (b0 > 0u)
+    else if (arg0_bits > 0u)
     {
-        w = pk_set(w, CMD_P0_SHIFT, b0, pk_sat_u((p_cmd->p0 < 0) ? 0u : (uint32_t)p_cmd->p0, b0));
+        word = pk_set(word, CMD_P0_SHIFT, arg0_bits, pk_sat_u((p_cmd->arg0 < 0) ? 0u : (uint32_t)p_cmd->arg0, arg0_bits));
     }
     else
     {
         /* STOP, CLEAR_ESTOP: no payload */
     }
-    return w;
+    return word;
 }
 
 void motion_cmd_unpack(uint32_t word, motion_cmd_t * p_cmd)
 {
     uint8_t const cmd = (uint8_t)pk_get(word, CMD_CMD_SHIFT, CMD_CMD_BITS);
-    uint8_t const b0  = p0_bits(cmd);
+    uint8_t const arg0_bits  = p0_bits(cmd);
 
     p_cmd->src      = (uint8_t)pk_get(word, CMD_SRC_SHIFT, CMD_SRC_BITS);
     p_cmd->cmd      = cmd;
     p_cmd->seq      = (uint8_t)pk_get(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS);
     p_cmd->reserved = 0u;
-    p_cmd->p0       = 0;
-    p_cmd->p1       = 0;
+    p_cmd->arg0       = 0;
+    p_cmd->arg1       = 0;
     if (cmd == (uint8_t)MOTION_CMD_DRIVE)
     {
-        p_cmd->p0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, DRIVE_V_BITS), DRIVE_V_BITS);
-        p_cmd->p1 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS), DRIVE_W_BITS);
+        p_cmd->arg0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, DRIVE_V_BITS), DRIVE_V_BITS);
+        p_cmd->arg1 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS), DRIVE_W_BITS);
     }
-    else if (b0 == AMOUNT_BITS)
+    else if (arg0_bits == AMOUNT_BITS)
     {
-        p_cmd->p0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, AMOUNT_BITS), AMOUNT_BITS);
-        p_cmd->p1 = (int16_t)pk_get(word, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS);
+        p_cmd->arg0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, AMOUNT_BITS), AMOUNT_BITS);
+        p_cmd->arg1 = (int16_t)pk_get(word, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS);
     }
-    else if (b0 > 0u)
+    else if (arg0_bits > 0u)
     {
-        p_cmd->p0 = (int16_t)pk_get(word, CMD_P0_SHIFT, b0);
+        p_cmd->arg0 = (int16_t)pk_get(word, CMD_P0_SHIFT, arg0_bits);
     }
     else
     {
@@ -698,7 +698,7 @@ void motion_cmd_unpack(uint32_t word, motion_cmd_t * p_cmd)
  *  Change Requirement 1: the shared odometry snapshot.  This table is the
  *  data representation of IF-02: bits stored per field and why.
  * --------------------------------------------------------------------- */
-static pk_field_t const k_odom_layout[] =
+static pk_field_t const g_odom_layout[] =
 {
     PK_FIELD(motion_odom_t, t_ms,            32u, PK_W),  /* ms since boot, wraps          */
     PK_FIELD(motion_odom_t, enc_l,           32u, PK_W),  /* running count since power-on  */
@@ -725,20 +725,20 @@ static pk_field_t const k_odom_layout[] =
     PK_FIELD(motion_odom_t, hw_ok,            1u, PK_U)
 };
 
-#define ODOM_FIELDS     ((uint16_t)(sizeof(k_odom_layout) / sizeof(k_odom_layout[0])))
+#define ODOM_FIELDS     ((uint16_t)(sizeof(g_odom_layout) / sizeof(g_odom_layout[0])))
 
 void motion_odom_pack(motion_odom_t const * p_odom, uint32_t * p_words)
 {
-    pk_pack_rec(k_odom_layout, ODOM_FIELDS, p_odom, p_words, MOTION_ODOM_WORDS);
+    pk_pack_rec(g_odom_layout, ODOM_FIELDS, p_odom, p_words, MOTION_ODOM_WORDS);
 }
 
 void motion_odom_unpack(uint32_t const * p_words, motion_odom_t * p_odom)
 {
     p_odom->reserved = 0u;
-    pk_unpack_rec(k_odom_layout, ODOM_FIELDS, p_words, p_odom);
+    pk_unpack_rec(g_odom_layout, ODOM_FIELDS, p_words, p_odom);
 }
 
 uint32_t motion_odom_layout_bits(void)
 {
-    return pk_layout_bits(k_odom_layout, ODOM_FIELDS);
+    return pk_layout_bits(g_odom_layout, ODOM_FIELDS);
 }

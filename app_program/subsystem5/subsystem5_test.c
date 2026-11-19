@@ -30,9 +30,9 @@ EXPORT void subsystem5_test(void)
 {
     T_RMBF          rmbf;
     T_RFLG          rflg;
-    mission_snap_t  ms;
-    obst_snap_t     a;
-    obst_snap_t     b;
+    mission_snap_t  mission;
+    obst_snap_t     snap_a;
+    obst_snap_t     snap_b;
 
     TEST_INIT();
 
@@ -40,31 +40,31 @@ EXPORT void subsystem5_test(void)
     TEST_CHECK("S5-U02", tk_ref_mbf(g_mbf_scan, &rmbf) == E_OK, "mbf_scan exists");
     TEST_CHECK("S5-U03", tk_ref_flg(g_flg_obst, &rflg) == E_OK, "flg_obst exists");
 
-    mission_get_snap(&ms);
-    TEST_CHECK("S5-U05", (ms.state < (uint8_t)MISSION_ST_COUNT) && (ms.cruise_mm_s > 0u) &&
-                         (ms.nav_map[0] == '\0'),
+    mission_get_snap(&mission);
+    TEST_CHECK("S5-U05", (mission.state < (uint8_t)MISSION_ST_COUNT) && (mission.cruise_mm_s > 0u) &&
+                         (mission.nav_map[0] == '\0'),
                "mission snapshot valid; no barcode map until MQTT sends one");
 
-    obst_get_snap(&a);
+    obst_get_snap(&snap_a);
     (void)tk_dly_tsk(150);
-    obst_get_snap(&b);
-    TEST_CHECK("S5-U06", b.t_ms != a.t_ms, "ObstacleTask runs (range_cyc / 100 ms wait)");
+    obst_get_snap(&snap_b);
+    TEST_CHECK("S5-U06", snap_b.t_ms != snap_a.t_ms, "ObstacleTask runs (range_cyc / 100 ms wait)");
     TEST_CHECK("S5-U07", (obst_echo_to_mm(1160u) == 200u) && (obst_median3(300u, 120u, 200u) == 200u),
                "echo conversion and median on target");
 
     /* ---- S5-U08: ping rate ------------------------------------------ */
     (void)scan_request((uint8_t)SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
     (void)tk_dly_tsk(T_SETTLE_MS);          /* servo to 90 deg, first 3 pings */
-    obst_get_snap(&a);
+    obst_get_snap(&snap_a);
     (void)tk_dly_tsk(T_PING_WIN_MS);
-    obst_get_snap(&b);
+    obst_get_snap(&snap_b);
     tm_printf((UB *)"[INFO] S5-U08 %d pings in %d ms (expected %d)\n",
-              (INT)(b.pings - a.pings), (INT)T_PING_WIN_MS, (INT)T_PINGS);
-    TEST_CHECK("S5-U08", ((b.pings - a.pings) + 1u >= T_PINGS) && ((b.pings - a.pings) <= T_PINGS + 1u),
+              (INT)(snap_b.pings - snap_a.pings), (INT)T_PING_WIN_MS, (INT)T_PINGS);
+    TEST_CHECK("S5-U08", ((snap_b.pings - snap_a.pings) + 1u >= T_PINGS) && ((snap_b.pings - snap_a.pings) <= T_PINGS + 1u),
                "ultrasonic pings every 60 ms");
 
     /* ---- S5-U09: one range against the object in front -------------- */
-    if (b.d_mm == OBST_RANGE_NONE)
+    if (snap_b.d_mm == OBST_RANGE_NONE)
     {
         TEST_SKIP("S5-U09", "ultrasonic range to the object in front",
                   "no echo: put a wall 30-100 cm ahead, or emulator");
@@ -72,8 +72,8 @@ EXPORT void subsystem5_test(void)
     else
     {
         tm_printf((UB *)"[INFO] S5-U09 range %d mm (median of 3); compare with a tape measure\n",
-                  (INT)b.d_mm);
-        TEST_CHECK("S5-U09", (b.d_mm >= T_RANGE_MIN_MM) && (b.d_mm <= T_RANGE_MAX_MM) && (b.no_echo == 0u),
+                  (INT)snap_b.d_mm);
+        TEST_CHECK("S5-U09", (snap_b.d_mm >= T_RANGE_MIN_MM) && (snap_b.d_mm <= T_RANGE_MAX_MM) && (snap_b.no_echo == 0u),
                    "ultrasonic echo received, range within 2 cm .. 4 m");
     }
 

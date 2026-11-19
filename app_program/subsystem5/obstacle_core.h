@@ -42,7 +42,7 @@ typedef struct
 } obst_profile_t;
 
 /* Median of three ranges (OBST_RANGE_NONE counts as far away). */
-uint16_t obst_median3(uint16_t a, uint16_t b, uint16_t c);
+uint16_t obst_median3(uint16_t val_a, uint16_t val_b, uint16_t val_c);
 
 /* HC-SR04 echo width to distance: us / 58 = cm (datasheet).  Widths of
    OBST_ECHO_MAX_US (4 m) or more mean no target: OBST_RANGE_NONE. */
@@ -91,11 +91,11 @@ uint16_t obst_edge_width(int32_t phi_l_cdeg, uint16_t r_l_mm, int32_t phi_r_cdeg
    servo scan's edge (p on entry) if it saw a real width, else reaches
    OBST_WIDTH_MAX from the other.  Neither found: the servo scan's plan
    edges, with the same side rule (p unchanged if that scan saw nothing). */
-void    obst_edge_plan(obst_profile_t * p, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
+void    obst_edge_plan(obst_profile_t * p_prof, bool b_has_l, int32_t lat_l, bool b_has_r, int32_t lat_r);
 /* 7 Nov: after obst_edge_plan (given the far edges): the offset on the
    chosen side becomes the step-out leg's minimum, from the sensor-position
    edge (obst_edge_lat) when that side had an echo. */
-void    obst_edge_plan_min(obst_profile_t * p, bool b_has_l, int32_t min_l, bool b_has_r, int32_t min_r);
+void    obst_edge_plan_min(obst_profile_t * p_prof, bool b_has_l, int32_t min_l, bool b_has_r, int32_t min_r);
 
 /* ---- Scan sequencer: COARSE (30..150 by 30) -> FINE (nearest +-40 by 5)
    -> REFINE each edge by bisection.  The task pings obst_scan_angle(),
@@ -190,8 +190,8 @@ bool    obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cde
 typedef struct
 {
     bool    b_seen;
-    int32_t lo;                 /* rightmost sensor lateral with a face echo */
-    int32_t hi;                 /* leftmost                                  */
+    int32_t low;                 /* rightmost sensor lateral with a face echo */
+    int32_t high;                 /* leftmost                                  */
     uint8_t off;                /* clear pings in a row                      */
 } obst_probe_t;
 
@@ -214,12 +214,12 @@ int32_t obst_out_servo_deg(int32_t theta_cdeg, int32_t side);
 
 /* Cross-track offset (+ left) of (x, y) from the line through (x0, y0)
    with heading h0, all from the odometry snapshot. */
-int32_t  obst_cross_track_mm(int32_t x, int32_t y, int32_t x0, int32_t y0, int32_t h0_cdeg);
+int32_t  obst_cross_track_mm(int32_t x_mm, int32_t y_mm, int32_t x0_mm, int32_t y0_mm, int32_t h0_cdeg);
 
 /* SEEK_LINE acceptance (Week 6 6.4): within +-60 mm of the original path
    and +-20 deg of the original heading. */
-bool     obst_line_accept(int32_t x, int32_t y, int32_t h_cdeg,
-                          int32_t x0, int32_t y0, int32_t h0_cdeg);
+bool     obst_line_accept(int32_t x_mm, int32_t y_mm, int32_t h_cdeg,
+                          int32_t x0_mm, int32_t y0_mm, int32_t h0_cdeg);
 
 /* Hump mask for the 40 / 20 cm thresholds (never for TOO_CLOSE). */
 typedef struct

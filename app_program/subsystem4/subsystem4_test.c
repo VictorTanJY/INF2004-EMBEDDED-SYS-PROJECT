@@ -36,9 +36,9 @@ static bool brake_pins_low(void)
            ((in_w(GPIO_CTRL(S2_PIN_MOT_R_B)) & 0x1Fu) == GPIO_CTRL_FUNCSEL_SIO);
 }
 
-static int32_t iabs(int32_t v)
+static int32_t iabs(int32_t value)
 {
-    return (v < 0) ? -v : v;
+    return (value < 0) ? -value : value;
 }
 
 IMPORT volatile UW g_safety_tick_us;   /* safety_task.c */
@@ -47,8 +47,8 @@ EXPORT void subsystem4_test(void)
 {
     T_RFLG      rflg;
     uint32_t    before;
-    imu_snap_t  a;
-    imu_snap_t  b;
+    imu_snap_t  snap_a;
+    imu_snap_t  snap_b;
 
     TEST_INIT();
 
@@ -59,50 +59,50 @@ EXPORT void subsystem4_test(void)
     TEST_CHECK("S4-U02", ((safety_heartbeat_count(SAFETY_HB_MOTION) - before) & 0xFFu) >= 3u,
                "MotionTask heartbeat advances (8-bit counter, modular)");
 
-    imu_get_snap(&a);
+    imu_get_snap(&snap_a);
     (void)tk_dly_tsk(100);
-    imu_get_snap(&b);
-    TEST_CHECK("S4-U04", b.t_ms != a.t_ms, "ImuTask publishes its snapshot");
+    imu_get_snap(&snap_b);
+    TEST_CHECK("S4-U04", snap_b.t_ms != snap_a.t_ms, "ImuTask publishes its snapshot");
     TEST_CHECK("S4-U05", safety_timer_tick_ok(), "1 us timer ticks at 1 MHz (watchdog tick = 12)");
     tm_printf((UB *)"[INFO] timer: %d us per 100 ms of CPU clock\n", (INT)g_safety_tick_us);
     TEST_CHECK("S4-U06", (in_w(WD_CTRL_REG) & (1uL << 30)) != 0u, "watchdog enabled and being fed");
 
     /* ---- S4-U07: IMU reads level, no I2C errors in 1 s ----------------- */
-    imu_get_snap(&a);
+    imu_get_snap(&snap_a);
     (void)tk_dly_tsk(1000);
-    imu_get_snap(&b);
-    if (b.ok == 0u)
+    imu_get_snap(&snap_b);
+    if (snap_b.b_ok == 0u)
     {
         TEST_SKIP("S4-U07", "IMU level and I2C clean", "IMU not answering: wiring, or emulator");
     }
     else
     {
         tm_printf((UB *)"[INFO] S4-U07 pitch %d cdeg, roll %d cdeg, |a|-1g %d mg, I2C errors %d in 1 s, cal 0x%x\n",
-                  (INT)b.pitch_cdeg, (INT)b.roll_cdeg, (INT)b.accel_mg,
-                  (INT)(b.i2c_errors - a.i2c_errors), (INT)b.cal);
-        TEST_CHECK("S4-U07", (iabs(b.pitch_cdeg) <= T_LEVEL_CDEG) && (iabs(b.roll_cdeg) <= T_LEVEL_CDEG) &&
-                             (b.i2c_errors == a.i2c_errors) && (b.tilt == 0u),
+                  (INT)snap_b.pitch_cdeg, (INT)snap_b.roll_cdeg, (INT)snap_b.accel_mg,
+                  (INT)(snap_b.i2c_errors - snap_a.i2c_errors), (INT)snap_b.cal);
+        TEST_CHECK("S4-U07", (iabs(snap_b.pitch_cdeg) <= T_LEVEL_CDEG) && (iabs(snap_b.roll_cdeg) <= T_LEVEL_CDEG) &&
+                             (snap_b.i2c_errors == snap_a.i2c_errors) && (snap_b.tilt == 0u),
                    "IMU reads level (pitch, roll within 5 deg), no I2C errors in 1 s");
     }
 
     /* ---- S4-U08: fault bit -> both motors braked (NFR8) ---------------- */
     {
-        mission_snap_t ms;
-        motion_odom_t  o;
-        uint32_t       t0;
+        mission_snap_t mission;
+        motion_odom_t  odom;
+        uint32_t       t_start;
         uint32_t       lat;
-        uint32_t       t;
+        uint32_t       elapsed;
         bool           b_ok = false;
         uint8_t        pre;
 
-        mission_get_snap(&ms);
-        pre = ms.state;
+        mission_get_snap(&mission);
+        pre = mission.state;
         g_estop_test_us = 0u;
-        t0 = (uint32_t)app_time_us();
+        t_start = (uint32_t)app_time_us();
         (void)tk_set_flg(g_flg_safety, T_FAULT_BIT);
         (void)tk_dly_tsk(50);
-        lat = g_estop_test_us - t0;
-        motion_get_odom(&o);
+        lat = g_estop_test_us - t_start;
+        motion_get_odom(&odom);
         tm_printf((UB *)"[INFO] S4-U08 fault flag -> motor_estop() %d us (limit %d us)\n",
                   (INT)lat, (INT)T_NFR8_US);
         TEST_CHECK("S4-U08", (g_estop_test_us != 0u) && (lat <= T_NFR8_US) && motion_estop_latched() &&
@@ -111,22 +111,22 @@ EXPORT void subsystem4_test(void)
 
         /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
         (void)mission_post((uint8_t)MISSION_EV_REMOTE_RESET, (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
-        for (t = 0u; t < 8000u; t += 50u)
+        for (elapsed = 0u; elapsed < 8000u; elapsed += 50u)
         {
             (void)tk_dly_tsk(50);
-            mission_get_snap(&ms);
+            mission_get_snap(&mission);
             if (!motion_estop_latched() && (safety_get_latched() == 0u) &&
-                ((pre != (uint8_t)MISSION_ST_IDLE) || (ms.state == (uint8_t)MISSION_ST_IDLE)))
+                ((pre != (uint8_t)MISSION_ST_IDLE) || (mission.state == (uint8_t)MISSION_ST_IDLE)))
             {
                 b_ok = true;
                 break;
             }
         }
-        motion_get_odom(&o);
+        motion_get_odom(&odom);
         tm_printf((UB *)"[INFO] S4-U09 cleared after %d ms; mission state %d (was %d), brake %d, latched 0x%x\n",
-                  (INT)t, (INT)ms.state, (INT)pre, (INT)(motion_estop_latched() ? 1 : 0),
+                  (INT)elapsed, (INT)mission.state, (INT)pre, (INT)(motion_estop_latched() ? 1 : 0),
                   (INT)safety_get_latched());
-        TEST_CHECK("S4-U09", b_ok && (o.state == (uint8_t)MOTION_ST_IDLE_BRAKED) &&
+        TEST_CHECK("S4-U09", b_ok && (odom.state == (uint8_t)MOTION_ST_IDLE_BRAKED) &&
                              ((in_w(GPIO_CTRL(S2_PIN_MOT_L_A)) & 0x1Fu) == GPIO_CTRL_FUNCSEL_PWM),
                    "Reset clears the latch, PWM reconnected, mission back to IDLE (if it was IDLE)");
     }

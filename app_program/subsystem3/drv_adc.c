@@ -97,15 +97,15 @@ EXPORT ER drv_adc_init(void)
 {
     uint32_t const pins[3] = { 26u, 27u, 28u };
     uint32_t       spin;
-    uint32_t       i;
+    uint32_t       idx;
 
     app_reset_release(RESETS_RESET_ADC | RESETS_RESET_DMA);
 
     /* Analog pins: digital input and pulls off (RP2040 datasheet 4.9.1). */
-    for (i = 0u; i < 3u; i++)
+    for (idx = 0u; idx < 3u; idx++)
     {
-        out_w(GPIO(pins[i]), GPIO_OD);
-        out_w(GPIO_CTRL(pins[i]), GPIO_CTRL_FUNCSEL_NULL);
+        out_w(GPIO(pins[idx]), GPIO_OD);
+        out_w(GPIO_CTRL(pins[idx]), GPIO_CTRL_FUNCSEL_NULL);
     }
 
     out_w(ADC_CS, ADC_CS_EN);
@@ -139,15 +139,15 @@ EXPORT ER drv_adc_init(void)
 EXPORT ER drv_adc_start(ID task)
 {
     T_DINT dint;
-    ER     er;
+    ER     err;
 
     g_task      = task;
     dint.intatr = TA_HLNG;
     dint.inthdr = (FP)adc_dma_isr;
-    er = tk_def_int(DMA_IRQ1_NO, &dint);
-    if (er != E_OK)
+    err = tk_def_int(DMA_IRQ1_NO, &dint);
+    if (err != E_OK)
     {
-        return er;
+        return err;
     }
     out_w(DMA_INTS1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
     set_w(DMA_INTE1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
@@ -162,7 +162,7 @@ EXPORT ER drv_adc_start(ID task)
 EXPORT bool drv_adc_get_block(uint16_t p_out[DRV_ADC_BLOCK_LEN], uint32_t * p_seq)
 {
     UINT     intsts;
-    uint32_t i;
+    uint32_t idx;
     uint8_t  which;
 
     DI(intsts);
@@ -174,9 +174,9 @@ EXPORT bool drv_adc_get_block(uint16_t p_out[DRV_ADC_BLOCK_LEN], uint32_t * p_se
         return false;
     }
     /* The other buffer is being filled now; this one is stable for 10 ms. */
-    for (i = 0u; i < DRV_ADC_BLOCK_LEN; i++)
+    for (idx = 0u; idx < DRV_ADC_BLOCK_LEN; idx++)
     {
-        p_out[i] = (uint16_t)(g_buf[which][i] & 0x0FFFu);
+        p_out[idx] = (uint16_t)(g_buf[which][idx] & 0x0FFFu);
     }
     return true;
 }

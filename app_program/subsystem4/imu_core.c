@@ -13,19 +13,19 @@
 #define MG_PER_G_MM_S2      9807        /* 1 g = 9807 mm/s^2 */
 
 /* body-frame value of one raw axis triple */
-static int32_t axis(int32_t const v[3], int axis_no, int32_t sign)
+static int32_t axis(int32_t const vec[3], int axis_no, int32_t sign)
 {
-    return sign * v[axis_no];
+    return sign * vec[axis_no];
 }
 
 void imu_core_init(imu_core_t * p_ic)
 {
     uint8_t * p_b = (uint8_t *)p_ic;
-    size_t    i;
+    size_t    idx;
 
-    for (i = 0u; i < sizeof(*p_ic); i++)
+    for (idx = 0u; idx < sizeof(*p_ic); idx++)
     {
-        p_b[i] = 0u;
+        p_b[idx] = 0u;
     }
     p_ic->hump_state = (uint8_t)IMU_HUMP_FLAT;
     p_ic->motion     = (uint8_t)IMU_MOTION_STATIONARY;
@@ -77,30 +77,30 @@ void imu_core_hump_restore(imu_core_t * p_ic)
 /* ---- calibration ------------------------------------------------------ */
 void imu_cal_level_start(imu_core_t * p_ic)
 {
-    uint8_t k;
+    uint8_t kdx;
 
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
-        p_ic->lvl_sum[k] = 0;
-        p_ic->lvl_min[k] = 0x7FFFFFFF;
-        p_ic->lvl_max[k] = -0x7FFFFFFF;
+        p_ic->lvl_sum[kdx] = 0;
+        p_ic->lvl_min[kdx] = 0x7FFFFFFF;
+        p_ic->lvl_max[kdx] = -0x7FFFFFFF;
     }
     p_ic->lvl_n = 0u;
 }
 
 void imu_cal_level_sample(imu_core_t * p_ic, int32_t const acc_mg[3])
 {
-    uint8_t k;
+    uint8_t kdx;
 
     if (p_ic->lvl_n == 0xFFFFu)
     {
         return;
     }
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
-        p_ic->lvl_sum[k] += acc_mg[k];
-        p_ic->lvl_min[k]  = app_min_i32(p_ic->lvl_min[k], acc_mg[k]);
-        p_ic->lvl_max[k]  = app_max_i32(p_ic->lvl_max[k], acc_mg[k]);
+        p_ic->lvl_sum[kdx] += acc_mg[kdx];
+        p_ic->lvl_min[kdx]  = app_min_i32(p_ic->lvl_min[kdx], acc_mg[kdx]);
+        p_ic->lvl_max[kdx]  = app_max_i32(p_ic->lvl_max[kdx], acc_mg[kdx]);
     }
     p_ic->lvl_n++;
 }
@@ -110,8 +110,8 @@ bool imu_cal_level_finish(imu_core_t * p_ic)
     int32_t mean[3];
     int32_t fwd;
     int32_t left;
-    int32_t up;
-    uint8_t k;
+    int32_t up_mg;
+    uint8_t kdx;
 
     /* Diagnostics for LOG 57-59 (why a calibration failed). */
     p_ic->lvl_spread_mg = 0;
@@ -120,58 +120,58 @@ bool imu_cal_level_finish(imu_core_t * p_ic)
     {
         return false;
     }
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
-        p_ic->lvl_spread_mg = app_max_i32(p_ic->lvl_spread_mg, p_ic->lvl_max[k] - p_ic->lvl_min[k]);
-        mean[k] = (int32_t)(p_ic->lvl_sum[k] / p_ic->lvl_n);
+        p_ic->lvl_spread_mg = app_max_i32(p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
+        mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / p_ic->lvl_n);
     }
     fwd  = axis(mean, IMU_AXIS_FWD, IMU_SIGN_FWD);
     left = axis(mean, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
-    up   = axis(mean, IMU_AXIS_UP, IMU_SIGN_UP);
-    p_ic->lvl_up_mg = up;
+    up_mg   = axis(mean, IMU_AXIS_UP, IMU_SIGN_UP);
+    p_ic->lvl_up_mg = up_mg;
     if (p_ic->lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG)
     {
         return false;                   /* the robot was moving */
     }
-    if (up < 500)
+    if (up_mg < 500)
     {
         return false;                   /* not right way up (or axes mis-set) */
     }
-    if (up > IMU_LEVEL_UP_MAX_MG)
+    if (up_mg > IMU_LEVEL_UP_MAX_MG)
     {
         return false;                   /* stuck / saturated output (2 Nov) */
     }
     p_ic->pitch0_cdeg = app_atan2_cdeg(fwd, (int32_t)app_isqrt64((uint64_t)((int64_t)left * left +
-                                                                         (int64_t)up * up)));
-    p_ic->roll0_cdeg  = app_atan2_cdeg(left, up);
+                                                                         (int64_t)up_mg * up_mg)));
+    p_ic->roll0_cdeg  = app_atan2_cdeg(left, up_mg);
     p_ic->cal |= IMU_CAL_LEVEL;
     return true;
 }
 
 void imu_cal_mag_start(imu_core_t * p_ic)
 {
-    uint8_t k;
+    uint8_t kdx;
 
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
-        p_ic->mag_min[k] = 32767;
-        p_ic->mag_max[k] = -32768;
+        p_ic->mag_min[kdx] = 32767;
+        p_ic->mag_max[kdx] = -32768;
     }
 }
 
 void imu_cal_mag_sample(imu_core_t * p_ic, int16_t const mag[3])
 {
-    uint8_t k;
+    uint8_t kdx;
 
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
-        if (mag[k] < p_ic->mag_min[k])
+        if (mag[kdx] < p_ic->mag_min[kdx])
         {
-            p_ic->mag_min[k] = mag[k];
+            p_ic->mag_min[kdx] = mag[kdx];
         }
-        if (mag[k] > p_ic->mag_max[k])
+        if (mag[kdx] > p_ic->mag_max[kdx])
         {
-            p_ic->mag_max[k] = mag[k];
+            p_ic->mag_max[kdx] = mag[kdx];
         }
     }
 }
@@ -179,18 +179,18 @@ void imu_cal_mag_sample(imu_core_t * p_ic, int16_t const mag[3])
 bool imu_cal_mag_finish(imu_core_t * p_ic)
 {
     int const axes[2] = { IMU_AXIS_FWD, IMU_AXIS_LEFT };   /* horizontal plane */
-    uint8_t   k;
+    uint8_t   kdx;
 
-    for (k = 0u; k < 2u; k++)
+    for (kdx = 0u; kdx < 2u; kdx++)
     {
-        if (((int32_t)p_ic->mag_max[axes[k]] - p_ic->mag_min[axes[k]]) < IMU_MAG_MIN_SPAN)
+        if (((int32_t)p_ic->mag_max[axes[kdx]] - p_ic->mag_min[axes[kdx]]) < IMU_MAG_MIN_SPAN)
         {
             return false;
         }
     }
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
-        p_ic->mag_off[k] = (int16_t)(((int32_t)p_ic->mag_min[k] + p_ic->mag_max[k]) / 2);
+        p_ic->mag_off[kdx] = (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx]) / 2);
     }
     p_ic->cal |= IMU_CAL_MAG;
     return true;
@@ -223,7 +223,7 @@ static void integrate(imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
 static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um)
 {
     int32_t const theta = p_ic->pitch_cdeg;
-    uint8_t       ev    = 0u;
+    uint8_t       events    = 0u;
 
     switch (p_ic->hump_state)
     {
@@ -237,7 +237,7 @@ static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um)
                     p_ic->hump_state = (uint8_t)IMU_HUMP_CLIMBING;
                     p_ic->hump_um    = p_ic->dwell_um;
                     p_ic->dwell_um   = 0u;
-                    ev |= IMU_EV_HUMP_START;
+                    events |= IMU_EV_HUMP_START;
                 }
             }
             else
@@ -253,7 +253,7 @@ static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um)
             if (p_ic->hump_um > IMU_RAMP_UM)
             {
                 hump_reset(p_ic);           /* a long slope, not a hump */
-                ev |= IMU_EV_RAMP;
+                events |= IMU_EV_RAMP;
             }
             else if (theta < IMU_DESC_CDEG)
             {
@@ -300,11 +300,11 @@ static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um)
                 }
                 p_ic->humps++;
                 hump_reset(p_ic);
-                ev |= IMU_EV_HUMP_END;
+                events |= IMU_EV_HUMP_END;
             }
             break;
     }
-    return ev;
+    return events;
 }
 
 /* ---- one-wheel hump (roll) ------------------------------------------------ */
@@ -315,12 +315,12 @@ static void side_reset(imu_core_t * p_ic)
     p_ic->side_peak_cdeg = 0;
 }
 
-static void side_record(imu_core_t * p_ic, uint16_t mm)
+static void side_record(imu_core_t * p_ic, uint16_t height_mm)
 {
-    p_ic->last_hump_mm = mm;
-    if (mm > p_ic->hump_max_mm)
+    p_ic->last_hump_mm = height_mm;
+    if (height_mm > p_ic->hump_max_mm)
     {
-        p_ic->hump_max_mm = mm;
+        p_ic->hump_max_mm = height_mm;
     }
     p_ic->humps++;
 }
@@ -329,19 +329,19 @@ static void side_record(imu_core_t * p_ic, uint16_t mm)
    progress.  Returns IMU_EV_* bits. */
 static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um)
 {
-    int32_t const r  = app_abs_i32(p_ic->roll_cdeg);
-    uint8_t       ev = 0u;
+    int32_t const roll_abs  = app_abs_i32(p_ic->roll_cdeg);
+    uint8_t       events = 0u;
 
     if (p_ic->side_state == 0u)
     {
-        if ((r > IMU_SIDE_ON_CDEG) && (app_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
+        if ((roll_abs > IMU_SIDE_ON_CDEG) && (app_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
         {
             p_ic->side_um        += ds_um;
-            p_ic->side_peak_cdeg  = app_max_i32(p_ic->side_peak_cdeg, r);
+            p_ic->side_peak_cdeg  = app_max_i32(p_ic->side_peak_cdeg, roll_abs);
             if (p_ic->side_um >= IMU_SIDE_DWELL_UM)
             {
                 p_ic->side_state = 1u;
-                ev |= IMU_EV_HUMP_START;
+                events |= IMU_EV_HUMP_START;
             }
         }
         else
@@ -352,31 +352,31 @@ static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um)
     else
     {
         p_ic->side_um        += ds_um;
-        p_ic->side_peak_cdeg  = app_max_i32(p_ic->side_peak_cdeg, r);
-        if (r < (p_ic->side_peak_cdeg - IMU_SIDE_DESC_CDEG))
+        p_ic->side_peak_cdeg  = app_max_i32(p_ic->side_peak_cdeg, roll_abs);
+        if (roll_abs < (p_ic->side_peak_cdeg - IMU_SIDE_DESC_CDEG))
         {
             p_ic->side_state = 2u;          /* coming down */
         }
         if (p_ic->side_um > IMU_SIDE_MAX_UM)
         {
             side_reset(p_ic);               /* a long side slope, not a hump */
-            ev |= IMU_EV_RAMP;
+            events |= IMU_EV_RAMP;
         }
-        else if (r < IMU_SIDE_OFF_CDEG)
+        else if (roll_abs < IMU_SIDE_OFF_CDEG)
         {
             int64_t const h_um = ((int64_t)IMU_SIDE_LEVER_MM * 1000 *
                                   app_sin_q15(p_ic->side_peak_cdeg)) / 32768;
 
             side_record(p_ic, (uint16_t)app_clamp_i32((int32_t)((h_um + 500) / 1000), 0, 65535));
             side_reset(p_ic);
-            ev |= IMU_EV_HUMP_END;
+            events |= IMU_EV_HUMP_END;
         }
         else
         {
             /* still on the hump */
         }
     }
-    return ev;
+    return events;
 }
 
 /* ---- lift (14 Nov) ------------------------------------------------------ */
@@ -388,7 +388,7 @@ static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um)
    checked against the robot's own bumps.  Returns IMU_EV_* bits. */
 static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s, uint32_t now_ms)
 {
-    uint8_t       ev     = 0u;
+    uint8_t       events     = 0u;
     int32_t const base   = (p_ic->lvl_up_mg > 0) ? p_ic->lvl_up_mg : 1000;
     int32_t const rise   = up_mg - base;
     bool const    b_flat = (p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && (p_ic->side_state == 0u);
@@ -404,7 +404,7 @@ static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s, uint3
         {
             p_ic->b_lift       = true;
             p_ic->lift_rise_mg = rise;
-            ev |= IMU_EV_LIFT;
+            events |= IMU_EV_LIFT;
         }
         else
         {
@@ -430,11 +430,11 @@ static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s, uint3
         if ((p_ic->rise_peak_mg > IMU_RISE_LOG_MG) && (p_ic->rise_peak_mg > p_ic->rise_max_mg))
         {
             p_ic->rise_max_mg = p_ic->rise_peak_mg;
-            ev |= IMU_EV_RISE_MAX;
+            events |= IMU_EV_RISE_MAX;
         }
         p_ic->rise_peak_mg = 0;
     }
-    return ev;
+    return events;
 }
 
 /* ---- classification ------------------------------------------------------ */
@@ -483,13 +483,13 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
                       int32_t ds_um, int32_t v_mm_s, int32_t yaw_cdeg_s,
                       uint32_t dt_ms, uint32_t now_ms)
 {
-    uint8_t ev = 0u;
-    int32_t a[3];
+    uint8_t events = 0u;
+    int32_t accel[3];
     int32_t fwd;
     int32_t left;
-    int32_t up;
+    int32_t up_mg;
     int32_t mag_mg;
-    uint8_t k;
+    uint8_t kdx;
     uint8_t cls;
 
     if (dt_ms == 0u)
@@ -498,14 +498,14 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
     }
 
     /* Low-pass filter (alpha 1/4), mg x 16. */
-    for (k = 0u; k < 3u; k++)
+    for (kdx = 0u; kdx < 3u; kdx++)
     {
         if (!p_ic->b_have_acc)
         {
-            p_ic->acc_f[k] = acc_mg[k] * 16;
+            p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
         }
-        p_ic->acc_f[k] += ((acc_mg[k] * 16) - p_ic->acc_f[k]) / (1 << IMU_ACC_LPF_SHIFT);
-        a[k] = p_ic->acc_f[k] / 16;
+        p_ic->acc_f[kdx] += ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / (1 << IMU_ACC_LPF_SHIFT);
+        accel[kdx] = p_ic->acc_f[kdx] / 16;
     }
 
     /* |a| for the snapshot (14 Nov: no longer an impact check). */
@@ -527,23 +527,23 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
 
     /* Attitude.  The forward axis also sees the robot's own acceleration,
        so subtract the encoder estimate before taking the angle. */
-    fwd  = axis(a, IMU_AXIS_FWD, IMU_SIGN_FWD) -
+    fwd  = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD) -
            ((app_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2, IMU_ACC_COMP_MAX_MM_S2) * 1000) /
             MG_PER_G_MM_S2);
-    left = axis(a, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
-    up   = axis(a, IMU_AXIS_UP, IMU_SIGN_UP);
+    left = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
+    up_mg   = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
     p_ic->pitch_cdeg = app_wrap_cdeg(app_atan2_cdeg(fwd, (int32_t)app_isqrt64((uint64_t)((int64_t)left * left +
-                                                                 (int64_t)up * up))) - p_ic->pitch0_cdeg);
-    p_ic->roll_cdeg  = app_wrap_cdeg(app_atan2_cdeg(left, up) - p_ic->roll0_cdeg);
+                                                                 (int64_t)up_mg * up_mg))) - p_ic->pitch0_cdeg);
+    p_ic->roll_cdeg  = app_wrap_cdeg(app_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
 
     if ((p_mag != NULL) && ((p_ic->cal & IMU_CAL_MAG) != 0u))
     {
-        int32_t const m[3] = { (int32_t)p_mag[0] - p_ic->mag_off[0],
+        int32_t const mag[3] = { (int32_t)p_mag[0] - p_ic->mag_off[0],
                                (int32_t)p_mag[1] - p_ic->mag_off[1],
                                (int32_t)p_mag[2] - p_ic->mag_off[2] };
-        int32_t h = app_atan2_cdeg(axis(m, IMU_AXIS_LEFT, IMU_SIGN_LEFT), axis(m, IMU_AXIS_FWD, IMU_SIGN_FWD));
+        int32_t heading = app_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT), axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
 
-        p_ic->heading_cdeg = (h < 0) ? (h + 36000) : h;         /* clockwise from north */
+        p_ic->heading_cdeg = (heading < 0) ? (heading + 36000) : heading;         /* clockwise from north */
     }
 
     /* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off
@@ -570,13 +570,13 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
             (app_elapsed_ms(now_ms, p_ic->tilt_since_ms) >= IMU_TILT_HOLD_MS))
         {
             p_ic->b_tilt = true;
-            ev |= IMU_EV_TILT_ON;
+            events |= IMU_EV_TILT_ON;
         }
         else if (p_ic->b_tilt && (app_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG) &&
                  (app_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
         {
             p_ic->b_tilt = false;
-            ev |= IMU_EV_TILT_OFF;
+            events |= IMU_EV_TILT_OFF;
         }
         else
         {
@@ -590,10 +590,10 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
        hump under one wheel. */
     if (ds_um > 0)
     {
-        ev |= hump_step(p_ic, (uint32_t)ds_um);
-        if ((p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && ((ev & IMU_EV_HUMP_START) == 0u))
+        events |= hump_step(p_ic, (uint32_t)ds_um);
+        if ((p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && ((events & IMU_EV_HUMP_START) == 0u))
         {
-            ev |= side_step(p_ic, (uint32_t)ds_um);
+            events |= side_step(p_ic, (uint32_t)ds_um);
         }
         else
         {
@@ -601,22 +601,22 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
         }
     }
 
-    ev |= lift_step(p_ic, up, v_mm_s, now_ms);
+    events |= lift_step(p_ic, up_mg, v_mm_s, now_ms);
 
     cls = classify(p_ic, v_mm_s, yaw_cdeg_s);
     if ((cls != p_ic->motion) && (app_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
     {
         p_ic->motion    = cls;
         p_ic->motion_ms = now_ms;
-        ev |= IMU_EV_MOTION;
+        events |= IMU_EV_MOTION;
     }
-    return ev;
+    return events;
 }
 
 /* ---------------------------------------------------------------------
  *  Change Requirement 1: data representation of IF-08 (IMU snapshot).
  * --------------------------------------------------------------------- */
-static pk_field_t const k_imu_layout[] =
+static pk_field_t const g_imu_layout[] =
 {
     PK_FIELD(imu_snap_t, t_ms,             32u, PK_W),
     PK_FIELD(imu_snap_t, pitch_cdeg,       15u, PK_S),   /* +-163.83 deg (pitch is +-90)  */
@@ -630,27 +630,27 @@ static pk_field_t const k_imu_layout[] =
     PK_FIELD(imu_snap_t, i2c_errors,       16u, PK_W),   /* counter                       */
     PK_FIELD(imu_snap_t, hump_state,        2u, PK_U),   /* 4 states                      */
     PK_FIELD(imu_snap_t, motion,            3u, PK_U),   /* 8 classes                     */
-    PK_FIELD(imu_snap_t, ok,                1u, PK_U),
+    PK_FIELD(imu_snap_t, b_ok,                1u, PK_U),
     PK_FIELD(imu_snap_t, cal,               2u, PK_U),   /* IMU_CAL_LEVEL | IMU_CAL_MAG   */
     PK_FIELD(imu_snap_t, pitch_valid,       1u, PK_U),
     PK_FIELD(imu_snap_t, tilt,              1u, PK_U)
 };
 
-#define IMU_FIELDS      ((uint16_t)(sizeof(k_imu_layout) / sizeof(k_imu_layout[0])))
+#define IMU_FIELDS      ((uint16_t)(sizeof(g_imu_layout) / sizeof(g_imu_layout[0])))
 
 void imu_snap_pack(imu_snap_t const * p_snap, uint32_t * p_words)
 {
-    pk_pack_rec(k_imu_layout, IMU_FIELDS, p_snap, p_words, IMU_SNAP_WORDS);
+    pk_pack_rec(g_imu_layout, IMU_FIELDS, p_snap, p_words, IMU_SNAP_WORDS);
 }
 
 void imu_snap_unpack(uint32_t const * p_words, imu_snap_t * p_snap)
 {
     p_snap->reserved[0] = 0u;
     p_snap->reserved[1] = 0u;
-    pk_unpack_rec(k_imu_layout, IMU_FIELDS, p_words, p_snap);
+    pk_unpack_rec(g_imu_layout, IMU_FIELDS, p_words, p_snap);
 }
 
 uint32_t imu_snap_layout_bits(void)
 {
-    return pk_layout_bits(k_imu_layout, IMU_FIELDS);
+    return pk_layout_bits(g_imu_layout, IMU_FIELDS);
 }

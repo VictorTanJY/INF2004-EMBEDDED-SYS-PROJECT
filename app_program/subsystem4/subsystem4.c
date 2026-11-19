@@ -106,29 +106,29 @@ EXPORT uint32_t safety_heartbeat_count(safety_hb_t task)
 
 EXPORT void imu_get_snap(imu_snap_t * p_out)
 {
-    uint32_t w[IMU_SNAP_WORDS];
-    uint32_t i;
+    uint32_t words[IMU_SNAP_WORDS];
+    uint32_t idx;
     UINT     sts = app_lock(&g_imu_lock);
 
-    for (i = 0u; i < IMU_SNAP_WORDS; i++)
+    for (idx = 0u; idx < IMU_SNAP_WORDS; idx++)
     {
-        w[i] = g_imu_snap[i];
+        words[idx] = g_imu_snap[idx];
     }
     app_unlock(&g_imu_lock, sts);
-    imu_snap_unpack(w, p_out);
+    imu_snap_unpack(words, p_out);
 }
 
 EXPORT void imu_put_snap(imu_snap_t const * p_in)
 {
-    uint32_t w[IMU_SNAP_WORDS];
-    uint32_t i;
+    uint32_t words[IMU_SNAP_WORDS];
+    uint32_t idx;
     UINT     sts;
 
-    imu_snap_pack(p_in, w);
+    imu_snap_pack(p_in, words);
     sts = app_lock(&g_imu_lock);
-    for (i = 0u; i < IMU_SNAP_WORDS; i++)
+    for (idx = 0u; idx < IMU_SNAP_WORDS; idx++)
     {
-        g_imu_snap[i] = w[i];
+        g_imu_snap[idx] = words[idx];
     }
     app_unlock(&g_imu_lock, sts);
 }

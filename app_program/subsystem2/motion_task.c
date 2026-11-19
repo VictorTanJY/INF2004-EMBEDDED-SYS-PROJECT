@@ -120,20 +120,20 @@ static void write_pwm(int16_t duty_l, int16_t duty_r)
 
 static void report_events(void)
 {
-    motion_event_t ev;
+    motion_event_t event;
 
-    while (motion_core_pop_event(&g_core, &ev))
+    while (motion_core_pop_event(&g_core, &event))
     {
-        switch (ev.code)
+        switch (event.code)
         {
             case MOTION_EV_DONE:
                 (void)mission_post((uint8_t)MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
-                                   (uint16_t)ev.seq, (int32_t)ev.src);
+                                   (uint16_t)event.seq, (int32_t)event.src);
                 break;
 
             case MOTION_EV_FAILED:
                 (void)mission_post((uint8_t)MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
-                                   (uint16_t)ev.seq, (int32_t)ev.src);
+                                   (uint16_t)event.seq, (int32_t)event.src);
                 break;
 
             case MOTION_EV_STALL:
@@ -209,7 +209,7 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
 
             if (res == MOTION_RES_CLEAR_ESTOP)
             {
-                if (motion_estop_clear_and_reconnect())
+                if (motion_estop_clear_reconnect())
                 {
                     motion_core_estop_cleared(&g_core);
                 }

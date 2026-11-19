@@ -70,7 +70,7 @@ typedef struct
 {
     uint8_t  type;              /* mission_ev_t                          */
     uint8_t  src;               /* APP_SRC_*                             */
-    uint16_t a;                 /* small argument (seq, param id, ...)   */
+    uint16_t arg;                 /* small argument (seq, param id, ...)   */
     int32_t  data;              /* see mission_ev_t                      */
 } mission_evt_t;                /* 8 bytes */
 

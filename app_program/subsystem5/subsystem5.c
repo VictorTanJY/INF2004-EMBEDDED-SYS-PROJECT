@@ -39,14 +39,14 @@ EXPORT ER subsystem5_init(void)
     app_lock_init(&g_mission_lock);
     app_lock_init(&g_obst_lock);
     {
-        mission_snap_t ms = {0};
-        obst_snap_t    os = {0};
+        mission_snap_t mission = {0};
+        obst_snap_t    obst = {0};
 
-        ms.state       = (uint8_t)MISSION_ST_BOOT;
-        ms.pending_nav = (uint8_t)MISSION_NAV_NONE;
-        os.d_mm        = OBST_RANGE_NONE;
-        mission_snap_pack(&ms, g_mission_snap);
-        obst_snap_pack(&os, g_obst_snap);
+        mission.state       = (uint8_t)MISSION_ST_BOOT;
+        mission.pending_nav = (uint8_t)MISSION_NAV_NONE;
+        obst.d_mm        = OBST_RANGE_NONE;
+        mission_snap_pack(&mission, g_mission_snap);
+        obst_snap_pack(&obst, g_obst_snap);
     }
 
     /* Messages are one packed word each (CR1); the kernel adds a 4-byte
@@ -101,23 +101,23 @@ EXPORT ER subsystem5_start(void)
     return tk_sta_cyc(g_cyc_range);
 }
 
-EXPORT ER mission_post(uint8_t type, uint8_t src, uint16_t a, int32_t data)
+EXPORT ER mission_post(uint8_t type, uint8_t src, uint16_t arg, int32_t data)
 {
     mission_evt_t evt;
     uint32_t      word;
-    ER            er;
+    ER            err;
 
     evt.type = type;
     evt.src  = src;
-    evt.a    = a;
+    evt.arg    = arg;
     evt.data = data;
     word = mission_evt_pack(&evt);
-    er = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
-    if (er != E_OK)
+    err = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
+    if (err != E_OK)
     {
         app_atomic_inc(&g_drops);       /* senders on both cores */
     }
-    return er;
+    return err;
 }
 
 EXPORT uint32_t mission_post_drops(void)
@@ -129,71 +129,71 @@ EXPORT ER scan_request(uint8_t type, uint8_t seq, int16_t param)
 {
     scan_req_t req;
     uint16_t   word;
-    ER         er;
+    ER         err;
 
     req.type  = type;
     req.seq   = seq;
     req.param = param;
     word = scan_req_pack(&req);
-    er = tk_snd_mbf(g_mbf_scan, &word, sizeof(word), TMO_POL);
+    err = tk_snd_mbf(g_mbf_scan, &word, sizeof(word), TMO_POL);
     (void)tk_set_flg(g_flg_obst, OBST_FLG_REQ);
-    return er;
+    return err;
 }
 
 EXPORT void mission_get_snap(mission_snap_t * p_out)
 {
-    uint32_t w[MISSION_SNAP_WORDS];
-    uint32_t i;
+    uint32_t words[MISSION_SNAP_WORDS];
+    uint32_t idx;
     UINT     sts = app_lock(&g_mission_lock);
 
-    for (i = 0u; i < MISSION_SNAP_WORDS; i++)
+    for (idx = 0u; idx < MISSION_SNAP_WORDS; idx++)
     {
-        w[i] = g_mission_snap[i];
+        words[idx] = g_mission_snap[idx];
     }
     app_unlock(&g_mission_lock, sts);
-    mission_snap_unpack(w, p_out);
+    mission_snap_unpack(words, p_out);
 }
 
 EXPORT void mission_put_snap(mission_snap_t const * p_in)
 {
-    uint32_t w[MISSION_SNAP_WORDS];
+    uint32_t words[MISSION_SNAP_WORDS];
     UINT     sts;
-    uint32_t i;
+    uint32_t idx;
 
-    mission_snap_pack(p_in, w);
+    mission_snap_pack(p_in, words);
     sts = app_lock(&g_mission_lock);
-    for (i = 0u; i < MISSION_SNAP_WORDS; i++)
+    for (idx = 0u; idx < MISSION_SNAP_WORDS; idx++)
     {
-        g_mission_snap[i] = w[i];
+        g_mission_snap[idx] = words[idx];
     }
     app_unlock(&g_mission_lock, sts);
 }
 
 EXPORT void obst_get_snap(obst_snap_t * p_out)
 {
-    uint32_t w[OBST_SNAP_WORDS];
-    uint32_t i;
+    uint32_t words[OBST_SNAP_WORDS];
+    uint32_t idx;
     UINT     sts = app_lock(&g_obst_lock);
 
-    for (i = 0u; i < OBST_SNAP_WORDS; i++)
+    for (idx = 0u; idx < OBST_SNAP_WORDS; idx++)
     {
-        w[i] = g_obst_snap[i];
+        words[idx] = g_obst_snap[idx];
     }
     app_unlock(&g_obst_lock, sts);
-    obst_snap_unpack(w, p_out);
+    obst_snap_unpack(words, p_out);
 }
 
 EXPORT void obst_put_snap(obst_snap_t const * p_in)
 {
-    uint32_t w[OBST_SNAP_WORDS];
+    uint32_t words[OBST_SNAP_WORDS];
     UINT     sts;
-    uint32_t i;
+    uint32_t idx;
 
-    obst_snap_pack(p_in, w);
+    obst_snap_pack(p_in, words);
     sts = app_lock(&g_obst_lock);
-    for (i = 0u; i < OBST_SNAP_WORDS; i++)
+    for (idx = 0u; idx < OBST_SNAP_WORDS; idx++)
     {
-        g_obst_snap[i] = w[i];
+        g_obst_snap[idx] = words[idx];
     }
     app_unlock(&g_obst_lock, sts);
 }

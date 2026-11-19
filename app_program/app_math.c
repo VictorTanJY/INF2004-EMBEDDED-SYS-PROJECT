@@ -5,20 +5,20 @@
 
 #include "app_math.h"
 
-uint32_t app_isqrt64(uint64_t x)
+uint32_t app_isqrt64(uint64_t value)
 {
     uint64_t result = 0u;
     uint64_t bit    = (uint64_t)1u << 62;
 
-    while (bit > x)
+    while (bit > value)
     {
         bit >>= 2;
     }
     while (bit != 0u)
     {
-        if (x >= (result + bit))
+        if (value >= (result + bit))
         {
-            x      -= result + bit;
+            value      -= result + bit;
             result  = (result >> 1) + bit;
         }
         else
@@ -30,20 +30,20 @@ uint32_t app_isqrt64(uint64_t x)
     return (uint32_t)result;
 }
 
-uint32_t app_isqrt32(uint32_t x)
+uint32_t app_isqrt32(uint32_t value)
 {
     uint32_t result = 0u;
     uint32_t bit    = (uint32_t)1u << 30;
 
-    while (bit > x)
+    while (bit > value)
     {
         bit >>= 2;
     }
     while (bit != 0u)
     {
-        if (x >= (result + bit))
+        if (value >= (result + bit))
         {
-            x      -= result + bit;
+            value      -= result + bit;
             result  = (result >> 1) + bit;
         }
         else
@@ -59,46 +59,46 @@ uint32_t app_isqrt32(uint32_t x)
  * atan(z) for 0 <= z <= 1, z in Q30, result in cdeg.  Abramowitz & Stegun
  * 4.4.49: atan(z) = z (a1 + a3 z^2 + a5 z^4 + a7 z^6 + a9 z^8), |err| <= 1e-5 rad.
  */
-static int32_t atan_unit_cdeg(int64_t z)
+static int32_t atan_unit_cdeg(int64_t ratio)
 {
     int64_t const pi_q30 = 3373259426;          /* pi * 2^30 */
-    int64_t const z2     = (z * z) >> 30;
-    int64_t       p;
+    int64_t const ratio_sq     = (ratio * ratio) >> 30;
+    int64_t       poly;
 
-    p = 22371518;                               /*  0.0208351 */
-    p = -91410863 + ((z2 * p) >> 30);           /* -0.0851330 */
-    p = 193424926 + ((z2 * p) >> 30);           /*  0.1801410 */
-    p = -354656388 + ((z2 * p) >> 30);          /* -0.3302995 */
-    p = 1073597943 + ((z2 * p) >> 30);          /*  0.9998660 */
-    p = (z * p) >> 30;                          /* atan(z), Q30 rad, >= 0 */
+    poly = 22371518;                               /*  0.0208351 */
+    poly = -91410863 + ((ratio_sq * poly) >> 30);           /* -0.0851330 */
+    poly = 193424926 + ((ratio_sq * poly) >> 30);           /*  0.1801410 */
+    poly = -354656388 + ((ratio_sq * poly) >> 30);          /* -0.3302995 */
+    poly = 1073597943 + ((ratio_sq * poly) >> 30);          /*  0.9998660 */
+    poly = (ratio * poly) >> 30;                          /* atan(z), Q30 rad, >= 0 */
 
     /* rad -> cdeg: x 18000 / pi, rounded */
-    return (int32_t)(((p * 18000) + (pi_q30 / 2)) / pi_q30);
+    return (int32_t)(((poly * 18000) + (pi_q30 / 2)) / pi_q30);
 }
 
-int32_t app_atan2_cdeg(int32_t y, int32_t x)
+int32_t app_atan2_cdeg(int32_t y_val, int32_t x_val)
 {
-    uint32_t ax = (x < 0) ? (0u - (uint32_t)x) : (uint32_t)x;
-    uint32_t ay = (y < 0) ? (0u - (uint32_t)y) : (uint32_t)y;
+    uint32_t abs_x = (x_val < 0) ? (0u - (uint32_t)x_val) : (uint32_t)x_val;
+    uint32_t abs_y = (y_val < 0) ? (0u - (uint32_t)y_val) : (uint32_t)y_val;
     int32_t  angle;
 
-    if ((ax == 0u) && (ay == 0u))
+    if ((abs_x == 0u) && (abs_y == 0u))
     {
         return 0;
     }
-    if (ax >= ay)
+    if (abs_x >= abs_y)
     {
-        angle = atan_unit_cdeg((int64_t)(((uint64_t)ay << 30) / ax));
+        angle = atan_unit_cdeg((int64_t)(((uint64_t)abs_y << 30) / abs_x));
     }
     else
     {
-        angle = APP_CDEG_90 - atan_unit_cdeg((int64_t)(((uint64_t)ax << 30) / ay));
+        angle = APP_CDEG_90 - atan_unit_cdeg((int64_t)(((uint64_t)abs_x << 30) / abs_y));
     }
-    if (x < 0)
+    if (x_val < 0)
     {
         angle = APP_CDEG_180 - angle;
     }
-    if (y < 0)
+    if (y_val < 0)
     {
         angle = -angle;
     }
@@ -107,21 +107,21 @@ int32_t app_atan2_cdeg(int32_t y, int32_t x)
 
 int32_t app_wrap_cdeg(int32_t cdeg)
 {
-    int32_t a = cdeg % APP_CDEG_360;
+    int32_t angle = cdeg % APP_CDEG_360;
 
-    if (a >= APP_CDEG_180)
+    if (angle >= APP_CDEG_180)
     {
-        a -= APP_CDEG_360;
+        angle -= APP_CDEG_360;
     }
-    else if (a < -APP_CDEG_180)
+    else if (angle < -APP_CDEG_180)
     {
-        a += APP_CDEG_360;
+        angle += APP_CDEG_360;
     }
     else
     {
         /* already in range */
     }
-    return a;
+    return angle;
 }
 
 /*
@@ -130,19 +130,19 @@ int32_t app_wrap_cdeg(int32_t cdeg)
  */
 int32_t app_sin_q15(int32_t cdeg)
 {
-    int32_t a    = app_wrap_cdeg(cdeg);         /* -180 .. 180 deg */
-    int64_t t;
-    int64_t t2;
-    int64_t s;
+    int32_t angle    = app_wrap_cdeg(cdeg);         /* -180 .. 180 deg */
+    int64_t term;
+    int64_t term_sq;
+    int64_t sine;
 
     /* Fold into -90 .. 90 deg: sin(180 - a) = sin(a). */
-    if (a > APP_CDEG_90)
+    if (angle > APP_CDEG_90)
     {
-        a = APP_CDEG_180 - a;
+        angle = APP_CDEG_180 - angle;
     }
-    else if (a < -APP_CDEG_90)
+    else if (angle < -APP_CDEG_90)
     {
-        a = -APP_CDEG_180 - a;
+        angle = -APP_CDEG_180 - angle;
     }
     else
     {
@@ -150,26 +150,26 @@ int32_t app_sin_q15(int32_t cdeg)
     }
 
     /* t = a * pi / 18000 in Q30: pi / 18000 * 2^30 = 187406.71 */
-    t  = ((int64_t)a * 18740671) / 100;
-    t2 = (t * t) >> 30;
+    term  = ((int64_t)angle * 18740671) / 100;
+    term_sq = (term * term) >> 30;
 
     /* Horner: t (1 - t2/6 (1 - t2/20 (1 - t2/42 (1 - t2/72)))) */
-    s = ((int64_t)1 << 30) - (t2 / 72);
-    s = ((int64_t)1 << 30) - (((t2 * s) >> 30) / 42);
-    s = ((int64_t)1 << 30) - (((t2 * s) >> 30) / 20);
-    s = ((int64_t)1 << 30) - (((t2 * s) >> 30) / 6);
-    s = (t * s) >> 30;                          /* Q30 */
+    sine = ((int64_t)1 << 30) - (term_sq / 72);
+    sine = ((int64_t)1 << 30) - (((term_sq * sine) >> 30) / 42);
+    sine = ((int64_t)1 << 30) - (((term_sq * sine) >> 30) / 20);
+    sine = ((int64_t)1 << 30) - (((term_sq * sine) >> 30) / 6);
+    sine = (term * sine) >> 30;                          /* Q30 */
 
-    s = (s + ((s >= 0) ? 16384 : -16384)) / 32768;  /* Q15, rounded */
-    if (s > 32767)
+    sine = (sine + ((sine >= 0) ? 16384 : -16384)) / 32768;  /* Q15, rounded */
+    if (sine > 32767)
     {
-        s = 32767;
+        sine = 32767;
     }
-    if (s < -32768)
+    if (sine < -32768)
     {
-        s = -32768;
+        sine = -32768;
     }
-    return (int32_t)s;
+    return (int32_t)sine;
 }
 
 int32_t app_cos_q15(int32_t cdeg)

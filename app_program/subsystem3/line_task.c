@@ -71,21 +71,21 @@ static void bc_reject_detail(bc_capture_t const * p_bc)
     uint32_t const len_mm = app_min_i32((int32_t)(p_bc->total_um / 1000u), 0xFFFF);
     uint32_t       w_min  = 0xFFFFu;
     uint32_t       w_max  = 0u;
-    uint16_t       k;
+    uint16_t       kdx;
 
-    for (k = 0u; (k < p_bc->n) && (k <= BC_MAX_ELEMENTS); k++)
+    for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
     {
-        uint32_t const w = app_min_i32((int32_t)(p_bc->widths[k] / 100u), 0xFFFF);
+        uint32_t const width = app_min_i32((int32_t)(p_bc->widths[kdx] / 100u), 0xFFFF);
 
-        w_min = (w < w_min) ? w : w_min;
-        w_max = (w > w_max) ? w : w_max;
+        w_min = (width < w_min) ? width : w_min;
+        w_max = (width > w_max) ? width : w_max;
     }
-    if (p_bc->n == 0u)
+    if (p_bc->n_elems == 0u)
     {
         w_min = 0u;
     }
     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHAPE,
-                           (int32_t)(((uint32_t)app_min_i32(p_bc->n, 255) << 24) |
+                           (int32_t)(((uint32_t)app_min_i32(p_bc->n_elems, 255) << 24) |
                                      (len_mm << 8) |
                                      ((uint32_t)p_bc->peak / 4u)));
     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_WIDTHS,
@@ -95,38 +95,38 @@ static void bc_reject_detail(bc_capture_t const * p_bc)
 /* LOG 76 and 75 for the capture that was just rejected (still in g_bc). */
 static void bc_widths_log(bc_capture_t const * p_bc)
 {
-    static uint32_t w[BC_MAX_ELEMENTS + 1u];
+    static uint32_t widths[BC_MAX_ELEMENTS + 1u];
     uint32_t        counts = 0u;
-    uint8_t         rd;
+    uint8_t         reading;
 
     {
         static uint8_t const k_count_rd[4] = { 0u, 2u, 3u, 5u };
-        uint8_t              j;
+        uint8_t              jdx;
 
-        for (j = 0u; j < 4u; j++)
+        for (jdx = 0u; jdx < 4u; jdx++)
         {
-            uint16_t const n = bc_reading(p_bc, k_count_rd[j], w);
+            uint16_t const n_elems = bc_reading(p_bc, k_count_rd[jdx], widths);
 
-            counts |= (uint32_t)app_min_i32(n, 255) << (8u * (3u - j));
+            counts |= (uint32_t)app_min_i32(n_elems, 255) << (8u * (3u - jdx));
         }
     }
     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_COUNTS,
                            (int32_t)counts);
-    for (rd = 0u; rd < BC_READINGS; rd += 5u)          /* swing (0), adaptive 10 % (5) */
+    for (reading = 0u; reading < BC_READINGS; reading += 5u)          /* swing (0), adaptive 10 % (5) */
     {
-        uint16_t const n = bc_reading(p_bc, rd, w);
-        uint16_t       k;
+        uint16_t const n_elems = bc_reading(p_bc, reading, widths);
+        uint16_t       kdx;
 
-        for (k = 0u; (k < n) && (k < LINE_LOG_ELEM_MAX); k += 3u)
+        for (kdx = 0u; (kdx < n_elems) && (kdx < LINE_LOG_ELEM_MAX); kdx += 3u)
         {
-            uint32_t data = ((uint32_t)((rd == 0u) ? 0u : 3u) << 30) | ((uint32_t)k << 24);
-            uint8_t  j;
+            uint32_t data = ((uint32_t)((reading == 0u) ? 0u : 3u) << 30) | ((uint32_t)kdx << 24);
+            uint8_t  jdx;
 
-            for (j = 0u; j < 3u; j++)
+            for (jdx = 0u; jdx < 3u; jdx++)
             {
-                uint32_t const e = ((k + j) < n) ? ((w[k + j] + 100u) / 200u) : 0u;    /* 0.2 mm */
+                uint32_t const elem = ((kdx + jdx) < n_elems) ? ((widths[kdx + jdx] + 100u) / 200u) : 0u;    /* 0.2 mm */
 
-                data |= ((e > 255u) ? 255u : ((e == 0u) && ((k + j) < n) ? 1u : e)) << (8u * (2u - j));
+                data |= ((elem > 255u) ? 255u : ((elem == 0u) && ((kdx + jdx) < n_elems) ? 1u : elem)) << (8u * (2u - jdx));
             }
             (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_ELEM,
                                    (int32_t)data);
@@ -177,7 +177,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
     uint16_t       block[DRV_ADC_BLOCK_LEN];
     line_snap_t    snap = {0};
     motion_odom_t  odom;
-    mission_snap_t ms;
+    mission_snap_t mission;
     uint32_t       seq;
     uint32_t       last_seq = 0u;
     bool           b_hw_ok;
@@ -202,8 +202,8 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         uint32_t step_um;
         uint32_t sum[LINE_CH_COUNT] = { 0u, 0u, 0u };
         uint16_t mean[LINE_CH_COUNT];
-        uint8_t  ev = 0u;
-        uint32_t i;
+        uint8_t  events = 0u;
+        uint32_t idx;
 
         (void)tk_slp_tsk(LINE_WAKE_TIMEOUT_MS);
         safety_heartbeat(SAFETY_HB_LINE);
@@ -225,13 +225,13 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         snap.blocks++;
 
         motion_get_odom(&odom);
-        mission_get_snap(&ms);
+        mission_get_snap(&mission);
 
         /* ---- 2. calibration (360 deg spin) -------------------------- */
-        if (ms.cal_phase == (uint8_t)MISSION_CAL_PH_SPIN)
+        if (mission.cal_phase == (uint8_t)MISSION_CAL_PH_SPIN)
         {
-            uint32_t cl = 0u;
-            uint32_t cr = 0u;
+            uint32_t cross_left = 0u;
+            uint32_t cross_right = 0u;
 
             if (!b_cal_active)
             {
@@ -239,26 +239,26 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 line_slip_start(&g_slip, odom.heading_cdeg);
                 b_cal_active = true;
             }
-            for (i = 0u; i < LINE_SAMPLES_PER_BLOCK; i++)
+            for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
             {
-                line_cal_sample(&g_cal, &block[i * LINE_CH_COUNT]);
-                cl += block[(i * LINE_CH_COUNT) + LINE_CH_L];
-                cr += block[(i * LINE_CH_COUNT) + LINE_CH_R];
+                line_cal_sample(&g_cal, &block[idx * LINE_CH_COUNT]);
+                cross_left += block[(idx * LINE_CH_COUNT) + LINE_CH_L];
+                cross_right += block[(idx * LINE_CH_COUNT) + LINE_CH_R];
             }
-            line_slip_sample(&g_slip, odom.heading_cdeg, (uint16_t)(cl / LINE_SAMPLES_PER_BLOCK),
-                             (uint16_t)(cr / LINE_SAMPLES_PER_BLOCK));
+            line_slip_sample(&g_slip, odom.heading_cdeg, (uint16_t)(cross_left / LINE_SAMPLES_PER_BLOCK),
+                             (uint16_t)(cross_right / LINE_SAMPLES_PER_BLOCK));
         }
-        else if (b_cal_active && (ms.cal_phase == (uint8_t)MISSION_CAL_PH_FINISH))
+        else if (b_cal_active && (mission.cal_phase == (uint8_t)MISSION_CAL_PH_FINISH))
         {
             bool const b_ok = line_cal_finish(&g_cal);
-            uint8_t    ch;
+            uint8_t    chan;
 
             /* raw levels seen during the spin, for S3-M01 / A7 on the laptop */
-            for (ch = 0u; ch < LINE_CH_COUNT; ch++)
+            for (chan = 0u; chan < LINE_CH_COUNT; chan++)
             {
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                                       (uint16_t)(LINE_LOG_CAL_LEVELS + ch),
-                                       (int32_t)(((uint32_t)g_cal.max[ch] << 16) | g_cal.min[ch]));
+                                       (uint16_t)(LINE_LOG_CAL_LEVELS + chan),
+                                       (int32_t)(((uint32_t)g_cal.max[chan] << 16) | g_cal.min[chan]));
             }
             /* turn slip for the bypass turns (3 Nov) */
             {
@@ -277,7 +277,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             (void)mission_post((uint8_t)MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_LINE,
                                (uint16_t)APP_SRC_LINE, b_ok ? 1 : 0);
         }
-        else if (ms.cal_phase == (uint8_t)MISSION_CAL_PH_NONE)
+        else if (mission.cal_phase == (uint8_t)MISSION_CAL_PH_NONE)
         {
             b_cal_active = false;       /* calibration aborted */
         }
@@ -288,12 +288,12 @@ EXPORT void line_task(INT stacd, void * p_exinf)
 
         /* ---- 3. barcode region (per sample) ------------------------- */
         step_um = bc_step_um(&odom);
-        for (i = 0u; i < LINE_SAMPLES_PER_BLOCK; i++)
+        for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
         {
-            uint16_t const * p_s = &block[i * LINE_CH_COUNT];
+            uint16_t const * p_s = &block[idx * LINE_CH_COUNT];
             bc_out_t         out;
-            bc_result_t      r;
-            bool             bc_was_capturing;
+            bc_result_t      result;
+            bool             b_was_capturing;
             uint32_t         t0_us;
 
             sum[LINE_CH_L]  += p_s[LINE_CH_L];
@@ -303,23 +303,23 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             {
                 continue;
             }
-            bc_was_capturing = (g_bc.state == (uint8_t)LINE_BC_CAPTURING);
-            t0_us = bc_was_capturing ? (uint32_t)app_time_us() : 0u;
-            r = bc_sample(&g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]), step_um, &out);
-            if (bc_was_capturing && ((r == BC_VALID) || (r == BC_REJECT)))
+            b_was_capturing = (g_bc.state == (uint8_t)LINE_BC_CAPTURING);
+            t0_us = b_was_capturing ? (uint32_t)app_time_us() : 0u;
+            result = bc_sample(&g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]), step_um, &out);
+            if (b_was_capturing && ((result == BC_VALID) || (result == BC_REJECT)))
             {
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_DECODE_US,
                                        (int32_t)((uint32_t)app_time_us() - t0_us));
             }
-            if (r == BC_VALID)
+            if (result == BC_VALID)
             {
                 snap.barcode_ok++;
-                snap.last_barcode = out.ch;
+                snap.last_barcode = out.chr;
                 (void)mission_post((uint8_t)MISSION_EV_BARCODE, (uint8_t)APP_SRC_LINE,
-                                   out.b_reversed ? 1u : 0u, (int32_t)out.ch);
+                                   out.b_reversed ? 1u : 0u, (int32_t)out.chr);
                 bc_levels_log(&g_bc);
             }
-            else if (r == BC_REJECT)
+            else if (result == BC_REJECT)
             {
                 /* BARCODE_ERR: telemetry only, never a command (FR3) */
                 snap.barcode_err++;
@@ -330,11 +330,11 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 bc_levels_log(&g_bc);
                 bc_widths_log(&g_bc);
             }
-            else if (bc_was_capturing && (g_bc.state == (uint8_t)LINE_BC_ARMED) && (g_bc.n >= 2u))
+            else if (b_was_capturing && (g_bc.state == (uint8_t)LINE_BC_ARMED) && (g_bc.n_elems >= 2u))
             {
                 /* dropped silently by the decoder (< 9 elements): say so */
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                                       LINE_LOG_BC_SHORT, (int32_t)g_bc.n);
+                                       LINE_LOG_BC_SHORT, (int32_t)g_bc.n_elems);
                 bc_reject_detail(&g_bc);
                 bc_levels_log(&g_bc);
             }
@@ -345,9 +345,9 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         }
 
         /* ---- 4. line region (per block) ----------------------------- */
-        for (i = 0u; i < LINE_CH_COUNT; i++)
+        for (idx = 0u; idx < LINE_CH_COUNT; idx++)
         {
-            mean[i] = (uint16_t)(sum[i] / LINE_SAMPLES_PER_BLOCK);
+            mean[idx] = (uint16_t)(sum[idx] / LINE_SAMPLES_PER_BLOCK);
         }
         snap.raw_l  = line_cal_norm(&g_cal, LINE_CH_L, mean[LINE_CH_L]);
         snap.raw_r  = line_cal_norm(&g_cal, LINE_CH_R, mean[LINE_CH_R]);
@@ -356,20 +356,20 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         {
             line_trk_cfg_t cfg;
 
-            cfg.junction_um = (uint32_t)ms.junction_mm * 1000u;
-            cfg.lost_um     = (uint32_t)ms.lost_mm * 1000u;
-            cfg.cruise_mm_s = app_min_i32((int32_t)ms.cruise_mm_s, (int32_t)ms.speed_cap_mm_s);
-            ev = line_track_step(&g_trk, &cfg, snap.raw_l, snap.raw_r,
+            cfg.junction_um = (uint32_t)mission.junction_mm * 1000u;
+            cfg.lost_um     = (uint32_t)mission.lost_mm * 1000u;
+            cfg.cruise_mm_s = app_min_i32((int32_t)mission.cruise_mm_s, (int32_t)mission.speed_cap_mm_s);
+            events = line_track_step(&g_trk, &cfg, snap.raw_l, snap.raw_r,
                                  (uint32_t)app_abs_i32(odom.v_mm_s) * 10u);
-            if ((ev & LINE_TRK_EV_JUNCTION) != 0u)
+            if ((events & LINE_TRK_EV_JUNCTION) != 0u)
             {
                 (void)mission_post((uint8_t)MISSION_EV_JUNCTION, (uint8_t)APP_SRC_LINE, 0u, 0);
             }
-            if ((ev & LINE_TRK_EV_LOST) != 0u)
+            if ((events & LINE_TRK_EV_LOST) != 0u)
             {
                 (void)mission_post((uint8_t)MISSION_EV_LINE_LOST, (uint8_t)APP_SRC_LINE, 0u, 0);
             }
-            if ((ev & LINE_TRK_EV_FOUND) != 0u)
+            if ((events & LINE_TRK_EV_FOUND) != 0u)
             {
                 (void)mission_post((uint8_t)MISSION_EV_LINE_FOUND, (uint8_t)APP_SRC_LINE, 0u, 0);
             }
@@ -400,7 +400,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
 
         /* ---- 5. steering command ------------------------------------ */
         if ((odom.auth == (uint8_t)MOTION_SRC_LINE) &&
-            (ms.state == (uint8_t)MISSION_ST_LINE_FOLLOW) && g_cal.b_valid)
+            (mission.state == (uint8_t)MISSION_ST_LINE_FOLLOW) && g_cal.b_valid)
         {
             int32_t omega = g_trk.omega;
 
@@ -413,7 +413,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             }
             drive_seq = motion_seq_next(drive_seq);
             (void)motion_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
-                               (int16_t)g_trk.v, (int16_t)omega);
+                               (int16_t)g_trk.v_mm_s, (int16_t)omega);
         }
 
         /* ---- 6. snapshot -------------------------------------------- */

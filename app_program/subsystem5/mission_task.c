@@ -20,8 +20,8 @@
 #include "../subsystem4/subsystem4.h"
 
 /* mission_core.c hard-codes these two APP_SRC values (pure module). */
-typedef char s5_check_src_line[(APP_SRC_LINE == 3u) ? 1 : -1];
-typedef char s5_check_src_imu[(APP_SRC_SAFETY_IMU == 4u) ? 1 : -1];
+typedef char s5_check_src_line_t[(APP_SRC_LINE == 3u) ? 1 : -1];
+typedef char s5_check_src_imu_t[(APP_SRC_SAFETY_IMU == 4u) ? 1 : -1];
 
 static mission_core_t g_mc;
 static uint8_t        g_scan_seq;
@@ -31,43 +31,43 @@ static uint8_t        g_scan_seq;
 static ER mission_motion(mission_act_t const * p_a)
 {
     uint8_t const  src    = (uint8_t)MOTION_SRC_MISSION;
-    uint16_t const amount = (uint16_t)app_abs_i32(p_a->p0);
-    ER             er;
+    uint16_t const amount = (uint16_t)app_abs_i32(p_a->arg0);
+    ER             err;
 
     switch (p_a->cmd)
     {
         case MOTION_CMD_MOVE:
-            er = (p_a->p0 >= 0) ? motion_move_forward(src, p_a->seq, amount, (uint16_t)p_a->p1)
-                                : motion_move_backward(src, p_a->seq, amount, (uint16_t)p_a->p1);
+            err = (p_a->arg0 >= 0) ? motion_move_forward(src, p_a->seq, amount, (uint16_t)p_a->arg1)
+                                : motion_move_backward(src, p_a->seq, amount, (uint16_t)p_a->arg1);
             break;
 
         case MOTION_CMD_TURN:
-            er = (p_a->p0 >= 0) ? motion_turn_left(src, p_a->seq, amount, (uint16_t)p_a->p1)
-                                : motion_turn_right(src, p_a->seq, amount, (uint16_t)p_a->p1);
+            err = (p_a->arg0 >= 0) ? motion_turn_left(src, p_a->seq, amount, (uint16_t)p_a->arg1)
+                                : motion_turn_right(src, p_a->seq, amount, (uint16_t)p_a->arg1);
             break;
 
         case MOTION_CMD_STOP:
-            er = motion_stop(src, p_a->seq);
+            err = motion_stop(src, p_a->seq);
             break;
 
         case MOTION_CMD_DRIVE:
-            er = motion_drive(src, p_a->seq, p_a->p0, p_a->p1);
+            err = motion_drive(src, p_a->seq, p_a->arg0, p_a->arg1);
             break;
 
         default:
-            er = motion_post(src, p_a->seq, p_a->cmd, p_a->p0, p_a->p1);
+            err = motion_post(src, p_a->seq, p_a->cmd, p_a->arg0, p_a->arg1);
             break;
     }
-    return er;
+    return err;
 }
 
 static void run_actions(mission_out_t const * p_out)
 {
-    uint8_t i;
+    uint8_t idx;
 
-    for (i = 0u; i < p_out->n; i++)
+    for (idx = 0u; idx < p_out->n_acts; idx++)
     {
-        mission_act_t const * p_a = &p_out->act[i];
+        mission_act_t const * p_a = &p_out->act[idx];
 
         switch (p_a->kind)
         {
@@ -82,7 +82,7 @@ static void run_actions(mission_out_t const * p_out)
 
             case MISSION_ACT_SCAN:
                 g_scan_seq++;
-                (void)scan_request(p_a->cmd, g_scan_seq, p_a->p0);
+                (void)scan_request(p_a->cmd, g_scan_seq, p_a->arg0);
                 break;
 
             case MISSION_ACT_SAFETY_RESET:
@@ -91,7 +91,7 @@ static void run_actions(mission_out_t const * p_out)
 
             case MISSION_ACT_STATE:
                 (void)comms_telem_post((uint8_t)COMMS_KIND_STATE, (uint8_t)APP_SRC_OBST_MISSION,
-                                       (uint16_t)p_a->p0, 0);
+                                       (uint16_t)p_a->arg0, 0);
                 break;
 
             case MISSION_ACT_LOG:
@@ -107,8 +107,8 @@ static void run_actions(mission_out_t const * p_out)
                 else
                 {
                     (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,
-                                           p_a->cmd, (int32_t)(((uint32_t)(uint16_t)p_a->p0 << 16) |
-                                                               (uint16_t)p_a->p1));
+                                           p_a->cmd, (int32_t)(((uint32_t)(uint16_t)p_a->arg0 << 16) |
+                                                               (uint16_t)p_a->arg1));
                 }
                 break;
 
@@ -120,10 +120,10 @@ static void run_actions(mission_out_t const * p_out)
 
 EXPORT void mission_task(INT stacd, void * p_exinf)
 {
-    mission_evt_t    ev;
+    mission_evt_t    event;
     uint32_t         ev_word;       /* mbf_mission: one packed word (CR1) */
     mission_out_t    out;
-    mission_inputs_t in;
+    mission_inputs_t inputs;
     motion_odom_t    odom;
     line_snap_t      line;
     imu_snap_t       imu;
@@ -137,35 +137,35 @@ EXPORT void mission_task(INT stacd, void * p_exinf)
 
     for (;;)
     {
-        INT      n = tk_rcv_mbf(g_mbf_mission, &ev_word, S5_MISSION_TICK_MS);
+        INT      msg_len = tk_rcv_mbf(g_mbf_mission, &ev_word, S5_MISSION_TICK_MS);
         uint32_t now_ms;
 
         safety_heartbeat(SAFETY_HB_MISSION);
         now_ms = (uint32_t)app_time_ms();
 
-        out.n = 0u;
-        if (n == (INT)sizeof(ev_word))
+        out.n_acts = 0u;
+        if (msg_len == (INT)sizeof(ev_word))
         {
-            mission_evt_unpack(ev_word, &ev);
+            mission_evt_unpack(ev_word, &event);
             /* the laptop's event log: every event MissionTask decides on */
-            (void)comms_telem_post((uint8_t)COMMS_KIND_EVENT, ev.src, (uint16_t)ev.type, ev.data);
-            mission_core_event(&g_mc, &ev, now_ms, &out);
+            (void)comms_telem_post((uint8_t)COMMS_KIND_EVENT, event.src, (uint16_t)event.type, event.data);
+            mission_core_event(&g_mc, &event, now_ms, &out);
             run_actions(&out);
         }
 
         motion_get_odom(&odom);
         line_get_snap(&line);
         imu_get_snap(&imu);
-        in.b_motion_hw_ok  = (odom.hw_ok != 0u);
-        in.b_line_hw_ok    = ((line.flags & LINE_FLAG_HW_OK) != 0u);
-        in.b_imu_ok        = (imu.ok != 0u);
-        in.b_timer_checked = true;
-        in.b_timer_ok      = safety_timer_tick_ok();
-        in.b_on_line       = ((line.flags & LINE_FLAG_ON_LINE) != 0u) &&
+        inputs.b_motion_hw_ok  = (odom.hw_ok != 0u);
+        inputs.b_line_hw_ok    = ((line.flags & LINE_FLAG_HW_OK) != 0u);
+        inputs.b_imu_ok        = (imu.b_ok != 0u);
+        inputs.b_timer_checked = true;
+        inputs.b_timer_ok      = safety_timer_tick_ok();
+        inputs.b_on_line       = ((line.flags & LINE_FLAG_ON_LINE) != 0u) &&
                              ((line.flags & LINE_FLAG_CALIBRATED) != 0u);
-        in.mbf_drops       = mission_post_drops();
-        out.n = 0u;
-        mission_core_tick(&g_mc, &in, now_ms, &out);
+        inputs.mbf_drops       = mission_post_drops();
+        out.n_acts = 0u;
+        mission_core_tick(&g_mc, &inputs, now_ms, &out);
         run_actions(&out);
 
         g_mc.snap.t_ms = now_ms;

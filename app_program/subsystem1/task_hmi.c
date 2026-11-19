@@ -31,16 +31,16 @@ static bool hmi_pressed(UW pin)
     return (gpio_get_val(pin) == S1_BTN_PRESSED_LEVEL);
 }
 
-static void hmi_report(mission_ev_t ev)
+static void hmi_report(mission_ev_t event)
 {
     /* Both sends use TMO_POL; a full mbf_mission is reported, not waited on. */
-    if (mission_post((uint8_t)ev, (uint8_t)APP_SRC_COMMS, 0u, 0) != E_OK)
+    if (mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS, 0u, 0) != E_OK)
     {
         (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_COMMS,
-                               (uint16_t)ev, -1);
+                               (uint16_t)event, -1);
     }
     (void)comms_telem_post((uint8_t)COMMS_KIND_EVENT, (uint8_t)APP_SRC_COMMS,
-                           (uint16_t)ev, 0);
+                           (uint16_t)event, 0);
 }
 
 EXPORT void hmi_task(INT stacd, void * p_exinf)
@@ -58,24 +58,24 @@ EXPORT void hmi_task(INT stacd, void * p_exinf)
 
     for (;;)
     {
-        hmi_btn_ev_t ev;
+        hmi_btn_ev_t event;
 
         (void)tk_dly_tsk(HMI_PERIOD_MS);
 
-        ev = hmi_btn_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
+        event = hmi_btn_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
                             (uint16_t)HMI_PERIOD_MS, (uint16_t)HMI_LONG_PRESS_MS);
-        if (ev == HMI_BTN_EV_PRESS)
+        if (event == HMI_BTN_EV_PRESS)
         {
             hmi_report(MISSION_EV_BTN_START_STOP);
         }
 
-        ev = hmi_btn_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
+        event = hmi_btn_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
                             (uint16_t)HMI_PERIOD_MS, (uint16_t)HMI_LONG_PRESS_MS);
-        if (ev == HMI_BTN_EV_SHORT)
+        if (event == HMI_BTN_EV_SHORT)
         {
             hmi_report(MISSION_EV_BTN_CALIBRATE);
         }
-        else if (ev == HMI_BTN_EV_LONG)
+        else if (event == HMI_BTN_EV_LONG)
         {
             hmi_report(MISSION_EV_BTN_RESET);
         }

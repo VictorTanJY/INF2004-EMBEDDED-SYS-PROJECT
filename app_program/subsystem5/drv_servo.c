@@ -29,20 +29,20 @@ EXPORT ER drv_servo_init(void)
 
 EXPORT void drv_servo_set_deg(int32_t angle_deg)
 {
-    int32_t a = angle_deg;
-    int32_t us;
+    int32_t angle = angle_deg;
+    int32_t pulse_us;
 
-    if (a < 0)
+    if (angle < 0)
     {
-        a = 0;
+        angle = 0;
     }
-    if (a > 180)
+    if (angle > 180)
     {
-        a = 180;
+        angle = 180;
     }
 #if !OBST_SERVO_LEFT_IS_HIGH
     a = 180 - a;
 #endif
-    us = OBST_SERVO_MIN_US + ((a * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
-    out_w(PWM_CH_CC(SERVO_SLICE), (uint32_t)us << 16);      /* channel B; A (GP14) = 0 */
+    pulse_us = OBST_SERVO_MIN_US + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
+    out_w(PWM_CH_CC(SERVO_SLICE), (uint32_t)pulse_us << 16);      /* channel B; A (GP14) = 0 */
 }
