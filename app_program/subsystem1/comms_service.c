@@ -91,6 +91,7 @@ static void comms_publish_telemetry(uint32_t now_ms);
 static bool comms_due(uint32_t now_ms, uint32_t * p_next_ms,
                       uint32_t period_ms);
 static comms_proto_err_t comms_execute(comms_proto_cmd_t const * p_cmd);
+static comms_proto_err_t comms_handle(comms_proto_cmd_t const * p_cmd);
 
 /* ---------------------------------------------------------------------
  *  mqtt_utk hooks
@@ -181,57 +182,63 @@ void mqtt_utk_app_poll (void)
 void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
                       uint16_t len)
 {
-    comms_proto_cmd_t    cmd;
-    comms_proto_err_t    err;
-    mission_types_snap_t mission;
-    uint16_t             ack_len;
+    comms_proto_cmd_t cmd;
+    comms_proto_err_t err;
+    uint16_t          ack_len;
 
-    if ((subsystem1_mbf_telem() <= 0) || !topic_eq(p_topic, COMMS_TOPIC_CMD))
+    if ((subsystem1_mbf_telem() > 0) && topic_eq(p_topic, COMMS_TOPIC_CMD))
     {
-        return;
+        err = comms_proto_parse_cmd(p_data, len, &cmd);
+        if (COMMS_ERR_NONE == err)
+        {
+            err = comms_handle(&cmd);
+        }
+        ack_len =
+            comms_proto_build_ack(&cmd, err, g_tx, (uint16_t)sizeof(g_tx));
+        (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
     }
+}
 
-    err = comms_proto_parse_cmd(p_data, len, &cmd);
-    if (COMMS_ERR_NONE == err)
+/* A well-formed command: drop a redelivery, else check and execute it. */
+static comms_proto_err_t comms_handle (comms_proto_cmd_t const * p_cmd)
+{
+    uint32_t const                   now_ms = (uint32_t)app_time_ms();
+    comms_proto_dedup_result_t const dup =
+        comms_proto_cmd_repeat_safe(p_cmd->cmd)
+            ? COMMS_DEDUP_NEW
+            : comms_proto_dedup_check(&g_dedup, p_cmd, now_ms);
+    comms_proto_err_t err = COMMS_ERR_NONE;
+
+    if (COMMS_DEDUP_REPEAT == dup)
     {
-        uint32_t                   now_ms = (uint32_t)app_time_ms();
-        comms_proto_dedup_result_t dup =
-            comms_proto_cmd_repeat_safe(cmd.cmd)
-                ? COMMS_DEDUP_NEW
-                : comms_proto_dedup_check(&g_dedup, &cmd, now_ms);
+        /* QoS 1 redelivery: acknowledge again, never execute twice. */
+    }
+    else if (COMMS_DEDUP_CONFLICT == dup)
+    {
+        err = COMMS_ERR_REUSED;
+    }
+    else
+    {
+        mission_types_snap_t mission;
 
-        if (COMMS_DEDUP_REPEAT == dup)
+        subsystem5_get_mission_snap(&mission);
+        err = comms_proto_check_cmd(p_cmd, MISSION_ST_IDLE == mission.state);
+        if (COMMS_ERR_NONE == err)
         {
-            /* QoS 1 redelivery: acknowledge again, never execute twice. */
+            err = comms_proto_check_ready(
+                p_cmd,
+                MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
         }
-        else if (COMMS_DEDUP_CONFLICT == dup)
+        if (COMMS_ERR_NONE == err)
         {
-            err = COMMS_ERR_REUSED;
+            err = comms_execute(p_cmd);
         }
-        else
+        if ((COMMS_ERR_NONE == err) && !comms_proto_cmd_repeat_safe(p_cmd->cmd))
         {
-            subsystem5_get_mission_snap(&mission);
-            err = comms_proto_check_cmd(&cmd, MISSION_ST_IDLE == mission.state);
-            if (COMMS_ERR_NONE == err)
-            {
-                err = comms_proto_check_ready(
-                    &cmd,
-                    MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
-            }
-            if (COMMS_ERR_NONE == err)
-            {
-                err = comms_execute(&cmd);
-            }
-            if ((COMMS_ERR_NONE == err)
-                && !comms_proto_cmd_repeat_safe(cmd.cmd))
-            {
-                comms_proto_dedup_add(&g_dedup, &cmd, now_ms);
-            }
+            comms_proto_dedup_add(&g_dedup, p_cmd, now_ms);
         }
     }
-
-    ack_len = comms_proto_build_ack(&cmd, err, g_tx, (uint16_t)sizeof(g_tx));
-    (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
+    return err;
 }
 
 static bool topic_eq (char const * p_a, char const * p_b)

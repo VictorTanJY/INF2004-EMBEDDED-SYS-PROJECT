@@ -130,6 +130,33 @@ static void apply_param(mission_core_t * p_mc, uint16_t param_id, int32_t value,
                         mission_core_out_t * p_out);
 static bool seq_matches(mission_core_t *            p_mc,
                         mission_types_evt_t const * p_ev);
+static void mission_core_ev_safety(mission_core_t *            p_mc,
+                                   mission_types_evt_t const * p_ev,
+                                   uint32_t now_ms, mission_core_out_t * p_out);
+static void mission_core_ev_operator(mission_core_t *            p_mc,
+                                     mission_types_evt_t const * p_ev,
+                                     uint32_t                    now_ms,
+                                     mission_core_out_t *        p_out);
+static void mission_core_ev_progress(mission_core_t *            p_mc,
+                                     mission_types_evt_t const * p_ev,
+                                     uint32_t                    now_ms,
+                                     mission_core_out_t *        p_out);
+static void mission_core_ev_line(mission_core_t *            p_mc,
+                                 mission_types_evt_t const * p_ev,
+                                 uint32_t now_ms, mission_core_out_t * p_out);
+static void mission_core_ev_obstacle(mission_core_t *            p_mc,
+                                     mission_types_evt_t const * p_ev,
+                                     uint32_t                    now_ms,
+                                     mission_core_out_t *        p_out);
+static void motion_finished(mission_core_t * p_mc, bool b_ok, uint32_t now_ms,
+                            mission_core_out_t * p_out);
+static void tick_state(mission_core_t *              p_mc,
+                       mission_core_inputs_t const * p_in, uint32_t now_ms,
+                       mission_core_out_t * p_out);
+static void tick_boot(mission_core_t * p_mc, mission_core_inputs_t const * p_in,
+                      uint32_t now_ms, mission_core_out_t * p_out);
+static void tick_calibrating(mission_core_t * p_mc, uint32_t now_ms,
+                             mission_core_out_t * p_out);
 
 /* ---- map helpers --------------------------------------------------------- */
 bool mission_core_map_char_ok (char chr)
@@ -224,302 +251,51 @@ void mission_core_event (mission_core_t *            p_mc,
                          mission_types_evt_t const * p_ev, uint32_t now_ms,
                          mission_core_out_t * p_out)
 {
-    uint8_t const state = p_mc->snap.state;
-
     switch (p_ev->type)
     {
         /* ---- faults and resets (any state) ---- */
         case MISSION_EV_FAULT:
-            if (p_ev->data != 0)
-            {
-                /* 14 Nov: lifting the robot ends the run in the demo; it is
-                   braked and latched like any fault, and the run summary
-                   (highest hump) is published as on STOP. */
-                if (is_active(state)
-                    && (((uint32_t)p_ev->data & SAFETY_FLT_LIFT) != 0u))
-                {
-                    log_act(p_out, MISSION_LOG_SUMMARY,
-                            (int16_t)p_mc->snap.runs, 0);
-                }
-                enter_fault(p_mc, MISSION_CAUSE_SAFETY, (uint32_t)p_ev->data,
-                            now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_BTN_RESET:
         case MISSION_EV_REMOTE_RESET:
-            if (MISSION_ST_FAULT == state)
-            {
-                push(p_out, MISSION_ACT_SAFETY_RESET, 0u, 0u, 0, 0);
-            }
-            else if (!is_active(state) && (state != MISSION_ST_CALIBRATING))
-            {
-                enter(p_mc, MISSION_ST_BOOT, now_ms,
-                      p_out); /* re-run the self-test */
-            }
-            else
-            {
-                /* while running, STOP first */
-            }
-        break;
-
         case MISSION_EV_SAFETY_OK:
-            if (MISSION_ST_FAULT == state)
-            {
-                motion(p_mc, p_out, MOTION_CMD_CLEAR_ESTOP, 0, 0);
-                p_mc->snap.cause      = MISSION_CAUSE_NONE;
-                p_mc->snap.fault_bits = 0u;
-                enter(p_mc, MISSION_ST_BOOT, now_ms, p_out);
-            }
+            mission_core_ev_safety(p_mc, p_ev, now_ms, p_out);
         break;
 
         /* ---- operator ---- */
         case MISSION_EV_BTN_START_STOP:
-            if (is_active(state))
-            {
-                enter(p_mc, MISSION_ST_MISSION_COMPLETE, now_ms, p_out);
-            }
-            else if ((MISSION_ST_IDLE == state)
-                     || (MISSION_ST_MISSION_COMPLETE == state))
-            {
-                start_run(p_mc, now_ms, p_out);
-            }
-            else if (MISSION_ST_CALIBRATING == state)
-            {
-                enter(p_mc, MISSION_ST_IDLE, now_ms, p_out); /* abort */
-            }
-            else
-            {
-                /* BOOT / FAULT: ignored */
-            }
-        break;
-
         case MISSION_EV_REMOTE_START:
-            if ((MISSION_ST_IDLE == state)
-                || (MISSION_ST_MISSION_COMPLETE == state))
-            {
-                start_run(p_mc, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_REMOTE_STOP:
-            if (is_active(state))
-            {
-                enter(p_mc, MISSION_ST_MISSION_COMPLETE, now_ms, p_out);
-            }
-            else if (MISSION_ST_CALIBRATING == state)
-            {
-                enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
-            }
-            else
-            {
-                /* already stopped */
-            }
-        break;
-
         case MISSION_EV_BTN_CALIBRATE:
-            if ((MISSION_ST_IDLE == state)
-                || (MISSION_ST_MISSION_COMPLETE == state))
-            {
-                enter(p_mc, MISSION_ST_CALIBRATING, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_REMOTE_SET:
-            if (MISSION_ST_IDLE == state)
-            {
-                apply_param(p_mc, p_ev->arg, p_ev->data, p_out);
-            }
-        break;
-
         case MISSION_EV_REMOTE_MAP:
-            if (!is_active(state) && (state != MISSION_ST_CALIBRATING))
-            {
-                char map[MISSION_NAV_COUNT];
-
-                if (mission_core_map_unpack(p_ev->data, map))
-                {
-                    uint8_t kdx;
-
-                    for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
-                    {
-                        p_mc->snap.nav_map[kdx] = map[kdx];
-                    }
-                    log_act(p_out, MISSION_LOG_MAP_SET,
-                            (int16_t)((uint32_t)p_ev->data & 0xFFFFu),
-                            (int16_t)((uint32_t)p_ev->data >> 16));
-                }
-                else
-                {
-                    log_act(p_out, MISSION_LOG_MAP_BAD, 0, 0);
-                }
-            }
+            mission_core_ev_operator(p_mc, p_ev, now_ms, p_out);
         break;
 
-        /* ---- calibration ---- */
+        /* ---- calibration and motion ---- */
         case MISSION_EV_CAL_DONE:
-            if ((MISSION_ST_CALIBRATING == state)
-                && (MISSION_CAL_PH_FINISH == p_mc->snap.cal_phase))
-            {
-                uint8_t const bit =
-                    (SRC_LINE == p_ev->arg)
-                        ? MISSION_CAL_IR
-                        : ((SRC_SAFETY_IMU == p_ev->arg) ? MISSION_CAL_IMU
-                                                         : 0u);
-
-                p_mc->cal_done |= bit;
-                if (p_ev->data != 0)
-                {
-                    p_mc->cal_ok |= bit;
-                }
-            }
-        break;
-
-        /* ---- motion ---- */
         case MISSION_EV_MOTION_DONE:
         case MISSION_EV_MOTION_FAILED:
-            if (seq_matches(p_mc, p_ev))
-            {
-                bool const b_ok = (MISSION_EV_MOTION_DONE == p_ev->type);
-
-                if (MISSION_ST_CALIBRATING == state)
-                {
-                    p_mc->snap.cal_phase =
-                        MISSION_CAL_PH_FINISH; /* spin over */
-                    p_mc->phase_ms = now_ms;
-                }
-                else if (MISSION_ST_EXECUTE_NAV == state)
-                {
-                    if (b_ok)
-                    {
-                        nav_next(p_mc, now_ms, p_out);
-                    }
-                    else
-                    {
-                        enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
-                    }
-                }
-                else if (MISSION_ST_LINE_SEARCH == state)
-                {
-                    search_next(p_mc, now_ms, p_out);
-                }
-                else
-                {
-                    /* stale completion: ignored */
-                }
-            }
+            mission_core_ev_progress(p_mc, p_ev, now_ms, p_out);
         break;
 
         /* ---- line ---- */
         case MISSION_EV_BARCODE:
-            if (is_active(state))
-            {
-                char const    chr = (char)p_ev->data;
-                uint8_t const nav = mission_core_nav_for(&p_mc->snap, chr);
-
-                if (nav != MISSION_NAV_NONE)
-                {
-                    /* latched until the next junction (FR4) */
-                    p_mc->snap.pending_nav  = nav;
-                    p_mc->snap.pending_char = chr;
-                    log_act(p_out, MISSION_LOG_NAV_LATCHED, (int16_t)nav,
-                            (int16_t)chr);
-                }
-                else
-                {
-                    log_act(p_out, MISSION_LOG_NAV_UNMAPPED, 0,
-                            (int16_t)chr); /* reported, never acted on */
-                }
-            }
-        break;
-
         case MISSION_EV_JUNCTION:
-            if ((MISSION_ST_LINE_FOLLOW == state)
-                && (p_mc->snap.pending_nav != MISSION_NAV_NONE))
-            {
-                enter(p_mc, MISSION_ST_EXECUTE_NAV, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_LINE_LOST:
-            if (MISSION_ST_LINE_FOLLOW == state)
-            {
-                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_LINE_FOUND:
-            if (MISSION_ST_LINE_SEARCH == state)
-            {
-                enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
-            }
+            mission_core_ev_line(p_mc, p_ev, now_ms, p_out);
         break;
 
         /* ---- obstacle ---- */
         case MISSION_EV_SLOW_DOWN:
-            p_mc->b_slow = (p_ev->data >= 0);
-            update_speed_cap(p_mc);
-        break;
-
         case MISSION_EV_OBSTACLE:
-            if (MISSION_ST_LINE_FOLLOW == state)
-            {
-                enter(p_mc, MISSION_ST_OBSTACLE_HANDLING, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_PROFILE_DONE:
         case MISSION_EV_CONTINUE:
-            if (MISSION_ST_OBSTACLE_HANDLING == state)
-            {
-                uint8_t const plan = (MISSION_EV_CONTINUE == p_ev->type)
-                                         ? OBST_PLAN_CONTINUE
-                                         : (uint8_t)p_ev->arg;
-
-                if ((OBST_PLAN_LEFT == plan) || (OBST_PLAN_RIGHT == plan))
-                {
-                    enter(p_mc, MISSION_ST_AVOIDING, now_ms, p_out);
-                    scan(p_out,
-                         (OBST_PLAN_LEFT == plan) ? SCAN_REQ_BYPASS_LEFT
-                                                  : SCAN_REQ_BYPASS_RIGHT,
-                         0);
-                }
-                else
-                {
-                    p_mc->b_slow = false;
-                    enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
-                }
-            }
-        break;
-
         case MISSION_EV_BYPASS_DONE:
-            if (MISSION_ST_AVOIDING == state)
-            {
-                enter(p_mc, MISSION_ST_LINE_RECOVERY, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_RECOVERY_DONE:
-            if (MISSION_ST_LINE_RECOVERY == state)
-            {
-                p_mc->b_slow = false;
-                enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_RECOVERY_FAILED:
-            if ((MISSION_ST_LINE_RECOVERY == state)
-                || (MISSION_ST_AVOIDING == state))
-            {
-                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
-            }
-        break;
-
         case MISSION_EV_BLOCKED_TIMEOUT:
-            if (MISSION_ST_OBSTACLE_HANDLING == state)
-            {
-                enter_fault(p_mc, MISSION_CAUSE_BLOCKED, 0u, now_ms, p_out);
-            }
+            mission_core_ev_obstacle(p_mc, p_ev, now_ms, p_out);
         break;
 
         /* ---- terrain ---- */
@@ -542,113 +318,22 @@ void mission_core_tick (mission_core_t *              p_mc,
                         mission_core_inputs_t const * p_in, uint32_t now_ms,
                         mission_core_out_t * p_out)
 {
-    uint8_t const  state     = p_mc->snap.state;
-    uint32_t const age       = now_ms - p_mc->entry_ms;
-    uint32_t const phase_age = now_ms - p_mc->phase_ms;
+    bool b_fault = false;
 
     /* A dropped event means a decision may have been missed (Week 6 8.3). */
     if (p_in->mbf_drops != p_mc->last_drops)
     {
         p_mc->last_drops = p_in->mbf_drops;
         log_act(p_out, MISSION_LOG_MBF_DROP, (int16_t)p_in->mbf_drops, 0);
-        if (is_active(state))
+        if (is_active(p_mc->snap.state))
         {
             enter_fault(p_mc, MISSION_CAUSE_MBF_OVERFLOW, 0u, now_ms, p_out);
-            return;
+            b_fault = true;
         }
     }
-
-    switch (state)
+    if (!b_fault)
     {
-        case MISSION_ST_BOOT:
-        {
-            uint32_t failed = 0u;
-
-            failed |= p_in->b_motion_hw_ok ? 0u : 0x1u;
-            failed |= p_in->b_line_hw_ok ? 0u : 0x2u;
-            failed |= p_in->b_imu_ok ? 0u : 0x4u;
-            failed |= (p_in->b_timer_checked && p_in->b_timer_ok) ? 0u : 0x8u;
-            failed &= MISSION_SELFTEST_MASK;
-            if (0u == failed)
-            {
-                enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
-            }
-            else if (age >= MISSION_BOOT_TIMEOUT_MS)
-            {
-                log_act(p_out, MISSION_LOG_CAL_RESULT,
-                        (int16_t)(0x100u | failed), 0);
-                enter_fault(p_mc, MISSION_CAUSE_SELFTEST,
-                            0x0400u | (failed << 16), now_ms, p_out);
-            }
-            else
-            {
-                /* still waiting for the subsystems */
-            }
-        }
-        break;
-
-        case MISSION_ST_CALIBRATING:
-            if ((MISSION_CAL_PH_STILL == p_mc->snap.cal_phase)
-                && (phase_age >= MISSION_CAL_STILL_MS))
-            {
-                p_mc->snap.cal_phase = MISSION_CAL_PH_SPIN;
-                p_mc->phase_ms       = now_ms;
-                motion(p_mc, p_out, MOTION_CMD_TURN, 3600,
-                       MISSION_CAL_SPIN_RATE);
-            }
-            else if ((MISSION_CAL_PH_FINISH == p_mc->snap.cal_phase)
-                     && ((MISSION_CAL_ALL == p_mc->cal_done)
-                         || (phase_age >= MISSION_CAL_DONE_TIMEOUT_MS)))
-            {
-                p_mc->snap.calibrated = p_mc->cal_ok;
-                log_act(p_out, MISSION_LOG_CAL_RESULT, (int16_t)p_mc->cal_ok,
-                        0);
-                enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
-            }
-            else
-            {
-                /* spinning, or waiting for the answers */
-            }
-        break;
-
-        case MISSION_ST_EXECUTE_NAV:
-            if (age >= MISSION_NAV_TIMEOUT_MS)
-            {
-                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
-            }
-        break;
-
-        case MISSION_ST_OBSTACLE_HANDLING:
-            if (age >= MISSION_OBST_TIMEOUT_MS)
-            {
-                enter_fault(p_mc, MISSION_CAUSE_TIMEOUT, 0u, now_ms, p_out);
-            }
-        break;
-
-        case MISSION_ST_AVOIDING:
-            if (age >= MISSION_AVOID_TIMEOUT_MS)
-            {
-                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
-            }
-        break;
-
-        case MISSION_ST_LINE_RECOVERY:
-            if (age >= MISSION_RECOVER_TIMEOUT_MS)
-            {
-                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
-            }
-        break;
-
-        case MISSION_ST_LINE_SEARCH:
-            /* the line sensors may see the line without a LOST/FOUND pair */
-            if (p_in->b_on_line && (age >= 100u))
-            {
-                enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
-            }
-        break;
-
-        default:
-        break;
+        tick_state(p_mc, p_in, now_ms, p_out);
     }
 }
 
@@ -754,6 +439,488 @@ void mission_core_snap_unpack (uint32_t const *       p_words,
 uint32_t mission_core_snap_layout_bits (void)
 {
     return app_pack_layout_bits(g_mission_layout, MISSION_FIELDS);
+}
+
+/* mission_core_tick(): the timeouts and checks of the current state. */
+static void tick_state (mission_core_t *              p_mc,
+                        mission_core_inputs_t const * p_in, uint32_t now_ms,
+                        mission_core_out_t * p_out)
+{
+    uint8_t const  state = p_mc->snap.state;
+    uint32_t const age   = now_ms - p_mc->entry_ms;
+
+    switch (state)
+    {
+        case MISSION_ST_BOOT:
+            tick_boot(p_mc, p_in, now_ms, p_out);
+        break;
+
+        case MISSION_ST_CALIBRATING:
+            tick_calibrating(p_mc, now_ms, p_out);
+        break;
+
+        case MISSION_ST_EXECUTE_NAV:
+            if (age >= MISSION_NAV_TIMEOUT_MS)
+            {
+                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_ST_OBSTACLE_HANDLING:
+            if (age >= MISSION_OBST_TIMEOUT_MS)
+            {
+                enter_fault(p_mc, MISSION_CAUSE_TIMEOUT, 0u, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_ST_AVOIDING:
+            if (age >= MISSION_AVOID_TIMEOUT_MS)
+            {
+                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_ST_LINE_RECOVERY:
+            if (age >= MISSION_RECOVER_TIMEOUT_MS)
+            {
+                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_ST_LINE_SEARCH:
+            /* the line sensors may see the line without a LOST/FOUND pair */
+            if (p_in->b_on_line && (age >= 100u))
+            {
+                enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+            }
+        break;
+
+        default:
+        break;
+    }
+}
+
+/* BOOT: wait for every subsystem's self-test, or fail after the timeout. */
+static void tick_boot (mission_core_t *              p_mc,
+                       mission_core_inputs_t const * p_in, uint32_t now_ms,
+                       mission_core_out_t * p_out)
+{
+    uint32_t const age    = now_ms - p_mc->entry_ms;
+    uint32_t       failed = 0u;
+
+    failed |= p_in->b_motion_hw_ok ? 0u : 0x1u;
+    failed |= p_in->b_line_hw_ok ? 0u : 0x2u;
+    failed |= p_in->b_imu_ok ? 0u : 0x4u;
+    failed |= (p_in->b_timer_checked && p_in->b_timer_ok) ? 0u : 0x8u;
+    failed &= MISSION_SELFTEST_MASK;
+    if (0u == failed)
+    {
+        enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
+    }
+    else if (age >= MISSION_BOOT_TIMEOUT_MS)
+    {
+        log_act(p_out, MISSION_LOG_CAL_RESULT, (int16_t)(0x100u | failed), 0);
+        enter_fault(p_mc, MISSION_CAUSE_SELFTEST, 0x0400u | (failed << 16),
+                    now_ms, p_out);
+    }
+    else
+    {
+        /* still waiting for the subsystems */
+    }
+}
+
+/* CALIBRATING: stand still, then spin, then wait for the answers. */
+static void tick_calibrating (mission_core_t * p_mc, uint32_t now_ms,
+                              mission_core_out_t * p_out)
+{
+    uint32_t const phase_age = now_ms - p_mc->phase_ms;
+
+    if ((MISSION_CAL_PH_STILL == p_mc->snap.cal_phase)
+        && (phase_age >= MISSION_CAL_STILL_MS))
+    {
+        p_mc->snap.cal_phase = MISSION_CAL_PH_SPIN;
+        p_mc->phase_ms       = now_ms;
+        motion(p_mc, p_out, MOTION_CMD_TURN, 3600, MISSION_CAL_SPIN_RATE);
+    }
+    else if ((MISSION_CAL_PH_FINISH == p_mc->snap.cal_phase)
+             && ((MISSION_CAL_ALL == p_mc->cal_done)
+                 || (phase_age >= MISSION_CAL_DONE_TIMEOUT_MS)))
+    {
+        p_mc->snap.calibrated = p_mc->cal_ok;
+        log_act(p_out, MISSION_LOG_CAL_RESULT, (int16_t)p_mc->cal_ok, 0);
+        enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
+    }
+    else
+    {
+        /* spinning, or waiting for the answers */
+    }
+}
+
+/* mission_core_event(): faults and resets. */
+static void mission_core_ev_safety (mission_core_t *            p_mc,
+                                    mission_types_evt_t const * p_ev,
+                                    uint32_t now_ms, mission_core_out_t * p_out)
+{
+    uint8_t const state = p_mc->snap.state;
+
+    switch (p_ev->type)
+    {
+        case MISSION_EV_FAULT:
+            if (p_ev->data != 0)
+            {
+                /* 14 Nov: lifting the robot ends the run in the demo; it is
+                   braked and latched like any fault, and the run summary
+                   (highest hump) is published as on STOP. */
+                if (is_active(state)
+                    && (((uint32_t)p_ev->data & SAFETY_FLT_LIFT) != 0u))
+                {
+                    log_act(p_out, MISSION_LOG_SUMMARY,
+                            (int16_t)p_mc->snap.runs, 0);
+                }
+                enter_fault(p_mc, MISSION_CAUSE_SAFETY, (uint32_t)p_ev->data,
+                            now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_BTN_RESET:
+        case MISSION_EV_REMOTE_RESET:
+            if (MISSION_ST_FAULT == state)
+            {
+                push(p_out, MISSION_ACT_SAFETY_RESET, 0u, 0u, 0, 0);
+            }
+            else if (!is_active(state) && (state != MISSION_ST_CALIBRATING))
+            {
+                enter(p_mc, MISSION_ST_BOOT, now_ms,
+                      p_out); /* re-run the self-test */
+            }
+            else
+            {
+                /* while running, STOP first */
+            }
+        break;
+
+        case MISSION_EV_SAFETY_OK:
+            if (MISSION_ST_FAULT == state)
+            {
+                motion(p_mc, p_out, MOTION_CMD_CLEAR_ESTOP, 0, 0);
+                p_mc->snap.cause      = MISSION_CAUSE_NONE;
+                p_mc->snap.fault_bits = 0u;
+                enter(p_mc, MISSION_ST_BOOT, now_ms, p_out);
+            }
+        break;
+
+        default: /* not one of this group */
+        break;
+    }
+}
+
+/* mission_core_event(): operator buttons and remote commands. */
+static void mission_core_ev_operator (mission_core_t *            p_mc,
+                                      mission_types_evt_t const * p_ev,
+                                      uint32_t                    now_ms,
+                                      mission_core_out_t *        p_out)
+{
+    uint8_t const state = p_mc->snap.state;
+
+    switch (p_ev->type)
+    {
+        case MISSION_EV_BTN_START_STOP:
+            if (is_active(state))
+            {
+                enter(p_mc, MISSION_ST_MISSION_COMPLETE, now_ms, p_out);
+            }
+            else if ((MISSION_ST_IDLE == state)
+                     || (MISSION_ST_MISSION_COMPLETE == state))
+            {
+                start_run(p_mc, now_ms, p_out);
+            }
+            else if (MISSION_ST_CALIBRATING == state)
+            {
+                enter(p_mc, MISSION_ST_IDLE, now_ms, p_out); /* abort */
+            }
+            else
+            {
+                /* BOOT / FAULT: ignored */
+            }
+        break;
+
+        case MISSION_EV_REMOTE_START:
+            if ((MISSION_ST_IDLE == state)
+                || (MISSION_ST_MISSION_COMPLETE == state))
+            {
+                start_run(p_mc, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_REMOTE_STOP:
+            if (is_active(state))
+            {
+                enter(p_mc, MISSION_ST_MISSION_COMPLETE, now_ms, p_out);
+            }
+            else if (MISSION_ST_CALIBRATING == state)
+            {
+                enter(p_mc, MISSION_ST_IDLE, now_ms, p_out);
+            }
+            else
+            {
+                /* already stopped */
+            }
+        break;
+
+        case MISSION_EV_BTN_CALIBRATE:
+            if ((MISSION_ST_IDLE == state)
+                || (MISSION_ST_MISSION_COMPLETE == state))
+            {
+                enter(p_mc, MISSION_ST_CALIBRATING, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_REMOTE_SET:
+            if (MISSION_ST_IDLE == state)
+            {
+                apply_param(p_mc, p_ev->arg, p_ev->data, p_out);
+            }
+        break;
+
+        case MISSION_EV_REMOTE_MAP:
+            if (!is_active(state) && (state != MISSION_ST_CALIBRATING))
+            {
+                char map[MISSION_NAV_COUNT];
+
+                if (mission_core_map_unpack(p_ev->data, map))
+                {
+                    uint8_t kdx;
+
+                    for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
+                    {
+                        p_mc->snap.nav_map[kdx] = map[kdx];
+                    }
+                    log_act(p_out, MISSION_LOG_MAP_SET,
+                            (int16_t)((uint32_t)p_ev->data & 0xFFFFu),
+                            (int16_t)((uint32_t)p_ev->data >> 16));
+                }
+                else
+                {
+                    log_act(p_out, MISSION_LOG_MAP_BAD, 0, 0);
+                }
+            }
+        break;
+
+        default: /* not one of this group */
+        break;
+    }
+}
+
+/* mission_core_event(): calibration and motion progress. */
+static void mission_core_ev_progress (mission_core_t *            p_mc,
+                                      mission_types_evt_t const * p_ev,
+                                      uint32_t                    now_ms,
+                                      mission_core_out_t *        p_out)
+{
+    uint8_t const state = p_mc->snap.state;
+
+    switch (p_ev->type)
+    {
+        case MISSION_EV_CAL_DONE:
+            if ((MISSION_ST_CALIBRATING == state)
+                && (MISSION_CAL_PH_FINISH == p_mc->snap.cal_phase))
+            {
+                uint8_t const bit =
+                    (SRC_LINE == p_ev->arg)
+                        ? MISSION_CAL_IR
+                        : ((SRC_SAFETY_IMU == p_ev->arg) ? MISSION_CAL_IMU
+                                                         : 0u);
+
+                p_mc->cal_done |= bit;
+                if (p_ev->data != 0)
+                {
+                    p_mc->cal_ok |= bit;
+                }
+            }
+        break;
+
+        /* ---- motion ---- */
+        case MISSION_EV_MOTION_DONE:
+        case MISSION_EV_MOTION_FAILED:
+            if (seq_matches(p_mc, p_ev))
+            {
+                motion_finished(p_mc, MISSION_EV_MOTION_DONE == p_ev->type,
+                                now_ms, p_out);
+            }
+        break;
+
+        default: /* not one of this group */
+        break;
+    }
+}
+
+/* The motion command MissionTask waits for has finished (b_ok) or
+   failed. */
+static void motion_finished (mission_core_t * p_mc, bool b_ok, uint32_t now_ms,
+                             mission_core_out_t * p_out)
+{
+    uint8_t const state = p_mc->snap.state;
+
+    if (MISSION_ST_CALIBRATING == state)
+    {
+        p_mc->snap.cal_phase = MISSION_CAL_PH_FINISH; /* spin over */
+        p_mc->phase_ms       = now_ms;
+    }
+    else if ((MISSION_ST_EXECUTE_NAV == state) && b_ok)
+    {
+        nav_next(p_mc, now_ms, p_out);
+    }
+    else if (MISSION_ST_EXECUTE_NAV == state)
+    {
+        enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
+    }
+    else if (MISSION_ST_LINE_SEARCH == state)
+    {
+        search_next(p_mc, now_ms, p_out);
+    }
+    else
+    {
+        /* stale completion: ignored */
+    }
+}
+
+/* mission_core_event(): line and barcode. */
+static void mission_core_ev_line (mission_core_t *            p_mc,
+                                  mission_types_evt_t const * p_ev,
+                                  uint32_t now_ms, mission_core_out_t * p_out)
+{
+    uint8_t const state = p_mc->snap.state;
+
+    switch (p_ev->type)
+    {
+        case MISSION_EV_BARCODE:
+            if (is_active(state))
+            {
+                char const    chr = (char)p_ev->data;
+                uint8_t const nav = mission_core_nav_for(&p_mc->snap, chr);
+
+                if (nav != MISSION_NAV_NONE)
+                {
+                    /* latched until the next junction (FR4) */
+                    p_mc->snap.pending_nav  = nav;
+                    p_mc->snap.pending_char = chr;
+                    log_act(p_out, MISSION_LOG_NAV_LATCHED, (int16_t)nav,
+                            (int16_t)chr);
+                }
+                else
+                {
+                    log_act(p_out, MISSION_LOG_NAV_UNMAPPED, 0,
+                            (int16_t)chr); /* reported, never acted on */
+                }
+            }
+        break;
+
+        case MISSION_EV_JUNCTION:
+            if ((MISSION_ST_LINE_FOLLOW == state)
+                && (p_mc->snap.pending_nav != MISSION_NAV_NONE))
+            {
+                enter(p_mc, MISSION_ST_EXECUTE_NAV, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_LINE_LOST:
+            if (MISSION_ST_LINE_FOLLOW == state)
+            {
+                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_LINE_FOUND:
+            if (MISSION_ST_LINE_SEARCH == state)
+            {
+                enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+            }
+        break;
+
+        default: /* not one of this group */
+        break;
+    }
+}
+
+/* mission_core_event(): obstacle handling. */
+static void mission_core_ev_obstacle (mission_core_t *            p_mc,
+                                      mission_types_evt_t const * p_ev,
+                                      uint32_t                    now_ms,
+                                      mission_core_out_t *        p_out)
+{
+    uint8_t const state = p_mc->snap.state;
+
+    switch (p_ev->type)
+    {
+        case MISSION_EV_SLOW_DOWN:
+            p_mc->b_slow = (p_ev->data >= 0);
+            update_speed_cap(p_mc);
+        break;
+
+        case MISSION_EV_OBSTACLE:
+            if (MISSION_ST_LINE_FOLLOW == state)
+            {
+                enter(p_mc, MISSION_ST_OBSTACLE_HANDLING, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_PROFILE_DONE:
+        case MISSION_EV_CONTINUE:
+            if (MISSION_ST_OBSTACLE_HANDLING == state)
+            {
+                uint8_t const plan = (MISSION_EV_CONTINUE == p_ev->type)
+                                         ? OBST_PLAN_CONTINUE
+                                         : (uint8_t)p_ev->arg;
+
+                if ((OBST_PLAN_LEFT == plan) || (OBST_PLAN_RIGHT == plan))
+                {
+                    enter(p_mc, MISSION_ST_AVOIDING, now_ms, p_out);
+                    scan(p_out,
+                         (OBST_PLAN_LEFT == plan) ? SCAN_REQ_BYPASS_LEFT
+                                                  : SCAN_REQ_BYPASS_RIGHT,
+                         0);
+                }
+                else
+                {
+                    p_mc->b_slow = false;
+                    enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+                }
+            }
+        break;
+
+        case MISSION_EV_BYPASS_DONE:
+            if (MISSION_ST_AVOIDING == state)
+            {
+                enter(p_mc, MISSION_ST_LINE_RECOVERY, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_RECOVERY_DONE:
+            if (MISSION_ST_LINE_RECOVERY == state)
+            {
+                p_mc->b_slow = false;
+                enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_RECOVERY_FAILED:
+            if ((MISSION_ST_LINE_RECOVERY == state)
+                || (MISSION_ST_AVOIDING == state))
+            {
+                enter(p_mc, MISSION_ST_LINE_SEARCH, now_ms, p_out);
+            }
+        break;
+
+        case MISSION_EV_BLOCKED_TIMEOUT:
+            if (MISSION_ST_OBSTACLE_HANDLING == state)
+            {
+                enter_fault(p_mc, MISSION_CAUSE_BLOCKED, 0u, now_ms, p_out);
+            }
+        break;
+
+        default: /* not one of this group */
+        break;
+    }
 }
 
 static void search_next (mission_core_t * p_mc, uint32_t now_ms,

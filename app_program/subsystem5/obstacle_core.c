@@ -94,7 +94,15 @@ static bool is_hit(obstacle_core_point_t const * p_point, uint16_t r_min);
 static void fine_insert(obstacle_core_scan_t * p_s, int16_t angle,
                         uint16_t r_mm);
 static void start_refine(obstacle_core_scan_t * p_s, bool b_right);
-static int32_t width_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
+static int32_t  width_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
+static void     profile_clear(obstacle_core_profile_t * p_out);
+static uint16_t nearest_echo(obstacle_core_point_t const * p_fine,
+                             uint8_t n_fine, uint8_t * p_nearest);
+static void profile_measure(obstacle_core_point_t const * p_fine,
+                            uint8_t                       n_fine,
+                            obstacle_core_point_t const * p_coarse,
+                            uint8_t n_coarse, uint8_t nearest, uint16_t r_min,
+                            obstacle_core_profile_t * p_out);
 
 uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
 {
@@ -856,18 +864,21 @@ static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
                           obstacle_core_point_t const * p_coarse,
                           uint8_t n_coarse, obstacle_core_profile_t * p_out)
 {
-    uint8_t  idx;
-    uint8_t  nearest = 0u;
-    uint8_t  low;
-    uint8_t  high;
-    uint16_t r_min = OBST_RANGE_NONE;
-    int32_t  a_left;
-    int32_t  a_right;
-    int32_t  lat_l;
-    int32_t  lat_r;
-    int32_t  pl_l;
-    int32_t  pl_r;
+    uint8_t        nearest = 0u;
+    uint16_t const r_min   = nearest_echo(p_fine, n_fine, &nearest);
 
+    profile_clear(p_out);
+    if (r_min != OBST_RANGE_NONE)
+    {
+        profile_measure(p_fine, n_fine, p_coarse, n_coarse, nearest, r_min,
+                        p_out);
+    }
+    /* else nothing in front: CONTINUE */
+}
+
+/* The profile before anything is measured: nothing seen, CONTINUE. */
+static void profile_clear (obstacle_core_profile_t * p_out)
+{
     p_out->b_valid       = false;
     p_out->plan          = OBST_PLAN_CONTINUE;
     p_out->closest_mm    = OBST_RANGE_NONE;
@@ -881,6 +892,16 @@ static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     p_out->b_sure        = false;
     p_out->plan_l_mm     = 0;
     p_out->plan_r_mm     = 0;
+}
+
+/* Index of the nearest usable echo (*p_nearest) and its range, or
+   OBST_RANGE_NONE when there is none. */
+static uint16_t nearest_echo (obstacle_core_point_t const * p_fine,
+                              uint8_t n_fine, uint8_t * p_nearest)
+{
+    uint16_t r_min   = OBST_RANGE_NONE;
+    uint8_t  nearest = 0u;
+    uint8_t  idx;
 
     /* 9 Nov: the nearest echo in the car's path first; a wall beside the
        track can be nearer than the box on the line (02:59 run). */
@@ -907,10 +928,25 @@ static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
             }
         }
     }
-    if (OBST_RANGE_NONE == r_min)
-    {
-        return; /* nothing in front: CONTINUE */
-    }
+    *p_nearest = nearest;
+    return r_min;
+}
+
+/* Grow the obstacle from its nearest echo, measure its edges and plan. */
+static void profile_measure (obstacle_core_point_t const * p_fine,
+                             uint8_t                       n_fine,
+                             obstacle_core_point_t const * p_coarse,
+                             uint8_t n_coarse, uint8_t nearest, uint16_t r_min,
+                             obstacle_core_profile_t * p_out)
+{
+    uint8_t low;
+    uint8_t high;
+    int32_t a_left;
+    int32_t a_right;
+    int32_t lat_l;
+    int32_t lat_r;
+    int32_t pl_l;
+    int32_t pl_r;
 
     grow(p_fine, n_fine, nearest, r_min, &low, &high);
 

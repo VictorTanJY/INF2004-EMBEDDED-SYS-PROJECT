@@ -50,6 +50,33 @@ typedef struct
 #define BEST_INF        0x3FFFFFFFu
 #define BEST_BOUND_MAX  (((BEST_ELEM_MAX * BEST_T) * BEST_MARGIN_X10) / 10u)
 
+/* Best match: the measured read, shared by every template fitted to it. */
+typedef struct
+{
+    uint32_t const * p_w;     /* measured widths                    */
+    uint16_t         n_elems; /* ... how many                       */
+    uint32_t const * p_lv;    /* bar n, bar W, space n, space W      */
+    bool const *     p_speck; /* measured element is a speck        */
+    uint32_t         inv;     /* (100 << 16) / narrow width         */
+} best_fit_in_t;
+
+/* Best match: the best character so far and the runner-up's cost. */
+typedef struct
+{
+    uint32_t best_cost; /* best cost and its character         */
+    uint32_t next_cost; /* best cost of any other character    */
+    char     ch1;
+    bool     b_rev1;
+} best_rank_t;
+
+/* Best match: the edit-distance tables (5.2 KB, kept off the stack). */
+typedef struct
+{
+    uint32_t cost[BEST_N_MAX + 1u][BEST_T + 1u];
+    uint8_t  edits[BEST_N_MAX + 1u][BEST_T + 1u];
+    uint32_t rmin[BEST_N_MAX + 1u]; /* smallest cost in each row */
+} best_tables_t;
+
 /* Code 39 character set (ISO/IEC 16388), element order b s b s b s b s b. */
 static code39_entry_t const g_code39_table[] = {
     {'0', "000110100"}, {'1', "100100001"}, {'2', "001100001"},
@@ -68,6 +95,8 @@ static code39_entry_t const g_code39_table[] = {
     {'*', "010010100"}, {'$', "010101000"}, {'/', "010100010"},
     {'+', "010001010"}, {'%', "000101010"}};
 
+static best_tables_t g_bt;
+
 static uint16_t bits_of(char const * p_bits);
 static uint32_t width_at(uint32_t const * p_w, uint16_t n_elems, uint16_t pos,
                          bool b_rev);
@@ -85,9 +114,20 @@ static void            best_levels(uint32_t const * p_w, uint16_t n_elems,
 static uint32_t        sq_err(uint32_t meas, uint32_t expect, uint32_t inv);
 static bool            in_band(uint16_t idx, uint16_t jdx);
 static bool     is_speck(uint32_t width, uint16_t idx, uint32_t const * p_lv);
-static uint32_t best_fit(uint32_t const * p_w, uint16_t n_elems,
-                         uint32_t const * p_e, bool const * p_wide,
-                         bool const * p_speck, uint32_t inv, uint32_t bound);
+static uint32_t best_fit(best_fit_in_t const * p_fit, uint32_t const * p_e,
+                         bool const * p_wide, uint32_t bound);
+static void best_try_char(best_fit_in_t const *  p_fit,
+                          code39_entry_t const * p_entry, best_rank_t * p_rank);
+static void best_template(uint16_t pat, uint32_t const levels[4],
+                          uint32_t expect[BEST_T], bool b_wide[BEST_T]);
+static void best_reverse(uint32_t expect[BEST_T], bool b_wide[BEST_T]);
+static void best_rank(best_rank_t * p_rank, uint32_t cost, char chr,
+                      bool b_rev);
+static void best_clear(uint16_t n_elems);
+static void best_steps(best_fit_in_t const * p_fit, uint32_t const * p_e,
+                       bool const * p_wide, uint16_t idx, uint16_t jdx);
+static void best_relax(uint32_t idx, uint32_t jdx, uint32_t cost,
+                       uint8_t edits);
 
 uint16_t code39_pattern (char chr)
 {
@@ -264,19 +304,12 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
                                         uint16_t n_elems, char * p_char,
                                         bool * pb_reversed)
 {
-    uint32_t       levels[4]; /* bar n, bar W, space n, space W */
-    uint32_t       expect[BEST_T];
-    bool           b_wide[BEST_T];
-    bool           b_speck[BEST_N_MAX]; /* measured element is a speck */
-    uint16_t const star = code39_pattern('*');
-    uint32_t       nar;
-    uint32_t       inv;
-    uint32_t       best_cost = BEST_INF; /* best cost and its character */
-    uint32_t       next_cost = BEST_INF; /* best cost of any other character */
-    char           ch1       = '\0';
-    bool           b_rev1    = false;
-    size_t         entry;
-    uint8_t        dir;
+    uint32_t      levels[4];           /* bar n, bar W, space n, space W */
+    bool          b_speck[BEST_N_MAX]; /* measured element is a speck */
+    best_fit_in_t fit;
+    best_rank_t   rank = {BEST_INF, BEST_INF, '\0', false};
+    uint32_t      nar;
+    size_t        entry;
 
     *p_char      = '\0';
     *pb_reversed = false;
@@ -295,85 +328,122 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
     {
         return CODE39_ERR_RATIO;
     }
-    inv = (100u << 16) / nar;
     for (entry = 0u; entry < n_elems; entry++)
     {
         b_speck[entry] = is_speck(p_widths[entry], (uint16_t)entry, levels);
     }
+    fit.p_w     = p_widths;
+    fit.n_elems = n_elems;
+    fit.p_lv    = levels;
+    fit.p_speck = b_speck;
+    fit.inv     = (100u << 16) / nar;
     for (entry = 0u; entry < TABLE_LEN; entry++)
     {
-        uint16_t const pat = bits_of(g_code39_table[entry].p_bits);
-        uint8_t        kdx;
-
         if ('*' != g_code39_table[entry].chr)
         {
-            /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
-            for (kdx = 0u; kdx < BEST_T; kdx++)
-            {
-                uint8_t const  char_idx = (uint8_t)(kdx / 10u);
-                uint8_t const  pos      = (uint8_t)(kdx % 10u);
-                uint16_t const pattern  = (1u == char_idx) ? pat : star;
-                bool const     b_w =
-                    (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
-
-                expect[kdx] =
-                    levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
-                b_wide[kdx] = b_w;
-            }
-            for (dir = 0u; dir < DIRECTIONS; dir++)
-            {
-                uint32_t cost;
-
-                if (1u == dir)
-                {
-                    for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
-                    {
-                        uint32_t const exp_width     = expect[kdx];
-                        bool const     b_expect_wide = b_wide[kdx];
-
-                        expect[kdx] = expect[(BEST_T - 1u) - kdx];
-                        b_wide[kdx] = b_wide[(BEST_T - 1u) - kdx];
-                        expect[(BEST_T - 1u) - kdx] = exp_width;
-                        b_wide[(BEST_T - 1u) - kdx] = b_expect_wide;
-                    }
-                }
-                /* A fit costing c2 or more changes neither result, and the
-                   runner-up only matters below the margin times the largest
-                   best that is accepted. */
-                cost = best_fit(p_widths, n_elems, expect, b_wide, b_speck, inv,
-                                (next_cost < BEST_BOUND_MAX) ? next_cost
-                                                             : BEST_BOUND_MAX);
-                if (cost < best_cost)
-                {
-                    if (g_code39_table[entry].chr != ch1)
-                    {
-                        next_cost = best_cost;
-                    }
-                    best_cost = cost;
-                    ch1       = g_code39_table[entry].chr;
-                    b_rev1    = (1u == dir);
-                }
-                else if ((cost < next_cost)
-                         && (g_code39_table[entry].chr != ch1))
-                {
-                    next_cost = cost;
-                }
-                else
-                {
-                    /* No action required. */
-                }
-            }
+            best_try_char(&fit, &g_code39_table[entry], &rank);
         }
     }
-    if (('\0' == ch1) || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T))
-        || (((uint64_t)next_cost * 10u)
-            < ((uint64_t)best_cost * BEST_MARGIN_X10)))
+    if (('\0' == rank.ch1)
+        || (rank.best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T))
+        || (((uint64_t)rank.next_cost * 10u)
+            < ((uint64_t)rank.best_cost * BEST_MARGIN_X10)))
     {
         return CODE39_ERR_PATTERN;
     }
-    *p_char      = ch1;
-    *pb_reversed = b_rev1;
+    *p_char      = rank.ch1;
+    *pb_reversed = rank.b_rev1;
     return CODE39_OK;
+}
+
+/* Best match: fit the template *X* for one character X, both ways round. */
+static void best_try_char (best_fit_in_t const *  p_fit,
+                           code39_entry_t const * p_entry, best_rank_t * p_rank)
+{
+    uint32_t expect[BEST_T];
+    bool     b_wide[BEST_T];
+    uint8_t  dir;
+
+    best_template(bits_of(p_entry->p_bits), p_fit->p_lv, expect, b_wide);
+    for (dir = 0u; dir < DIRECTIONS; dir++)
+    {
+        uint32_t cost;
+
+        if (1u == dir)
+        {
+            best_reverse(expect, b_wide);
+        }
+        /* A fit costing c2 or more changes neither result, and the
+           runner-up only matters below the margin times the largest
+           best that is accepted. */
+        cost = best_fit(p_fit, expect, b_wide,
+                        (p_rank->next_cost < BEST_BOUND_MAX) ? p_rank->next_cost
+                                                             : BEST_BOUND_MAX);
+        best_rank(p_rank, cost, p_entry->chr, 1u == dir);
+    }
+}
+
+/* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces.  Expected
+   width (from the four levels) and wide flag of each of the BEST_T
+   elements. */
+static void best_template (uint16_t pat, uint32_t const levels[4],
+                           uint32_t expect[BEST_T], bool b_wide[BEST_T])
+{
+    uint16_t const star = code39_pattern('*');
+    uint8_t        kdx;
+
+    for (kdx = 0u; kdx < BEST_T; kdx++)
+    {
+        uint8_t const  char_idx = (uint8_t)(kdx / 10u);
+        uint8_t const  pos      = (uint8_t)(kdx % 10u);
+        uint16_t const pattern  = (1u == char_idx) ? pat : star;
+        bool const b_w = (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
+
+        expect[kdx] = levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
+        b_wide[kdx] = b_w;
+    }
+}
+
+/* Reverse the template in place (a barcode read backwards). */
+static void best_reverse (uint32_t expect[BEST_T], bool b_wide[BEST_T])
+{
+    uint8_t kdx;
+
+    for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
+    {
+        uint32_t const exp_width     = expect[kdx];
+        bool const     b_expect_wide = b_wide[kdx];
+
+        expect[kdx]                 = expect[(BEST_T - 1u) - kdx];
+        b_wide[kdx]                 = b_wide[(BEST_T - 1u) - kdx];
+        expect[(BEST_T - 1u) - kdx] = exp_width;
+        b_wide[(BEST_T - 1u) - kdx] = b_expect_wide;
+    }
+}
+
+/* Keep the best cost with its character and direction, and the best cost
+   of any other character. */
+static void best_rank (best_rank_t * p_rank, uint32_t cost, char chr,
+                       bool b_rev)
+{
+    if (cost < p_rank->best_cost)
+    {
+        if (chr != p_rank->ch1)
+        {
+            p_rank->next_cost = p_rank->best_cost;
+        }
+        p_rank->best_cost = cost;
+        p_rank->ch1       = chr;
+        p_rank->b_rev1    = b_rev;
+    }
+    else if ((cost < p_rank->next_cost) && (chr != p_rank->ch1))
+    {
+        p_rank->next_cost = cost;
+    }
+    else
+    {
+        /* No action required. */
+    }
 }
 
 static uint16_t bits_of (char const * p_bits)
@@ -637,118 +707,130 @@ static bool is_speck (uint32_t width, uint16_t idx, uint32_t const * p_lv)
    14 Nov: gives up (BEST_INF) once every open path costs bound or more:
    such a fit can change neither the best nor the runner-up (a car read
    took over 50 ms and tripped the line task's heartbeat). */
-static uint32_t best_fit (uint32_t const * p_w, uint16_t n_elems,
-                          uint32_t const * p_e, bool const * p_wide,
-                          bool const * p_speck, uint32_t inv, uint32_t bound)
+static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
+                          bool const * p_wide, uint32_t bound)
 {
-    static uint32_t cost_tbl[BEST_N_MAX + 1u][BEST_T + 1u];
-    static uint8_t  edit_tbl[BEST_N_MAX + 1u][BEST_T + 1u];
-    static uint32_t rmin[BEST_N_MAX + 1u]; /* smallest cost in each row */
-    uint32_t        best;
-    uint16_t        idx;
-    uint16_t        jdx;
+    uint16_t const n_elems = p_fit->n_elems;
+    uint32_t       best    = BEST_INF;
+    bool           b_over  = false;
+    uint16_t       idx;
+    uint16_t       jdx;
 
-    /* Every defect moves the two indexes apart by 2, so only a band of
-       cells can be reached; only those are used. */
+    best_clear(n_elems);
+    for (idx = 0u; (idx < n_elems) && !b_over; idx++)
+    {
+        /* Every path to the end passes a filled cell of row i, i + 1 or
+           i + 2 (a step moves on 1 or 3 measured elements, and rows
+           before i are done); costs only grow along a path. */
+        uint32_t c_open = g_bt.rmin[idx];
+
+        c_open = (((idx + 1u) <= n_elems) && (g_bt.rmin[idx + 1u] < c_open))
+                     ? g_bt.rmin[idx + 1u]
+                     : c_open;
+        c_open = (((idx + 2u) <= n_elems) && (g_bt.rmin[idx + 2u] < c_open))
+                     ? g_bt.rmin[idx + 2u]
+                     : c_open;
+        if (c_open >= bound)
+        {
+            b_over = true; /* no fit below the bound: BEST_INF */
+        }
+        for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u;
+             !b_over && (jdx < BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
+        {
+            if (g_bt.cost[idx][jdx] < BEST_INF)
+            {
+                best_steps(p_fit, p_e, p_wide, idx, jdx);
+            }
+        }
+    }
+    if (!b_over)
+    {
+        best = in_band(n_elems, BEST_T) ? g_bt.cost[n_elems][BEST_T] : BEST_INF;
+        if (in_band(n_elems, (uint16_t)(BEST_T - 2u))
+            && (g_bt.edits[n_elems][BEST_T - 2u] < BEST_MAX_EDITS)
+            && (g_bt.cost[n_elems][BEST_T - 2u] < BEST_INF)
+            && ((g_bt.cost[n_elems][BEST_T - 2u] + BEST_EDIT) < best))
+        {
+            /* last space and bar lost */
+            best = g_bt.cost[n_elems][BEST_T - 2u] + BEST_EDIT;
+        }
+    }
+    return best;
+}
+
+/* Every defect moves the two indexes apart by 2, so only a band of cells
+   can be reached; only those are used. */
+static void best_clear (uint16_t n_elems)
+{
+    uint16_t idx;
+    uint16_t jdx;
+
     for (idx = 0u; idx <= n_elems; idx++)
     {
         for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u;
              (jdx <= BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
         {
-            cost_tbl[idx][jdx] = BEST_INF;
-            edit_tbl[idx][jdx] = 0u;
+            g_bt.cost[idx][jdx]  = BEST_INF;
+            g_bt.edits[idx][jdx] = 0u;
         }
-        rmin[idx] = BEST_INF;
+        g_bt.rmin[idx] = BEST_INF;
     }
-    cost_tbl[0][0] = 0u;
-    rmin[0]        = 0u;
-    cost_tbl[0][2] = BEST_EDIT; /* first bar and space lost */
-    edit_tbl[0][2] = 1u;
-    for (idx = 0u; idx < n_elems; idx++)
+    g_bt.cost[0][0]  = 0u;
+    g_bt.rmin[0]     = 0u;
+    g_bt.cost[0][2]  = BEST_EDIT; /* first bar and space lost */
+    g_bt.edits[0][2] = 1u;
+}
+
+/* The three steps out of the filled cell (idx measured, jdx printed). */
+static void best_steps (best_fit_in_t const * p_fit, uint32_t const * p_e,
+                        bool const * p_wide, uint16_t idx, uint16_t jdx)
+{
+    uint32_t const * const p_w       = p_fit->p_w;
+    uint32_t const         cost_here = g_bt.cost[idx][jdx];
+    uint8_t const          edits     = g_bt.edits[idx][jdx];
+
+    if (!p_fit->p_speck[idx])
     {
-        /* Every path to the end passes a filled cell of row i, i + 1 or
-           i + 2 (a step moves on 1 or 3 measured elements, and rows
-           before i are done); costs only grow along a path. */
-        uint32_t c_open = rmin[idx];
-
-        c_open = (((idx + 1u) <= n_elems) && (rmin[idx + 1u] < c_open))
-                     ? rmin[idx + 1u]
-                     : c_open;
-        c_open = (((idx + 2u) <= n_elems) && (rmin[idx + 2u] < c_open))
-                     ? rmin[idx + 2u]
-                     : c_open;
-        if (c_open >= bound)
-        {
-            return BEST_INF;
-        }
-        for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u;
-             (jdx < BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
-        {
-            uint32_t const cost_here = cost_tbl[idx][jdx];
-            uint8_t const  edits     = edit_tbl[idx][jdx];
-
-            if (cost_here < BEST_INF)
-            {
-                if (!p_speck[idx])
-                { /* 1 : 1 */
-                    uint32_t const cost =
-                        cost_here + sq_err(p_w[idx], p_e[jdx], inv);
-
-                    if (cost < cost_tbl[idx + 1u][jdx + 1u])
-                    {
-                        cost_tbl[idx + 1u][jdx + 1u] = cost;
-                        rmin[idx + 1u] =
-                            (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
-                        edit_tbl[idx + 1u][jdx + 1u] = edits;
-                    }
-                }
-                if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= n_elems)
-                    && in_band((uint16_t)(idx + 3u), (uint16_t)(jdx + 1u))
-                    && p_speck[idx + 1u])
-                { /* 3 measured : 1 printed */
-                    uint32_t const cost =
-                        cost_here + BEST_EDIT
-                        + sq_err(p_w[idx] + p_w[idx + 1u] + p_w[idx + 2u],
-                                 p_e[jdx], inv);
-
-                    if (cost < cost_tbl[idx + 3u][jdx + 1u])
-                    {
-                        cost_tbl[idx + 3u][jdx + 1u] = cost;
-                        rmin[idx + 3u] =
-                            (cost < rmin[idx + 3u]) ? cost : rmin[idx + 3u];
-                        edit_tbl[idx + 3u][jdx + 1u] = (uint8_t)(edits + 1u);
-                    }
-                }
-                if ((edits < BEST_MAX_EDITS) && ((jdx + 3u) <= BEST_T)
-                    && in_band((uint16_t)(idx + 1u), (uint16_t)(jdx + 3u))
-                    && !p_wide[jdx + 1u])
-                { /* 1 measured : 3 printed */
-                    uint32_t const cost =
-                        cost_here + BEST_EDIT
-                        + sq_err(p_w[idx],
-                                 p_e[jdx] + p_e[jdx + 1u] + p_e[jdx + 2u], inv);
-
-                    if (cost < cost_tbl[idx + 1u][jdx + 3u])
-                    {
-                        cost_tbl[idx + 1u][jdx + 3u] = cost;
-                        rmin[idx + 1u] =
-                            (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
-                        edit_tbl[idx + 1u][jdx + 3u] = (uint8_t)(edits + 1u);
-                    }
-                }
-            }
-        }
+        /* 1 : 1 */
+        best_relax(idx + 1u, jdx + 1u,
+                   cost_here + sq_err(p_w[idx], p_e[jdx], p_fit->inv), edits);
     }
-    best = in_band(n_elems, BEST_T) ? cost_tbl[n_elems][BEST_T] : BEST_INF;
-    if (in_band(n_elems, (uint16_t)(BEST_T - 2u))
-        && (edit_tbl[n_elems][BEST_T - 2u] < BEST_MAX_EDITS)
-        && (cost_tbl[n_elems][BEST_T - 2u] < BEST_INF)
-        && ((cost_tbl[n_elems][BEST_T - 2u] + BEST_EDIT) < best))
+    if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= p_fit->n_elems)
+        && in_band((uint16_t)(idx + 3u), (uint16_t)(jdx + 1u))
+        && p_fit->p_speck[idx + 1u])
     {
-        best = cost_tbl[n_elems][BEST_T - 2u]
-               + BEST_EDIT; /* last space and bar lost */
+        /* 3 measured : 1 printed */
+        best_relax(idx + 3u, jdx + 1u,
+                   cost_here + BEST_EDIT
+                       + sq_err(p_w[idx] + p_w[idx + 1u] + p_w[idx + 2u],
+                                p_e[jdx], p_fit->inv),
+                   (uint8_t)(edits + 1u));
     }
-    return best;
+    if ((edits < BEST_MAX_EDITS) && ((jdx + 3u) <= BEST_T)
+        && in_band((uint16_t)(idx + 1u), (uint16_t)(jdx + 3u))
+        && !p_wide[jdx + 1u])
+    {
+        /* 1 measured : 3 printed */
+        best_relax(idx + 1u, jdx + 3u,
+                   cost_here + BEST_EDIT
+                       + sq_err(p_w[idx],
+                                p_e[jdx] + p_e[jdx + 1u] + p_e[jdx + 2u],
+                                p_fit->inv),
+                   (uint8_t)(edits + 1u));
+    }
+}
+
+/* A path reaches cell (idx, jdx) at this cost with this many edits: keep
+   it if it is cheaper. */
+static void best_relax (uint32_t idx, uint32_t jdx, uint32_t cost,
+                        uint8_t edits)
+{
+    if (cost < g_bt.cost[idx][jdx])
+    {
+        g_bt.cost[idx][jdx]  = cost;
+        g_bt.rmin[idx]       = (cost < g_bt.rmin[idx]) ? cost : g_bt.rmin[idx];
+        g_bt.edits[idx][jdx] = edits;
+    }
 }
 
 /*** end of file ***/

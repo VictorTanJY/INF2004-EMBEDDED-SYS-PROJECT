@@ -36,9 +36,13 @@ static comms_proto_param_t const g_params[COMMS_PARAM_COUNT] = {
 };
 
 static void put_header(app_pack_writer_t * p_w, comms_proto_frame_type_t type);
-static int32_t  cdeg_to_tenths(int16_t cdeg);
-static uint32_t mm_to_cm_field(uint16_t value_mm, bool b_valid,
-                               uint32_t none_code);
+static int32_t           cdeg_to_tenths(int16_t cdeg);
+static uint32_t          mm_to_cm_field(uint16_t value_mm, bool b_valid,
+                                        uint32_t none_code);
+static comms_proto_err_t parse_set(app_pack_reader_t * p_reader, uint16_t len,
+                                   comms_proto_cmd_t * p_cmd);
+static comms_proto_err_t parse_map(app_pack_reader_t * p_reader, uint16_t len,
+                                   comms_proto_cmd_t * p_cmd);
 
 /* ---------------------------------------------------------------------
  *  Helpers
@@ -257,6 +261,7 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
     app_pack_reader_t reader;
     uint32_t          type;
     uint32_t          version;
+    comms_proto_err_t err = COMMS_ERR_NONE;
 
     p_cmd->cmd_id   = 0u;
     p_cmd->b_has_id = false;
@@ -291,71 +296,23 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
         case COMMS_CMD_RESET:
             if (len != 3u)
             {
-                return COMMS_ERR_BAD_FRAME;
+                err = COMMS_ERR_BAD_FRAME;
             }
         break;
 
         case COMMS_CMD_SET:
-        {
-            comms_proto_param_t const * p_param = NULL;
-            uint32_t                    param_index;
-
-            if (len != 5u)
-            {
-                return COMMS_ERR_BAD_FRAME;
-            }
-            param_index  = app_pack_take(&reader, COMMS_PARAM_BITS);
-            p_cmd->value = app_pack_unoff_s(
-                app_pack_take(&reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
-            p_param = comms_proto_param_by_index((uint8_t)param_index);
-            if (NULL == p_param)
-            {
-                return COMMS_ERR_BAD_PARAM;
-            }
-            p_cmd->param_id = p_param->param_id;
-            if ((p_cmd->value < p_param->min) || (p_cmd->value > p_param->max))
-            {
-                return COMMS_ERR_RANGE;
-            }
-        }
+            err = parse_set(&reader, len, p_cmd);
         break;
 
         case COMMS_CMD_MAP:
-        {
-            char     chars[4];
-            uint32_t packed = 0u;
-            uint8_t  kdx;
-            uint8_t  jdx;
-
-            if (len != 6u)
-            {
-                return COMMS_ERR_BAD_FRAME;
-            }
-            for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
-            {
-                chars[kdx] = comms_proto_symbol_char(
-                    (uint8_t)app_pack_take(&reader, 6u));
-                if ('\0' == chars[kdx])
-                {
-                    return COMMS_ERR_BAD_MAP;
-                }
-                for (jdx = 0u; jdx < kdx; jdx++)
-                {
-                    if (chars[jdx] == chars[kdx])
-                    {
-                        return COMMS_ERR_BAD_MAP;
-                    }
-                }
-                packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
-            }
-            p_cmd->value = (int32_t)packed;
-        }
+            err = parse_map(&reader, len, p_cmd);
         break;
 
         default:
-            return COMMS_ERR_BAD_CMD;
+            err = COMMS_ERR_BAD_CMD;
+        break;
     }
-    return COMMS_ERR_NONE;
+    return err;
 }
 
 bool comms_proto_map_char_ok (char chr)
@@ -489,6 +446,67 @@ void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
         p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);
         p_ring->count--;
     }
+}
+
+/* SET: parameter index and value, both checked. */
+static comms_proto_err_t parse_set (app_pack_reader_t * p_reader, uint16_t len,
+                                    comms_proto_cmd_t * p_cmd)
+{
+    comms_proto_param_t const * p_param = NULL;
+    uint32_t                    param_index;
+
+    if (len != 5u)
+    {
+        return COMMS_ERR_BAD_FRAME;
+    }
+    param_index  = app_pack_take(p_reader, COMMS_PARAM_BITS);
+    p_cmd->value = app_pack_unoff_s(app_pack_take(p_reader, COMMS_VALUE_BITS),
+                                    COMMS_VALUE_BITS);
+    p_param      = comms_proto_param_by_index((uint8_t)param_index);
+    if (NULL == p_param)
+    {
+        return COMMS_ERR_BAD_PARAM;
+    }
+    p_cmd->param_id = p_param->param_id;
+    if ((p_cmd->value < p_param->min) || (p_cmd->value > p_param->max))
+    {
+        return COMMS_ERR_RANGE;
+    }
+    return COMMS_ERR_NONE;
+}
+
+/* MAP: four different Code 39 data characters, packed one per byte. */
+static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
+                                    comms_proto_cmd_t * p_cmd)
+{
+    char     chars[4];
+    uint32_t packed = 0u;
+    uint8_t  kdx;
+    uint8_t  jdx;
+
+    if (len != 6u)
+    {
+        return COMMS_ERR_BAD_FRAME;
+    }
+    for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
+    {
+        chars[kdx] =
+            comms_proto_symbol_char((uint8_t)app_pack_take(p_reader, 6u));
+        if ('\0' == chars[kdx])
+        {
+            return COMMS_ERR_BAD_MAP;
+        }
+        for (jdx = 0u; jdx < kdx; jdx++)
+        {
+            if (chars[jdx] == chars[kdx])
+            {
+                return COMMS_ERR_BAD_MAP;
+            }
+        }
+        packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
+    }
+    p_cmd->value = (int32_t)packed;
+    return COMMS_ERR_NONE;
 }
 
 static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)

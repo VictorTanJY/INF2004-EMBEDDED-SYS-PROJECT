@@ -111,7 +111,12 @@ static void update_odometry(motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
 static void check_stall(motion_core_t * p_mc, uint32_t now_ms);
 static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms,
                           uint32_t dt_ms);
-static uint8_t p0_bits(uint8_t cmd);
+static uint8_t              p0_bits(uint8_t cmd);
+static motion_core_result_t command_run(motion_core_t *            p_mc,
+                                        motion_types_cmd_t const * p_cmd,
+                                        uint32_t                   now_ms);
+static void command_move(motion_core_t * p_mc, motion_types_cmd_t const * p_cmd,
+                         uint32_t now_ms);
 
 uint32_t motion_core_expected_ms (int64_t distance_um, int32_t vmax_mm_s)
 {
@@ -146,128 +151,38 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
                                           motion_types_cmd_t const * p_cmd,
                                           uint32_t                   now_ms)
 {
-    motion_core_result_t res = MOTION_RES_ACCEPTED;
+    motion_core_result_t res;
 
     if (p_cmd->src >= MOTION_SRC_COUNT)
     {
-        return MOTION_RES_INVALID;
+        res = MOTION_RES_INVALID;
     }
-
-    if (MOTION_CMD_CLEAR_ESTOP == p_cmd->cmd)
+    else if (MOTION_CMD_CLEAR_ESTOP == p_cmd->cmd)
     {
         if (p_cmd->src != MOTION_SRC_MISSION)
         {
             p_mc->rejected++;
-            return MOTION_RES_REJECTED_AUTH;
+            res = MOTION_RES_REJECTED_AUTH;
         }
-        return (MOTION_ST_ESTOP_LATCHED == p_mc->state) ? MOTION_RES_CLEAR_ESTOP
-                                                        : MOTION_RES_ACCEPTED;
+        else
+        {
+            res = (MOTION_ST_ESTOP_LATCHED == p_mc->state)
+                      ? MOTION_RES_CLEAR_ESTOP
+                      : MOTION_RES_ACCEPTED;
+        }
     }
-    if (MOTION_ST_ESTOP_LATCHED == p_mc->state)
+    else if (MOTION_ST_ESTOP_LATCHED == p_mc->state)
     {
         p_mc->rejected++;
-        return MOTION_RES_REJECTED_ESTOP;
+        res = MOTION_RES_REJECTED_ESTOP;
     }
-
-    switch (p_cmd->cmd)
+    else
     {
-        case MOTION_CMD_SET_AUTH:
-            if (p_cmd->src != MOTION_SRC_MISSION)
-            {
-                res = MOTION_RES_REJECTED_AUTH;
-            }
-            else if ((p_cmd->arg0 < 0)
-                     || (p_cmd->arg0 >= (int16_t)MOTION_SRC_COUNT))
-            {
-                res = MOTION_RES_INVALID;
-            }
-            else
-            {
-                p_mc->auth = (uint8_t)p_cmd->arg0;
-            }
-        break;
-
-        case MOTION_CMD_STOP:
-            if ((p_cmd->src != MOTION_SRC_MISSION)
-                && (p_cmd->src != p_mc->auth))
-            {
-                res = MOTION_RES_REJECTED_AUTH;
-            }
-            else if (p_mc->state != MOTION_ST_IDLE_BRAKED)
-            {
-                end_maneuver(p_mc, false);
-                p_mc->state = MOTION_ST_STOPPING;
-            }
-            else
-            {
-                /* already braked */
-            }
-        break;
-
-        case MOTION_CMD_DRIVE:
-            if (p_cmd->src != p_mc->auth)
-            {
-                res = MOTION_RES_REJECTED_AUTH;
-            }
-            else
-            {
-                end_maneuver(p_mc, false);
-                p_mc->drive_v = app_types_clamp_i32(
-                    p_cmd->arg0, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
-                p_mc->drive_w = app_types_clamp_i32(p_cmd->arg1, -6000, 6000);
-                p_mc->last_drive_ms = now_ms;
-                p_mc->state         = MOTION_ST_VELOCITY_TRACK;
-            }
-        break;
-
-        case MOTION_CMD_MOVE:
-        case MOTION_CMD_TURN:
-            if (p_cmd->src != p_mc->auth)
-            {
-                res = MOTION_RES_REJECTED_AUTH;
-            }
-            else if (p_cmd->arg1 <= 0)
-            {
-                res = MOTION_RES_INVALID;
-            }
-            else
-            {
-                int8_t  dir = (p_cmd->arg0 < 0) ? (int8_t)-1 : (int8_t)1;
-                int64_t target;
-                int32_t vmax;
-
-                end_maneuver(p_mc, false);
-                if (MOTION_CMD_MOVE == p_cmd->cmd)
-                {
-                    target = (int64_t)app_types_abs_i32(p_cmd->arg0) * 1000;
-                    vmax   = app_types_min_i32(p_cmd->arg1, MOTION_V_MAX_MM_S);
-                }
-                else
-                {
-                    /* p0 in 0.1 deg; p1 in deg/s -> wheel speed in mm/s */
-                    target = turn_arc_um((int32_t)p_cmd->arg0 * 10);
-                    vmax   = (int32_t)(((int64_t)p_cmd->arg1 * MOTION_TRACK_MM
-                                        * PI_E6)
-                                       / 360000000);
-                    vmax   = app_types_clamp_i32(vmax, MOTION_PROFILE_V_MIN,
-                                                 MOTION_V_MAX_MM_S);
-                }
-                start_maneuver(p_mc, p_cmd, target, vmax, dir, now_ms);
-                if (0 == target)
-                {
-                    end_maneuver(p_mc, true); /* nothing to do */
-                }
-            }
-        break;
-
-        default:
-            res = MOTION_RES_INVALID;
-        break;
-    }
-
-    if ((MOTION_RES_REJECTED_AUTH == res) || (MOTION_RES_INVALID == res))
-    {
-        p_mc->rejected++;
+        res = command_run(p_mc, p_cmd, now_ms);
+        if ((MOTION_RES_REJECTED_AUTH == res) || (MOTION_RES_INVALID == res))
+        {
+            p_mc->rejected++;
+        }
     }
     return res;
 }
@@ -510,6 +425,117 @@ void motion_core_odom_unpack (uint32_t const *      p_words,
 uint32_t motion_core_odom_layout_bits (void)
 {
     return app_pack_layout_bits(g_odom_layout, ODOM_FIELDS);
+}
+
+/* A command other than CLEAR_ESTOP, with no E-stop latched. */
+static motion_core_result_t command_run (motion_core_t *            p_mc,
+                                         motion_types_cmd_t const * p_cmd,
+                                         uint32_t                   now_ms)
+{
+    motion_core_result_t res = MOTION_RES_ACCEPTED;
+
+    switch (p_cmd->cmd)
+    {
+        case MOTION_CMD_SET_AUTH:
+            if (p_cmd->src != MOTION_SRC_MISSION)
+            {
+                res = MOTION_RES_REJECTED_AUTH;
+            }
+            else if ((p_cmd->arg0 < 0)
+                     || (p_cmd->arg0 >= (int16_t)MOTION_SRC_COUNT))
+            {
+                res = MOTION_RES_INVALID;
+            }
+            else
+            {
+                p_mc->auth = (uint8_t)p_cmd->arg0;
+            }
+        break;
+
+        case MOTION_CMD_STOP:
+            if ((p_cmd->src != MOTION_SRC_MISSION)
+                && (p_cmd->src != p_mc->auth))
+            {
+                res = MOTION_RES_REJECTED_AUTH;
+            }
+            else if (p_mc->state != MOTION_ST_IDLE_BRAKED)
+            {
+                end_maneuver(p_mc, false);
+                p_mc->state = MOTION_ST_STOPPING;
+            }
+            else
+            {
+                /* already braked */
+            }
+        break;
+
+        case MOTION_CMD_DRIVE:
+            if (p_cmd->src != p_mc->auth)
+            {
+                res = MOTION_RES_REJECTED_AUTH;
+            }
+            else
+            {
+                end_maneuver(p_mc, false);
+                p_mc->drive_v = app_types_clamp_i32(
+                    p_cmd->arg0, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
+                p_mc->drive_w = app_types_clamp_i32(p_cmd->arg1, -6000, 6000);
+                p_mc->last_drive_ms = now_ms;
+                p_mc->state         = MOTION_ST_VELOCITY_TRACK;
+            }
+        break;
+
+        case MOTION_CMD_MOVE:
+        case MOTION_CMD_TURN:
+            if (p_cmd->src != p_mc->auth)
+            {
+                res = MOTION_RES_REJECTED_AUTH;
+            }
+            else if (p_cmd->arg1 <= 0)
+            {
+                res = MOTION_RES_INVALID;
+            }
+            else
+            {
+                command_move(p_mc, p_cmd, now_ms);
+            }
+        break;
+
+        default:
+            res = MOTION_RES_INVALID;
+        break;
+    }
+    return res;
+}
+
+/* MOVE / TURN from the authorised source with a valid speed. */
+static void command_move (motion_core_t *            p_mc,
+                          motion_types_cmd_t const * p_cmd, uint32_t now_ms)
+{
+    int8_t  dir = (p_cmd->arg0 < 0) ? (int8_t)-1 : (int8_t)1;
+    int64_t target;
+    int32_t vmax;
+
+    end_maneuver(p_mc, false);
+    if (MOTION_CMD_MOVE == p_cmd->cmd)
+    {
+        target = (int64_t)app_types_abs_i32(p_cmd->arg0) * 1000;
+        vmax   = app_types_min_i32(p_cmd->arg1, MOTION_V_MAX_MM_S);
+    }
+    else
+    {
+        /* p0 in 0.1 deg; p1 in deg/s -> wheel speed in mm/s */
+        target = turn_arc_um((int32_t)p_cmd->arg0 * 10);
+        vmax   = (int32_t)(((int64_t)p_cmd->arg1 * MOTION_TRACK_MM * PI_E6)
+                           / 360000000);
+        vmax =
+            app_types_clamp_i32(vmax, MOTION_PROFILE_V_MIN, MOTION_V_MAX_MM_S);
+    }
+    start_maneuver(p_mc, p_cmd, target, vmax, dir, now_ms);
+    if (0 == target)
+    {
+        end_maneuver(p_mc, true); /* nothing to do */
+    }
 }
 
 /* ------------------------------------------------------------------ */

@@ -69,6 +69,11 @@ static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
                          uint32_t now_ms);
 static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s,
                         int32_t yaw_cdeg_s);
+static void    acc_filter(imu_core_t * p_ic, int32_t const acc_mg[IMU_AXES],
+                          int32_t accel[IMU_AXES]);
+static int32_t attitude(imu_core_t * p_ic, int32_t const accel[IMU_AXES]);
+static void heading_update(imu_core_t * p_ic, int16_t const mag_raw[IMU_AXES]);
+static uint8_t tilt_step(imu_core_t * p_ic, uint32_t now_ms);
 
 bool imu_core_cal_mag_finish (imu_core_t * p_ic)
 {
@@ -98,12 +103,8 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
                        int32_t yaw_cdeg_s, uint32_t dt_ms, uint32_t now_ms)
 {
     uint8_t events = 0u;
-    int32_t accel[3];
-    int32_t fwd;
-    int32_t left;
+    int32_t accel[IMU_AXES];
     int32_t up_mg;
-    int32_t mag_mg;
-    uint8_t kdx;
     uint8_t cls;
 
     if (0u == dt_ms)
@@ -111,25 +112,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
         dt_ms = 10u;
     }
 
-    /* Low-pass filter (alpha 1/4), mg x 16. */
-    for (kdx = 0u; kdx < IMU_AXES; kdx++)
-    {
-        if (!p_ic->b_have_acc)
-        {
-            p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
-        }
-        p_ic->acc_f[kdx] +=
-            ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / IMU_ACC_LPF_DIV;
-        accel[kdx] = p_ic->acc_f[kdx] / 16;
-    }
-
-    /* |a| for the snapshot (14 Nov: no longer an impact check). */
-    mag_mg = (int32_t)app_math_isqrt64(
-        (uint64_t)(((int64_t)acc_mg[0] * acc_mg[0])
-                   + ((int64_t)acc_mg[1] * acc_mg[1])
-                   + ((int64_t)acc_mg[2] * acc_mg[2])));
-    p_ic->prev_mag_mg = mag_mg;
-    p_ic->b_have_acc  = true;
+    acc_filter(p_ic, acc_mg, accel);
 
     /* Longitudinal acceleration from the encoders, filtered. */
     if (p_ic->b_have_v)
@@ -141,76 +124,13 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     p_ic->prev_v   = v_mm_s;
     p_ic->b_have_v = true;
 
-    /* Attitude.  The forward axis also sees the robot's own acceleration,
-       so subtract the encoder estimate before taking the angle. */
-    fwd   = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD)
-            - ((app_types_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
-                                    IMU_ACC_COMP_MAX_MM_S2)
-                * 1000)
-               / MG_PER_G_MM_S2);
-    left  = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
-    up_mg = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
-    p_ic->pitch_cdeg = app_math_wrap_cdeg(
-        app_math_atan2_cdeg(fwd, (int32_t)app_math_isqrt64(
-                                     (uint64_t)(((int64_t)left * left)
-                                                + ((int64_t)up_mg * up_mg))))
-        - p_ic->pitch0_cdeg);
-    p_ic->roll_cdeg =
-        app_math_wrap_cdeg(app_math_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
-
-    if ((p_mag != NULL) && ((p_ic->cal & IMU_CAL_MAG) != 0u))
+    up_mg = attitude(p_ic, accel);
+    if (p_mag != NULL)
     {
-        int32_t const mag[3] = {(int32_t)p_mag[0] - p_ic->mag_off[0],
-                                (int32_t)p_mag[1] - p_ic->mag_off[1],
-                                (int32_t)p_mag[2] - p_ic->mag_off[2]};
-        int32_t       heading =
-            app_math_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT),
-                                axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
-
-        p_ic->heading_cdeg = (heading < 0) ? (heading + 36000)
-                                           : heading; /* clockwise from north */
+        heading_update(p_ic, p_mag);
     }
 
-    /* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off
-       again below 25 deg on both axes. */
-    {
-        bool const b_over =
-            (app_types_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG)
-            || (app_types_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
-
-        if (!b_over)
-        {
-            p_ic->b_tilt_over = false;
-        }
-        else if (!p_ic->b_tilt_over)
-        {
-            p_ic->b_tilt_over   = true;
-            p_ic->tilt_since_ms = now_ms;
-        }
-        else
-        {
-            /* still beyond the limit */
-        }
-
-        if (!p_ic->b_tilt && p_ic->b_tilt_over
-            && (app_types_elapsed_ms(now_ms, p_ic->tilt_since_ms)
-                >= IMU_TILT_HOLD_MS))
-        {
-            p_ic->b_tilt = true;
-            events |= IMU_EV_TILT_ON;
-        }
-        else if (p_ic->b_tilt
-                 && (app_types_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG)
-                 && (app_types_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
-        {
-            p_ic->b_tilt = false;
-            events |= IMU_EV_TILT_OFF;
-        }
-        else
-        {
-            /* no change */
-        }
-    }
+    events |= tilt_step(p_ic, now_ms);
 
     /* Hump detection runs on forward travel only (lifting the robot by
        hand with the wheels still is never a hump).  A pitch hump (both
@@ -417,6 +337,122 @@ uint32_t imu_core_snap_layout_bits (void)
     return app_pack_layout_bits(g_imu_layout, IMU_FIELDS);
 }
 
+/* Low-pass filter (alpha 1/4), mg x 16; accel = the filtered mg.  |a| of
+   the raw sample for the snapshot. */
+static void acc_filter (imu_core_t * p_ic, int32_t const acc_mg[IMU_AXES],
+                        int32_t accel[IMU_AXES])
+{
+    int32_t mag_mg;
+    uint8_t kdx;
+
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
+    {
+        if (!p_ic->b_have_acc)
+        {
+            p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
+        }
+        p_ic->acc_f[kdx] +=
+            ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / IMU_ACC_LPF_DIV;
+        accel[kdx] = p_ic->acc_f[kdx] / 16;
+    }
+
+    /* |a| for the snapshot (14 Nov: no longer an impact check). */
+    mag_mg = (int32_t)app_math_isqrt64(
+        (uint64_t)(((int64_t)acc_mg[0] * acc_mg[0])
+                   + ((int64_t)acc_mg[1] * acc_mg[1])
+                   + ((int64_t)acc_mg[2] * acc_mg[2])));
+    p_ic->prev_mag_mg = mag_mg;
+    p_ic->b_have_acc  = true;
+}
+
+/* Attitude.  The forward axis also sees the robot's own acceleration, so
+   the encoder estimate is subtracted before taking the angle.  Returns the
+   up-axis acceleration, mg. */
+static int32_t attitude (imu_core_t * p_ic, int32_t const accel[IMU_AXES])
+{
+    int32_t fwd;
+    int32_t left;
+    int32_t up_mg;
+
+    fwd   = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD)
+            - ((app_types_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
+                                    IMU_ACC_COMP_MAX_MM_S2)
+                * 1000)
+               / MG_PER_G_MM_S2);
+    left  = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
+    up_mg = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
+    p_ic->pitch_cdeg = app_math_wrap_cdeg(
+        app_math_atan2_cdeg(fwd, (int32_t)app_math_isqrt64(
+                                     (uint64_t)(((int64_t)left * left)
+                                                + ((int64_t)up_mg * up_mg))))
+        - p_ic->pitch0_cdeg);
+    p_ic->roll_cdeg =
+        app_math_wrap_cdeg(app_math_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
+    return up_mg;
+}
+
+/* Magnetic heading, clockwise from north, once the hard-iron offsets are
+   known. */
+static void heading_update (imu_core_t * p_ic, int16_t const mag_raw[IMU_AXES])
+{
+    if ((p_ic->cal & IMU_CAL_MAG) != 0u)
+    {
+        int32_t const mag[3] = {(int32_t)mag_raw[0] - p_ic->mag_off[0],
+                                (int32_t)mag_raw[1] - p_ic->mag_off[1],
+                                (int32_t)mag_raw[2] - p_ic->mag_off[2]};
+        int32_t       heading =
+            app_math_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT),
+                                axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
+
+        p_ic->heading_cdeg = (heading < 0) ? (heading + 36000)
+                                           : heading; /* clockwise from north */
+    }
+}
+
+/* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off again
+   below 25 deg on both axes. */
+static uint8_t tilt_step (imu_core_t * p_ic, uint32_t now_ms)
+{
+    uint8_t    events = 0u;
+    bool const b_over =
+        (app_types_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG)
+        || (app_types_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
+
+    if (!b_over)
+    {
+        p_ic->b_tilt_over = false;
+    }
+    else if (!p_ic->b_tilt_over)
+    {
+        p_ic->b_tilt_over   = true;
+        p_ic->tilt_since_ms = now_ms;
+    }
+    else
+    {
+        /* still beyond the limit */
+    }
+
+    if (!p_ic->b_tilt && p_ic->b_tilt_over
+        && (app_types_elapsed_ms(now_ms, p_ic->tilt_since_ms)
+            >= IMU_TILT_HOLD_MS))
+    {
+        p_ic->b_tilt = true;
+        events |= IMU_EV_TILT_ON;
+    }
+    else if (p_ic->b_tilt
+             && (app_types_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG)
+             && (app_types_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
+    {
+        p_ic->b_tilt = false;
+        events |= IMU_EV_TILT_OFF;
+    }
+    else
+    {
+        /* no change */
+    }
+    return events;
+}
+
 /* ---- hump sequence ------------------------------------------------------ */
 static void hump_reset (imu_core_t * p_ic)
 {
@@ -560,24 +596,21 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
     int32_t const roll_abs = app_types_abs_i32(p_ic->roll_cdeg);
     uint8_t       events   = 0u;
 
-    if (0u == p_ic->side_state)
+    if ((0u == p_ic->side_state) && (roll_abs > IMU_SIDE_ON_CDEG)
+        && (app_types_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
     {
-        if ((roll_abs > IMU_SIDE_ON_CDEG)
-            && (app_types_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
+        p_ic->side_um += ds_um;
+        p_ic->side_peak_cdeg =
+            app_types_max_i32(p_ic->side_peak_cdeg, roll_abs);
+        if (p_ic->side_um >= IMU_SIDE_DWELL_UM)
         {
-            p_ic->side_um += ds_um;
-            p_ic->side_peak_cdeg =
-                app_types_max_i32(p_ic->side_peak_cdeg, roll_abs);
-            if (p_ic->side_um >= IMU_SIDE_DWELL_UM)
-            {
-                p_ic->side_state = 1u;
-                events |= IMU_EV_HUMP_START;
-            }
+            p_ic->side_state = 1u;
+            events |= IMU_EV_HUMP_START;
         }
-        else
-        {
-            side_reset(p_ic);
-        }
+    }
+    else if (0u == p_ic->side_state)
+    {
+        side_reset(p_ic);
     }
     else
     {
