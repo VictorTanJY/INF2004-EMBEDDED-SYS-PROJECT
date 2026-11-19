@@ -193,287 +193,293 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
             snap.pitch_valid = 0u;
             snap.t_ms        = (uint32_t)app_time_ms();
             imu_put_snap(&snap);
-            continue;
         }
-
-        errors = 0u;
-
-        if (good < 255u)
+        else
         {
-            good++;
-        }
+            errors = 0u;
 
-        if (b_fault && (good >= IMU_RECOVER_SAMPLES))
-        {
-            b_fault = false;
-
-            (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 112u, 1);
-
-            (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_IMU_FAULT);
-        }
-
-        /* ---- Odometry ---- */
-        motion_get_odom(&odom);
-        mission_get_snap(&mission);
-
-        dist_um = odom.dist_mm * 1000;
-        ds_um   = b_have_dist
-                      ? (int32_t)((uint32_t)dist_um - (uint32_t)prev_dist_um)
-                      : 0;
-
-        prev_dist_um = dist_um;
-        b_have_dist  = true;
-        now_ms       = (uint32_t)app_time_ms_hw();
-
-        if (mission.runs != prev_runs)
-        {
-            prev_runs = mission.runs;
-            imu_core_new_run(&g_ic);
-        }
-
-        /* ---- Calibration ---- */
-        if (mission.cal_phase != prev_phase)
-        {
-            if ((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
+            if (good < 255u)
             {
-                imu_cal_level_start(&g_ic);
-                still_ms = now_ms;
+                good++;
             }
-            else if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
-            {
-                (void)imu_cal_level_finish(&g_ic);
-                imu_cal_mag_start(&g_ic);
-            }
-            else if ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase)
-            {
-                bool b_level;
 
-                if ((uint8_t)MISSION_CAL_PH_STILL == prev_phase)
+            if (b_fault && (good >= IMU_RECOVER_SAMPLES))
+            {
+                b_fault = false;
+
+                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 112u,
+                                       1);
+
+                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_IMU_FAULT);
+            }
+
+            /* ---- Odometry ---- */
+            motion_get_odom(&odom);
+            mission_get_snap(&mission);
+
+            dist_um = odom.dist_mm * 1000;
+            ds_um = b_have_dist
+                        ? (int32_t)((uint32_t)dist_um - (uint32_t)prev_dist_um)
+                        : 0;
+
+            prev_dist_um = dist_um;
+            b_have_dist  = true;
+            now_ms       = (uint32_t)app_time_ms_hw();
+
+            if (mission.runs != prev_runs)
+            {
+                prev_runs = mission.runs;
+                imu_core_new_run(&g_ic);
+            }
+
+            /* ---- Calibration ---- */
+            if (mission.cal_phase != prev_phase)
+            {
+                if ((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
+                {
+                    imu_cal_level_start(&g_ic);
+                    still_ms = now_ms;
+                }
+                else if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
                 {
                     (void)imu_cal_level_finish(&g_ic);
+                    imu_cal_mag_start(&g_ic);
+                }
+                else if ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase)
+                {
+                    bool b_level;
+
+                    if ((uint8_t)MISSION_CAL_PH_STILL == prev_phase)
+                    {
+                        (void)imu_cal_level_finish(&g_ic);
+                    }
+                    else
+                    {
+                        (void)imu_cal_mag_finish(&g_ic);
+                    }
+
+                    b_level = ((g_ic.cal & IMU_CAL_LEVEL) != 0u);
+
+                    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                           (uint8_t)APP_SRC_SAFETY_IMU,
+                                           IMU_LOG_LVL_N, (int32_t)g_ic.lvl_n);
+                    (void)comms_telem_post(
+                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                        IMU_LOG_LVL_SPREAD, g_ic.lvl_spread_mg);
+                    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                           (uint8_t)APP_SRC_SAFETY_IMU,
+                                           IMU_LOG_LVL_UP, g_ic.lvl_up_mg);
+
+                    (void)mission_post((uint8_t)MISSION_EV_CAL_DONE,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
+                                       (uint16_t)APP_SRC_SAFETY_IMU,
+                                       b_level ? 1 : 0);
                 }
                 else
                 {
-                    (void)imu_cal_mag_finish(&g_ic);
+                    /* No action required. */
                 }
 
-                b_level = ((g_ic.cal & IMU_CAL_LEVEL) != 0u);
+                prev_phase = mission.cal_phase;
+            }
 
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_LVL_N, (int32_t)g_ic.lvl_n);
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_LVL_SPREAD, g_ic.lvl_spread_mg);
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_LVL_UP, g_ic.lvl_up_mg);
+            if (((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
+                && (app_elapsed_ms(now_ms, still_ms) >= IMU_LEVEL_SETTLE_MS))
+            {
+                /* low-pass filtered (IMU_ACC_LPF_SHIFT), not single samples */
+                int32_t filt[3];
+                uint8_t kdx;
 
-                (void)mission_post(
-                    (uint8_t)MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_SAFETY_IMU,
-                    (uint16_t)APP_SRC_SAFETY_IMU, b_level ? 1 : 0);
+                for (kdx = 0u; kdx < 3u; kdx++)
+                {
+                    filt[kdx] =
+                        g_ic.b_have_acc ? (g_ic.acc_f[kdx] / 16) : acc[kdx];
+                }
+                imu_cal_level_sample(&g_ic, filt);
+            }
+            else if (((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
+                     && b_mag)
+            {
+                imu_cal_mag_sample(&g_ic, mag);
             }
             else
             {
                 /* No action required. */
             }
 
-            prev_phase = mission.cal_phase;
-        }
-
-        if (((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
-            && (app_elapsed_ms(now_ms, still_ms) >= IMU_LEVEL_SETTLE_MS))
-        {
-            /* low-pass filtered (IMU_ACC_LPF_SHIFT), not single samples */
-            int32_t filt[3];
-            uint8_t kdx;
-
-            for (kdx = 0u; kdx < 3u; kdx++)
+            /* ---- 14 Nov: humps while the floor may have gone ---- */
+            b_air_start = false;
+            safety_bits = 0u;
+            /* All three IR sensors black: the robot may be in the air (wheels
+               spinning, chassis tipped: read as humps).  Keep the hump results
+               as they are; if it turns out lifted, undo every hump since and
+               stop measuring humps until it is back on the floor. */
             {
-                filt[kdx] = g_ic.b_have_acc ? (g_ic.acc_f[kdx] / 16) : acc[kdx];
+                line_snap_t line;
+                bool        b_black;
+                bool        b_air;
+
+                line_get_snap(&line);
+                b_black = (line.sens & LINE_SENS_ALL_BLACK) != 0u;
+                b_air   = (line.sens & LINE_SENS_NO_FLOOR) != 0u;
+                if (b_black && !b_was_black)
+                {
+                    imu_core_hump_save(&g_ic);
+                }
+                if (b_air && !b_was_air)
+                {
+                    imu_core_hump_restore(&g_ic);
+                    b_air_start = true;
+                }
+                if (!b_black && b_was_black && !b_was_air)
+                {
+                    imu_core_hump_drop(&g_ic);
+                }
+                b_was_black = b_black;
+                b_was_air   = b_air;
+                if (b_air)
+                {
+                    ds_um = 0; /* no hump progress in the air */
+                }
             }
-            imu_cal_level_sample(&g_ic, filt);
-        }
-        else if (((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase) && b_mag)
-        {
-            imu_cal_mag_sample(&g_ic, mag);
-        }
-        else
-        {
-            /* No action required. */
-        }
 
-        /* ---- 14 Nov: humps while the floor may have gone ---- */
-        b_air_start = false;
-        safety_bits = 0u;
-        /* All three IR sensors black: the robot may be in the air (wheels
-           spinning, chassis tipped: read as humps).  Keep the hump results
-           as they are; if it turns out lifted, undo every hump since and
-           stop measuring humps until it is back on the floor. */
-        {
-            line_snap_t line;
-            bool        b_black;
-            bool        b_air;
+            /* ---- IMU processing ---- */
+            events = imu_core_step(&g_ic, acc, b_mag ? mag : NULL, ds_um,
+                                   odom.v_mm_s, odom.yaw_rate_cdeg_s,
+                                   now_ms - prev_ms, now_ms);
 
-            line_get_snap(&line);
-            b_black = (line.sens & LINE_SENS_ALL_BLACK) != 0u;
-            b_air   = (line.sens & LINE_SENS_NO_FLOOR) != 0u;
-            if (b_black && !b_was_black)
+            prev_ms = now_ms;
+
+            if ((events & IMU_EV_HUMP_START) != 0u)
             {
-                imu_core_hump_save(&g_ic);
+                (void)mission_post((uint8_t)MISSION_EV_HUMP_START,
+                                   (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
             }
-            if (b_air && !b_was_air)
+
+            if ((events & IMU_EV_HUMP_END) != 0u)
             {
-                imu_core_hump_restore(&g_ic);
-                b_air_start = true;
+                (void)mission_post((uint8_t)MISSION_EV_HUMP_END,
+                                   (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                   (int32_t)g_ic.last_hump_mm);
             }
-            if (!b_black && b_was_black && !b_was_air)
+
+            /* 14 Nov: tilt (overturned) and lift brake the motors while a run
+               is active (SafetyTask latches the fault); idle, they are only
+               logged, so handling the robot does not latch a fault.  The bits
+               are set after the snapshot below, so the run summary
+               (MissionTask, core 1) reads the humps as corrected for a lift. */
             {
-                imu_core_hump_drop(&g_ic);
+                bool const b_run =
+                    (mission.state >= (uint8_t)MISSION_ST_LINE_FOLLOW)
+                    && (mission.state <= (uint8_t)MISSION_ST_LINE_SEARCH);
+
+                if (b_run && g_ic.b_tilt && !b_tilt_sent)
+                {
+                    safety_bits |= SAFETY_FLT_TILT;
+                }
+                b_tilt_sent = b_run && g_ic.b_tilt;
+                if (b_run && (((events & IMU_EV_LIFT) != 0u) || b_air_start))
+                {
+                    safety_bits |= SAFETY_FLT_LIFT; /* IMU lift, or no floor
+                                                       under the IR sensors */
+                }
             }
-            b_was_black = b_black;
-            b_was_air   = b_air;
-            if (b_air)
+            if ((events & IMU_EV_LIFT) != 0u)
             {
-                ds_um = 0; /* no hump progress in the air */
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_LIFT, g_ic.lift_rise_mg);
             }
-        }
-
-        /* ---- IMU processing ---- */
-        events =
-            imu_core_step(&g_ic, acc, b_mag ? mag : NULL, ds_um, odom.v_mm_s,
-                          odom.yaw_rate_cdeg_s, now_ms - prev_ms, now_ms);
-
-        prev_ms = now_ms;
-
-        if ((events & IMU_EV_HUMP_START) != 0u)
-        {
-            (void)mission_post((uint8_t)MISSION_EV_HUMP_START,
-                               (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
-        }
-
-        if ((events & IMU_EV_HUMP_END) != 0u)
-        {
-            (void)mission_post((uint8_t)MISSION_EV_HUMP_END,
-                               (uint8_t)APP_SRC_SAFETY_IMU, 0u,
-                               (int32_t)g_ic.last_hump_mm);
-        }
-
-        /* 14 Nov: tilt (overturned) and lift brake the motors while a run
-           is active (SafetyTask latches the fault); idle, they are only
-           logged, so handling the robot does not latch a fault.  The bits
-           are set after the snapshot below, so the run summary (MissionTask,
-           core 1) reads the humps as corrected for a lift. */
-        {
-            bool const b_run =
-                (mission.state >= (uint8_t)MISSION_ST_LINE_FOLLOW)
-                && (mission.state <= (uint8_t)MISSION_ST_LINE_SEARCH);
-
-            if (b_run && g_ic.b_tilt && !b_tilt_sent)
+            if ((events & IMU_EV_RISE_MAX) != 0u)
             {
-                safety_bits |= SAFETY_FLT_TILT;
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_RISE_MAX, g_ic.rise_max_mg);
             }
-            b_tilt_sent = b_run && g_ic.b_tilt;
-            if (b_run && (((events & IMU_EV_LIFT) != 0u) || b_air_start))
+
+            if ((events & IMU_EV_TILT_ON) != 0u)
             {
-                safety_bits |= SAFETY_FLT_LIFT; /* IMU lift, or no floor under
-                                                   the IR sensors */
+                (void)comms_telem_post(
+                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                    IMU_LOG_TILT_ON,
+                    app_max_i32(app_abs_i32(g_ic.pitch_cdeg),
+                                app_abs_i32(g_ic.roll_cdeg)));
             }
-        }
-        if ((events & IMU_EV_LIFT) != 0u)
-        {
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, IMU_LOG_LIFT,
-                                   g_ic.lift_rise_mg);
-        }
-        if ((events & IMU_EV_RISE_MAX) != 0u)
-        {
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                   (uint8_t)APP_SRC_SAFETY_IMU,
-                                   IMU_LOG_RISE_MAX, g_ic.rise_max_mg);
-        }
 
-        if ((events & IMU_EV_TILT_ON) != 0u)
-        {
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, IMU_LOG_TILT_ON,
-                                   app_max_i32(app_abs_i32(g_ic.pitch_cdeg),
-                                               app_abs_i32(g_ic.roll_cdeg)));
-        }
+            if ((events & IMU_EV_TILT_OFF) != 0u)
+            {
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_TILT_OFF, 0);
+            }
 
-        if ((events & IMU_EV_TILT_OFF) != 0u)
-        {
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                   (uint8_t)APP_SRC_SAFETY_IMU,
-                                   IMU_LOG_TILT_OFF, 0);
-        }
+            if ((events & IMU_EV_MOTION) != 0u)
+            {
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_MOTION, (int32_t)g_ic.motion);
+            }
 
-        if ((events & IMU_EV_MOTION) != 0u)
-        {
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, IMU_LOG_MOTION,
-                                   (int32_t)g_ic.motion);
-        }
+            if ((events & IMU_EV_RAMP) != 0u)
+            {
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
+                                       IMU_LOG_RAMP, 0);
+            }
 
-        if ((events & IMU_EV_RAMP) != 0u)
-        {
-            (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, IMU_LOG_RAMP,
-                                   0);
-        }
+            /* ---- Snapshot ---- */
+            snap.t_ms             = (uint32_t)app_time_ms();
+            snap.pitch_cdeg       = (int16_t)g_ic.pitch_cdeg;
+            snap.roll_cdeg        = (int16_t)g_ic.roll_cdeg;
+            snap.heading_cdeg     = (int16_t)g_ic.heading_cdeg;
+            snap.turn_rate_cdeg_s = odom.yaw_rate_cdeg_s;
+            snap.accel_mg         = (int16_t)(g_ic.prev_mag_mg - 1000);
+            snap.tilt             = g_ic.b_tilt ? 1u : 0u;
+            snap.hump_max_mm      = g_ic.hump_max_mm;
+            snap.last_hump_mm     = g_ic.last_hump_mm;
+            snap.humps            = g_ic.humps;
+            snap.hump_state       = g_ic.hump_state;
+            snap.motion           = g_ic.motion;
+            snap.cal              = g_ic.cal;
+            snap.b_ok             = b_fault ? 0u : 1u;
+            snap.pitch_valid =
+                (!b_fault && (good >= IMU_RECOVER_SAMPLES)) ? 1u : 0u;
 
-        /* ---- Snapshot ---- */
-        snap.t_ms             = (uint32_t)app_time_ms();
-        snap.pitch_cdeg       = (int16_t)g_ic.pitch_cdeg;
-        snap.roll_cdeg        = (int16_t)g_ic.roll_cdeg;
-        snap.heading_cdeg     = (int16_t)g_ic.heading_cdeg;
-        snap.turn_rate_cdeg_s = odom.yaw_rate_cdeg_s;
-        snap.accel_mg         = (int16_t)(g_ic.prev_mag_mg - 1000);
-        snap.tilt             = g_ic.b_tilt ? 1u : 0u;
-        snap.hump_max_mm      = g_ic.hump_max_mm;
-        snap.last_hump_mm     = g_ic.last_hump_mm;
-        snap.humps            = g_ic.humps;
-        snap.hump_state       = g_ic.hump_state;
-        snap.motion           = g_ic.motion;
-        snap.cal              = g_ic.cal;
-        snap.b_ok             = b_fault ? 0u : 1u;
-        snap.pitch_valid =
-            (!b_fault && (good >= IMU_RECOVER_SAMPLES)) ? 1u : 0u;
-
-        /* Bring-up only (IMU_DEBUG_LOGS in imu_cfg.h): raw acceleration,
-           pitch and roll as LOG 100..104 on the first good sample, then
-           every 100 cycles.  Off by default: five QoS 1 events per second
-           exceed lwIP's MQTT in-flight limit and fill the laptop's log. */
+            /* Bring-up only (IMU_DEBUG_LOGS in imu_cfg.h): raw acceleration,
+               pitch and roll as LOG 100..104 on the first good sample, then
+               every 100 cycles.  Off by default: five QoS 1 events per second
+               exceed lwIP's MQTT in-flight limit and fill the laptop's log. */
 #if IMU_DEBUG_LOGS
-        {
-            static bool b_first_sample = true;
-
-            if (b_first_sample || (0u == (cycle % 100u)))
             {
-                b_first_sample = false;
+                static bool b_first_sample = true;
 
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 100u,
-                                       acc[0]);
+                if (b_first_sample || (0u == (cycle % 100u)))
+                {
+                    b_first_sample = false;
 
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 101u,
-                                       acc[1]);
+                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                           100u, acc[0]);
 
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 102u,
-                                       acc[2]);
+                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                           101u, acc[1]);
 
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 103u,
-                                       (int32_t)snap.pitch_cdeg);
+                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                           102u, acc[2]);
 
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 104u,
-                                       (int32_t)snap.roll_cdeg);
+                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                           103u, (int32_t)snap.pitch_cdeg);
+
+                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                           104u, (int32_t)snap.roll_cdeg);
+                }
             }
-        }
 #endif
 
-        imu_put_snap(&snap);
-        if (safety_bits != 0u)
-        {
-            (void)tk_set_flg(g_flg_safety, safety_bits);
+            imu_put_snap(&snap);
+            if (safety_bits != 0u)
+            {
+                (void)tk_set_flg(g_flg_safety, safety_bits);
+            }
         }
     }
 }

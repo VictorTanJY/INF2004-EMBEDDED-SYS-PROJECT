@@ -281,32 +281,33 @@ static void decide (obst_point_t const * p_fine, uint8_t n_fine,
             (idx < n_fine) ? &p_fine[idx] : &p_coarse[idx - n_fine];
         int32_t lat;
 
+        /* Skipped: the obstacle's own fine pings, unusable or far pings,
+           and a coarse ping at the obstacle's own range (the obstacle seen
+           through the side of the beam, not a second object). */
         if (((idx < n_fine) && (idx >= low) && (idx <= high))
             || !usable(p_point)
             || (p_point->r_mm
-                > ((uint32_t)r_min + OBST_DEPTH_TOL_MM + OBST_NEAR_EXTRA_MM)))
+                > ((uint32_t)r_min + OBST_DEPTH_TOL_MM + OBST_NEAR_EXTRA_MM))
+            || ((idx >= n_fine)
+                && (p_point->r_mm <= ((uint32_t)r_min + OBST_DEPTH_TOL_MM))))
         {
-            continue;
-        }
-        if ((idx >= n_fine)
-            && (p_point->r_mm <= ((uint32_t)r_min + OBST_DEPTH_TOL_MM)))
-        {
-            /* A coarse ping at the obstacle's own range is the obstacle seen
-               through the side of the beam, not a second object. */
-            continue;
-        }
-        lat = lateral_mm((int32_t)p_point->angle_deg * 100, p_point->r_mm);
-        if (lat > pl_l)
-        {
-            clr_l = app_min_i32(clr_l, lat - pl_l);
-        }
-        else if (lat < pl_r)
-        {
-            clr_r = app_min_i32(clr_r, pl_r - lat);
+            /* not a clearance point */
         }
         else
         {
-            /* inside the obstacle's lateral span (behind it) */
+            lat = lateral_mm((int32_t)p_point->angle_deg * 100, p_point->r_mm);
+            if (lat > pl_l)
+            {
+                clr_l = app_min_i32(clr_l, lat - pl_l);
+            }
+            else if (lat < pl_r)
+            {
+                clr_r = app_min_i32(clr_r, pl_r - lat);
+            }
+            else
+            {
+                /* inside the obstacle's lateral span (behind it) */
+            }
         }
     }
 

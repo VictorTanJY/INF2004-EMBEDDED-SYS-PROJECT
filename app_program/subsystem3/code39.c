@@ -543,55 +543,54 @@ static uint32_t best_fit (uint32_t const * p_w, uint16_t n_elems,
             uint32_t const cost_here = cost_tbl[idx][jdx];
             uint8_t const  edits     = edit_tbl[idx][jdx];
 
-            if (cost_here >= BEST_INF)
+            if (cost_here < BEST_INF)
             {
-                continue;
-            }
-            if (!p_speck[idx])
-            { /* 1 : 1 */
-                uint32_t const cost =
-                    cost_here + sq_err(p_w[idx], p_e[jdx], inv);
+                if (!p_speck[idx])
+                { /* 1 : 1 */
+                    uint32_t const cost =
+                        cost_here + sq_err(p_w[idx], p_e[jdx], inv);
 
-                if (cost < cost_tbl[idx + 1u][jdx + 1u])
-                {
-                    cost_tbl[idx + 1u][jdx + 1u] = cost;
-                    rmin[idx + 1u] =
-                        (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
-                    edit_tbl[idx + 1u][jdx + 1u] = edits;
+                    if (cost < cost_tbl[idx + 1u][jdx + 1u])
+                    {
+                        cost_tbl[idx + 1u][jdx + 1u] = cost;
+                        rmin[idx + 1u] =
+                            (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
+                        edit_tbl[idx + 1u][jdx + 1u] = edits;
+                    }
                 }
-            }
-            if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= n_elems)
-                && in_band((uint16_t)(idx + 3u), (uint16_t)(jdx + 1u))
-                && p_speck[idx + 1u])
-            { /* 3 measured : 1 printed */
-                uint32_t const cost =
-                    cost_here + BEST_EDIT
-                    + sq_err(p_w[idx] + p_w[idx + 1u] + p_w[idx + 2u], p_e[jdx],
-                             inv);
+                if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= n_elems)
+                    && in_band((uint16_t)(idx + 3u), (uint16_t)(jdx + 1u))
+                    && p_speck[idx + 1u])
+                { /* 3 measured : 1 printed */
+                    uint32_t const cost =
+                        cost_here + BEST_EDIT
+                        + sq_err(p_w[idx] + p_w[idx + 1u] + p_w[idx + 2u],
+                                 p_e[jdx], inv);
 
-                if (cost < cost_tbl[idx + 3u][jdx + 1u])
-                {
-                    cost_tbl[idx + 3u][jdx + 1u] = cost;
-                    rmin[idx + 3u] =
-                        (cost < rmin[idx + 3u]) ? cost : rmin[idx + 3u];
-                    edit_tbl[idx + 3u][jdx + 1u] = (uint8_t)(edits + 1u);
+                    if (cost < cost_tbl[idx + 3u][jdx + 1u])
+                    {
+                        cost_tbl[idx + 3u][jdx + 1u] = cost;
+                        rmin[idx + 3u] =
+                            (cost < rmin[idx + 3u]) ? cost : rmin[idx + 3u];
+                        edit_tbl[idx + 3u][jdx + 1u] = (uint8_t)(edits + 1u);
+                    }
                 }
-            }
-            if ((edits < BEST_MAX_EDITS) && ((jdx + 3u) <= BEST_T)
-                && in_band((uint16_t)(idx + 1u), (uint16_t)(jdx + 3u))
-                && !p_wide[jdx + 1u])
-            { /* 1 measured : 3 printed */
-                uint32_t const cost =
-                    cost_here + BEST_EDIT
-                    + sq_err(p_w[idx], p_e[jdx] + p_e[jdx + 1u] + p_e[jdx + 2u],
-                             inv);
+                if ((edits < BEST_MAX_EDITS) && ((jdx + 3u) <= BEST_T)
+                    && in_band((uint16_t)(idx + 1u), (uint16_t)(jdx + 3u))
+                    && !p_wide[jdx + 1u])
+                { /* 1 measured : 3 printed */
+                    uint32_t const cost =
+                        cost_here + BEST_EDIT
+                        + sq_err(p_w[idx],
+                                 p_e[jdx] + p_e[jdx + 1u] + p_e[jdx + 2u], inv);
 
-                if (cost < cost_tbl[idx + 1u][jdx + 3u])
-                {
-                    cost_tbl[idx + 1u][jdx + 3u] = cost;
-                    rmin[idx + 1u] =
-                        (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
-                    edit_tbl[idx + 1u][jdx + 3u] = (uint8_t)(edits + 1u);
+                    if (cost < cost_tbl[idx + 1u][jdx + 3u])
+                    {
+                        cost_tbl[idx + 1u][jdx + 3u] = cost;
+                        rmin[idx + 1u] =
+                            (cost < rmin[idx + 1u]) ? cost : rmin[idx + 1u];
+                        edit_tbl[idx + 1u][jdx + 3u] = (uint8_t)(edits + 1u);
+                    }
                 }
             }
         }
@@ -653,63 +652,63 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
         uint16_t const pat = bits_of(g_code39_table[entry].p_bits);
         uint8_t        kdx;
 
-        if ('*' == g_code39_table[entry].chr)
+        if ('*' != g_code39_table[entry].chr)
         {
-            continue;
-        }
-        /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
-        for (kdx = 0u; kdx < BEST_T; kdx++)
-        {
-            uint8_t const  char_idx = (uint8_t)(kdx / 10u);
-            uint8_t const  pos      = (uint8_t)(kdx % 10u);
-            uint16_t const pattern  = (1u == char_idx) ? pat : star;
-            bool const     b_w =
-                (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
-
-            expect[kdx] =
-                levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
-            b_wide[kdx] = b_w;
-        }
-        for (dir = 0u; dir < 2u; dir++)
-        {
-            uint32_t cost;
-
-            if (1u == dir)
+            /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
+            for (kdx = 0u; kdx < BEST_T; kdx++)
             {
-                for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
+                uint8_t const  char_idx = (uint8_t)(kdx / 10u);
+                uint8_t const  pos      = (uint8_t)(kdx % 10u);
+                uint16_t const pattern  = (1u == char_idx) ? pat : star;
+                bool const     b_w =
+                    (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
+
+                expect[kdx] =
+                    levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
+                b_wide[kdx] = b_w;
+            }
+            for (dir = 0u; dir < 2u; dir++)
+            {
+                uint32_t cost;
+
+                if (1u == dir)
                 {
-                    uint32_t const exp_width     = expect[kdx];
-                    bool const     b_expect_wide = b_wide[kdx];
+                    for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
+                    {
+                        uint32_t const exp_width     = expect[kdx];
+                        bool const     b_expect_wide = b_wide[kdx];
 
-                    expect[kdx]               = expect[BEST_T - 1u - kdx];
-                    b_wide[kdx]               = b_wide[BEST_T - 1u - kdx];
-                    expect[BEST_T - 1u - kdx] = exp_width;
-                    b_wide[BEST_T - 1u - kdx] = b_expect_wide;
+                        expect[kdx]               = expect[BEST_T - 1u - kdx];
+                        b_wide[kdx]               = b_wide[BEST_T - 1u - kdx];
+                        expect[BEST_T - 1u - kdx] = exp_width;
+                        b_wide[BEST_T - 1u - kdx] = b_expect_wide;
+                    }
                 }
-            }
-            /* A fit costing c2 or more changes neither result, and the
-               runner-up only matters below the margin times the largest
-               best that is accepted. */
-            cost = best_fit(p_widths, n_elems, expect, b_wide, b_speck, inv,
-                            (next_cost < BEST_BOUND_MAX) ? next_cost
-                                                         : BEST_BOUND_MAX);
-            if (cost < best_cost)
-            {
-                if (g_code39_table[entry].chr != ch1)
+                /* A fit costing c2 or more changes neither result, and the
+                   runner-up only matters below the margin times the largest
+                   best that is accepted. */
+                cost = best_fit(p_widths, n_elems, expect, b_wide, b_speck, inv,
+                                (next_cost < BEST_BOUND_MAX) ? next_cost
+                                                             : BEST_BOUND_MAX);
+                if (cost < best_cost)
                 {
-                    next_cost = best_cost;
+                    if (g_code39_table[entry].chr != ch1)
+                    {
+                        next_cost = best_cost;
+                    }
+                    best_cost = cost;
+                    ch1       = g_code39_table[entry].chr;
+                    b_rev1    = (1u == dir);
                 }
-                best_cost = cost;
-                ch1       = g_code39_table[entry].chr;
-                b_rev1    = (1u == dir);
-            }
-            else if ((cost < next_cost) && (g_code39_table[entry].chr != ch1))
-            {
-                next_cost = cost;
-            }
-            else
-            {
-                /* No action required. */
+                else if ((cost < next_cost)
+                         && (g_code39_table[entry].chr != ch1))
+                {
+                    next_cost = cost;
+                }
+                else
+                {
+                    /* No action required. */
+                }
             }
         }
     }

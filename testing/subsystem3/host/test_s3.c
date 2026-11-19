@@ -746,55 +746,57 @@ static void test_capture (void)
         {
             for (step = 0; step < N_SLIDES; step++)
             {
-                if (g_slides[step].chr != 'Z')
+                if ('Z' == g_slides[step].chr)
                 {
-                    continue;
-                }
-                for (diff = 0; diff < 2; diff++)
-                {
-                    uint32_t    widths[29];
-                    bc_out_t    out;
-                    bc_result_t result;
-                    int32_t     kdx;
+                    for (diff = 0; diff < 2; diff++)
+                    {
+                        uint32_t    widths[29];
+                        bc_out_t    out;
+                        bc_result_t result;
+                        int32_t     kdx;
 
-                    uint32_t wmin = 0xFFFFFFFFu;
+                        uint32_t wmin = 0xFFFFFFFFu;
 
-                    /* printed at the specified size: 3 mm narrow (~141 mm code)
-                     */
-                    for (kdx = 0; kdx < 29; kdx++)
-                    {
-                        wmin = (g_slides[step].p_w[kdx] < wmin)
-                                   ? g_slides[step].p_w[kdx]
-                                   : wmin;
-                    }
-                    for (kdx = 0; kdx < 29; kdx++)
-                    {
-                        widths[kdx] = (g_slides[step].p_w[kdx] * 3000u) / wmin;
-                    }
-                    g_thin_um =
-                        6000u; /* bars under 6 mm are the faint narrow ones */
-                    if (diff)
-                    {
-                        reverse(widths, 29);
-                    }
-                    memset(&out, 0, sizeof(out));
-                    result = run_pass(widths, 29, 90u, noise, &out);
-                    total++;
-                    if ((BC_VALID == result) && ('Z' == out.chr))
-                    {
-                        good++;
-                    }
-                    else if (BC_VALID == result)
-                    {
-                        wrong++;
-                    }
-                    else
-                    {
-                        printf("  Z slide %d dir %d noise %d: result %d, %u "
-                               "elements, %u mm\n",
-                               g_slides[step].slide, diff, noise,
-                               (int32_t)result, (uint32_t)out.elements,
-                               (uint32_t)(out.length_um / 1000u));
+                        /* printed at the specified size: 3 mm narrow (~141 mm
+                         * code)
+                         */
+                        for (kdx = 0; kdx < 29; kdx++)
+                        {
+                            wmin = (g_slides[step].p_w[kdx] < wmin)
+                                       ? g_slides[step].p_w[kdx]
+                                       : wmin;
+                        }
+                        for (kdx = 0; kdx < 29; kdx++)
+                        {
+                            widths[kdx] =
+                                (g_slides[step].p_w[kdx] * 3000u) / wmin;
+                        }
+                        g_thin_um = 6000u; /* bars under 6 mm are the faint
+                                              narrow ones */
+                        if (diff)
+                        {
+                            reverse(widths, 29);
+                        }
+                        memset(&out, 0, sizeof(out));
+                        result = run_pass(widths, 29, 90u, noise, &out);
+                        total++;
+                        if ((BC_VALID == result) && ('Z' == out.chr))
+                        {
+                            good++;
+                        }
+                        else if (BC_VALID == result)
+                        {
+                            wrong++;
+                        }
+                        else
+                        {
+                            printf(
+                                "  Z slide %d dir %d noise %d: result %d, %u "
+                                "elements, %u mm\n",
+                                g_slides[step].slide, diff, noise,
+                                (int32_t)result, (uint32_t)out.elements,
+                                (uint32_t)(out.length_um / 1000u));
+                        }
                     }
                 }
             }
@@ -1260,9 +1262,10 @@ static void test_best (void)
                     uint16_t n_elems =
                         make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths);
                     uint16_t elem;
-                    uint16_t mid;
+                    uint16_t mid = 0u;
                     char     chr;
                     bool     b_rev;
+                    bool     b_case = true; /* this position fits the kind */
 
                     for (elem = 0u; elem < n_elems; elem++)
                     {
@@ -1278,18 +1281,25 @@ static void test_best (void)
                     {
                         if ((at_idx % 2u) != 0u)
                         {
-                            continue;
+                            b_case = false;
                         } /* a speck in a bar */
-                        mid = split_at(widths, n_elems, at_idx, 1000u, accel);
+                        else
+                        {
+                            mid =
+                                split_at(widths, n_elems, at_idx, 1000u, accel);
+                        }
                     }
                     else if (1 == kind)
                     {
                         if ((at_idx > 26u)
                             || !thin_triplet(widths, at_idx, 3000u))
                         {
-                            continue;
+                            b_case = false;
                         }
-                        mid = merge_at(widths, n_elems, at_idx, accel);
+                        else
+                        {
+                            mid = merge_at(widths, n_elems, at_idx, accel);
+                        }
                     }
                     else if (2 == kind)
                     {
@@ -1302,27 +1312,39 @@ static void test_best (void)
                             || (((setpoint + 2u) >= at_idx)
                                 && (setpoint <= (at_idx + 2u))))
                         {
-                            continue;
+                            b_case = false;
                         }
-                        mid = merge_at(widths, n_elems, at_idx, buf);
-                        mid = split_at(buf, mid,
-                                       (setpoint < at_idx)
-                                           ? setpoint
-                                           : (uint16_t)(setpoint - 2u),
-                                       1000u, accel);
+                        else
+                        {
+                            mid = merge_at(widths, n_elems, at_idx, buf);
+                            mid = split_at(buf, mid,
+                                           (setpoint < at_idx)
+                                               ? setpoint
+                                               : (uint16_t)(setpoint - 2u),
+                                           1000u, accel);
+                        }
                     }
                     else
                     {
                         if (((at_idx % 2u) != 0u) || (at_idx < 2u))
                         {
-                            continue;
+                            b_case = false;
                         } /* first bar lost, speck in a bar */
-                        mid = split_at(&widths[2], (uint16_t)(n_elems - 2u),
-                                       (uint16_t)(at_idx - 2u), 1000u, accel);
+                        else
+                        {
+                            mid =
+                                split_at(&widths[2], (uint16_t)(n_elems - 2u),
+                                         (uint16_t)(at_idx - 2u), 1000u, accel);
+                        }
                     }
-                    ktotal++;
-                    if (CODE39_OK
-                        == code39_decode_one_best(accel, mid, &chr, &b_rev))
+                    if (b_case)
+                    {
+                        ktotal++;
+                    }
+                    if (b_case
+                        && (CODE39_OK
+                            == code39_decode_one_best(accel, mid, &chr,
+                                                      &b_rev)))
                     {
                         if (chr == g_data_chars[cnt])
                         {
@@ -1390,7 +1412,7 @@ static void test_best (void)
                 uint32_t buf[60];
                 uint16_t n_elems =
                     make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths);
-                uint16_t mid;
+                uint16_t mid = 0u;
                 uint16_t proj;
                 uint16_t elem;
                 char     chr;

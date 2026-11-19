@@ -232,257 +232,267 @@ EXPORT void line_task (INT stacd, void * p_exinf)
             snap.flags = (uint8_t)((snap.flags & (uint8_t)~LINE_FLAG_HW_OK)
                                    | (b_hw_ok ? LINE_FLAG_HW_OK : 0u));
             line_put_snap(&snap);
-            continue;
-        }
-        timing_pin_toggle();
-        if ((last_seq != 0u) && ((seq - last_seq) > 1u))
-        {
-            snap.missed_blocks += (seq - last_seq) - 1u;
-        }
-        last_seq = seq;
-        snap.blocks++;
-
-        motion_get_odom(&odom);
-        mission_get_snap(&mission);
-
-        /* ---- 2. calibration (360 deg spin) -------------------------- */
-        if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
-        {
-            uint32_t cross_left  = 0u;
-            uint32_t cross_right = 0u;
-
-            if (!b_cal_active)
-            {
-                line_cal_start(&g_cal);
-                line_slip_start(&g_slip, odom.heading_cdeg);
-                b_cal_active = true;
-            }
-            for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
-            {
-                line_cal_sample(&g_cal, &block[idx * LINE_CH_COUNT]);
-                cross_left += block[(idx * LINE_CH_COUNT) + LINE_CH_L];
-                cross_right += block[(idx * LINE_CH_COUNT) + LINE_CH_R];
-            }
-            line_slip_sample(&g_slip, odom.heading_cdeg,
-                             (uint16_t)(cross_left / LINE_SAMPLES_PER_BLOCK),
-                             (uint16_t)(cross_right / LINE_SAMPLES_PER_BLOCK));
-        }
-        else if (b_cal_active
-                 && ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase))
-        {
-            bool const b_ok = line_cal_finish(&g_cal);
-            uint8_t    chan;
-
-            /* raw levels seen during the spin, for S3-M01 / A7 on the laptop */
-            for (chan = 0u; chan < LINE_CH_COUNT; chan++)
-            {
-                (void)comms_telem_post(
-                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                    (uint16_t)(LINE_LOG_CAL_LEVELS + chan),
-                    (int32_t)(((uint32_t)g_cal.max[chan] << 16)
-                              | g_cal.min[chan]));
-            }
-            /* turn slip for the bypass turns (3 Nov) */
-            {
-                uint32_t diag = 0u;
-
-                snap.turn_gain_pm = line_slip_gain(&g_slip, &g_cal, &diag);
-                (void)comms_telem_post(
-                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                    LINE_LOG_TURN_GAIN, (int32_t)snap.turn_gain_pm);
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_LINE,
-                                       LINE_LOG_SLIP_DIAG, (int32_t)diag);
-            }
-            b_cal_active      = false;
-            snap.contrast_x10 = g_cal.contrast_x10;
-            line_track_init(&g_trk);
-            bc_init(&g_bc);
-            (void)mission_post((uint8_t)MISSION_EV_CAL_DONE,
-                               (uint8_t)APP_SRC_LINE, (uint16_t)APP_SRC_LINE,
-                               b_ok ? 1 : 0);
-        }
-        else if ((uint8_t)MISSION_CAL_PH_NONE == mission.cal_phase)
-        {
-            b_cal_active = false; /* calibration aborted */
         }
         else
         {
-            /* STILL phase: nothing for the IR sensors */
-        }
-
-        /* ---- 3. barcode region (per sample) ------------------------- */
-        step_um = bc_step_um(&odom);
-        for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
-        {
-            uint16_t const * p_s = &block[idx * LINE_CH_COUNT];
-            bc_out_t         out;
-            bc_result_t      result;
-            bool             b_was_capturing;
-            uint32_t         t0_us;
-
-            sum[LINE_CH_L] += p_s[LINE_CH_L];
-            sum[LINE_CH_R] += p_s[LINE_CH_R];
-            sum[LINE_CH_BC] += p_s[LINE_CH_BC];
-            if (!g_cal.b_valid || b_cal_active)
+            timing_pin_toggle();
+            if ((last_seq != 0u) && ((seq - last_seq) > 1u))
             {
-                continue;
+                snap.missed_blocks += (seq - last_seq) - 1u;
             }
-            b_was_capturing = ((uint8_t)LINE_BC_CAPTURING == g_bc.state);
-            t0_us           = b_was_capturing ? (uint32_t)app_time_us() : 0u;
-            result          = bc_sample(
-                &g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]),
-                step_um, &out);
-            if (b_was_capturing
-                && ((BC_VALID == result) || (BC_REJECT == result)))
+            last_seq = seq;
+            snap.blocks++;
+
+            motion_get_odom(&odom);
+            mission_get_snap(&mission);
+
+            /* ---- 2. calibration (360 deg spin) -------------------------- */
+            if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
             {
-                (void)comms_telem_post(
-                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                    LINE_LOG_BC_DECODE_US,
-                    (int32_t)((uint32_t)app_time_us() - t0_us));
+                uint32_t cross_left  = 0u;
+                uint32_t cross_right = 0u;
+
+                if (!b_cal_active)
+                {
+                    line_cal_start(&g_cal);
+                    line_slip_start(&g_slip, odom.heading_cdeg);
+                    b_cal_active = true;
+                }
+                for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
+                {
+                    line_cal_sample(&g_cal, &block[idx * LINE_CH_COUNT]);
+                    cross_left += block[(idx * LINE_CH_COUNT) + LINE_CH_L];
+                    cross_right += block[(idx * LINE_CH_COUNT) + LINE_CH_R];
+                }
+                line_slip_sample(
+                    &g_slip, odom.heading_cdeg,
+                    (uint16_t)(cross_left / LINE_SAMPLES_PER_BLOCK),
+                    (uint16_t)(cross_right / LINE_SAMPLES_PER_BLOCK));
             }
-            if (BC_VALID == result)
+            else if (b_cal_active
+                     && ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase))
             {
-                snap.barcode_ok++;
-                snap.last_barcode = out.chr;
-                (void)mission_post((uint8_t)MISSION_EV_BARCODE,
+                bool const b_ok = line_cal_finish(&g_cal);
+                uint8_t    chan;
+
+                /* raw levels seen during the spin, for S3-M01 / A7 on the
+                 * laptop */
+                for (chan = 0u; chan < LINE_CH_COUNT; chan++)
+                {
+                    (void)comms_telem_post(
+                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        (uint16_t)(LINE_LOG_CAL_LEVELS + chan),
+                        (int32_t)(((uint32_t)g_cal.max[chan] << 16)
+                                  | g_cal.min[chan]));
+                }
+                /* turn slip for the bypass turns (3 Nov) */
+                {
+                    uint32_t diag = 0u;
+
+                    snap.turn_gain_pm = line_slip_gain(&g_slip, &g_cal, &diag);
+                    (void)comms_telem_post(
+                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        LINE_LOG_TURN_GAIN, (int32_t)snap.turn_gain_pm);
+                    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                           (uint8_t)APP_SRC_LINE,
+                                           LINE_LOG_SLIP_DIAG, (int32_t)diag);
+                }
+                b_cal_active      = false;
+                snap.contrast_x10 = g_cal.contrast_x10;
+                line_track_init(&g_trk);
+                bc_init(&g_bc);
+                (void)mission_post((uint8_t)MISSION_EV_CAL_DONE,
                                    (uint8_t)APP_SRC_LINE,
-                                   out.b_reversed ? 1u : 0u, (int32_t)out.chr);
-                bc_levels_log(&g_bc);
+                                   (uint16_t)APP_SRC_LINE, b_ok ? 1 : 0);
             }
-            else if (BC_REJECT == result)
+            else if ((uint8_t)MISSION_CAL_PH_NONE == mission.cal_phase)
             {
-                /* BARCODE_ERR: telemetry only, never a command (FR3) */
-                snap.barcode_err++;
-                snap.last_reject = out.reason;
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_LINE,
-                                       LINE_LOG_BC_REJECT, (int32_t)out.reason);
-                bc_reject_detail(&g_bc);
-                bc_levels_log(&g_bc);
-                bc_widths_log(&g_bc);
-            }
-            else if (b_was_capturing && ((uint8_t)LINE_BC_ARMED == g_bc.state)
-                     && (g_bc.n_elems >= 2u))
-            {
-                /* dropped silently by the decoder (< 9 elements): say so */
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHORT,
-                                       (int32_t)g_bc.n_elems);
-                bc_reject_detail(&g_bc);
-                bc_levels_log(&g_bc);
+                b_cal_active = false; /* calibration aborted */
             }
             else
             {
-                /* nothing yet */
+                /* STILL phase: nothing for the IR sensors */
             }
-        }
 
-        /* ---- 4. line region (per block) ----------------------------- */
-        for (idx = 0u; idx < LINE_CH_COUNT; idx++)
-        {
-            mean[idx] = (uint16_t)(sum[idx] / LINE_SAMPLES_PER_BLOCK);
-        }
-        snap.raw_l  = line_cal_norm(&g_cal, LINE_CH_L, mean[LINE_CH_L]);
-        snap.raw_r  = line_cal_norm(&g_cal, LINE_CH_R, mean[LINE_CH_R]);
-        snap.raw_bc = line_cal_norm(&g_cal, LINE_CH_BC, mean[LINE_CH_BC]);
-        if (g_cal.b_valid && !b_cal_active)
-        {
-            line_trk_cfg_t cfg;
-
-            cfg.junction_um = (uint32_t)mission.junction_mm * 1000u;
-            cfg.lost_um     = (uint32_t)mission.lost_mm * 1000u;
-            cfg.cruise_mm_s = app_min_i32((int32_t)mission.cruise_mm_s,
-                                          (int32_t)mission.speed_cap_mm_s);
-            events = line_track_step(&g_trk, &cfg, snap.raw_l, snap.raw_r,
-                                     (uint32_t)app_abs_i32(odom.v_mm_s) * 10u);
-            if ((events & LINE_TRK_EV_JUNCTION) != 0u)
+            /* ---- 3. barcode region (per sample) ------------------------- */
+            step_um = bc_step_um(&odom);
+            for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
             {
-                (void)mission_post((uint8_t)MISSION_EV_JUNCTION,
-                                   (uint8_t)APP_SRC_LINE, 0u, 0);
-            }
-            if ((events & LINE_TRK_EV_LOST) != 0u)
-            {
-                (void)mission_post((uint8_t)MISSION_EV_LINE_LOST,
-                                   (uint8_t)APP_SRC_LINE, 0u, 0);
-            }
-            if ((events & LINE_TRK_EV_FOUND) != 0u)
-            {
-                (void)mission_post((uint8_t)MISSION_EV_LINE_FOUND,
-                                   (uint8_t)APP_SRC_LINE, 0u, 0);
-            }
-        }
+                uint16_t const * p_s = &block[idx * LINE_CH_COUNT];
+                bc_out_t         out;
+                bc_result_t      result;
+                bool             b_was_capturing;
+                uint32_t         t0_us;
 
-        /* ---- 4b. no floor: lifted (14 Nov, see LINE_NOFLOOR_*) ------- */
-        /* Published in the snapshot (LINE_SENS_NO_FLOOR); ImuTask undoes the
-           humps measured in the air and then sets SAFETY_FLT_LIFT. */
-        if (g_cal.b_valid && !b_cal_active && (snap.raw_l >= LINE_NOFLOOR_NORM)
-            && (snap.raw_r >= LINE_NOFLOOR_NORM)
-            && (snap.raw_bc >= LINE_NOFLOOR_NORM))
-        {
-            b_all_black = true;
-            nofloor_um += (uint32_t)app_abs_i32(odom.v_mm_s)
-                          * 10u; /* um per 10 ms block */
-            if (!b_no_floor && (nofloor_um >= LINE_NOFLOOR_UM))
-            {
-                b_no_floor = true;
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_LINE, LINE_LOG_NO_FLOOR,
-                                       (int32_t)(((uint32_t)snap.raw_l << 20)
-                                                 | ((uint32_t)snap.raw_r << 10)
-                                                 | (uint32_t)snap.raw_bc));
+                sum[LINE_CH_L] += p_s[LINE_CH_L];
+                sum[LINE_CH_R] += p_s[LINE_CH_R];
+                sum[LINE_CH_BC] += p_s[LINE_CH_BC];
+                if (g_cal.b_valid && !b_cal_active)
+                {
+                    b_was_capturing =
+                        ((uint8_t)LINE_BC_CAPTURING == g_bc.state);
+                    t0_us  = b_was_capturing ? (uint32_t)app_time_us() : 0u;
+                    result = bc_sample(
+                        &g_bc,
+                        line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]),
+                        step_um, &out);
+                    if (b_was_capturing
+                        && ((BC_VALID == result) || (BC_REJECT == result)))
+                    {
+                        (void)comms_telem_post(
+                            (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                            LINE_LOG_BC_DECODE_US,
+                            (int32_t)((uint32_t)app_time_us() - t0_us));
+                    }
+                    if (BC_VALID == result)
+                    {
+                        snap.barcode_ok++;
+                        snap.last_barcode = out.chr;
+                        (void)mission_post(
+                            (uint8_t)MISSION_EV_BARCODE, (uint8_t)APP_SRC_LINE,
+                            out.b_reversed ? 1u : 0u, (int32_t)out.chr);
+                        bc_levels_log(&g_bc);
+                    }
+                    else if (BC_REJECT == result)
+                    {
+                        /* BARCODE_ERR: telemetry only, never a command (FR3) */
+                        snap.barcode_err++;
+                        snap.last_reject = out.reason;
+                        (void)comms_telem_post(
+                            (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                            LINE_LOG_BC_REJECT, (int32_t)out.reason);
+                        bc_reject_detail(&g_bc);
+                        bc_levels_log(&g_bc);
+                        bc_widths_log(&g_bc);
+                    }
+                    else if (b_was_capturing
+                             && ((uint8_t)LINE_BC_ARMED == g_bc.state)
+                             && (g_bc.n_elems >= 2u))
+                    {
+                        /* dropped silently by the decoder (< 9 elements): say
+                         * so */
+                        (void)comms_telem_post(
+                            (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                            LINE_LOG_BC_SHORT, (int32_t)g_bc.n_elems);
+                        bc_reject_detail(&g_bc);
+                        bc_levels_log(&g_bc);
+                    }
+                    else
+                    {
+                        /* nothing yet */
+                    }
+                }
             }
-        }
-        else
-        {
-            b_all_black = false;
-            b_no_floor  = false;
-            nofloor_um  = 0u;
-        }
 
-        /* ---- 5. steering command ------------------------------------ */
-        if (((uint8_t)MOTION_SRC_LINE == odom.auth)
-            && ((uint8_t)MISSION_ST_LINE_FOLLOW == mission.state)
-            && g_cal.b_valid)
-        {
-            int32_t omega = g_trk.omega;
-
-            /* 7 Nov reading mode: steady steering while a code is read, so
-               the side barcode IR crosses the bars on a straight path; not
-               on curves (the line well off centre) */
-            if (((uint8_t)LINE_BC_CAPTURING == g_bc.state)
-                && (app_abs_i32(g_trk.err) <= LINE_BC_HOLD_ERR))
+            /* ---- 4. line region (per block) ----------------------------- */
+            for (idx = 0u; idx < LINE_CH_COUNT; idx++)
             {
-                omega =
-                    app_clamp_i32(omega, -LINE_BC_OMEGA_MAX, LINE_BC_OMEGA_MAX);
+                mean[idx] = (uint16_t)(sum[idx] / LINE_SAMPLES_PER_BLOCK);
             }
-            drive_seq = motion_seq_next(drive_seq);
-            (void)motion_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
-                               (int16_t)g_trk.v_mm_s, (int16_t)omega);
-        }
+            snap.raw_l  = line_cal_norm(&g_cal, LINE_CH_L, mean[LINE_CH_L]);
+            snap.raw_r  = line_cal_norm(&g_cal, LINE_CH_R, mean[LINE_CH_R]);
+            snap.raw_bc = line_cal_norm(&g_cal, LINE_CH_BC, mean[LINE_CH_BC]);
+            if (g_cal.b_valid && !b_cal_active)
+            {
+                line_trk_cfg_t cfg;
 
-        /* ---- 6. snapshot -------------------------------------------- */
-        snap.t_ms         = (uint32_t)app_time_ms();
-        snap.err          = (int16_t)g_trk.err;
-        snap.omega_mrad_s = (int16_t)g_trk.omega;
-        snap.bc_state     = g_bc.state;
-        snap.sens         = (uint8_t)((g_trk.b_white_l ? 0u : LINE_SENS_L)
-                                      | (g_trk.b_white_r ? 0u : LINE_SENS_R)
-                                      | (b_all_black ? LINE_SENS_ALL_BLACK : 0u)
-                                      | (b_no_floor ? LINE_SENS_NO_FLOOR : 0u));
-        snap.flags =
-            (uint8_t)((g_cal.b_valid ? LINE_FLAG_CALIBRATED : 0u)
-                      | (g_trk.b_lost ? LINE_FLAG_LOST : 0u)
-                      | (g_trk.b_junction ? LINE_FLAG_JUNCTION : 0u)
-                      | (((uint8_t)MOTION_SRC_LINE == odom.auth)
-                             ? LINE_FLAG_HAS_AUTH
-                             : 0u)
-                      | ((!g_trk.b_white_l || !g_trk.b_white_r)
-                             ? LINE_FLAG_ON_LINE
-                             : 0u)
-                      | LINE_FLAG_HW_OK
-                      | ((g_trk.both_white_um > 0u) ? LINE_FLAG_GAP : 0u));
-        line_put_snap(&snap);
+                cfg.junction_um = (uint32_t)mission.junction_mm * 1000u;
+                cfg.lost_um     = (uint32_t)mission.lost_mm * 1000u;
+                cfg.cruise_mm_s = app_min_i32((int32_t)mission.cruise_mm_s,
+                                              (int32_t)mission.speed_cap_mm_s);
+                events =
+                    line_track_step(&g_trk, &cfg, snap.raw_l, snap.raw_r,
+                                    (uint32_t)app_abs_i32(odom.v_mm_s) * 10u);
+                if ((events & LINE_TRK_EV_JUNCTION) != 0u)
+                {
+                    (void)mission_post((uint8_t)MISSION_EV_JUNCTION,
+                                       (uint8_t)APP_SRC_LINE, 0u, 0);
+                }
+                if ((events & LINE_TRK_EV_LOST) != 0u)
+                {
+                    (void)mission_post((uint8_t)MISSION_EV_LINE_LOST,
+                                       (uint8_t)APP_SRC_LINE, 0u, 0);
+                }
+                if ((events & LINE_TRK_EV_FOUND) != 0u)
+                {
+                    (void)mission_post((uint8_t)MISSION_EV_LINE_FOUND,
+                                       (uint8_t)APP_SRC_LINE, 0u, 0);
+                }
+            }
+
+            /* ---- 4b. no floor: lifted (14 Nov, see LINE_NOFLOOR_*) ------- */
+            /* Published in the snapshot (LINE_SENS_NO_FLOOR); ImuTask undoes
+               the humps measured in the air and then sets SAFETY_FLT_LIFT. */
+            if (g_cal.b_valid && !b_cal_active
+                && (snap.raw_l >= LINE_NOFLOOR_NORM)
+                && (snap.raw_r >= LINE_NOFLOOR_NORM)
+                && (snap.raw_bc >= LINE_NOFLOOR_NORM))
+            {
+                b_all_black = true;
+                nofloor_um += (uint32_t)app_abs_i32(odom.v_mm_s)
+                              * 10u; /* um per 10 ms block */
+                if (!b_no_floor && (nofloor_um >= LINE_NOFLOOR_UM))
+                {
+                    b_no_floor = true;
+                    (void)comms_telem_post(
+                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        LINE_LOG_NO_FLOOR,
+                        (int32_t)(((uint32_t)snap.raw_l << 20)
+                                  | ((uint32_t)snap.raw_r << 10)
+                                  | (uint32_t)snap.raw_bc));
+                }
+            }
+            else
+            {
+                b_all_black = false;
+                b_no_floor  = false;
+                nofloor_um  = 0u;
+            }
+
+            /* ---- 5. steering command ------------------------------------ */
+            if (((uint8_t)MOTION_SRC_LINE == odom.auth)
+                && ((uint8_t)MISSION_ST_LINE_FOLLOW == mission.state)
+                && g_cal.b_valid)
+            {
+                int32_t omega = g_trk.omega;
+
+                /* 7 Nov reading mode: steady steering while a code is read, so
+                   the side barcode IR crosses the bars on a straight path; not
+                   on curves (the line well off centre) */
+                if (((uint8_t)LINE_BC_CAPTURING == g_bc.state)
+                    && (app_abs_i32(g_trk.err) <= LINE_BC_HOLD_ERR))
+                {
+                    omega = app_clamp_i32(omega, -LINE_BC_OMEGA_MAX,
+                                          LINE_BC_OMEGA_MAX);
+                }
+                drive_seq = motion_seq_next(drive_seq);
+                (void)motion_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
+                                   (int16_t)g_trk.v_mm_s, (int16_t)omega);
+            }
+
+            /* ---- 6. snapshot -------------------------------------------- */
+            snap.t_ms         = (uint32_t)app_time_ms();
+            snap.err          = (int16_t)g_trk.err;
+            snap.omega_mrad_s = (int16_t)g_trk.omega;
+            snap.bc_state     = g_bc.state;
+            snap.sens = (uint8_t)((g_trk.b_white_l ? 0u : LINE_SENS_L)
+                                  | (g_trk.b_white_r ? 0u : LINE_SENS_R)
+                                  | (b_all_black ? LINE_SENS_ALL_BLACK : 0u)
+                                  | (b_no_floor ? LINE_SENS_NO_FLOOR : 0u));
+            snap.flags =
+                (uint8_t)((g_cal.b_valid ? LINE_FLAG_CALIBRATED : 0u)
+                          | (g_trk.b_lost ? LINE_FLAG_LOST : 0u)
+                          | (g_trk.b_junction ? LINE_FLAG_JUNCTION : 0u)
+                          | (((uint8_t)MOTION_SRC_LINE == odom.auth)
+                                 ? LINE_FLAG_HAS_AUTH
+                                 : 0u)
+                          | ((!g_trk.b_white_l || !g_trk.b_white_r)
+                                 ? LINE_FLAG_ON_LINE
+                                 : 0u)
+                          | LINE_FLAG_HW_OK
+                          | ((g_trk.both_white_um > 0u) ? LINE_FLAG_GAP : 0u));
+            line_put_snap(&snap);
+        }
     }
 }
 

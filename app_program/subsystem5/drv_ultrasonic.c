@@ -87,7 +87,7 @@ EXPORT void drv_us_trigger (void)
     UW t_start;
 
 #if !US_PINS_FREE
-    (void)t0;
+    (void)t_start;
     return;
 #endif
     gb_rise = false;

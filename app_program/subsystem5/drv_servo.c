@@ -56,7 +56,7 @@ EXPORT void drv_servo_set_deg (int32_t angle_deg)
         angle = 180;
     }
 #if !OBST_SERVO_LEFT_IS_HIGH
-    a = 180 - a;
+    angle = 180 - angle;
 #endif
     pulse_us = OBST_SERVO_MIN_US
                + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);

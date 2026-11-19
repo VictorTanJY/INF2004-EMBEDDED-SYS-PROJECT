@@ -230,6 +230,7 @@ void mqtt_utk_app_poll (void)
     comms_rec_t rec;
     uint8_t     seq;
     uint32_t    count;
+    bool        b_sent;
 
     if (mbf <= 0)
     {
@@ -260,12 +261,11 @@ void mqtt_utk_app_poll (void)
             break;
         }
         g_event_seq++;
-        if (gb_online && (0u == g_ring.count)
-            && comms_publish_event(&rec, g_event_seq))
-        {
-            continue;
-        }
-        if (comms_ring_push(&g_ring, &rec, g_event_seq))
+        /* Sent at once when online and nothing older is waiting; kept in the
+           offline ring otherwise. */
+        b_sent = gb_online && (0u == g_ring.count)
+                 && comms_publish_event(&rec, g_event_seq);
+        if (!b_sent && comms_ring_push(&g_ring, &rec, g_event_seq))
         {
             g_ring_lost++;
         }

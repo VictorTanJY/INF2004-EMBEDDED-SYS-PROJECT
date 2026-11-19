@@ -56,28 +56,30 @@ bool line_cal_finish (line_cal_t * p_cal)
                the spin.  min/max are still kept for LOG 34.            */
             white[chan] = (uint16_t)LINE_BC_WHITE_RAW;
             black[chan] = (uint16_t)LINE_BC_BLACK_RAW;
-            continue;
-        }
-        if ((low > high) || ((high - low) < LINE_CAL_MIN_SPAN))
-        {
-            b_ok     = false; /* never saw both black and white */
-            contrast = 0u;
         }
         else
         {
-            /* AO ratio of the two levels, x 10 (3:1 = 30) */
-            contrast = (0u == low) ? 999u : ((high * 10u) / low);
-        }
+            if ((low > high) || ((high - low) < LINE_CAL_MIN_SPAN))
+            {
+                b_ok     = false; /* never saw both black and white */
+                contrast = 0u;
+            }
+            else
+            {
+                /* AO ratio of the two levels, x 10 (3:1 = 30) */
+                contrast = (0u == low) ? 999u : ((high * 10u) / low);
+            }
 #if LINE_BLACK_IS_HIGH
-        white[chan] = (uint16_t)low;
-        black[chan] = (uint16_t)high;
+            white[chan] = (uint16_t)low;
+            black[chan] = (uint16_t)high;
 #else
-        white[ch] = (uint16_t)hi;
-        black[ch] = (uint16_t)lo;
+            white[chan] = (uint16_t)high;
+            black[chan] = (uint16_t)low;
 #endif
-        if (contrast < worst)
-        {
-            worst = (uint16_t)contrast;
+            if (contrast < worst)
+            {
+                worst = (uint16_t)contrast;
+            }
         }
     }
     if (worst < LINE_CONTRAST_MIN_X10)

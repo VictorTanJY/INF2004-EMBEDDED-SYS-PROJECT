@@ -503,7 +503,7 @@ static void plan (uint32_t now_ms, motion_odom_t const * p_odom)
 #if OBST_WIDTH_PROBE
         /* 7 Nov: measure the edges by side-stepping past them */
         goto_state((uint8_t)OBST_ST_WIDTH_PROBE);
-        g_o.pb_ph         = PB_FACE;
+        g_o.probe_ph      = PB_FACE;
         g_o.b_pb_moved    = false;
         g_o.sw_n          = 0u;
         g_o.edge_h0       = p_odom->heading_cdeg;
