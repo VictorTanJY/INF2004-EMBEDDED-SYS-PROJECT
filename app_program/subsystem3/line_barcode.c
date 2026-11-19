@@ -34,7 +34,7 @@ static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
 
 void line_barcode_init (line_barcode_capture_t * p_bc)
 {
-    p_bc->state       = (uint8_t)LINE_BC_WAIT_QUIET;
+    p_bc->state       = LINE_BC_WAIT_QUIET;
     p_bc->b_black     = false;
     p_bc->run_um      = 0u;
     p_bc->white_um    = 0u;
@@ -56,7 +56,7 @@ void line_barcode_init (line_barcode_capture_t * p_bc)
 
 static void start_cooldown (line_barcode_capture_t * p_bc)
 {
-    p_bc->state       = (uint8_t)LINE_BC_COOLDOWN;
+    p_bc->state       = LINE_BC_COOLDOWN;
     p_bc->cooldown_um = 0u;
 }
 
@@ -458,7 +458,7 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
     {
         /* A crossing line or a speck: not a barcode, not an error.  The
            white that ended it already counts as the next quiet zone. */
-        p_bc->state = (uint8_t)LINE_BC_ARMED;
+        p_bc->state = LINE_BC_ARMED;
         return BC_NONE;
     }
     start_cooldown(p_bc);
@@ -527,7 +527,7 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
             p_bc->white_um = p_bc->b_black ? 0u : (p_bc->white_um + step_um);
             if (p_bc->white_um >= BC_QUIET_UM)
             {
-                p_bc->state    = (uint8_t)LINE_BC_ARMED;
+                p_bc->state    = LINE_BC_ARMED;
                 p_bc->white_um = 0u;
                 pre_reset(p_bc);
                 p_bc->q_lo  = 0u;
@@ -557,7 +557,7 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
             {
                 uint16_t kdx;
 
-                p_bc->state       = (uint8_t)LINE_BC_CAPTURING;
+                p_bc->state       = LINE_BC_CAPTURING;
                 p_bc->n_elems     = 0u;
                 p_bc->run_um      = step_um;
                 p_bc->total_um    = step_um;
@@ -652,7 +652,7 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
             p_bc->cooldown_um += step_um;
             if (p_bc->cooldown_um >= BC_COOLDOWN_UM)
             {
-                p_bc->state    = (uint8_t)LINE_BC_WAIT_QUIET;
+                p_bc->state    = LINE_BC_WAIT_QUIET;
                 p_bc->white_um = 0u;
             }
         break;

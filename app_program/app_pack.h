@@ -143,16 +143,14 @@ uint8_t app_pack_sym_index(char chr);
 char    app_pack_sym_char(uint8_t index);
 
 /* ---- Records: table-driven packing of a struct into words ------------ */
-typedef enum
-{
-    PK_U  = 0, /* unsigned, saturates at the field maximum          */
-    PK_S  = 1, /* signed, offset-binary, saturates at both ends     */
-    PK_W  = 2, /* counter / time: low bits, wraps (32 = whole)      */
-    PK_UN = 3, /* unsigned with a "none" value: the C type's maximum
-              (0xFF, 0xFFFF, ...) <-> the field's all-ones;
-              other values saturate one below it              */
-    PK_SYM = 4 /* char: Code 39 symbol index, 6 bits                */
-} app_pack_kind_t;
+typedef uint8_t app_pack_kind_t; /* one of the constants below */
+#define PK_U 0u                  /* unsigned, saturates at the field maximum */
+#define PK_S 1u /* signed, offset-binary, saturates at both ends */
+#define PK_W 2u /* counter / time: low bits, wraps (32 = whole) */
+#define PK_UN                                                               \
+    3u /* unsigned with a "none" value: the C type's maximum (0xFF, 0xFFFF, \
+          ...) <-> the field's all-ones; other values saturate one below it */
+#define PK_SYM 4u /* char: Code 39 symbol index, 6 bits */
 
 typedef struct
 {

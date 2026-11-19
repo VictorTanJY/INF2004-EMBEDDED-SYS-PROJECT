@@ -50,13 +50,11 @@
  *  records carry packed values).  CommsTask rebuilds the full time from
  *  its own clock, as a record is never older than a few seconds.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    COMMS_KIND_EVENT = 1, /* code = mission_types_ev_t, data = its data   */
-    COMMS_KIND_FAULT = 2, /* code = 0, data = SAFETY_FLT_* bits     */
-    COMMS_KIND_STATE = 3, /* code = new mission_types_state_t             */
-    COMMS_KIND_LOG   = 4  /* code, data: free use by the sender     */
-} comms_proto_kind_t;
+typedef uint8_t comms_proto_kind_t; /* one of the constants below */
+#define COMMS_KIND_EVENT 1u /* code = mission_types_ev_t, data = its data */
+#define COMMS_KIND_FAULT 2u /* code = 0, data = SAFETY_FLT_* bits */
+#define COMMS_KIND_STATE 3u /* code = new mission_types_state_t */
+#define COMMS_KIND_LOG   4u /* code, data: free use by the sender */
 
 #define COMMS_REC_KIND_SHIFT 0u
 #define COMMS_REC_KIND_BITS  2u
@@ -94,14 +92,12 @@ void comms_proto_rec_unpack(comms_proto_rec_t const * p_rec, uint32_t now_ms,
 #define COMMS_FRAME_VERSION 1u
 #define COMMS_FRAME_MAX     32u /* largest frame: telemetry, 27 B */
 
-typedef enum
-{
-    COMMS_FT_TELEMETRY = 1,
-    COMMS_FT_EVENT     = 2,
-    COMMS_FT_STATUS    = 3,
-    COMMS_FT_ACK       = 4,
-    COMMS_FT_CMD       = 5
-} comms_proto_frame_type_t;
+typedef uint8_t comms_proto_frame_type_t; /* one of the constants below */
+#define COMMS_FT_TELEMETRY 1u
+#define COMMS_FT_EVENT     2u
+#define COMMS_FT_STATUS    3u
+#define COMMS_FT_ACK       4u
+#define COMMS_FT_CMD       5u
 
 /* Last Will on the status topic: the status header byte alone (0x23). */
 #define COMMS_WILL_MSG "\x23"
@@ -158,16 +154,16 @@ uint16_t comms_proto_build_status(uint32_t uptime_s, int32_t rssi,
 /* ---------------------------------------------------------------------
  *  Remote commands.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    COMMS_CMD_NONE  = 0,
-    COMMS_CMD_START = 1,
-    COMMS_CMD_STOP  = 2, /* 3 unused: the remote E-stop was removed (14 Nov) */
-    COMMS_CMD_RESET = 4,
-    COMMS_CMD_SET   = 5,
-    COMMS_CMD_MAP =
-        6 /* value = 4 packed chars: left, right, straight, U-turn */
-} comms_proto_cmd_code_t;
+typedef uint8_t comms_proto_cmd_code_t; /* one of the constants below */
+#define COMMS_CMD_NONE  0u
+#define COMMS_CMD_START 1u
+#define COMMS_CMD_STOP                                     \
+    2u /* 3 unused: the remote E-stop was removed (14 Nov) \
+        */
+#define COMMS_CMD_RESET 4u
+#define COMMS_CMD_SET   5u
+#define COMMS_CMD_MAP \
+    6u /* value = 4 packed chars: left, right, straight, U-turn */
 
 typedef enum
 {

@@ -104,7 +104,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
     bool                 b_fault    = false;
     uint8_t              errors     = 0u;
     uint8_t              good       = 0u;
-    uint8_t              prev_phase = (uint8_t)MISSION_CAL_PH_NONE;
+    uint8_t              prev_phase = MISSION_CAL_PH_NONE;
     bool b_tilt_sent   = false; /* SAFETY_FLT_TILT set for this tilt (14 Nov) */
     bool b_was_black   = false; /* line snapshot: all IR black last cycle     */
     bool b_was_air     = false; /* line snapshot: no floor last cycle         */
@@ -179,7 +179,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_IMU_FAULT);
 
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_FAULT,
+                (void)subsystem1_telem_post(COMMS_KIND_FAULT,
                                             (uint8_t)APP_SRC_SAFETY_IMU, 0u,
                                             (int32_t)SAFETY_FLT_IMU_FAULT);
             }
@@ -235,21 +235,21 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             /* ---- Calibration ---- */
             if (mission.cal_phase != prev_phase)
             {
-                if ((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
+                if (MISSION_CAL_PH_STILL == mission.cal_phase)
                 {
                     imu_core_cal_level_start(&g_ic);
                     still_ms = now_ms;
                 }
-                else if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
+                else if (MISSION_CAL_PH_SPIN == mission.cal_phase)
                 {
                     (void)imu_core_cal_level_finish(&g_ic);
                     imu_core_cal_mag_start(&g_ic);
                 }
-                else if ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase)
+                else if (MISSION_CAL_PH_FINISH == mission.cal_phase)
                 {
                     bool b_level;
 
-                    if ((uint8_t)MISSION_CAL_PH_STILL == prev_phase)
+                    if (MISSION_CAL_PH_STILL == prev_phase)
                     {
                         (void)imu_core_cal_level_finish(&g_ic);
                     }
@@ -261,19 +261,18 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                     b_level = ((g_ic.cal & IMU_CAL_LEVEL) != 0u);
 
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
                         IMU_LOG_LVL_N, (int32_t)g_ic.lvl_n);
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
                         IMU_LOG_LVL_SPREAD, g_ic.lvl_spread_mg);
-                    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                    (void)subsystem1_telem_post(COMMS_KIND_LOG,
                                                 (uint8_t)APP_SRC_SAFETY_IMU,
                                                 IMU_LOG_LVL_UP, g_ic.lvl_up_mg);
 
-                    (void)subsystem5_mission_post((uint8_t)MISSION_EV_CAL_DONE,
-                                                  (uint8_t)APP_SRC_SAFETY_IMU,
-                                                  (uint16_t)APP_SRC_SAFETY_IMU,
-                                                  b_level ? 1 : 0);
+                    (void)subsystem5_mission_post(
+                        MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_SAFETY_IMU,
+                        (uint16_t)APP_SRC_SAFETY_IMU, b_level ? 1 : 0);
                 }
                 else
                 {
@@ -283,7 +282,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                 prev_phase = mission.cal_phase;
             }
 
-            if (((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
+            if ((MISSION_CAL_PH_STILL == mission.cal_phase)
                 && (app_types_elapsed_ms(now_ms, still_ms)
                     >= IMU_LEVEL_SETTLE_MS))
             {
@@ -298,8 +297,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                 }
                 imu_core_cal_level_sample(&g_ic, filt);
             }
-            else if (((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
-                     && b_mag)
+            else if ((MISSION_CAL_PH_SPIN == mission.cal_phase) && b_mag)
             {
                 imu_core_cal_mag_sample(&g_ic, mag);
             }
@@ -353,14 +351,13 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 
             if ((events & IMU_EV_HUMP_START) != 0u)
             {
-                (void)subsystem5_mission_post((uint8_t)MISSION_EV_HUMP_START,
-                                              (uint8_t)APP_SRC_SAFETY_IMU, 0u,
-                                              0);
+                (void)subsystem5_mission_post(
+                    MISSION_EV_HUMP_START, (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
             }
 
             if ((events & IMU_EV_HUMP_END) != 0u)
             {
-                (void)subsystem5_mission_post((uint8_t)MISSION_EV_HUMP_END,
+                (void)subsystem5_mission_post(MISSION_EV_HUMP_END,
                                               (uint8_t)APP_SRC_SAFETY_IMU, 0u,
                                               (int32_t)g_ic.last_hump_mm);
             }
@@ -371,9 +368,8 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                are set after the snapshot below, so the run summary
                (MissionTask, core 1) reads the humps as corrected for a lift. */
             {
-                bool const b_run =
-                    (mission.state >= (uint8_t)MISSION_ST_LINE_FOLLOW)
-                    && (mission.state <= (uint8_t)MISSION_ST_LINE_SEARCH);
+                bool const b_run = (mission.state >= MISSION_ST_LINE_FOLLOW)
+                                   && (mission.state <= MISSION_ST_LINE_SEARCH);
 
                 if (b_run && g_ic.b_tilt && !b_tilt_sent)
                 {
@@ -388,13 +384,13 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             }
             if ((events & IMU_EV_LIFT) != 0u)
             {
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                (void)subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_SAFETY_IMU,
                                             IMU_LOG_LIFT, g_ic.lift_rise_mg);
             }
             if ((events & IMU_EV_RISE_MAX) != 0u)
             {
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                (void)subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_SAFETY_IMU,
                                             IMU_LOG_RISE_MAX, g_ic.rise_max_mg);
             }
@@ -402,7 +398,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             if ((events & IMU_EV_TILT_ON) != 0u)
             {
                 (void)subsystem1_telem_post(
-                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                    COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
                     IMU_LOG_TILT_ON,
                     app_types_max_i32(app_types_abs_i32(g_ic.pitch_cdeg),
                                       app_types_abs_i32(g_ic.roll_cdeg)));
@@ -410,7 +406,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 
             if ((events & IMU_EV_TILT_OFF) != 0u)
             {
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                (void)subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_SAFETY_IMU,
                                             IMU_LOG_TILT_OFF, 0);
             }
@@ -418,13 +414,13 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             if ((events & IMU_EV_MOTION) != 0u)
             {
                 (void)subsystem1_telem_post(
-                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
-                    IMU_LOG_MOTION, (int32_t)g_ic.motion);
+                    COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU, IMU_LOG_MOTION,
+                    (int32_t)g_ic.motion);
             }
 
             if ((events & IMU_EV_RAMP) != 0u)
             {
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                (void)subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_SAFETY_IMU,
                                             IMU_LOG_RAMP, 0);
             }

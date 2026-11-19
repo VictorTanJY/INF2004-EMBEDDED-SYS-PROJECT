@@ -133,15 +133,15 @@ EXPORT void subsystem4_test_run (void)
                    "LOW; latched)");
 
         /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
-        (void)subsystem5_mission_post((uint8_t)MISSION_EV_REMOTE_RESET,
+        (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
                                       (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
         for (elapsed = 0u; elapsed < 8000u; elapsed += 50u)
         {
             (void)tk_dly_tsk(50);
             subsystem5_get_mission_snap(&mission);
             if (!subsystem2_estop_latched() && (0u == subsystem4_get_latched())
-                && ((pre != (uint8_t)MISSION_ST_IDLE)
-                    || ((uint8_t)MISSION_ST_IDLE == mission.state)))
+                && ((pre != MISSION_ST_IDLE)
+                    || (MISSION_ST_IDLE == mission.state)))
             {
                 b_ok = true;
                 break;
@@ -154,7 +154,7 @@ EXPORT void subsystem4_test_run (void)
                   (INT)(subsystem2_estop_latched() ? 1 : 0),
                   (INT)subsystem4_get_latched());
         TEST_CHECK("S4-U09",
-                   b_ok && ((uint8_t)MOTION_ST_IDLE_BRAKED == odom.state)
+                   b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)
                        && (GPIO_CTRL_FUNCSEL_PWM
                            == (in_w(GPIO_CTRL(S2_PIN_MOT_L_A)) & 0x1Fu)),
                    "Reset clears the latch, PWM reconnected, mission back to "

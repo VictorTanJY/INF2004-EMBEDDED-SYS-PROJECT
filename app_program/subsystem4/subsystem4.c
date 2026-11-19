@@ -97,7 +97,7 @@ EXPORT void subsystem4_request_reset (void)
 
 EXPORT void subsystem4_heartbeat (imu_types_safety_hb_t task)
 {
-    if ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT)
+    if ((uint32_t)task < SAFETY_HB_COUNT)
     {
         g_hb[task] = (uint8_t)(g_hb[task] + 1u); /* single writer per byte */
     }
@@ -105,7 +105,7 @@ EXPORT void subsystem4_heartbeat (imu_types_safety_hb_t task)
 
 EXPORT uint32_t subsystem4_heartbeat_count (imu_types_safety_hb_t task)
 {
-    return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_hb[task] : 0u;
+    return ((uint32_t)task < SAFETY_HB_COUNT) ? g_hb[task] : 0u;
 }
 
 EXPORT void subsystem4_get_imu_snap (imu_types_snap_t * p_out)

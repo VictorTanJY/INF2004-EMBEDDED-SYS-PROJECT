@@ -42,8 +42,8 @@ EXPORT ER subsystem5_init (void)
         mission_types_snap_t      mission = {0};
         mission_types_obst_snap_t obst    = {0};
 
-        mission.state       = (uint8_t)MISSION_ST_BOOT;
-        mission.pending_nav = (uint8_t)MISSION_NAV_NONE;
+        mission.state       = MISSION_ST_BOOT;
+        mission.pending_nav = MISSION_NAV_NONE;
         obst.d_mm           = OBST_RANGE_NONE;
         mission_core_snap_pack(&mission, g_mission_snap);
         obstacle_core_snap_pack(&obst, g_obst_snap);

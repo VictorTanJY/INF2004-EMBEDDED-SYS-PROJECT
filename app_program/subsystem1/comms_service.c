@@ -35,10 +35,11 @@
 #include "../subsystem5/subsystem5.h"
 
 /* The frame fields must hold subsystem 5's enums (Change Requirement 1). */
-typedef uint8_t s1_check_states_t
-    [((uint32_t)MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
-typedef uint8_t s1_check_events_t
-    [((uint32_t)MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1 : -1];
+typedef uint8_t
+    s1_check_states_t[(MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
+typedef uint8_t
+    s1_check_events_t[(MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1
+                                                                         : -1];
 typedef uint8_t
     s1_check_src_t[(APP_SRC_OBST_MISSION < (1uL << COMMS_SRC_BITS)) ? 1 : -1];
 typedef uint8_t s1_check_rec_size_t[(8u == sizeof(comms_proto_rec_t)) ? 1 : -1];
@@ -327,9 +328,8 @@ static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
     {
         return COMMS_ERR_FULL;
     }
-    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_EVENT,
-                                (uint8_t)APP_SRC_COMMS, (uint16_t)event,
-                                p_cmd->value);
+    (void)subsystem1_telem_post(COMMS_KIND_EVENT, (uint8_t)APP_SRC_COMMS,
+                                (uint16_t)event, p_cmd->value);
     return COMMS_ERR_NONE;
 }
 
@@ -366,8 +366,7 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
         else
         {
             subsystem5_get_mission_snap(&mission);
-            err = comms_proto_check_cmd(&cmd, (uint8_t)MISSION_ST_IDLE
-                                                  == mission.state);
+            err = comms_proto_check_cmd(&cmd, MISSION_ST_IDLE == mission.state);
             if (COMMS_ERR_NONE == err)
             {
                 err = comms_proto_check_ready(

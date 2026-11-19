@@ -212,7 +212,7 @@ static void test_pack_s2 (void)
     {
         cmd.src  = 1u;
         cmd.seq  = (uint8_t)(kdx * 9);
-        cmd.cmd  = (uint8_t)MOTION_CMD_DRIVE;
+        cmd.cmd  = MOTION_CMD_DRIVE;
         cmd.arg0 = drive[kdx][0];
         cmd.arg1 = drive[kdx][1];
         motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
@@ -234,7 +234,7 @@ static void test_pack_s2 (void)
         }
     }
     CHECK("S2-H16", b_ok);
-    cmd.cmd  = (uint8_t)MOTION_CMD_SET_AUTH;
+    cmd.cmd  = MOTION_CMD_SET_AUTH;
     cmd.arg0 = 2;
     cmd.arg1 = 0;
     cmd.seq  = 31u;
@@ -242,7 +242,7 @@ static void test_pack_s2 (void)
     motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
     CHECK("S2-H16", (MOTION_CMD_SET_AUTH == unpacked.cmd)
                         && (2 == unpacked.arg0) && (31u == unpacked.seq));
-    cmd.cmd  = (uint8_t)MOTION_CMD_DRIVE;
+    cmd.cmd  = MOTION_CMD_DRIVE;
     cmd.arg0 = 600;
     cmd.arg1 = -6000;
     cmd.seq  = 33u; /* saturate, seq 5 bits */

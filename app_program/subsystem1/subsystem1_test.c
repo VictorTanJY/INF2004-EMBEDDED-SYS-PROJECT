@@ -63,7 +63,7 @@ EXPORT void subsystem1_test_run (void)
     /* S1-U01: mbf_telem exists and accepts a record without blocking. */
     TEST_CHECK("S1-U01",
                (E_OK == tk_ref_mbf(g_mbf_telem, &rmbf))
-                   && subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                   && subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_COMMS, 1u, 42),
                "mbf_telem accepts a record with TMO_POL");
 
@@ -95,7 +95,7 @@ EXPORT void subsystem1_test_run (void)
     TEST_CHECK(
         "S1-U03",
         s1_parse(g_start_7, 3u, &cmd, &err) && (7u == cmd.cmd_id)
-            && ((uint8_t)COMMS_CMD_START == cmd.cmd)
+            && (COMMS_CMD_START == cmd.cmd)
             && !s1_parse(g_set_99, 5u, &cmd, &err) && (COMMS_ERR_RANGE == err)
             && !s1_parse(g_no_id, 1u, &cmd, &err) && (COMMS_ERR_NO_ID == err),
         "binary command parser accepts valid and rejects invalid frames");

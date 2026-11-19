@@ -129,13 +129,13 @@ static void report_events (void)
         {
             case MOTION_EV_DONE:
                 (void)subsystem5_mission_post(
-                    (uint8_t)MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
+                    MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
                     (uint16_t)event.seq, (int32_t)event.src);
             break;
 
             case MOTION_EV_FAILED:
                 (void)subsystem5_mission_post(
-                    (uint8_t)MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
+                    MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
                     (uint16_t)event.seq, (int32_t)event.src);
             break;
 
@@ -145,7 +145,7 @@ static void report_events (void)
 
             case MOTION_EV_ENC_FAULT:
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_FAULT,
+                (void)subsystem1_telem_post(COMMS_KIND_FAULT,
                                             (uint8_t)APP_SRC_MOTION, 0u,
                                             (int32_t)SAFETY_FLT_ENC_FAULT);
             break;

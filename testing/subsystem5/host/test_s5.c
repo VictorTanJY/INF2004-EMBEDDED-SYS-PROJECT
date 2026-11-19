@@ -1341,7 +1341,7 @@ static void test_pack_s5 (void)
 
     for (kdx = 0u; kdx < sizeof(datas) / sizeof(datas[0]); kdx++)
     {
-        evt.type = (uint8_t)MISSION_EV_REMOTE_SET;
+        evt.type = MISSION_EV_REMOTE_SET;
         evt.src  = 5u;
         evt.arg  = (uint16_t)(kdx * 15u);
         evt.data = datas[kdx];
@@ -1353,12 +1353,12 @@ static void test_pack_s5 (void)
         }
     }
     CHECK("S5-H26", b_ok);
-    evt.type = (uint8_t)MISSION_EV_OBSTACLE;
+    evt.type = MISSION_EV_OBSTACLE;
     evt.arg  = 200u;
     evt.data = 100000; /* saturate */
     mission_core_evt_unpack(mission_core_evt_pack(&evt), &decoded);
     CHECK("S5-H26", (127u == decoded.arg) && (65535 == decoded.data));
-    evt.type = (uint8_t)MISSION_EV_REMOTE_MAP;
+    evt.type = MISSION_EV_REMOTE_MAP;
     evt.src  = 1u;
     evt.arg  = 0u;
     evt.data = (int32_t)((uint32_t)'A' | ((uint32_t)'F' << 8)
@@ -1366,8 +1366,8 @@ static void test_pack_s5 (void)
     mission_core_evt_unpack(mission_core_evt_pack(&evt), &decoded);
     CHECK("S5-H26", (MISSION_EV_REMOTE_MAP == decoded.type)
                         && (decoded.data == evt.data) && (1u == decoded.src));
-    CHECK("S5-H26", (uint32_t)MISSION_EV_COUNT <= 32u);
-    req.type  = (uint8_t)SCAN_REQ_STOP;
+    CHECK("S5-H26", MISSION_EV_COUNT <= 32u);
+    req.type  = SCAN_REQ_STOP;
     req.seq   = 37u;
     req.param = 180;
     mission_core_scan_req_unpack(mission_core_scan_req_pack(&req), &req_out);
@@ -1390,7 +1390,7 @@ static void test_pack_s5 (void)
     mission.runs           = 12u;
     mission.state          = 10u;
     mission.auth           = 2u;
-    mission.pending_nav    = (uint8_t)MISSION_NAV_NONE;
+    mission.pending_nav    = MISSION_NAV_NONE;
     mission.pending_char   = '\0';
     mission.nav_map[0]     = 'A';
     mission.nav_map[1]     = 'F';

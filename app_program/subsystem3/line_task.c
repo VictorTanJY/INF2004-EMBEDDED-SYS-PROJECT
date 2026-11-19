@@ -26,9 +26,10 @@
 #include "../subsystem4/subsystem4.h"
 #include "../subsystem5/subsystem5.h"
 
-#define LINE_WAKE_TIMEOUT_MS 30  /* still heartbeats if the DMA stops */
-#define LINE_LOG_BC_REJECT   31u /* comms_proto_rec_t code for a rejected read \
-                                  */
+#define LINE_WAKE_TIMEOUT_MS 30 /* still heartbeats if the DMA stops */
+#define LINE_LOG_BC_REJECT                            \
+    31u /* comms_proto_rec_t code for a rejected read \
+         */
 /* 32/33/34 = L/R/barcode: max << 16 | min raw */
 #define LINE_LOG_CAL_LEVELS 32u
 /* Diagnosis of a rejected barcode (2 Nov), right after LOG 31:
@@ -91,10 +92,10 @@ static void bc_reject_detail (line_barcode_capture_t const * p_bc)
         w_min = 0u;
     }
     (void)subsystem1_telem_post(
-        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHAPE,
+        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHAPE,
         (int32_t)(((uint32_t)app_types_min_i32(p_bc->n_elems, 255) << 24)
                   | (len_mm << 8) | ((uint32_t)p_bc->peak / 4u)));
-    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                 LINE_LOG_BC_WIDTHS,
                                 (int32_t)((w_min << 16) | w_max));
 }
@@ -119,7 +120,7 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
                       << (8u * (3u - jdx));
         }
     }
-    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                 LINE_LOG_BC_COUNTS, (int32_t)counts);
     for (reading = 0u; reading < BC_READINGS;
          reading += 5u) /* swing (0), adaptive 10 % (5) */
@@ -145,9 +146,8 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
                                                                         : elem))
                         << (8u * (2u - jdx));
             }
-            (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
-                                        (uint8_t)APP_SRC_LINE, LINE_LOG_BC_ELEM,
-                                        (int32_t)data);
+            (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                                        LINE_LOG_BC_ELEM, (int32_t)data);
         }
     }
 }
@@ -159,7 +159,7 @@ static void bc_levels_log (line_barcode_capture_t const * p_bc)
         (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
 
     (void)subsystem1_telem_post(
-        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_LEVELS,
+        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_LEVELS,
         (int32_t)(((uint32_t)(p_bc->pass & 7u) << 29)
                   | ((uint32_t)app_types_min_i32((int32_t)noise, 511) << 20)
                   | ((uint32_t)app_types_min_i32(p_bc->q_lo, 1023) << 10)
@@ -250,7 +250,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
             subsystem5_get_mission_snap(&mission);
 
             /* ---- 2. calibration (360 deg spin) -------------------------- */
-            if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
+            if (MISSION_CAL_PH_SPIN == mission.cal_phase)
             {
                 uint32_t cross_left  = 0u;
                 uint32_t cross_right = 0u;
@@ -273,7 +273,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                     (uint16_t)(cross_right / LINE_SAMPLES_PER_BLOCK));
             }
             else if (b_cal_active
-                     && ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase))
+                     && (MISSION_CAL_PH_FINISH == mission.cal_phase))
             {
                 bool const b_ok = line_track_cal_finish(&g_cal);
                 uint8_t    chan;
@@ -283,7 +283,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                 for (chan = 0u; chan < LINE_CH_COUNT; chan++)
                 {
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                         (uint16_t)(LINE_LOG_CAL_LEVELS + chan),
                         (int32_t)(((uint32_t)g_cal.max[chan] << 16)
                                   | g_cal.min[chan]));
@@ -295,10 +295,10 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                     snap.turn_gain_pm =
                         line_track_slip_gain(&g_slip, &g_cal, &diag);
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                         LINE_LOG_TURN_GAIN, (int32_t)snap.turn_gain_pm);
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                         LINE_LOG_SLIP_DIAG, (int32_t)diag);
                 }
                 b_cal_active      = false;
@@ -306,10 +306,10 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                 line_track_init(&g_trk);
                 line_barcode_init(&g_bc);
                 (void)subsystem5_mission_post(
-                    (uint8_t)MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_LINE,
+                    MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_LINE,
                     (uint16_t)APP_SRC_LINE, b_ok ? 1 : 0);
             }
-            else if ((uint8_t)MISSION_CAL_PH_NONE == mission.cal_phase)
+            else if (MISSION_CAL_PH_NONE == mission.cal_phase)
             {
                 b_cal_active = false; /* calibration aborted */
             }
@@ -333,8 +333,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                 sum[LINE_CH_BC] += p_s[LINE_CH_BC];
                 if (g_cal.b_valid && !b_cal_active)
                 {
-                    b_was_capturing =
-                        ((uint8_t)LINE_BC_CAPTURING == g_bc.state);
+                    b_was_capturing = (LINE_BC_CAPTURING == g_bc.state);
                     t0_us  = b_was_capturing ? (uint32_t)app_time_us() : 0u;
                     result = line_barcode_sample(
                         &g_bc,
@@ -345,7 +344,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                         && ((BC_VALID == result) || (BC_REJECT == result)))
                     {
                         (void)subsystem1_telem_post(
-                            (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                            COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                             LINE_LOG_BC_DECODE_US,
                             (int32_t)((uint32_t)app_time_us() - t0_us));
                     }
@@ -354,7 +353,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                         snap.barcode_ok++;
                         snap.last_barcode = out.chr;
                         (void)subsystem5_mission_post(
-                            (uint8_t)MISSION_EV_BARCODE, (uint8_t)APP_SRC_LINE,
+                            MISSION_EV_BARCODE, (uint8_t)APP_SRC_LINE,
                             out.b_reversed ? 1u : 0u, (int32_t)out.chr);
                         bc_levels_log(&g_bc);
                     }
@@ -364,20 +363,19 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                         snap.barcode_err++;
                         snap.last_reject = out.reason;
                         (void)subsystem1_telem_post(
-                            (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                            COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                             LINE_LOG_BC_REJECT, (int32_t)out.reason);
                         bc_reject_detail(&g_bc);
                         bc_levels_log(&g_bc);
                         bc_widths_log(&g_bc);
                     }
-                    else if (b_was_capturing
-                             && ((uint8_t)LINE_BC_ARMED == g_bc.state)
+                    else if (b_was_capturing && (LINE_BC_ARMED == g_bc.state)
                              && (g_bc.n_elems >= 2u))
                     {
                         /* dropped silently by the decoder (< 9 elements): say
                          * so */
                         (void)subsystem1_telem_post(
-                            (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                            COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                             LINE_LOG_BC_SHORT, (int32_t)g_bc.n_elems);
                         bc_reject_detail(&g_bc);
                         bc_levels_log(&g_bc);
@@ -414,19 +412,18 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                     (uint32_t)app_types_abs_i32(odom.v_mm_s) * 10u);
                 if ((events & LINE_TRK_EV_JUNCTION) != 0u)
                 {
-                    (void)subsystem5_mission_post((uint8_t)MISSION_EV_JUNCTION,
+                    (void)subsystem5_mission_post(MISSION_EV_JUNCTION,
                                                   (uint8_t)APP_SRC_LINE, 0u, 0);
                 }
                 if ((events & LINE_TRK_EV_LOST) != 0u)
                 {
-                    (void)subsystem5_mission_post((uint8_t)MISSION_EV_LINE_LOST,
+                    (void)subsystem5_mission_post(MISSION_EV_LINE_LOST,
                                                   (uint8_t)APP_SRC_LINE, 0u, 0);
                 }
                 if ((events & LINE_TRK_EV_FOUND) != 0u)
                 {
-                    (void)subsystem5_mission_post(
-                        (uint8_t)MISSION_EV_LINE_FOUND, (uint8_t)APP_SRC_LINE,
-                        0u, 0);
+                    (void)subsystem5_mission_post(MISSION_EV_LINE_FOUND,
+                                                  (uint8_t)APP_SRC_LINE, 0u, 0);
                 }
             }
 
@@ -445,7 +442,7 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                 {
                     b_no_floor = true;
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                         LINE_LOG_NO_FLOOR,
                         (int32_t)(((uint32_t)snap.raw_l << 20)
                                   | ((uint32_t)snap.raw_r << 10)
@@ -460,23 +457,22 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
             }
 
             /* ---- 5. steering command ------------------------------------ */
-            if (((uint8_t)MOTION_SRC_LINE == odom.auth)
-                && ((uint8_t)MISSION_ST_LINE_FOLLOW == mission.state)
-                && g_cal.b_valid)
+            if ((MOTION_SRC_LINE == odom.auth)
+                && (MISSION_ST_LINE_FOLLOW == mission.state) && g_cal.b_valid)
             {
                 int32_t omega = g_trk.omega;
 
                 /* 7 Nov reading mode: steady steering while a code is read, so
                    the side barcode IR crosses the bars on a straight path; not
                    on curves (the line well off centre) */
-                if (((uint8_t)LINE_BC_CAPTURING == g_bc.state)
+                if ((LINE_BC_CAPTURING == g_bc.state)
                     && (app_types_abs_i32(g_trk.err) <= LINE_BC_HOLD_ERR))
                 {
                     omega = app_types_clamp_i32(omega, -LINE_BC_OMEGA_MAX,
                                                 LINE_BC_OMEGA_MAX);
                 }
                 drive_seq = motion_types_seq_next(drive_seq);
-                (void)motion_api_drive((uint8_t)MOTION_SRC_LINE, drive_seq,
+                (void)motion_api_drive(MOTION_SRC_LINE, drive_seq,
                                        (int16_t)g_trk.v_mm_s, (int16_t)omega);
             }
 
@@ -493,9 +489,8 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
                 (uint8_t)((g_cal.b_valid ? LINE_FLAG_CALIBRATED : 0u)
                           | (g_trk.b_lost ? LINE_FLAG_LOST : 0u)
                           | (g_trk.b_junction ? LINE_FLAG_JUNCTION : 0u)
-                          | (((uint8_t)MOTION_SRC_LINE == odom.auth)
-                                 ? LINE_FLAG_HAS_AUTH
-                                 : 0u)
+                          | ((MOTION_SRC_LINE == odom.auth) ? LINE_FLAG_HAS_AUTH
+                                                            : 0u)
                           | ((!g_trk.b_white_l || !g_trk.b_white_r)
                                  ? LINE_FLAG_ON_LINE
                                  : 0u)

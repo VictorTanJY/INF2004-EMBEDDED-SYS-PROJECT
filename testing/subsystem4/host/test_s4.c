@@ -526,7 +526,7 @@ int main (void)
             step_up(0, 200, 2000);
         }
     }
-    g_ic.hump_state = (uint8_t)IMU_HUMP_CLIMBING;
+    g_ic.hump_state = IMU_HUMP_CLIMBING;
     {
         int32_t kdx;
         for (kdx = 0; kdx < 15; kdx++)
@@ -594,7 +594,7 @@ int main (void)
                              && (g_ic.hump_max_mm > real_max)); /* the bug */
         imu_core_hump_restore(&g_ic); /* lift confirmed */
         CHECK("S4-H05e", (g_ic.hump_max_mm == real_max) && (1u == g_ic.humps)
-                             && ((uint8_t)IMU_HUMP_FLAT == g_ic.hump_state));
+                             && (IMU_HUMP_FLAT == g_ic.hump_state));
 
         imu_core_hump_save(&g_ic); /* crossing line */
         g_ic.hump_max_mm =

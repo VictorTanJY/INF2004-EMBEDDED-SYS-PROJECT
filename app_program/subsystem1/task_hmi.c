@@ -37,12 +37,11 @@ static void hmi_report (mission_types_ev_t event)
     if (subsystem5_mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS, 0u, 0)
         != E_OK)
     {
-        (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
-                                    (uint8_t)APP_SRC_COMMS, (uint16_t)event,
-                                    -1);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_COMMS,
+                                    (uint16_t)event, -1);
     }
-    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_EVENT,
-                                (uint8_t)APP_SRC_COMMS, (uint16_t)event, 0);
+    (void)subsystem1_telem_post(COMMS_KIND_EVENT, (uint8_t)APP_SRC_COMMS,
+                                (uint16_t)event, 0);
 }
 
 EXPORT void task_hmi_thread (INT stacd, void * p_exinf)

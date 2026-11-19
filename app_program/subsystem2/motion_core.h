@@ -30,15 +30,13 @@ typedef enum
                                       motion_core_estop_cleared()          */
 } motion_core_result_t;
 
-typedef enum
-{
-    MOTION_EV_NONE      = 0,
-    MOTION_EV_DONE      = 1, /* MOVE / TURN completed: seq, src      */
-    MOTION_EV_FAILED    = 2, /* timeout, pre-empted or E-stop: seq, src */
-    MOTION_EV_STALL     = 3, /* set SAFETY_FLT_STALL                 */
-    MOTION_EV_ENC_FAULT = 4, /* report only                          */
-    MOTION_EV_ENC_OK    = 5  /* glitches stopped for 1 s             */
-} motion_core_ev_code_t;
+typedef uint8_t motion_core_ev_code_t; /* one of the constants below */
+#define MOTION_EV_NONE      0u
+#define MOTION_EV_DONE      1u /* MOVE / TURN completed: seq, src */
+#define MOTION_EV_FAILED    2u /* timeout, pre-empted or E-stop: seq, src */
+#define MOTION_EV_STALL     3u /* set SAFETY_FLT_STALL */
+#define MOTION_EV_ENC_FAULT 4u /* report only */
+#define MOTION_EV_ENC_OK    5u /* glitches stopped for 1 s */
 
 typedef struct
 {

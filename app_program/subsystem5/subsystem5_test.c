@@ -45,8 +45,7 @@ EXPORT void subsystem5_test_run (void)
 
     subsystem5_get_mission_snap(&mission);
     TEST_CHECK("S5-U05",
-               (mission.state < (uint8_t)MISSION_ST_COUNT)
-                   && (mission.cruise_mm_s > 0u)
+               (mission.state < MISSION_ST_COUNT) && (mission.cruise_mm_s > 0u)
                    && ('\0' == mission.nav_map[0]),
                "mission snapshot valid; no barcode map until MQTT sends one");
 
@@ -61,7 +60,7 @@ EXPORT void subsystem5_test_run (void)
                "echo conversion and median on target");
 
     /* ---- S5-U08: ping rate ------------------------------------------ */
-    (void)subsystem5_scan_request((uint8_t)SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
+    (void)subsystem5_scan_request(SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
     (void)tk_dly_tsk(T_SETTLE_MS); /* servo to 90 deg, first 3 pings */
     subsystem5_get_obst_snap(&snap_a);
     (void)tk_dly_tsk(T_PING_WIN_MS);
@@ -92,8 +91,7 @@ EXPORT void subsystem5_test_run (void)
                    "ultrasonic echo received, range within 2 cm .. 4 m");
     }
 
-    (void)subsystem5_scan_request((uint8_t)SCAN_REQ_STOP,
-                                  (uint8_t)(T_SCAN_SEQ + 1u), 0);
+    (void)subsystem5_scan_request(SCAN_REQ_STOP, (uint8_t)(T_SCAN_SEQ + 1u), 0);
 
     TEST_SUMMARY("subsystem5");
 }

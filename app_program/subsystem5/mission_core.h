@@ -17,26 +17,24 @@
 #include "mission_types.h"
 #include "../subsystem2/motion_types.h"
 
-typedef enum
-{
-    MISSION_ACT_MOTION = 1, /* cmd, seq, p0, p1 (src = MISSION)       */
-    MISSION_ACT_SCAN = 2, /* cmd = mission_types_scan_code_t, p0 = param      */
-    MISSION_ACT_SAFETY_RESET = 3, /* subsystem4_request_reset() */
-    MISSION_ACT_STATE        = 4, /* telemetry: p0 = new state              */
-    MISSION_ACT_LOG          = 5, /* telemetry: cmd = log code, p0/p1 data  */
-    MISSION_ACT_NEW_RUN      = 6  /* a run starts (hump maximum resets)     */
-} mission_core_act_kind_t;
+typedef uint8_t mission_core_act_kind_t; /* one of the constants below */
+#define MISSION_ACT_MOTION 1u            /* cmd, seq, p0, p1 (src = MISSION) */
+#define MISSION_ACT_SCAN   2u /* cmd = mission_types_scan_code_t, p0 = param */
+#define MISSION_ACT_SAFETY_RESET 3u /* subsystem4_request_reset() */
+#define MISSION_ACT_STATE        4u /* telemetry: p0 = new state */
+#define MISSION_ACT_LOG          5u /* telemetry: cmd = log code, p0/p1 data */
+#define MISSION_ACT_NEW_RUN      6u /* a run starts (hump maximum resets) */
 
 /* MISSION_ACT_LOG codes */
 #define MISSION_LOG_NOT_CALIBRATED 61u
 #define MISSION_LOG_CAL_RESULT     62u /* p0 = MISSION_CAL_* bits achieved */
-#define MISSION_LOG_NAV_LATCHED  63u   /* p0 = mission_types_nav_t, p1 = char */
-#define MISSION_LOG_NAV_UNMAPPED 64u   /* p1 = char (valid, not in the map) */
-#define MISSION_LOG_MAP_SET      65u   /* p0/p1: packed map low/high half  */
-#define MISSION_LOG_MAP_BAD      66u
-#define MISSION_LOG_SUMMARY      67u /* run summary (task adds the hump max) */
-#define MISSION_LOG_PARAM_SET    68u /* p0 = param id, p1 = value        */
-#define MISSION_LOG_MBF_DROP     69u
+#define MISSION_LOG_NAV_LATCHED    63u /* p0 = mission_types_nav_t, p1 = char */
+#define MISSION_LOG_NAV_UNMAPPED   64u /* p1 = char (valid, not in the map) */
+#define MISSION_LOG_MAP_SET        65u /* p0/p1: packed map low/high half  */
+#define MISSION_LOG_MAP_BAD        66u
+#define MISSION_LOG_SUMMARY   67u /* run summary (task adds the hump max) */
+#define MISSION_LOG_PARAM_SET 68u /* p0 = param id, p1 = value        */
+#define MISSION_LOG_MBF_DROP  69u
 
 typedef struct
 {

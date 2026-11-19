@@ -30,7 +30,7 @@ static uint8_t        g_scan_seq;
    CLEAR_ESTOP have no named form and use subsystem2_post. */
 static ER mission_motion (mission_core_act_t const * p_a)
 {
-    uint8_t const  src    = (uint8_t)MOTION_SRC_MISSION;
+    uint8_t const  src    = MOTION_SRC_MISSION;
     uint16_t const amount = (uint16_t)app_types_abs_i32(p_a->arg0);
     ER             err;
 
@@ -83,7 +83,7 @@ static void run_actions (mission_core_out_t const * p_out)
                 {
                     /* mbf_motion full: MotionTask stalled; its heartbeat
                      * catches it */
-                    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                    (void)subsystem1_telem_post(COMMS_KIND_LOG,
                                                 (uint8_t)APP_SRC_OBST_MISSION,
                                                 70u, (int32_t)p_a->cmd);
                 }
@@ -99,7 +99,7 @@ static void run_actions (mission_core_out_t const * p_out)
             break;
 
             case MISSION_ACT_STATE:
-                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_STATE,
+                (void)subsystem1_telem_post(COMMS_KIND_STATE,
                                             (uint8_t)APP_SRC_OBST_MISSION,
                                             (uint16_t)p_a->arg0, 0);
             break;
@@ -112,14 +112,13 @@ static void run_actions (mission_core_out_t const * p_out)
                     subsystem4_get_imu_snap(&imu);
                     /* run summary: highest hump peak of the run (FR7) */
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,
                         MISSION_LOG_SUMMARY, (int32_t)imu.hump_max_mm);
                 }
                 else
                 {
                     (void)subsystem1_telem_post(
-                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION,
-                        p_a->cmd,
+                        COMMS_KIND_LOG, (uint8_t)APP_SRC_OBST_MISSION, p_a->cmd,
                         (int32_t)(((uint32_t)(uint16_t)p_a->arg0 << 16)
                                   | (uint16_t)p_a->arg1));
                 }
@@ -161,7 +160,7 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
         {
             mission_core_evt_unpack(ev_word, &event);
             /* the laptop's event log: every event MissionTask decides on */
-            (void)subsystem1_telem_post((uint8_t)COMMS_KIND_EVENT, event.src,
+            (void)subsystem1_telem_post(COMMS_KIND_EVENT, event.src,
                                         (uint16_t)event.type, event.data);
             mission_core_event(&g_mc, &event, now_ms, &out);
             run_actions(&out);

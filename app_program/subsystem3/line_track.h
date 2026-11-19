@@ -40,13 +40,11 @@ uint16_t line_track_cal_norm(line_track_cal_t const * p_cal, uint8_t chan,
    the darkest bar seen (its spin calibration only sees the line). */
 
 /* ---- Tracking -------------------------------------------------------- */
-typedef enum
-{
-    LINE_TRK_EV_NONE     = 0x00u,
-    LINE_TRK_EV_JUNCTION = 0x01u,
-    LINE_TRK_EV_LOST     = 0x02u,
-    LINE_TRK_EV_FOUND    = 0x04u
-} line_track_ev_t;
+typedef uint8_t line_track_ev_t; /* one of the constants below */
+#define LINE_TRK_EV_NONE     0x00u
+#define LINE_TRK_EV_JUNCTION 0x01u
+#define LINE_TRK_EV_LOST     0x02u
+#define LINE_TRK_EV_FOUND    0x04u
 
 typedef struct
 {

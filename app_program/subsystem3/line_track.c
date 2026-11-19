@@ -160,7 +160,7 @@ static bool is_white (bool b_white, uint16_t norm)
 uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
                          uint16_t norm_l, uint16_t norm_r, uint32_t step_um)
 {
-    uint8_t events = (uint8_t)LINE_TRK_EV_NONE;
+    uint8_t events = LINE_TRK_EV_NONE;
     int32_t sum    = (int32_t)norm_l + (int32_t)norm_r;
 
     p_t->b_black_l = is_black(p_t->b_black_l, norm_l);
@@ -192,7 +192,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
         {
             p_t->b_junction        = true;
             p_t->since_junction_um = 0u;
-            events |= (uint8_t)LINE_TRK_EV_JUNCTION;
+            events |= LINE_TRK_EV_JUNCTION;
         }
     }
     else if (p_t->b_white_l && p_t->b_white_r)
@@ -210,7 +210,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
         if (!p_t->b_lost && (p_t->both_white_um >= p_cfg->lost_um))
         {
             p_t->b_lost = true;
-            events |= (uint8_t)LINE_TRK_EV_LOST;
+            events |= LINE_TRK_EV_LOST;
         }
     }
     else
@@ -234,7 +234,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
     if (p_t->b_lost && (!p_t->b_white_l || !p_t->b_white_r))
     {
         p_t->b_lost = false;
-        events |= (uint8_t)LINE_TRK_EV_FOUND;
+        events |= LINE_TRK_EV_FOUND;
     }
 
     /* Output.  Hold the heading (omega = 0) across a junction and across a

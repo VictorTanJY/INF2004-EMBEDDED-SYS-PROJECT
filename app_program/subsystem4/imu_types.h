@@ -39,39 +39,33 @@
 /* ---------------------------------------------------------------------
  *  IF-07  Heartbeats: monitored tasks and their timeouts (Week 6 Sec. 3).
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    SAFETY_HB_MOTION   = 0, /* timeout 50 ms  */
-    SAFETY_HB_LINE     = 1, /* timeout 50 ms  */
-    SAFETY_HB_MISSION  = 2, /* timeout 300 ms */
-    SAFETY_HB_OBSTACLE = 3, /* timeout 300 ms */
-    SAFETY_HB_IMU      = 4, /* timeout 100 ms */
-    SAFETY_HB_COUNT    = 5
-} imu_types_safety_hb_t;
+typedef uint8_t imu_types_safety_hb_t; /* one of the constants below */
+#define SAFETY_HB_MOTION   0u          /* timeout 50 ms */
+#define SAFETY_HB_LINE     1u          /* timeout 50 ms */
+#define SAFETY_HB_MISSION  2u          /* timeout 300 ms */
+#define SAFETY_HB_OBSTACLE 3u          /* timeout 300 ms */
+#define SAFETY_HB_IMU      4u          /* timeout 100 ms */
+#define SAFETY_HB_COUNT    5u
 
 /* ---------------------------------------------------------------------
  *  IF-08  IMU snapshot (written by ImuTask every 10 ms).
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    IMU_HUMP_FLAT       = 0,
-    IMU_HUMP_CLIMBING   = 1,
-    IMU_HUMP_CREST      = 2,
-    IMU_HUMP_DESCENDING = 3
-} imu_types_hump_state_t;
+typedef uint8_t imu_types_hump_state_t; /* one of the constants below */
+#define IMU_HUMP_FLAT       0u
+#define IMU_HUMP_CLIMBING   1u
+#define IMU_HUMP_CREST      2u
+#define IMU_HUMP_DESCENDING 3u
 
-typedef enum
-{
-    IMU_MOTION_STATIONARY   = 0,
-    IMU_MOTION_ACCELERATING = 1,
-    IMU_MOTION_TURNING      = 2,
-    IMU_MOTION_CLIMBING     = 3,
-    IMU_MOTION_DESCENDING   = 4,
-    IMU_MOTION_IMPACT =
-        5, /* not produced since 14 Nov (IMU collision detection removed) */
-    IMU_MOTION_CRUISING     = 6,
-    IMU_MOTION_DECELERATING = 7 /* speed falling (forward or reverse) */
-} imu_types_motion_t;
+typedef uint8_t imu_types_motion_t; /* one of the constants below */
+#define IMU_MOTION_STATIONARY   0u
+#define IMU_MOTION_ACCELERATING 1u
+#define IMU_MOTION_TURNING      2u
+#define IMU_MOTION_CLIMBING     3u
+#define IMU_MOTION_DESCENDING   4u
+#define IMU_MOTION_IMPACT \
+    5u /* not produced since 14 Nov (IMU collision detection removed) */
+#define IMU_MOTION_CRUISING     6u
+#define IMU_MOTION_DECELERATING 7u /* speed falling (forward or reverse) */
 
 /* imu_types_snap_t.cal */
 #define IMU_CAL_LEVEL 0x01u /* level offsets stored           */

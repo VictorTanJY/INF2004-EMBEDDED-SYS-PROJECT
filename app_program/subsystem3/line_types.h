@@ -26,13 +26,11 @@
 #define LINE_SENS_NO_FLOOR 0x08u
 
 /* line_types_snap_t.bc_state */
-typedef enum
-{
-    LINE_BC_WAIT_QUIET = 0,
-    LINE_BC_ARMED      = 1, /* quiet zone seen, waiting for a bar */
-    LINE_BC_CAPTURING  = 2,
-    LINE_BC_COOLDOWN   = 3
-} line_types_bc_state_t;
+typedef uint8_t line_types_bc_state_t; /* one of the constants below */
+#define LINE_BC_WAIT_QUIET 0u
+#define LINE_BC_ARMED      1u /* quiet zone seen, waiting for a bar */
+#define LINE_BC_CAPTURING  2u
+#define LINE_BC_COOLDOWN   3u
 
 /* IF-04  Line snapshot (written by LineBarcodeTask every 10 ms). */
 typedef struct

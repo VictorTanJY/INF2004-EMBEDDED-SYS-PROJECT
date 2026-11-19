@@ -284,14 +284,14 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
 
     p_cmd->cmd_id   = 0u;
     p_cmd->b_has_id = false;
-    p_cmd->cmd      = (uint8_t)COMMS_CMD_NONE;
+    p_cmd->cmd      = COMMS_CMD_NONE;
     p_cmd->param_id = 0u;
     p_cmd->value    = 0;
 
     app_pack_reader_init(&reader, p_data, len);
     type    = app_pack_take(&reader, 5u);
     version = app_pack_take(&reader, 3u);
-    if (reader.b_short || (type != (uint32_t)COMMS_FT_CMD)
+    if (reader.b_short || (type != COMMS_FT_CMD)
         || (version != COMMS_FRAME_VERSION))
     {
         return COMMS_ERR_BAD_FRAME;
@@ -390,7 +390,7 @@ bool comms_proto_map_char_ok (char chr)
 comms_proto_err_t comms_proto_check_ready (comms_proto_cmd_t const * p_cmd,
                                            bool b_calibrated)
 {
-    if (((uint8_t)COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
+    if ((COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
     {
         return COMMS_ERR_NOT_CAL;
     }
@@ -400,9 +400,8 @@ comms_proto_err_t comms_proto_check_ready (comms_proto_cmd_t const * p_cmd,
 comms_proto_err_t comms_proto_check_cmd (comms_proto_cmd_t const * p_cmd,
                                          bool                      b_idle)
 {
-    if ((((uint8_t)COMMS_CMD_START == p_cmd->cmd)
-         || ((uint8_t)COMMS_CMD_SET == p_cmd->cmd)
-         || ((uint8_t)COMMS_CMD_MAP == p_cmd->cmd))
+    if (((COMMS_CMD_START == p_cmd->cmd) || (COMMS_CMD_SET == p_cmd->cmd)
+         || (COMMS_CMD_MAP == p_cmd->cmd))
         && !b_idle)
     {
         return COMMS_ERR_BUSY;
@@ -421,7 +420,7 @@ void comms_proto_dedup_init (comms_proto_dedup_t * p_dd)
 
 bool comms_proto_cmd_repeat_safe (uint8_t cmd)
 {
-    return ((uint8_t)COMMS_CMD_STOP == cmd);
+    return (COMMS_CMD_STOP == cmd);
 }
 
 comms_proto_dedup_result_t

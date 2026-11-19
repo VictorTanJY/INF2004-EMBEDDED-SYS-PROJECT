@@ -157,7 +157,7 @@ static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     int32_t  pl_r;
 
     p_out->b_valid       = false;
-    p_out->plan          = (uint8_t)OBST_PLAN_CONTINUE;
+    p_out->plan          = OBST_PLAN_CONTINUE;
     p_out->closest_mm    = OBST_RANGE_NONE;
     p_out->w_mm          = 0u;
     p_out->left_lat_mm   = 0;
@@ -320,7 +320,7 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
 
     if ((pl_r > corridor) || (pl_l < -corridor))
     {
-        p_out->plan = (uint8_t)OBST_PLAN_CONTINUE; /* beside the path */
+        p_out->plan = OBST_PLAN_CONTINUE; /* beside the path */
     }
     else
     {
@@ -333,17 +333,17 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
 
         if (b_left && (!b_right || (dev_l <= dev_r)))
         {
-            p_out->plan         = (uint8_t)OBST_PLAN_LEFT;
+            p_out->plan         = OBST_PLAN_LEFT;
             p_out->deviation_mm = (int16_t)dev_l;
         }
         else if (b_right)
         {
-            p_out->plan         = (uint8_t)OBST_PLAN_RIGHT;
+            p_out->plan         = OBST_PLAN_RIGHT;
             p_out->deviation_mm = (int16_t)-dev_r;
         }
         else
         {
-            p_out->plan = (uint8_t)OBST_PLAN_BLOCKED;
+            p_out->plan = OBST_PLAN_BLOCKED;
         }
     }
 }
@@ -396,8 +396,7 @@ void obstacle_core_profile (obstacle_core_point_t const * p_fine,
             r_ahead = p_point->r_mm;
         }
     }
-    if ((r_ahead < OBST_GUARD_MM)
-        && ((uint8_t)OBST_PLAN_CONTINUE == p_out->plan))
+    if ((r_ahead < OBST_GUARD_MM) && (OBST_PLAN_CONTINUE == p_out->plan))
     {
         force_ahead(p_fine, n_fine, p_coarse, n_coarse, r_ahead, p_out);
     }
@@ -473,19 +472,19 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
     p_s->iter  = 0u;
     if (OBST_RANGE_NONE == r_min)
     {
-        p_s->phase = (uint8_t)OBST_SCAN_DONE;
+        p_s->phase = OBST_SCAN_DONE;
         return;
     }
     grow(p_s->fine, p_s->n_fine, nearest, r_min, &low, &high);
     if (b_right && (low > 0u))
     {
-        p_s->phase = (uint8_t)OBST_SCAN_REFINE_R;
+        p_s->phase = OBST_SCAN_REFINE_R;
         p_s->hit   = p_s->fine[low].angle_deg;
         p_s->miss  = p_s->fine[low - 1u].angle_deg;
     }
     else if (!b_right && ((high + 1u) < p_s->n_fine))
     {
-        p_s->phase = (uint8_t)OBST_SCAN_REFINE_L;
+        p_s->phase = OBST_SCAN_REFINE_L;
         p_s->hit   = p_s->fine[high].angle_deg;
         p_s->miss  = p_s->fine[high + 1u].angle_deg;
     }
@@ -497,7 +496,7 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
             start_refine(p_s, false);
             return;
         }
-        p_s->phase = (uint8_t)OBST_SCAN_DONE;
+        p_s->phase = OBST_SCAN_DONE;
         return;
     }
     p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
@@ -509,7 +508,7 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
 
 void obstacle_core_scan_start (obstacle_core_scan_t * p_s)
 {
-    p_s->phase    = (uint8_t)OBST_SCAN_COARSE;
+    p_s->phase    = OBST_SCAN_COARSE;
     p_s->n_coarse = 0u;
     p_s->n_fine   = 0u;
     p_s->angle    = 30;
@@ -524,7 +523,7 @@ int16_t obstacle_core_scan_angle (obstacle_core_scan_t const * p_s)
 
 bool obstacle_core_scan_done (obstacle_core_scan_t const * p_s)
 {
-    return ((uint8_t)OBST_SCAN_DONE == p_s->phase);
+    return (OBST_SCAN_DONE == p_s->phase);
 }
 
 void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
@@ -556,12 +555,11 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
                 }
                 if (OBST_RANGE_NONE == best)
                 {
-                    p_s->phase =
-                        (uint8_t)OBST_SCAN_DONE; /* nothing near: CONTINUE */
+                    p_s->phase = OBST_SCAN_DONE; /* nothing near: CONTINUE */
                 }
                 else
                 {
-                    p_s->phase = (uint8_t)OBST_SCAN_FINE;
+                    p_s->phase = OBST_SCAN_FINE;
                     p_s->angle = (int16_t)app_types_max_i32(
                         centre - OBST_FINE_HALF_DEG, OBST_SCAN_MIN_DEG);
                     p_s->fine_to = (int16_t)app_types_min_i32(
@@ -603,13 +601,13 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
             if ((p_s->iter >= OBST_REFINE_ITERS) || (p_s->angle == p_s->hit)
                 || (p_s->angle == p_s->miss))
             {
-                if ((uint8_t)OBST_SCAN_REFINE_R == p_s->phase)
+                if (OBST_SCAN_REFINE_R == p_s->phase)
                 {
                     start_refine(p_s, false);
                 }
                 else
                 {
-                    p_s->phase = (uint8_t)OBST_SCAN_DONE;
+                    p_s->phase = OBST_SCAN_DONE;
                 }
             }
         }
@@ -766,7 +764,7 @@ void obstacle_core_edge_plan (obstacle_core_profile_t * p_prof, bool b_has_l,
             b_left = (OBST_PREF_LEFT != 0);
         }
     }
-    p_prof->plan = b_left ? (uint8_t)OBST_PLAN_LEFT : (uint8_t)OBST_PLAN_RIGHT;
+    p_prof->plan = b_left ? OBST_PLAN_LEFT : OBST_PLAN_RIGHT;
     p_prof->deviation_mm =
         (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
 }
@@ -778,11 +776,11 @@ void obstacle_core_edge_plan_min (obstacle_core_profile_t * p_prof,
     int32_t const extra =
         OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
 
-    if (((uint8_t)OBST_PLAN_LEFT == p_prof->plan) && b_has_l)
+    if ((OBST_PLAN_LEFT == p_prof->plan) && b_has_l)
     {
         p_prof->deviation_mm = (int16_t)app_types_max_i32(min_l + extra, extra);
     }
-    else if (((uint8_t)OBST_PLAN_RIGHT == p_prof->plan) && b_has_r)
+    else if ((OBST_PLAN_RIGHT == p_prof->plan) && b_has_r)
     {
         p_prof->deviation_mm =
             (int16_t)-app_types_max_i32(-min_r + extra, extra);
@@ -797,7 +795,7 @@ void obstacle_core_edge_plan_min (obstacle_core_profile_t * p_prof,
 uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
                                    uint8_t side, obstacle_core_step_t * p_steps)
 {
-    int32_t const sign  = ((uint8_t)OBST_PLAN_LEFT == side) ? 1 : -1;
+    int32_t const sign  = (OBST_PLAN_LEFT == side) ? 1 : -1;
     int32_t const dev   = app_types_abs_i32(p_prof->deviation_mm);
     int32_t const sin_q = app_math_sin_q15(OBST_TURN_OUT_DDEG * 10);
     int32_t const cos_q = app_math_cos_q15(OBST_TURN_OUT_DDEG * 10);
@@ -816,17 +814,17 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
     if (fwd_r > room)
     {
         back                   = fwd_r - room + 20;
-        p_steps[n_steps].kind  = (uint8_t)OBST_STEP_MOVE;
+        p_steps[n_steps].kind  = OBST_STEP_MOVE;
         p_steps[n_steps].value = (int16_t)-back;
         n_steps++;
     }
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_TURN;
+    p_steps[n_steps].kind  = OBST_STEP_TURN;
     p_steps[n_steps].value = (int16_t)(sign * OBST_TURN_OUT_DDEG);
     n_steps++;
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_OUT;
+    p_steps[n_steps].kind  = OBST_STEP_OUT;
     p_steps[n_steps].value = (int16_t)diag;
     n_steps++;
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_TURN;
+    p_steps[n_steps].kind  = OBST_STEP_TURN;
     p_steps[n_steps].value = (int16_t)(-sign * OBST_TURN_OUT_DDEG);
     n_steps++;
 
@@ -845,7 +843,7 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
                 : OBST_WIDTH_MAX_MM;
     pass  = app_types_max_i32((int32_t)p_prof->closest_mm + back - fwd, 0)
             + depth + OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM;
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_PASS;
+    p_steps[n_steps].kind  = OBST_STEP_PASS;
     p_steps[n_steps].value = (int16_t)app_types_min_i32(pass, OBST_PASS_MAX_MM);
     n_steps++;
 
@@ -853,17 +851,17 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
        line (not a fixed distance: the turns slip), then OBST_IR_AHEAD_MM
        on so the axle is on the line, then (4 Nov) spin until the line is
        centred under the sensors, wherever it runs. */
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_TURN;
+    p_steps[n_steps].kind  = OBST_STEP_TURN;
     p_steps[n_steps].value = (int16_t)(-sign * OBST_TURN_OUT_DDEG);
     n_steps++;
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_JOIN;
+    p_steps[n_steps].kind  = OBST_STEP_JOIN;
     p_steps[n_steps].value = (int16_t)(((diag * OBST_JOIN_MAX_PERMILLE) / 1000)
                                        + OBST_JOIN_EXTRA_MM);
     n_steps++;
-    p_steps[n_steps].kind  = (uint8_t)OBST_STEP_MOVE;
+    p_steps[n_steps].kind  = OBST_STEP_MOVE;
     p_steps[n_steps].value = (int16_t)OBST_IR_AHEAD_MM;
     n_steps++;
-    p_steps[n_steps].kind = (uint8_t)OBST_STEP_LINESCAN;
+    p_steps[n_steps].kind = OBST_STEP_LINESCAN;
     p_steps[n_steps].value =
         (int16_t)(sign * (OBST_TURN_OUT_DDEG + OBST_LINESCAN_SPARE_DDEG));
     n_steps++;

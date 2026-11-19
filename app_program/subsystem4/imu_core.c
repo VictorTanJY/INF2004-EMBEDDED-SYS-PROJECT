@@ -27,8 +27,8 @@ void imu_core_init (imu_core_t * p_ic)
     {
         p_b[idx] = 0u;
     }
-    p_ic->hump_state = (uint8_t)IMU_HUMP_FLAT;
-    p_ic->motion     = (uint8_t)IMU_MOTION_STATIONARY;
+    p_ic->hump_state = IMU_HUMP_FLAT;
+    p_ic->motion     = IMU_MOTION_STATIONARY;
 }
 
 void imu_core_new_run (imu_core_t * p_ic)
@@ -204,7 +204,7 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
 /* ---- hump sequence ------------------------------------------------------ */
 static void hump_reset (imu_core_t * p_ic)
 {
-    p_ic->hump_state     = (uint8_t)IMU_HUMP_FLAT;
+    p_ic->hump_state     = IMU_HUMP_FLAT;
     p_ic->dwell_um       = 0u;
     p_ic->hump_um        = 0u;
     p_ic->h_um           = 0;
@@ -240,7 +240,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
                 p_ic->dwell_um += ds_um;
                 if (p_ic->dwell_um >= IMU_DWELL_UM)
                 {
-                    p_ic->hump_state = (uint8_t)IMU_HUMP_CLIMBING;
+                    p_ic->hump_state = IMU_HUMP_CLIMBING;
                     p_ic->hump_um    = p_ic->dwell_um;
                     p_ic->dwell_um   = 0u;
                     events |= IMU_EV_HUMP_START;
@@ -263,16 +263,16 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             }
             else if (theta < IMU_DESC_CDEG)
             {
-                p_ic->hump_state = (uint8_t)IMU_HUMP_DESCENDING;
+                p_ic->hump_state = IMU_HUMP_DESCENDING;
                 p_ic->dwell_um   = 0u;
             }
             else if (theta < IMU_CREST_CDEG)
             {
-                p_ic->hump_state = (uint8_t)IMU_HUMP_CREST;
+                p_ic->hump_state = IMU_HUMP_CREST;
             }
             else if (theta > IMU_HUMP_ON_CDEG)
             {
-                p_ic->hump_state = (uint8_t)IMU_HUMP_CLIMBING;
+                p_ic->hump_state = IMU_HUMP_CLIMBING;
             }
             else
             {
@@ -409,8 +409,8 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
     uint8_t       events = 0u;
     int32_t const base   = (p_ic->lvl_up_mg > 0) ? p_ic->lvl_up_mg : 1000;
     int32_t const rise   = up_mg - base;
-    bool const    b_flat = ((uint8_t)IMU_HUMP_FLAT == p_ic->hump_state)
-                           && (0u == p_ic->side_state);
+    bool const    b_flat =
+        (IMU_HUMP_FLAT == p_ic->hump_state) && (0u == p_ic->side_state);
 
     if (b_flat && (rise > IMU_LIFT_RISE_MG))
     {
@@ -471,38 +471,38 @@ static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
 
     if (1u == p_ic->side_state)
     {
-        return (uint8_t)IMU_MOTION_CLIMBING;
+        return IMU_MOTION_CLIMBING;
     }
     if (2u == p_ic->side_state)
     {
-        return (uint8_t)IMU_MOTION_DESCENDING;
+        return IMU_MOTION_DESCENDING;
     }
-    if ((uint8_t)IMU_HUMP_CLIMBING == p_ic->hump_state)
+    if (IMU_HUMP_CLIMBING == p_ic->hump_state)
     {
-        return (uint8_t)IMU_MOTION_CLIMBING;
+        return IMU_MOTION_CLIMBING;
     }
-    if ((uint8_t)IMU_HUMP_DESCENDING == p_ic->hump_state)
+    if (IMU_HUMP_DESCENDING == p_ic->hump_state)
     {
-        return (uint8_t)IMU_MOTION_DESCENDING;
+        return IMU_MOTION_DESCENDING;
     }
     if ((app_types_abs_i32(v_mm_s) < IMU_STATIONARY_MM_S)
         && (app_types_abs_i32(yaw_cdeg_s) < 500))
     {
-        return (uint8_t)IMU_MOTION_STATIONARY;
+        return IMU_MOTION_STATIONARY;
     }
     if (app_types_abs_i32(yaw_cdeg_s) > IMU_TURNING_CDEG_S)
     {
-        return (uint8_t)IMU_MOTION_TURNING;
+        return IMU_MOTION_TURNING;
     }
     if (a_speed > IMU_ACCEL_MM_S2)
     {
-        return (uint8_t)IMU_MOTION_ACCELERATING;
+        return IMU_MOTION_ACCELERATING;
     }
     if (a_speed < -IMU_ACCEL_MM_S2)
     {
-        return (uint8_t)IMU_MOTION_DECELERATING;
+        return IMU_MOTION_DECELERATING;
     }
-    return (uint8_t)IMU_MOTION_CRUISING;
+    return IMU_MOTION_CRUISING;
 }
 
 uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
@@ -631,7 +631,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     if (ds_um > 0)
     {
         events |= hump_step(p_ic, (uint32_t)ds_um);
-        if (((uint8_t)IMU_HUMP_FLAT == p_ic->hump_state)
+        if ((IMU_HUMP_FLAT == p_ic->hump_state)
             && (0u == (events & IMU_EV_HUMP_START)))
         {
             events |= side_step(p_ic, (uint32_t)ds_um);

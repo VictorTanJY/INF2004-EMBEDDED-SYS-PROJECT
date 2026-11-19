@@ -109,14 +109,12 @@ void obstacle_core_edge_plan_min(obstacle_core_profile_t * p_prof, bool b_has_l,
    -> REFINE each edge by bisection.  The task pings obstacle_core_scan_angle(),
    feeds the range with obstacle_core_scan_feed() until
    obstacle_core_scan_done(). */
-typedef enum
-{
-    OBST_SCAN_COARSE   = 0,
-    OBST_SCAN_FINE     = 1,
-    OBST_SCAN_REFINE_R = 2,
-    OBST_SCAN_REFINE_L = 3,
-    OBST_SCAN_DONE     = 4
-} obstacle_core_scan_phase_t;
+typedef uint8_t obstacle_core_scan_phase_t; /* one of the constants below */
+#define OBST_SCAN_COARSE   0u
+#define OBST_SCAN_FINE     1u
+#define OBST_SCAN_REFINE_R 2u
+#define OBST_SCAN_REFINE_L 3u
+#define OBST_SCAN_DONE     4u
 
 typedef struct
 {
@@ -145,21 +143,20 @@ void    obstacle_core_scan_detected(obstacle_core_scan_t const * p_s,
 
 /* Bypass path: up to OBST_BYPASS_MAX_STEPS steps.  TURN values are real
    degrees; the task scales them by the measured turn slip. */
-typedef enum
-{
-    OBST_STEP_MOVE = 1, /* value = mm (+ forward)                  */
-    OBST_STEP_TURN = 2, /* value = 0.1 deg (+ left)                */
-    OBST_STEP_PASS = 3, /* drive on, servo watching the obstacle   */
-    OBST_STEP_JOIN = 4, /* drive on until a line sensor sees the
-                           line; value = give up after this, mm    */
-    OBST_STEP_LINESCAN =
-        5,            /* spin slowly until the line is centred
-                         under the sensors; value = most 0.1 deg (+ left) */
-    OBST_STEP_OUT = 6 /* 7 Nov: step out at the turned heading,
-                         the servo looking along the line at the
-                         face, until clear of it (obst_out_*);
-                         value = planned leg, mm               */
-} obstacle_core_step_kind_t;
+typedef uint8_t obstacle_core_step_kind_t; /* one of the constants below */
+#define OBST_STEP_MOVE 1u                  /* value = mm (+ forward) */
+#define OBST_STEP_TURN 2u                  /* value = 0.1 deg (+ left) */
+#define OBST_STEP_PASS 3u /* drive on, servo watching the obstacle */
+#define OBST_STEP_JOIN                                                      \
+    4u /* drive on until a line sensor sees the line; value = give up after \
+          this, mm */
+#define OBST_STEP_LINESCAN                                                 \
+    5u /* spin slowly until the line is centred under the sensors; value = \
+          most 0.1 deg (+ left) */
+#define OBST_STEP_OUT                                                        \
+    6u /* 7 Nov: step out at the turned heading, the servo looking along the \
+          line at the face, until clear of it (obst_out_*); value = planned  \
+          leg, mm */
 
 typedef struct
 {

@@ -48,7 +48,7 @@ static void brake (motion_core_t * p_mc)
 /* End the active manoeuvre (if any) and report it. */
 static void end_maneuver (motion_core_t * p_mc, bool b_ok)
 {
-    if (p_mc->state != (uint8_t)MOTION_ST_MANEUVER)
+    if (p_mc->state != MOTION_ST_MANEUVER)
     {
         return;
     }
@@ -57,16 +57,16 @@ static void end_maneuver (motion_core_t * p_mc, bool b_ok)
         p_mc->last_done_seq = p_mc->m_seq;
         p_mc->last_done_src = p_mc->m_src;
         p_mc->done_count++;
-        push_event(p_mc, (uint8_t)MOTION_EV_DONE, p_mc->m_seq, p_mc->m_src);
+        push_event(p_mc, MOTION_EV_DONE, p_mc->m_seq, p_mc->m_src);
     }
     else
     {
         p_mc->last_fail_seq = p_mc->m_seq;
         p_mc->fail_count++;
-        push_event(p_mc, (uint8_t)MOTION_EV_FAILED, p_mc->m_seq, p_mc->m_src);
+        push_event(p_mc, MOTION_EV_FAILED, p_mc->m_seq, p_mc->m_src);
     }
-    p_mc->phase = (uint8_t)MOTION_PH_NONE;
-    p_mc->state = (uint8_t)MOTION_ST_IDLE_BRAKED;
+    p_mc->phase = MOTION_PH_NONE;
+    p_mc->state = MOTION_ST_IDLE_BRAKED;
 }
 
 static int64_t counts_to_um (int32_t counts)
@@ -114,11 +114,10 @@ static void start_maneuver (motion_core_t *            p_mc,
                          + MOTION_TIMEOUT_MARGIN_MS;
 
     /* A straight MOVE continues smoothly from the current forward speed. */
-    speed_start =
-        ((uint8_t)MOTION_CMD_MOVE == p_cmd->cmd) ? (p_mc->sp_v * dir) : 0;
+    speed_start    = (MOTION_CMD_MOVE == p_cmd->cmd) ? (p_mc->sp_v * dir) : 0;
     p_mc->m_prof_v = app_types_clamp_i32(speed_start, 0, vmax);
-    p_mc->phase    = (uint8_t)MOTION_PH_ACCEL;
-    p_mc->state    = (uint8_t)MOTION_ST_MANEUVER;
+    p_mc->phase    = MOTION_PH_ACCEL;
+    p_mc->state    = MOTION_ST_MANEUVER;
 }
 
 /* ------------------------------------------------------------------ */
@@ -131,8 +130,8 @@ void motion_core_init (motion_core_t * p_mc, uint32_t now_ms)
     {
         p_byte[idx] = 0u;
     }
-    p_mc->state   = (uint8_t)MOTION_ST_IDLE_BRAKED;
-    p_mc->auth    = (uint8_t)MOTION_SRC_MISSION;
+    p_mc->state   = MOTION_ST_IDLE_BRAKED;
+    p_mc->auth    = MOTION_SRC_MISSION;
     p_mc->prev_ms = now_ms;
 }
 
@@ -142,23 +141,22 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
 {
     motion_core_result_t res = MOTION_RES_ACCEPTED;
 
-    if (p_cmd->src >= (uint8_t)MOTION_SRC_COUNT)
+    if (p_cmd->src >= MOTION_SRC_COUNT)
     {
         return MOTION_RES_INVALID;
     }
 
-    if ((uint8_t)MOTION_CMD_CLEAR_ESTOP == p_cmd->cmd)
+    if (MOTION_CMD_CLEAR_ESTOP == p_cmd->cmd)
     {
-        if (p_cmd->src != (uint8_t)MOTION_SRC_MISSION)
+        if (p_cmd->src != MOTION_SRC_MISSION)
         {
             p_mc->rejected++;
             return MOTION_RES_REJECTED_AUTH;
         }
-        return ((uint8_t)MOTION_ST_ESTOP_LATCHED == p_mc->state)
-                   ? MOTION_RES_CLEAR_ESTOP
-                   : MOTION_RES_ACCEPTED;
+        return (MOTION_ST_ESTOP_LATCHED == p_mc->state) ? MOTION_RES_CLEAR_ESTOP
+                                                        : MOTION_RES_ACCEPTED;
     }
-    if ((uint8_t)MOTION_ST_ESTOP_LATCHED == p_mc->state)
+    if (MOTION_ST_ESTOP_LATCHED == p_mc->state)
     {
         p_mc->rejected++;
         return MOTION_RES_REJECTED_ESTOP;
@@ -167,7 +165,7 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
     switch (p_cmd->cmd)
     {
         case MOTION_CMD_SET_AUTH:
-            if (p_cmd->src != (uint8_t)MOTION_SRC_MISSION)
+            if (p_cmd->src != MOTION_SRC_MISSION)
             {
                 res = MOTION_RES_REJECTED_AUTH;
             }
@@ -183,15 +181,15 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
         break;
 
         case MOTION_CMD_STOP:
-            if ((p_cmd->src != (uint8_t)MOTION_SRC_MISSION)
+            if ((p_cmd->src != MOTION_SRC_MISSION)
                 && (p_cmd->src != p_mc->auth))
             {
                 res = MOTION_RES_REJECTED_AUTH;
             }
-            else if (p_mc->state != (uint8_t)MOTION_ST_IDLE_BRAKED)
+            else if (p_mc->state != MOTION_ST_IDLE_BRAKED)
             {
                 end_maneuver(p_mc, false);
-                p_mc->state = (uint8_t)MOTION_ST_STOPPING;
+                p_mc->state = MOTION_ST_STOPPING;
             }
             else
             {
@@ -211,7 +209,7 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
                     p_cmd->arg0, -MOTION_V_MAX_MM_S, MOTION_V_MAX_MM_S);
                 p_mc->drive_w = app_types_clamp_i32(p_cmd->arg1, -6000, 6000);
                 p_mc->last_drive_ms = now_ms;
-                p_mc->state         = (uint8_t)MOTION_ST_VELOCITY_TRACK;
+                p_mc->state         = MOTION_ST_VELOCITY_TRACK;
             }
         break;
 
@@ -232,7 +230,7 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
                 int32_t vmax;
 
                 end_maneuver(p_mc, false);
-                if ((uint8_t)MOTION_CMD_MOVE == p_cmd->cmd)
+                if (MOTION_CMD_MOVE == p_cmd->cmd)
                 {
                     target = (int64_t)app_types_abs_i32(p_cmd->arg0) * 1000;
                     vmax   = app_types_min_i32(p_cmd->arg1, MOTION_V_MAX_MM_S);
@@ -269,11 +267,11 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
 
 void motion_core_estop_cleared (motion_core_t * p_mc)
 {
-    if ((uint8_t)MOTION_ST_ESTOP_LATCHED == p_mc->state)
+    if (MOTION_ST_ESTOP_LATCHED == p_mc->state)
     {
         brake(p_mc);
-        p_mc->state = (uint8_t)MOTION_ST_IDLE_BRAKED;
-        p_mc->auth  = (uint8_t)MOTION_SRC_MISSION;
+        p_mc->state = MOTION_ST_IDLE_BRAKED;
+        p_mc->auth  = MOTION_SRC_MISSION;
     }
 }
 
@@ -389,7 +387,7 @@ static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
     {
         if (!p_mc->b_enc_fault)
         {
-            push_event(p_mc, (uint8_t)MOTION_EV_ENC_FAULT, 0u, 0u);
+            push_event(p_mc, MOTION_EV_ENC_FAULT, 0u, 0u);
         }
         p_mc->b_enc_fault   = true;
         p_mc->enc_glitch_ms = now_ms;
@@ -417,7 +415,7 @@ static void check_stall (motion_core_t * p_mc, uint32_t now_ms)
                  && !p_mc->b_stall_reported)
         {
             p_mc->b_stall_reported = true;
-            push_event(p_mc, (uint8_t)MOTION_EV_STALL, 0u, 0u);
+            push_event(p_mc, MOTION_EV_STALL, 0u, 0u);
         }
         else
         {
@@ -438,7 +436,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
 {
     int64_t const rel_l  = p_mc->dist_l_um - p_mc->m_start_l_um;
     int64_t const rel_r  = p_mc->dist_r_um - p_mc->m_start_r_um;
-    bool const    b_move = ((uint8_t)MOTION_CMD_MOVE == p_mc->m_cmd);
+    bool const    b_move = (MOTION_CMD_MOVE == p_mc->m_cmd);
     int64_t       progress;
     int64_t       remaining;
     int64_t       tol;
@@ -446,7 +444,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     int32_t       v_dec;
     int32_t       speed;
 
-    if ((uint8_t)MOTION_PH_SETTLE == p_mc->phase)
+    if (MOTION_PH_SETTLE == p_mc->phase)
     {
         brake(p_mc);
         if (app_types_elapsed_ms(now_ms, p_mc->m_settle_ms) >= MOTION_SETTLE_MS)
@@ -464,7 +462,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
 
     if (remaining <= tol)
     {
-        p_mc->phase       = (uint8_t)MOTION_PH_SETTLE;
+        p_mc->phase       = MOTION_PH_SETTLE;
         p_mc->m_settle_ms = now_ms;
         brake(p_mc);
         return false;
@@ -486,15 +484,15 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     speed = app_types_max_i32(speed, MOTION_PROFILE_V_MIN);
     if (speed >= p_mc->m_vmax)
     {
-        p_mc->phase = (uint8_t)MOTION_PH_CRUISE;
+        p_mc->phase = MOTION_PH_CRUISE;
     }
     else if (v_dec <= v_acc)
     {
-        p_mc->phase = (uint8_t)MOTION_PH_DECEL;
+        p_mc->phase = MOTION_PH_DECEL;
     }
     else
     {
-        p_mc->phase = (uint8_t)MOTION_PH_ACCEL;
+        p_mc->phase = MOTION_PH_ACCEL;
     }
     p_mc->m_prof_v = speed;
 
@@ -534,22 +532,21 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
         && (app_types_elapsed_ms(now_ms, p_mc->enc_glitch_ms) >= 1000u))
     {
         p_mc->b_enc_fault = false;
-        push_event(p_mc, (uint8_t)MOTION_EV_ENC_OK, 0u, 0u);
+        push_event(p_mc, MOTION_EV_ENC_OK, 0u, 0u);
     }
 
-    if (b_estop && (p_mc->state != (uint8_t)MOTION_ST_ESTOP_LATCHED))
+    if (b_estop && (p_mc->state != MOTION_ST_ESTOP_LATCHED))
     {
         end_maneuver(p_mc, false);
-        p_mc->state = (uint8_t)MOTION_ST_ESTOP_LATCHED;
-        p_mc->phase = (uint8_t)MOTION_PH_NONE;
+        p_mc->state = MOTION_ST_ESTOP_LATCHED;
+        p_mc->phase = MOTION_PH_NONE;
     }
 
-    if (((uint8_t)MOTION_ST_VELOCITY_TRACK == p_mc->state)
+    if ((MOTION_ST_VELOCITY_TRACK == p_mc->state)
         && (app_types_elapsed_ms(now_ms, p_mc->last_drive_ms)
             > MOTION_DRIVE_TIMEOUT_MS))
     {
-        p_mc->state =
-            (uint8_t)MOTION_ST_STOPPING; /* line follower went quiet */
+        p_mc->state = MOTION_ST_STOPPING; /* line follower went quiet */
     }
 
     switch (p_mc->state)
@@ -572,7 +569,7 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
             if ((0 == p_mc->sp_v) && (0 == p_mc->sp_w))
             {
                 brake(p_mc);
-                p_mc->state = (uint8_t)MOTION_ST_IDLE_BRAKED;
+                p_mc->state = MOTION_ST_IDLE_BRAKED;
                 b_drive     = false;
             }
         }
@@ -666,15 +663,15 @@ bool motion_core_pop_event (motion_core_t * p_mc, motion_core_event_t * p_ev)
 
 static uint8_t p0_bits (uint8_t cmd)
 {
-    if ((uint8_t)MOTION_CMD_DRIVE == cmd)
+    if (MOTION_CMD_DRIVE == cmd)
     {
         return DRIVE_V_BITS;
     }
-    if (((uint8_t)MOTION_CMD_MOVE == cmd) || ((uint8_t)MOTION_CMD_TURN == cmd))
+    if ((MOTION_CMD_MOVE == cmd) || (MOTION_CMD_TURN == cmd))
     {
         return AMOUNT_BITS;
     }
-    return ((uint8_t)MOTION_CMD_SET_AUTH == cmd) ? CMD_SRC_BITS : 0u;
+    return (MOTION_CMD_SET_AUTH == cmd) ? CMD_SRC_BITS : 0u;
 }
 
 uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
@@ -689,7 +686,7 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
                         app_pack_sat_u(cmd, CMD_CMD_BITS));
     word = app_pack_set(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS,
                         (uint32_t)p_cmd->seq & MOTION_SEQ_MASK);
-    if ((uint8_t)MOTION_CMD_DRIVE == cmd)
+    if (MOTION_CMD_DRIVE == cmd)
     {
         word = app_pack_set(word, CMD_P0_SHIFT, DRIVE_V_BITS,
                             app_pack_off_s(p_cmd->arg0, DRIVE_V_BITS));
@@ -731,7 +728,7 @@ void motion_core_cmd_unpack (uint32_t word, motion_types_cmd_t * p_cmd)
     p_cmd->reserved = 0u;
     p_cmd->arg0     = 0;
     p_cmd->arg1     = 0;
-    if ((uint8_t)MOTION_CMD_DRIVE == cmd)
+    if (MOTION_CMD_DRIVE == cmd)
     {
         p_cmd->arg0 = (int16_t)app_pack_unoff_s(
             app_pack_get(word, CMD_P0_SHIFT, DRIVE_V_BITS), DRIVE_V_BITS);

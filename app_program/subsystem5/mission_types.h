@@ -13,61 +13,64 @@
 /* ---------------------------------------------------------------------
  *  System states (Week 6 Section 5).  11 states.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    MISSION_ST_BOOT              = 0,
-    MISSION_ST_IDLE              = 1,
-    MISSION_ST_CALIBRATING       = 2,
-    MISSION_ST_LINE_FOLLOW       = 3,
-    MISSION_ST_EXECUTE_NAV       = 4,
-    MISSION_ST_OBSTACLE_HANDLING = 5,
-    MISSION_ST_AVOIDING          = 6,
-    MISSION_ST_LINE_RECOVERY     = 7,
-    MISSION_ST_LINE_SEARCH       = 8,
-    MISSION_ST_MISSION_COMPLETE  = 9,
-    MISSION_ST_FAULT             = 10,
-    MISSION_ST_COUNT             = 11
-} mission_types_state_t;
+typedef uint8_t mission_types_state_t; /* one of the constants below */
+#define MISSION_ST_BOOT              0u
+#define MISSION_ST_IDLE              1u
+#define MISSION_ST_CALIBRATING       2u
+#define MISSION_ST_LINE_FOLLOW       3u
+#define MISSION_ST_EXECUTE_NAV       4u
+#define MISSION_ST_OBSTACLE_HANDLING 5u
+#define MISSION_ST_AVOIDING          6u
+#define MISSION_ST_LINE_RECOVERY     7u
+#define MISSION_ST_LINE_SEARCH       8u
+#define MISSION_ST_MISSION_COMPLETE  9u
+#define MISSION_ST_FAULT             10u
+#define MISSION_ST_COUNT             11u
 
 /* ---------------------------------------------------------------------
  *  IF-06  mbf_mission events.  All senders use TMO_POL.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    MISSION_EV_NONE = 0,
-    MISSION_EV_BTN_START_STOP =
-        1, /* HmiTask: GP20 press (start or stop by state) */
-    MISSION_EV_BTN_CALIBRATE = 2, /* HmiTask: GP21 short press */
-    MISSION_EV_BTN_RESET     = 3, /* HmiTask: GP21 long press  */
-    MISSION_EV_REMOTE_START  = 4, /* CommsTask                 */
-    MISSION_EV_REMOTE_STOP   = 5,
-    MISSION_EV_REMOTE_RESET  = 6,
-    MISSION_EV_REMOTE_SET    = 7, /* a = param id, data = value */
-    MISSION_EV_BARCODE   = 8, /* data = decoded character (any valid Code 39) */
-    MISSION_EV_JUNCTION  = 9,
-    MISSION_EV_LINE_LOST = 10,
-    MISSION_EV_LINE_FOUND    = 11,
-    MISSION_EV_MOTION_DONE   = 12, /* a = seq                    */
-    MISSION_EV_MOTION_FAILED = 13, /* a = seq                    */
-    MISSION_EV_OBSTACLE      = 14, /* data = distance [mm]       */
-    MISSION_EV_SLOW_DOWN     = 15, /* data = distance [mm]       */
-    MISSION_EV_PROFILE_DONE =
-        16, /* a = mission_types_obst_plan_t, data = width [mm] */
-    MISSION_EV_CONTINUE        = 17,
-    MISSION_EV_BYPASS_DONE     = 18,
-    MISSION_EV_RECOVERY_DONE   = 19,
-    MISSION_EV_RECOVERY_FAILED = 20,
-    MISSION_EV_BLOCKED_TIMEOUT = 21,
-    MISSION_EV_HUMP_START      = 22,
-    MISSION_EV_HUMP_END        = 23, /* data = peak [mm]           */
-    MISSION_EV_MOTION_CLASS =
-        24,                   /* data = imu_types_motion_t (telemetry only) */
-    MISSION_EV_FAULT    = 25, /* data = SAFETY_FLT_* bits   */
-    MISSION_EV_CAL_DONE = 26, /* a = source subsystem, data = 1 ok / 0 failed */
-    MISSION_EV_REMOTE_MAP = 27, /* data = 4 packed chars, see MISSION_NAV_* */
-    MISSION_EV_SAFETY_OK  = 28, /* SafetyTask cleared its latch after RESET */
-    MISSION_EV_COUNT      = 29
-} mission_types_ev_t;
+typedef uint8_t mission_types_ev_t; /* one of the constants below */
+#define MISSION_EV_NONE 0u
+#define MISSION_EV_BTN_START_STOP \
+    1u /* HmiTask: GP20 press (start or stop by state) */
+#define MISSION_EV_BTN_CALIBRATE 2u /* HmiTask: GP21 short press */
+#define MISSION_EV_BTN_RESET     3u /* HmiTask: GP21 long press */
+#define MISSION_EV_REMOTE_START  4u /* CommsTask */
+#define MISSION_EV_REMOTE_STOP   5u
+#define MISSION_EV_REMOTE_RESET  6u
+#define MISSION_EV_REMOTE_SET    7u /* a = param id, data = value */
+#define MISSION_EV_BARCODE                             \
+    8u /* data = decoded character (any valid Code 39) \
+        */
+#define MISSION_EV_JUNCTION      9u
+#define MISSION_EV_LINE_LOST     10u
+#define MISSION_EV_LINE_FOUND    11u
+#define MISSION_EV_MOTION_DONE   12u /* a = seq */
+#define MISSION_EV_MOTION_FAILED 13u /* a = seq */
+#define MISSION_EV_OBSTACLE      14u /* data = distance [mm] */
+#define MISSION_EV_SLOW_DOWN     15u /* data = distance [mm] */
+#define MISSION_EV_PROFILE_DONE \
+    16u /* a = mission_types_obst_plan_t, data = width [mm] */
+#define MISSION_EV_CONTINUE        17u
+#define MISSION_EV_BYPASS_DONE     18u
+#define MISSION_EV_RECOVERY_DONE   19u
+#define MISSION_EV_RECOVERY_FAILED 20u
+#define MISSION_EV_BLOCKED_TIMEOUT 21u
+#define MISSION_EV_HUMP_START      22u
+#define MISSION_EV_HUMP_END        23u /* data = peak [mm] */
+#define MISSION_EV_MOTION_CLASS \
+    24u                      /* data = imu_types_motion_t (telemetry only) */
+#define MISSION_EV_FAULT 25u /* data = SAFETY_FLT_* bits */
+#define MISSION_EV_CAL_DONE \
+    26u /* a = source subsystem, data = 1 ok / 0 failed */
+#define MISSION_EV_REMOTE_MAP                       \
+    27u /* data = 4 packed chars, see MISSION_NAV_* \
+         */
+#define MISSION_EV_SAFETY_OK                        \
+    28u /* SafetyTask cleared its latch after RESET \
+         */
+#define MISSION_EV_COUNT 29u
 
 typedef struct
 {
@@ -86,29 +89,28 @@ typedef struct
  *  movement k (MISSION_NAV_LEFT = byte 0 ... MISSION_NAV_UTURN = byte 3).
  *  Until a map arrives, decoded barcodes are reported but never acted on.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    MISSION_NAV_LEFT     = 0,
-    MISSION_NAV_RIGHT    = 1,
-    MISSION_NAV_STRAIGHT = 2,
-    MISSION_NAV_UTURN    = 3,
-    MISSION_NAV_COUNT    = 4,
-    MISSION_NAV_NONE     = 0xFF
-} mission_types_nav_t;
+typedef uint8_t mission_types_nav_t; /* one of the constants below */
+#define MISSION_NAV_LEFT     0u
+#define MISSION_NAV_RIGHT    1u
+#define MISSION_NAV_STRAIGHT 2u
+#define MISSION_NAV_UTURN    3u
+#define MISSION_NAV_COUNT    4u
+#define MISSION_NAV_NONE     0xFFu
 
 /* MissionTask's own fault causes (mission_types_snap_t.cause), besides
  * SafetyTask's.
  */
-typedef enum
-{
-    MISSION_CAUSE_NONE     = 0,
-    MISSION_CAUSE_SAFETY   = 1, /* see mission_types_snap_t.fault_bits */
-    MISSION_CAUSE_SELFTEST = 2, /* BOOT: a subsystem's hardware did not start */
-    MISSION_CAUSE_BLOCKED  = 3, /* BLOCKED_TIMEOUT: no path for 10 s */
-    MISSION_CAUSE_LINE_LOST    = 4, /* LINE_SEARCH exhausted      */
-    MISSION_CAUSE_MBF_OVERFLOW = 5, /* an event to mbf_mission was dropped */
-    MISSION_CAUSE_TIMEOUT      = 6  /* a state exceeded its supervision time */
-} mission_types_cause_t;
+typedef uint8_t mission_types_cause_t; /* one of the constants below */
+#define MISSION_CAUSE_NONE   0u
+#define MISSION_CAUSE_SAFETY 1u /* see mission_types_snap_t.fault_bits */
+#define MISSION_CAUSE_SELFTEST \
+    2u /* BOOT: a subsystem's hardware did not start */
+#define MISSION_CAUSE_BLOCKED   3u /* BLOCKED_TIMEOUT: no path for 10 s */
+#define MISSION_CAUSE_LINE_LOST 4u /* LINE_SEARCH exhausted */
+#define MISSION_CAUSE_MBF_OVERFLOW                                      \
+    5u                           /* an event to mbf_mission was dropped \
+                                  */
+#define MISSION_CAUSE_TIMEOUT 6u /* a state exceeded its supervision time */
 
 /* mission_types_snap_t.calibrated */
 #define MISSION_CAL_IR  0x01u
@@ -117,13 +119,11 @@ typedef enum
 
 /* mission_types_snap_t.cal_phase: what CALIBRATING asks the sensor tasks to do
  */
-typedef enum
-{
-    MISSION_CAL_PH_NONE   = 0,
-    MISSION_CAL_PH_STILL  = 1, /* stand still 1 s: IMU level offsets          */
-    MISSION_CAL_PH_SPIN   = 2, /* 360 deg spin: IR min/max, magnetometer      */
-    MISSION_CAL_PH_FINISH = 3  /* compute and report MISSION_EV_CAL_DONE      */
-} mission_types_cal_phase_t;
+typedef uint8_t mission_types_cal_phase_t; /* one of the constants below */
+#define MISSION_CAL_PH_NONE   0u
+#define MISSION_CAL_PH_STILL  1u /* stand still 1 s: IMU level offsets */
+#define MISSION_CAL_PH_SPIN   2u /* 360 deg spin: IR min/max, magnetometer */
+#define MISSION_CAL_PH_FINISH 3u /* compute and report MISSION_EV_CAL_DONE */
 
 /* ---------------------------------------------------------------------
  *  IF-10  Mission snapshot (written by MissionTask).  Besides the state,
@@ -155,16 +155,14 @@ typedef struct
  *  IF-09  mbf_scan requests (MissionTask -> ObstacleTask), announced by
  *  OBST_FLG_REQ in flg_obst.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    SCAN_REQ_NONE        = 0,
-    SCAN_REQ_MONITOR     = 1, /* servo at 90 deg, ping every 60 ms       */
-    SCAN_REQ_PROFILE     = 2, /* coarse + fine scan + plan, then PROFILE_DONE */
-    SCAN_REQ_BYPASS_LEFT = 3,
-    SCAN_REQ_BYPASS_RIGHT = 4,
-    SCAN_REQ_RECOVER      = 5, /* seek and align with the original line   */
-    SCAN_REQ_STOP         = 6  /* stop everything, servo to 90 deg        */
-} mission_types_scan_code_t;
+typedef uint8_t mission_types_scan_code_t; /* one of the constants below */
+#define SCAN_REQ_NONE    0u
+#define SCAN_REQ_MONITOR 1u /* servo at 90 deg, ping every 60 ms */
+#define SCAN_REQ_PROFILE 2u /* coarse + fine scan + plan, then PROFILE_DONE */
+#define SCAN_REQ_BYPASS_LEFT  3u
+#define SCAN_REQ_BYPASS_RIGHT 4u
+#define SCAN_REQ_RECOVER      5u /* seek and align with the original line */
+#define SCAN_REQ_STOP         6u /* stop everything, servo to 90 deg */
 
 typedef struct
 {
@@ -177,31 +175,27 @@ typedef struct
  *  Obstacle snapshot (written by ObstacleTask).  Lateral positions are
  *  relative to the robot's centre line, + left, in mm.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    OBST_PLAN_NONE     = 0,
-    OBST_PLAN_CONTINUE = 1, /* nothing inside the robot's corridor    */
-    OBST_PLAN_LEFT     = 2,
-    OBST_PLAN_RIGHT    = 3,
-    OBST_PLAN_BLOCKED  = 4
-} mission_types_obst_plan_t;
+typedef uint8_t mission_types_obst_plan_t; /* one of the constants below */
+#define OBST_PLAN_NONE     0u
+#define OBST_PLAN_CONTINUE 1u /* nothing inside the robot's corridor */
+#define OBST_PLAN_LEFT     2u
+#define OBST_PLAN_RIGHT    3u
+#define OBST_PLAN_BLOCKED  4u
 
-typedef enum
-{
-    OBST_ST_IDLE        = 0,
-    OBST_ST_MONITOR     = 1,
-    OBST_ST_COARSE_SCAN = 2,
-    OBST_ST_FINE_SCAN   = 3,
-    OBST_ST_PLAN        = 4,
-    OBST_ST_REVERSE     = 5,
-    OBST_ST_BLOCKED     = 6,
-    OBST_ST_BYPASS      = 7,
-    OBST_ST_SEEK_LINE   = 8,
-    OBST_ST_ALIGN       = 9,
-    OBST_ST_EDGE_SCAN   = 10, /* 4 Nov: car turns to find each edge  */
-    OBST_ST_SEEK_SWEEP  = 11, /* no line straight ahead: sweep +-45 deg */
-    OBST_ST_WIDTH_PROBE = 12  /* 7 Nov: side-step past both edges     */
-} mission_types_obst_state_t;
+typedef uint8_t mission_types_obst_state_t; /* one of the constants below */
+#define OBST_ST_IDLE        0u
+#define OBST_ST_MONITOR     1u
+#define OBST_ST_COARSE_SCAN 2u
+#define OBST_ST_FINE_SCAN   3u
+#define OBST_ST_PLAN        4u
+#define OBST_ST_REVERSE     5u
+#define OBST_ST_BLOCKED     6u
+#define OBST_ST_BYPASS      7u
+#define OBST_ST_SEEK_LINE   8u
+#define OBST_ST_ALIGN       9u
+#define OBST_ST_EDGE_SCAN   10u /* 4 Nov: car turns to find each edge */
+#define OBST_ST_SEEK_SWEEP  11u /* no line straight ahead: sweep +-45 deg */
+#define OBST_ST_WIDTH_PROBE 12u /* 7 Nov: side-step past both edges */
 
 #define OBST_RANGE_NONE 0xFFFFu
 

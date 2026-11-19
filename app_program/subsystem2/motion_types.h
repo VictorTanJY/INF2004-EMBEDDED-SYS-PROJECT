@@ -22,27 +22,24 @@
  *  Queued commands are judged against the authority in force when
  *  MotionTask reads them; SET_AUTH travels through the same FIFO.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    MOTION_SRC_MISSION = 0, /* MissionTask: STOP, MOVE/TURN, SET_AUTH */
-    MOTION_SRC_LINE    = 1, /* LineBarcodeTask: DRIVE                 */
-    MOTION_SRC_AVOID   = 2, /* ObstacleTask during a bypass           */
-    MOTION_SRC_COUNT   = 3
-} motion_types_src_t;
+typedef uint8_t motion_types_src_t; /* one of the constants below */
+#define MOTION_SRC_MISSION 0u       /* MissionTask: STOP, MOVE/TURN, SET_AUTH */
+#define MOTION_SRC_LINE    1u       /* LineBarcodeTask: DRIVE */
+#define MOTION_SRC_AVOID   2u       /* ObstacleTask during a bypass */
+#define MOTION_SRC_COUNT   3u
 
-typedef enum
-{
-    MOTION_CMD_NONE  = 0,
-    MOTION_CMD_DRIVE = 1, /* p0 = v [mm/s, +fwd], p1 = omega [mrad/s, +left] */
-    MOTION_CMD_MOVE =
-        2, /* p0 = distance [mm, +fwd], p1 = cruise v [mm/s, > 0] */
-    MOTION_CMD_TURN =
-        3, /* p0 = angle [0.1 deg, +left], p1 = rate [deg/s, > 0] */
-    MOTION_CMD_STOP = 4, /* ramp down (MOTION_STOP_DECEL), then brake       */
-    MOTION_CMD_SET_AUTH =
-        5, /* p0 = new authority (motion_types_src_t); MISSION only */
-    MOTION_CMD_CLEAR_ESTOP = 6 /* MISSION only, after an operator reset */
-} motion_types_cmd_code_t;
+typedef uint8_t motion_types_cmd_code_t; /* one of the constants below */
+#define MOTION_CMD_NONE 0u
+#define MOTION_CMD_DRIVE \
+    1u /* p0 = v [mm/s, +fwd], p1 = omega [mrad/s, +left] */
+#define MOTION_CMD_MOVE \
+    2u /* p0 = distance [mm, +fwd], p1 = cruise v [mm/s, > 0] */
+#define MOTION_CMD_TURN \
+    3u /* p0 = angle [0.1 deg, +left], p1 = rate [deg/s, > 0] */
+#define MOTION_CMD_STOP 4u /* ramp down (MOTION_STOP_DECEL), then brake */
+#define MOTION_CMD_SET_AUTH \
+    5u /* p0 = new authority (motion_types_src_t); MISSION only */
+#define MOTION_CMD_CLEAR_ESTOP 6u /* MISSION only, after an operator reset */
 
 /* Unpacked command (task-local).  Through mbf_motion it travels as ONE
    32-bit word (Change Requirement 1, motion_core_cmd_pack()):
@@ -77,23 +74,19 @@ static inline uint8_t motion_types_seq_next (uint8_t seq)
  *  Pose: x forward / y left from the power-on position, heading
  *  accumulated (not wrapped), + left.  Encoder odometry only (A5).
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    MOTION_ST_IDLE_BRAKED    = 0,
-    MOTION_ST_VELOCITY_TRACK = 1,
-    MOTION_ST_MANEUVER       = 2,
-    MOTION_ST_STOPPING       = 3,
-    MOTION_ST_ESTOP_LATCHED  = 4
-} motion_types_state_t;
+typedef uint8_t motion_types_state_t; /* one of the constants below */
+#define MOTION_ST_IDLE_BRAKED    0u
+#define MOTION_ST_VELOCITY_TRACK 1u
+#define MOTION_ST_MANEUVER       2u
+#define MOTION_ST_STOPPING       3u
+#define MOTION_ST_ESTOP_LATCHED  4u
 
-typedef enum
-{
-    MOTION_PH_NONE   = 0,
-    MOTION_PH_ACCEL  = 1,
-    MOTION_PH_CRUISE = 2,
-    MOTION_PH_DECEL  = 3,
-    MOTION_PH_SETTLE = 4
-} motion_types_phase_t;
+typedef uint8_t motion_types_phase_t; /* one of the constants below */
+#define MOTION_PH_NONE   0u
+#define MOTION_PH_ACCEL  1u
+#define MOTION_PH_CRUISE 2u
+#define MOTION_PH_DECEL  3u
+#define MOTION_PH_SETTLE 4u
 
 typedef struct
 {
