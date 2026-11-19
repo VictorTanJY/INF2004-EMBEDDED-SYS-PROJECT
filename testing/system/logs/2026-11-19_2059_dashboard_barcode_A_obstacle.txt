@@ -1,0 +1,593 @@
+State → IDLE
+Standing by
+08:59:18 PM
+·
+IMU start result
+0x00004900
+08:59:18 PM
+·
+IMU configuration
+Value 0
+08:59:18 PM
+·
+IMU identity value
+Value 73
+08:59:18 PM
+·
+IMU identity read
+Value 0
+08:59:18 PM
+·
+IMU bus start
+Value 0
+08:59:18 PM
+·
+Motion class
+decelerating
+08:59:13 PM
+·
+Barcode widths (mm)
+adaptive 10% #31-33: bar 3.4
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #28-30: gap 2.4, bar 9.0, gap 2.4
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #25-27: bar 4.0, gap 2.6, bar 9.2
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #22-24: gap 2.6, bar 3.0, gap 7.2
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #19-21: bar 4.0, gap 2.4, bar 9.0
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #16-18: gap 2.4, bar 3.4, gap 7.2
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #13-15: bar 9.2, gap 2.4, bar 3.4
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #10-12: gap 2.4, bar 3.4, gap 2.4
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #7-9: bar 9.0, gap 2.0, bar 9.6
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 7.2, bar 5.0, gap 2.0
+08:59:10 PM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 2.4, gap 2.6, bar 9.2
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #25-27: bar 8.8, gap 2.6, bar 3.0
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #22-24: gap 2.6, bar 9.0, gap 2.8
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #19-21: bar 3.0, gap 7.8, bar 3.4
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #16-18: gap 2.6, bar 8.8, gap 2.8
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #13-15: bar 2.8, gap 8.0, bar 3.2
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #10-12: gap 2.8, bar 3.0, gap 2.6
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #7-9: bar 14.8, gap 2.2, bar 9.0
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #4-6: gap 2.2, bar 8.6, gap 2.4
+08:59:10 PM
+·
+Barcode widths (mm)
+swing #1-3: bar 13.6, gap 8.0, bar 4.0
+08:59:10 PM
+·
+Barcode: elements found by each reading
+swing 27, low threshold 5, adaptive 20% 31, adaptive 10% 31 (a letter has 29; 0 = not tried)
+08:59:10 PM
+·
+Barcode sensor levels
+white 24 / 1000, white noise 20, darkest 1000 (a bar must rise 250 above white; noise 20 leaves 230 margin)
+08:59:10 PM
+·
+Barcode rejected: bar widths
+narrowest 2.2 mm, widest 14.8 mm
+08:59:10 PM
+·
+Barcode rejected: what the sensor saw
+27 elements (a letter has 29), 184 mm long, darkest 1000 / 1000
+08:59:10 PM
+·
+Barcode rejected
+wrong element count
+08:59:10 PM
+·
+Barcode decode time (µs, line task limit 50 000)
+Value 16437
+08:59:10 PM
+·
+Motion class
+cruising
+08:59:07 PM
+·
+Motion class
+accelerating
+08:59:07 PM
+·
+Motion class
+cruising
+08:59:07 PM
+↗
+State → LINE_FOLLOW
+Following the line
+08:59:07 PM
+↗
+Start/stop button
+Value 0
+08:59:07 PM
+↗
+Start/stop button
+Value 0
+08:59:07 PM
+·
+Motion class
+stationary
+08:59:01 PM
+↗
+State → IDLE
+Standing by
+08:59:01 PM
+·
+Calibration / self-test result
+0x00030000
+08:59:01 PM
+↗
+Calibration step done
+ok
+08:59:01 PM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 0, spun 360° (encoders)
+08:59:01 PM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+08:59:01 PM
+·
+IR calibration (barcode)
+Value 241107139
+08:59:01 PM
+·
+IR calibration (right)
+Value 187826315
+08:59:01 PM
+·
+IR calibration (left)
+Value 157417699
+08:59:01 PM
+↗
+Calibration step done
+ok
+08:59:01 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 880
+08:59:01 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 5
+08:59:01 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+08:59:01 PM
+↗
+Move done
+08:59:01 PM
+·
+Motion class
+cruising
+08:59:01 PM
+·
+Motion class
+turning
+08:58:59 PM
+·
+Motion class
+cruising
+08:58:59 PM
+↗
+State → CALIBRATING
+Calibrating
+08:58:59 PM
+↗
+Calibrate button
+Value 0
+08:58:59 PM
+↗
+Calibrate button
+Value 0
+08:58:59 PM
+↗
+State → IDLE
+Standing by
+08:58:59 PM
+·
+IMU start result
+0x00004900
+08:58:59 PM
+·
+IMU configuration
+Value 0
+08:58:59 PM
+·
+IMU identity value
+Value 73
+08:58:59 PM
+·
+IMU identity read
+Value 0
+08:58:59 PM
+·
+IMU bus start
+Value 0
+08:58:59 PM
+↗
+State → IDLE
+Standing by
+08:31:27 PM
+·
+IMU start result
+0x00004900
+08:31:27 PM
+·
+IMU configuration
+Value 0
+08:31:27 PM
+·
+IMU identity value
+Value 73
+08:31:27 PM
+·
+IMU identity read
+Value 0
+08:31:27 PM
+·
+IMU bus start
+Value 0
+08:31:27 PM
+·
+Motion class
+cruising
+08:31:21 PM
+↗
+Slowing for an obstacle
+-0.1 cm
+08:31:21 PM
+·
+Motion class
+turning
+08:31:21 PM
+·
+Motion class
+cruising
+08:31:21 PM
+·
+Motion class
+turning
+08:31:20 PM
+·
+Motion class
+accelerating
+08:31:20 PM
+·
+Motion class
+turning
+08:31:20 PM
+·
+Motion class
+cruising
+08:31:19 PM
+·
+Motion class
+turning
+08:31:19 PM
+·
+Motion class
+cruising
+08:31:19 PM
+↗
+Slowing for an obstacle
+36.8 cm
+08:31:19 PM
+·
+Motion class
+turning
+08:31:19 PM
+·
+Motion class
+cruising
+08:31:18 PM
+·
+Motion class
+turning
+08:31:18 PM
+·
+Motion class
+cruising
+08:31:13 PM
+·
+Motion class
+turning
+08:31:13 PM
+·
+Motion class
+cruising
+08:31:13 PM
+·
+Motion class
+accelerating
+08:31:13 PM
+·
+Motion class
+decelerating
+08:31:13 PM
+·
+Motion class
+cruising
+08:31:12 PM
+·
+Motion class
+turning
+08:31:12 PM
+·
+Motion class
+cruising
+08:31:11 PM
+·
+Motion class
+accelerating
+08:31:11 PM
+!
+Move did not complete
+08:31:11 PM
+↗
+State → LINE_FOLLOW
+Following the line
+08:31:11 PM
+↗
+Line found
+08:31:11 PM
+·
+Motion class
+decelerating
+08:31:11 PM
+↗
+State → LINE_SEARCH
+Searching for the line
+08:31:11 PM
+↗
+Line lost
+08:31:11 PM
+·
+Barcode not in the map
+'A' is not in the map: ignored
+08:31:11 PM
+↗
+Barcode 'A' read
+08:31:11 PM
+·
+Barcode sensor levels
+white 29 / 1000, white noise 19, darkest 1000 (a bar must rise 250 above white; noise 19 leaves 231 margin)
+08:31:11 PM
+·
+Barcode decode time (µs, line task limit 50 000)
+Value 352
+08:31:11 PM
+·
+Motion class
+cruising
+08:31:08 PM
+·
+Motion class
+turning
+08:31:08 PM
+·
+Motion class
+cruising
+08:31:08 PM
+·
+Motion class
+turning
+08:31:08 PM
+·
+Motion class
+decelerating
+08:31:08 PM
+·
+Motion class
+cruising
+08:31:07 PM
+↗
+State → LINE_FOLLOW
+Following the line
+08:31:07 PM
+↗
+Start/stop button
+Value 0
+08:31:07 PM
+↗
+Start/stop button
+Value 0
+08:31:07 PM
+·
+Motion class
+stationary
+08:31:06 PM
+↗
+State → IDLE
+Standing by
+08:31:06 PM
+·
+Calibration / self-test result
+0x00030000
+08:31:06 PM
+↗
+Calibration step done
+ok
+08:31:06 PM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 0, spun 360° (encoders)
+08:31:06 PM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+08:31:06 PM
+·
+IR calibration (barcode)
+Value 227541192
+08:31:06 PM
+·
+IR calibration (right)
+Value 185073802
+08:31:06 PM
+·
+IR calibration (left)
+Value 166002913
+08:31:06 PM
+↗
+Calibration step done
+ok
+08:31:06 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 890
+08:31:06 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 5
+08:31:06 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+08:31:06 PM
+↗
+Move done
+08:31:06 PM
+·
+Motion class
+cruising
+08:31:06 PM
+·
+Motion class
+turning
+08:31:05 PM
+·
+Motion class
+cruising
+08:31:05 PM
+↗
+State → CALIBRATING
+Calibrating
+08:31:05 PM
+↗
+Calibrate button
+Value 0
+08:31:05 PM
+↗
+Calibrate button
+Value 0
+08:31:05 PM
+↗
+State → IDLE
+Standing by
+08:31:05 PM
+·
+IMU start result
+0x00004900
+08:31:05 PM
+·
+IMU configuration
+Value 0
+08:31:05 PM
+·
+IMU identity value
+Value 73
+08:31:05 PM
+·
+IMU identity read
+Value 0
+08:31:05 PM
+·
+IMU bus start
+Value 0
+08:31:05 PM
+↗
+State → IDLE
+Standing by
+08:28:37 PM
+·
+IMU start result
+0x00004900
+08:28:37 PM
+·
+IMU configuration
+Value 0
+08:28:37 PM
+·
+IMU identity value
+Value 73
+08:28:37 PM
+·
+IMU identity read
+Value 0
+08:28:37 PM
+·
+IMU bus start
+Value 0
+08:28:37 PM
+·
+Barcode widths (mm)
+swing #22-24: gap 51.0+, bar 21.8
+08:28:30 PM
+·
+Barcode widths (mm)
+swing #19-21: bar 8.6, gap 2.4, bar 3.4
+08:28:30 PM
+·
+Barcode widths (mm)
+swing #16-18: gap 2.4, bar 8.8, gap 2.6
+08:28:30 PM
+·
+Barcode widths (mm)
+swing #13-15: bar 2.8, gap 7.6, bar 3.8
+08:28:30 PM
+·
+Barcode widths (mm)
+swing #10-12: gap 2.4, bar 9.0, gap 2.6
+08:28:30 PM

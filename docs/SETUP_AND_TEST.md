@@ -246,7 +246,7 @@ answered with `"err": "bad_map"`. The map is only accepted in IDLE and is
 
 **C7.** S1-M03 (pull the power: the broker publishes the Last Will,
 `online:false`), S1-M04 (stop / start the broker: the Pico reconnects by
-itself), S1-M05 (each command and error below), S1-M06 (10-minute soak).
+itself), S1-M05 (each command and error below) (S1-M06, the 10-minute soak, was retired on 19 Nov).
 
 Commands: the dashboard buttons, or `python3 dashboard/picocar_codec.py
 cmd <id> ... > cmd.bin` then `mosquitto_pub -h localhost -q 1 -t
