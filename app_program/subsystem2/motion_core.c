@@ -37,36 +37,61 @@
  *  data representation of IF-02: bits stored per field and why.
  * --------------------------------------------------------------------- */
 static app_pack_field_t const g_odom_layout[] = {
-    PK_FIELD(motion_types_odom_t, t_ms, 32u, PK_W), /* ms since boot, wraps */
-    PK_FIELD(motion_types_odom_t, enc_l, 32u,
-             PK_W), /* running count since power-on  */
-    PK_FIELD(motion_types_odom_t, enc_r, 32u, PK_W),
-    PK_FIELD(motion_types_odom_t, dist_mm, 32u,
-             PK_W), /* running, readers take differences */
-    PK_FIELD(motion_types_odom_t, x_mm, 24u, PK_S), /* +-8.3 km */
-    PK_FIELD(motion_types_odom_t, y_mm, 24u, PK_S),
-    PK_FIELD(motion_types_odom_t, heading_cdeg, 32u,
-             PK_W), /* accumulated, never wrapped    */
-    PK_FIELD(motion_types_odom_t, v_l_mm_s, 10u,
-             PK_S), /* +-511 (set-points clamp at 450) */
-    PK_FIELD(motion_types_odom_t, v_r_mm_s, 10u, PK_S),
-    PK_FIELD(motion_types_odom_t, v_mm_s, 10u, PK_S),
-    PK_FIELD(motion_types_odom_t, yaw_rate_cdeg_s, 16u,
-             PK_S), /* the int16_t range, +-327 deg/s */
-    PK_FIELD(motion_types_odom_t, duty_l, 11u, PK_S), /* +-1000 per mille */
-    PK_FIELD(motion_types_odom_t, duty_r, 11u, PK_S),
-    PK_FIELD(motion_types_odom_t, rejected, 16u, PK_W), /* counter */
-    PK_FIELD(motion_types_odom_t, state, 3u, PK_U),     /* 5 states */
-    PK_FIELD(motion_types_odom_t, phase, 3u, PK_U),     /* 5 phases */
-    PK_FIELD(motion_types_odom_t, auth, 2u, PK_U),      /* 3 sources */
-    PK_FIELD(motion_types_odom_t, last_done_seq, 5u,
-             PK_W), /* MOTION_SEQ_BITS */
-    PK_FIELD(motion_types_odom_t, last_done_src, 2u, PK_U),
-    PK_FIELD(motion_types_odom_t, last_fail_seq, 5u, PK_W),
-    PK_FIELD(motion_types_odom_t, done_count, 8u,
-             PK_W), /* counters, readers compare     */
-    PK_FIELD(motion_types_odom_t, fail_count, 8u, PK_W),
-    PK_FIELD(motion_types_odom_t, hw_ok, 1u, PK_U)};
+    {offsetof(motion_types_odom_t, t_ms),
+     sizeof(((motion_types_odom_t){0}).t_ms), 32u,
+     PK_W}, /* ms since boot, wraps */
+    {offsetof(motion_types_odom_t, enc_l),
+     sizeof(((motion_types_odom_t){0}).enc_l), 32u,
+     PK_W}, /* running count since power-on  */
+    {offsetof(motion_types_odom_t, enc_r),
+     sizeof(((motion_types_odom_t){0}).enc_r), 32u, PK_W},
+    {offsetof(motion_types_odom_t, dist_mm),
+     sizeof(((motion_types_odom_t){0}).dist_mm), 32u,
+     PK_W}, /* running, readers take differences */
+    {offsetof(motion_types_odom_t, x_mm),
+     sizeof(((motion_types_odom_t){0}).x_mm), 24u, PK_S}, /* +-8.3 km */
+    {offsetof(motion_types_odom_t, y_mm),
+     sizeof(((motion_types_odom_t){0}).y_mm), 24u, PK_S},
+    {offsetof(motion_types_odom_t, heading_cdeg),
+     sizeof(((motion_types_odom_t){0}).heading_cdeg), 32u,
+     PK_W}, /* accumulated, never wrapped    */
+    {offsetof(motion_types_odom_t, v_l_mm_s),
+     sizeof(((motion_types_odom_t){0}).v_l_mm_s), 10u,
+     PK_S}, /* +-511 (set-points clamp at 450) */
+    {offsetof(motion_types_odom_t, v_r_mm_s),
+     sizeof(((motion_types_odom_t){0}).v_r_mm_s), 10u, PK_S},
+    {offsetof(motion_types_odom_t, v_mm_s),
+     sizeof(((motion_types_odom_t){0}).v_mm_s), 10u, PK_S},
+    {offsetof(motion_types_odom_t, yaw_rate_cdeg_s),
+     sizeof(((motion_types_odom_t){0}).yaw_rate_cdeg_s), 16u,
+     PK_S}, /* the int16_t range, +-327 deg/s */
+    {offsetof(motion_types_odom_t, duty_l),
+     sizeof(((motion_types_odom_t){0}).duty_l), 11u,
+     PK_S}, /* +-1000 per mille */
+    {offsetof(motion_types_odom_t, duty_r),
+     sizeof(((motion_types_odom_t){0}).duty_r), 11u, PK_S},
+    {offsetof(motion_types_odom_t, rejected),
+     sizeof(((motion_types_odom_t){0}).rejected), 16u, PK_W}, /* counter */
+    {offsetof(motion_types_odom_t, state),
+     sizeof(((motion_types_odom_t){0}).state), 3u, PK_U}, /* 5 states */
+    {offsetof(motion_types_odom_t, phase),
+     sizeof(((motion_types_odom_t){0}).phase), 3u, PK_U}, /* 5 phases */
+    {offsetof(motion_types_odom_t, auth),
+     sizeof(((motion_types_odom_t){0}).auth), 2u, PK_U}, /* 3 sources */
+    {offsetof(motion_types_odom_t, last_done_seq),
+     sizeof(((motion_types_odom_t){0}).last_done_seq), 5u,
+     PK_W}, /* MOTION_SEQ_BITS */
+    {offsetof(motion_types_odom_t, last_done_src),
+     sizeof(((motion_types_odom_t){0}).last_done_src), 2u, PK_U},
+    {offsetof(motion_types_odom_t, last_fail_seq),
+     sizeof(((motion_types_odom_t){0}).last_fail_seq), 5u, PK_W},
+    {offsetof(motion_types_odom_t, done_count),
+     sizeof(((motion_types_odom_t){0}).done_count), 8u,
+     PK_W}, /* counters, readers compare     */
+    {offsetof(motion_types_odom_t, fail_count),
+     sizeof(((motion_types_odom_t){0}).fail_count), 8u, PK_W},
+    {offsetof(motion_types_odom_t, hw_ok),
+     sizeof(((motion_types_odom_t){0}).hw_ok), 1u, PK_U}};
 
 static void    push_event(motion_core_t * p_mc, uint8_t code, uint8_t seq,
                           uint8_t src);

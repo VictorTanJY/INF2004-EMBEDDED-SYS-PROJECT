@@ -521,6 +521,5 @@ static uint32_t bc_step_um (motion_types_odom_t const * p_odom)
                                    / ((int64_t)18000 * 1000000));
     return (uint32_t)app_types_abs_i32((int32_t)p_odom->v_mm_s + side);
 }
-/*** end of file ***/
 
 /*** end of file ***/

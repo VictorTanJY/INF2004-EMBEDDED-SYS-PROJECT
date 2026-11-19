@@ -11,9 +11,10 @@
  *      [TEST] subsystem1 SUMMARY 1 passed, 1 failed, 0 skipped
  *
  *  Usage, inside a test function:
- *      TEST_INIT();
- *      TEST_CHECK("S1-U01", value >= 0 && value <= 4095, "ADC reads in range");
- *      TEST_SUMMARY("subsystem1");
+ *      test_report_t report = {0, 0, 0};
+ *      TEST_CHECK(&report, "S1-U01", (value >= 0) && (value <= 4095),
+ *                 "ADC reads in range");
+ *      test_report_summary(&report, "subsystem1");
  *
  *  Test IDs must match the ones in testing/<subsystem>/TEST_LOG.md.
  *
@@ -26,39 +27,27 @@
 #ifndef TEST_REPORT_H
 #define TEST_REPORT_H
 
-#include <tm/tmonitor.h>
+#include <stdbool.h>
+#include <tk/tkernel.h>
 
-#define TEST_INIT()     \
-    INT test_pass_ = 0; \
-    INT test_fail_ = 0; \
-    INT test_skip_ = 0
+/* Results of one subsystem's test run. */
+typedef struct
+{
+    INT pass;
+    INT fail;
+    INT skip;
+} test_report_t;
 
-#define TEST_CHECK(id, cond, desc)                                          \
-    do                                                                      \
-    {                                                                       \
-        if (cond)                                                           \
-        {                                                                   \
-            test_pass_++;                                                   \
-            tm_printf((UB *)"[TEST] %s PASS  %s\n", (id), (desc));          \
-        }                                                                   \
-        else                                                                \
-        {                                                                   \
-            test_fail_++;                                                   \
-            tm_printf((UB *)"[TEST] %s FAIL  %s   (%s:%d)\n", (id), (desc), \
-                      __FILE__, __LINE__);                                  \
-        }                                                                   \
-    } while (0)
+void test_report_check(test_report_t * p_report, char const * p_id, bool b_ok,
+                       char const * p_desc, char const * p_file, INT line);
+void test_report_skip(test_report_t * p_report, char const * p_id,
+                      char const * p_desc, char const * p_why);
+void test_report_summary(test_report_t const * p_report, char const * p_name);
 
-#define TEST_SKIP(id, desc, why)                                             \
-    do                                                                       \
-    {                                                                        \
-        test_skip_++;                                                        \
-        tm_printf((UB *)"[TEST] %s SKIP  %s   (%s)\n", (id), (desc), (why)); \
-    } while (0)
-
-#define TEST_SUMMARY(name)                                                  \
-    tm_printf((UB *)"[TEST] %s SUMMARY %d passed, %d failed, %d skipped\n", \
-              (name), test_pass_, test_fail_, test_skip_)
+/* NOTE: a macro rather than a function only so that a failure reports the
+   caller's file and line (__FILE__, __LINE__). */
+#define TEST_CHECK(p_report, id, cond, desc) \
+    (test_report_check((p_report), (id), (cond), (desc), __FILE__, __LINE__))
 
 #endif /* TEST_REPORT_H */
 

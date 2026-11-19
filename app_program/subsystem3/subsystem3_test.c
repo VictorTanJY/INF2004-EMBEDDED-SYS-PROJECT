@@ -56,14 +56,14 @@ EXPORT void subsystem3_test_run (void)
     int32_t           kdx;
     int32_t           elem;
 
-    TEST_INIT();
+    test_report_t report = {0, 0, 0};
 
     subsystem3_get_snap(&snap_a);
     (void)tk_dly_tsk(100);
     subsystem3_get_snap(&snap_b);
-    TEST_CHECK("S3-U02", snap_b.t_ms != snap_a.t_ms,
+    TEST_CHECK(&report, "S3-U02", snap_b.t_ms != snap_a.t_ms,
                "LineBarcodeTask publishes its snapshot");
-    TEST_CHECK("S3-U03",
+    TEST_CHECK(&report, "S3-U03",
                ((snap_b.flags & LINE_FLAG_HW_OK) != 0u)
                    && ((snap_b.blocks - snap_a.blocks) >= 8u)
                    && ((snap_b.blocks - snap_a.blocks) <= 12u),
@@ -83,7 +83,7 @@ EXPORT void subsystem3_test_run (void)
             elem_widths[n_elems++] = 3000u;
         }
     }
-    TEST_CHECK("S3-U04",
+    TEST_CHECK(&report, "S3-U04",
                (CODE39_OK
                 == code39_decode_one(elem_widths, n_elems, 15u, &chr, &b_rev))
                    && ('F' == chr),
@@ -98,7 +98,7 @@ EXPORT void subsystem3_test_run (void)
               (INT)(snap_b.blocks - snap_a.blocks),
               (INT)(snap_b.missed_blocks - snap_a.missed_blocks),
               (INT)snap_b.raw_l, (INT)snap_b.raw_r, (INT)snap_b.raw_bc);
-    TEST_CHECK("S3-U05",
+    TEST_CHECK(&report, "S3-U05",
                ((snap_b.flags & LINE_FLAG_HW_OK) != 0u)
                    && ((snap_b.blocks - snap_a.blocks) >= 95u)
                    && ((snap_b.blocks - snap_a.blocks) <= 105u)
@@ -149,14 +149,14 @@ EXPORT void subsystem3_test_run (void)
                   (INT)found, (INT)((out_ok.chr != '\0') ? out_ok.chr : '?'),
                   (INT)g_t_bc.pass, (INT)worst_us, (INT)(total_us / samples),
                   (INT)samples);
-        TEST_CHECK("S3-U07",
+        TEST_CHECK(&report, "S3-U07",
                    (BC_VALID == found) && ('A' == out_ok.chr) && (1u == results)
                        && (worst_us < T_BLOCK_US),
                    "barcode *A* decodes once through bc_sample; slowest call "
                    "fits a 10 ms block");
     }
 
-    TEST_SUMMARY("subsystem3");
+    test_report_summary(&report, "subsystem3");
 }
 
 #endif

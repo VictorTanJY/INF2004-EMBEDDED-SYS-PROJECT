@@ -174,7 +174,6 @@ EXPORT bool subsystem2_estop_reconnect (void)
     return b_ok;
 }
 
-/*** end of file ***/
 
 /* motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
 static void motion_cyc_handler (void * p_exinf)

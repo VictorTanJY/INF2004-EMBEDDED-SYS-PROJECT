@@ -162,7 +162,6 @@ EXPORT uint32_t drv_adc_errors (void)
     return g_errors + (((in_w(ADC_CS) & ADC_CS_ERR_STICKY) != 0u) ? 1u : 0u);
 }
 
-/*** end of file ***/
 
 static inline uint32_t adc_fcs_level (uint32_t fcs)
 {

@@ -12,6 +12,8 @@
 #include "test_s4_main.h"
 #include <math.h>
 #include <stdio.h>
+#include <inttypes.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "app_types.h"
@@ -35,19 +37,9 @@
 #define T_HB_START_MS   1000u /* supervision starts */
 #define T_HB_END_MS     1320u /* past the slowest timeout */
 
-#define CHECK(id, cond)                                                      \
-    do                                                                       \
-    {                                                                        \
-        if (cond)                                                            \
-        {                                                                    \
-            g_pass++;                                                        \
-        }                                                                    \
-        else                                                                 \
-        {                                                                    \
-            g_fail++;                                                        \
-            printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); \
-        }                                                                    \
-    } while (0)
+/* NOTE: a macro rather than a function only so that a failure reports the
+   caller's file and line (__FILE__, __LINE__). */
+#define CHECK(id, cond) (check_result((id), (cond), __FILE__, __LINE__))
 
 static int32_t g_pass;
 static int32_t g_fail;
@@ -68,6 +60,8 @@ static int32_t   run_hump(float64_t h_mm, float64_t len_mm, int32_t * p_starts,
 static int32_t   run_side_hump(float64_t h_mm, float64_t len_mm, int32_t side,
                                int32_t * p_starts, int32_t * p_ends);
 static void      test_pack_s4(void);
+static void      check_result(char const * p_id, bool b_ok, char const * p_file,
+                              int32_t line);
 
 int main (void)
 {
@@ -822,6 +816,26 @@ static void test_pack_s4 (void)
     imu_core_snap_unpack(words, &ret);
     CHECK("S4-H11", (255u == ret.humps) && (1023u == ret.hump_max_mm));
 }
-/*** end of file ***/
+
+/*!
+ * @brief Count one check; print a FAIL line when it failed.
+ * @param[in] p_id Test id, as in the subsystem's TEST_LOG.md.
+ * @param[in] b_ok Whether the check passed.
+ * @param[in] p_file Source file of the check.
+ * @param[in] line Source line of the check.
+ */
+static void check_result (char const * p_id, bool b_ok, char const * p_file,
+                          int32_t line)
+{
+    if (b_ok)
+    {
+        g_pass++;
+    }
+    else
+    {
+        g_fail++;
+        printf("FAIL %s  (%s:%" PRId32 ")\n", p_id, p_file, line);
+    }
+}
 
 /*** end of file ***/

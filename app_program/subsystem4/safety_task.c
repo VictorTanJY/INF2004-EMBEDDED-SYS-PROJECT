@@ -154,7 +154,6 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
     }
 }
 
-/*** end of file ***/
 
 static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
 {

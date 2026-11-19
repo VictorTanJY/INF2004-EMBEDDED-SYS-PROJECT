@@ -56,32 +56,52 @@ static char const g_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
 /* Data representation of IF-10 (mission part). */
 static app_pack_field_t const g_mission_layout[] = {
-    PK_FIELD(mission_types_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(mission_types_snap_t, fault_bits, 20u,
-             PK_U), /* SAFETY_FLT_* (16) + self-test mask << 16 */
-    PK_FIELD(mission_types_snap_t, cruise_mm_s, 9u, PK_U), /* <= 450 */
-    PK_FIELD(mission_types_snap_t, speed_cap_mm_s, 9u, PK_U),
-    PK_FIELD(mission_types_snap_t, slow_mm, 10u,
-             PK_U), /* <= 600 (slow_cm 25..60) */
-    PK_FIELD(mission_types_snap_t, stop_mm, 9u,
-             PK_U), /* <= 400 (stop_cm 15..40)   */
-    PK_FIELD(mission_types_snap_t, lost_mm, 8u, PK_U),     /* <= 150 */
-    PK_FIELD(mission_types_snap_t, junction_mm, 6u, PK_U), /* <= 40 */
-    PK_FIELD(mission_types_snap_t, runs, 16u, PK_W),       /* counter */
-    PK_FIELD(mission_types_snap_t, state, 4u, PK_U),       /* 11 states */
-    PK_FIELD(mission_types_snap_t, auth, 2u, PK_U),        /* 3 sources */
-    PK_FIELD(mission_types_snap_t, pending_nav, 3u,
-             PK_UN), /* 0..3, NONE (0xFF) */
-    PK_FIELD(mission_types_snap_t, pending_char, 6u,
-             PK_SYM), /* Code 39 symbol or none    */
-    PK_FIELD(mission_types_snap_t, nav_map[0], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, nav_map[1], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, nav_map[2], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, nav_map[3], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, calibrated, 2u,
-             PK_U), /* MISSION_CAL_IR | _IMU */
-    PK_FIELD(mission_types_snap_t, cal_phase, 2u, PK_U), /* 4 phases */
-    PK_FIELD(mission_types_snap_t, cause, 3u, PK_U)      /* 7 causes */
+    {offsetof(mission_types_snap_t, t_ms),
+     sizeof(((mission_types_snap_t){0}).t_ms), 32u, PK_W},
+    {offsetof(mission_types_snap_t, fault_bits),
+     sizeof(((mission_types_snap_t){0}).fault_bits), 20u,
+     PK_U}, /* SAFETY_FLT_* (16) + self-test mask << 16 */
+    {offsetof(mission_types_snap_t, cruise_mm_s),
+     sizeof(((mission_types_snap_t){0}).cruise_mm_s), 9u, PK_U}, /* <= 450 */
+    {offsetof(mission_types_snap_t, speed_cap_mm_s),
+     sizeof(((mission_types_snap_t){0}).speed_cap_mm_s), 9u, PK_U},
+    {offsetof(mission_types_snap_t, slow_mm),
+     sizeof(((mission_types_snap_t){0}).slow_mm), 10u,
+     PK_U}, /* <= 600 (slow_cm 25..60) */
+    {offsetof(mission_types_snap_t, stop_mm),
+     sizeof(((mission_types_snap_t){0}).stop_mm), 9u,
+     PK_U}, /* <= 400 (stop_cm 15..40)   */
+    {offsetof(mission_types_snap_t, lost_mm),
+     sizeof(((mission_types_snap_t){0}).lost_mm), 8u, PK_U}, /* <= 150 */
+    {offsetof(mission_types_snap_t, junction_mm),
+     sizeof(((mission_types_snap_t){0}).junction_mm), 6u, PK_U}, /* <= 40 */
+    {offsetof(mission_types_snap_t, runs),
+     sizeof(((mission_types_snap_t){0}).runs), 16u, PK_W}, /* counter */
+    {offsetof(mission_types_snap_t, state),
+     sizeof(((mission_types_snap_t){0}).state), 4u, PK_U}, /* 11 states */
+    {offsetof(mission_types_snap_t, auth),
+     sizeof(((mission_types_snap_t){0}).auth), 2u, PK_U}, /* 3 sources */
+    {offsetof(mission_types_snap_t, pending_nav),
+     sizeof(((mission_types_snap_t){0}).pending_nav), 3u,
+     PK_UN}, /* 0..3, NONE (0xFF) */
+    {offsetof(mission_types_snap_t, pending_char),
+     sizeof(((mission_types_snap_t){0}).pending_char), 6u,
+     PK_SYM}, /* Code 39 symbol or none    */
+    {offsetof(mission_types_snap_t, nav_map[0]),
+     sizeof(((mission_types_snap_t){0}).nav_map[0]), 6u, PK_SYM},
+    {offsetof(mission_types_snap_t, nav_map[1]),
+     sizeof(((mission_types_snap_t){0}).nav_map[1]), 6u, PK_SYM},
+    {offsetof(mission_types_snap_t, nav_map[2]),
+     sizeof(((mission_types_snap_t){0}).nav_map[2]), 6u, PK_SYM},
+    {offsetof(mission_types_snap_t, nav_map[3]),
+     sizeof(((mission_types_snap_t){0}).nav_map[3]), 6u, PK_SYM},
+    {offsetof(mission_types_snap_t, calibrated),
+     sizeof(((mission_types_snap_t){0}).calibrated), 2u,
+     PK_U}, /* MISSION_CAL_IR | _IMU */
+    {offsetof(mission_types_snap_t, cal_phase),
+     sizeof(((mission_types_snap_t){0}).cal_phase), 2u, PK_U}, /* 4 phases */
+    {offsetof(mission_types_snap_t, cause),
+     sizeof(((mission_types_snap_t){0}).cause), 3u, PK_U} /* 7 causes */
 };
 
 static void    enter(mission_core_t * p_mc, uint8_t state, uint32_t now_ms,

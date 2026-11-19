@@ -163,10 +163,6 @@ typedef struct
     uint8_t  kind;   /* app_pack_kind_t                                   */
 } app_pack_field_t;
 
-#define PK_FIELD(type, member, width, kind)                                  \
-    {(uint16_t)offsetof(type, member), (uint8_t)sizeof(((type *)0)->member), \
-     (uint8_t)(width), (uint8_t)(kind)}
-
 /* Words needed for a number of bits. */
 #define PK_WORDS(bits) (((bits) + 31u) / 32u)
 

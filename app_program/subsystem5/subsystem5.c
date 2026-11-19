@@ -197,7 +197,6 @@ EXPORT void subsystem5_put_obst_snap (mission_types_obst_snap_t const * p_in)
     app_unlock(&g_obst_lock, sts);
 }
 
-/*** end of file ***/
 
 /* range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
 static void range_cyc_handler (void * p_exinf)

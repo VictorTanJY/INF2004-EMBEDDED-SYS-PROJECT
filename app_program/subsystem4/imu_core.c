@@ -20,25 +20,42 @@
  *  Change Requirement 1: data representation of IF-08 (IMU snapshot).
  * --------------------------------------------------------------------- */
 static app_pack_field_t const g_imu_layout[] = {
-    PK_FIELD(imu_types_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(imu_types_snap_t, pitch_cdeg, 15u,
-             PK_S), /* +-163.83 deg (pitch is +-90)  */
-    PK_FIELD(imu_types_snap_t, roll_cdeg, 16u,
-             PK_S), /* +-327.67 deg (roll is +-180)  */
-    PK_FIELD(imu_types_snap_t, heading_cdeg, 16u, PK_U), /* 0..35999 */
-    PK_FIELD(imu_types_snap_t, turn_rate_cdeg_s, 16u,
-             PK_S), /* the int16_t range, +-327 deg/s */
-    PK_FIELD(imu_types_snap_t, accel_mg, 15u, PK_S), /* +-16 g (sensor range) */
-    PK_FIELD(imu_types_snap_t, hump_max_mm, 10u, PK_U), /* 0..1023 mm */
-    PK_FIELD(imu_types_snap_t, last_hump_mm, 10u, PK_U),
-    PK_FIELD(imu_types_snap_t, humps, 8u, PK_U), /* per run, saturates at 255 */
-    PK_FIELD(imu_types_snap_t, i2c_errors, 16u, PK_W), /* counter */
-    PK_FIELD(imu_types_snap_t, hump_state, 2u, PK_U),  /* 4 states */
-    PK_FIELD(imu_types_snap_t, motion, 3u, PK_U),      /* 8 classes */
-    PK_FIELD(imu_types_snap_t, b_ok, 1u, PK_U),
-    PK_FIELD(imu_types_snap_t, cal, 2u, PK_U), /* IMU_CAL_LEVEL | IMU_CAL_MAG */
-    PK_FIELD(imu_types_snap_t, pitch_valid, 1u, PK_U),
-    PK_FIELD(imu_types_snap_t, tilt, 1u, PK_U)};
+    {offsetof(imu_types_snap_t, t_ms), sizeof(((imu_types_snap_t){0}).t_ms),
+     32u, PK_W},
+    {offsetof(imu_types_snap_t, pitch_cdeg),
+     sizeof(((imu_types_snap_t){0}).pitch_cdeg), 15u,
+     PK_S}, /* +-163.83 deg (pitch is +-90)  */
+    {offsetof(imu_types_snap_t, roll_cdeg),
+     sizeof(((imu_types_snap_t){0}).roll_cdeg), 16u,
+     PK_S}, /* +-327.67 deg (roll is +-180)  */
+    {offsetof(imu_types_snap_t, heading_cdeg),
+     sizeof(((imu_types_snap_t){0}).heading_cdeg), 16u, PK_U}, /* 0..35999 */
+    {offsetof(imu_types_snap_t, turn_rate_cdeg_s),
+     sizeof(((imu_types_snap_t){0}).turn_rate_cdeg_s), 16u,
+     PK_S}, /* the int16_t range, +-327 deg/s */
+    {offsetof(imu_types_snap_t, accel_mg),
+     sizeof(((imu_types_snap_t){0}).accel_mg), 15u,
+     PK_S}, /* +-16 g (sensor range) */
+    {offsetof(imu_types_snap_t, hump_max_mm),
+     sizeof(((imu_types_snap_t){0}).hump_max_mm), 10u, PK_U}, /* 0..1023 mm */
+    {offsetof(imu_types_snap_t, last_hump_mm),
+     sizeof(((imu_types_snap_t){0}).last_hump_mm), 10u, PK_U},
+    {offsetof(imu_types_snap_t, humps), sizeof(((imu_types_snap_t){0}).humps),
+     8u, PK_U}, /* per run, saturates at 255 */
+    {offsetof(imu_types_snap_t, i2c_errors),
+     sizeof(((imu_types_snap_t){0}).i2c_errors), 16u, PK_W}, /* counter */
+    {offsetof(imu_types_snap_t, hump_state),
+     sizeof(((imu_types_snap_t){0}).hump_state), 2u, PK_U}, /* 4 states */
+    {offsetof(imu_types_snap_t, motion), sizeof(((imu_types_snap_t){0}).motion),
+     3u, PK_U}, /* 8 classes */
+    {offsetof(imu_types_snap_t, b_ok), sizeof(((imu_types_snap_t){0}).b_ok), 1u,
+     PK_U},
+    {offsetof(imu_types_snap_t, cal), sizeof(((imu_types_snap_t){0}).cal), 2u,
+     PK_U}, /* IMU_CAL_LEVEL | IMU_CAL_MAG */
+    {offsetof(imu_types_snap_t, pitch_valid),
+     sizeof(((imu_types_snap_t){0}).pitch_valid), 1u, PK_U},
+    {offsetof(imu_types_snap_t, tilt), sizeof(((imu_types_snap_t){0}).tilt), 1u,
+     PK_U}};
 
 /* ---- hump results while the floor may have gone (14 Nov) ----------------- */
 static void    hump_reset(imu_core_t * p_ic);

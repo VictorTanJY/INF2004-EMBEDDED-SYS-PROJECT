@@ -9,6 +9,8 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
+#include <stdbool.h>
 #include "app_types.h"
 #include "app_math.h"
 #include "app_pack.h"
@@ -19,24 +21,16 @@
 #define T_ATAN_RANGE     3000  /* +-3000 on each axis */
 #define T_ISQRT_MAX      70000u
 
-#define CHECK(id, cond)                                                      \
-    do                                                                       \
-    {                                                                        \
-        if (cond)                                                            \
-        {                                                                    \
-            g_pass++;                                                        \
-        }                                                                    \
-        else                                                                 \
-        {                                                                    \
-            g_fail++;                                                        \
-            printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); \
-        }                                                                    \
-    } while (0)
+/* NOTE: a macro rather than a function only so that a failure reports the
+   caller's file and line (__FILE__, __LINE__). */
+#define CHECK(id, cond) (check_result((id), (cond), __FILE__, __LINE__))
 
 static int32_t g_pass;
 static int32_t g_fail;
 
 static void test_pack(void);
+static void check_result(char const * p_id, bool b_ok, char const * p_file,
+                         int32_t line);
 
 int main (void)
 {
@@ -261,6 +255,26 @@ static void test_pack (void)
               writer.b_overflow && (0u == app_pack_writer_len(&writer)));
     }
 }
-/*** end of file ***/
+
+/*!
+ * @brief Count one check; print a FAIL line when it failed.
+ * @param[in] p_id Test id, as in the subsystem's TEST_LOG.md.
+ * @param[in] b_ok Whether the check passed.
+ * @param[in] p_file Source file of the check.
+ * @param[in] line Source line of the check.
+ */
+static void check_result (char const * p_id, bool b_ok, char const * p_file,
+                          int32_t line)
+{
+    if (b_ok)
+    {
+        g_pass++;
+    }
+    else
+    {
+        g_fail++;
+        printf("FAIL %s  (%s:%" PRId32 ")\n", p_id, p_file, line);
+    }
+}
 
 /*** end of file ***/

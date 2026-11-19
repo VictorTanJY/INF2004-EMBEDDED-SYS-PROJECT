@@ -149,7 +149,6 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 
 #if APP_TEST
 
-/*** end of file ***/
 
 static void tt_wake (uint32_t now_us)
 {

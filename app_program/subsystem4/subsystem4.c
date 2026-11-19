@@ -134,7 +134,6 @@ EXPORT void subsystem4_put_imu_snap (imu_types_snap_t const * p_in)
     app_unlock(&g_imu_lock, sts);
 }
 
-/*** end of file ***/
 
 static void imu_cyc_handler (void * p_exinf)
 {

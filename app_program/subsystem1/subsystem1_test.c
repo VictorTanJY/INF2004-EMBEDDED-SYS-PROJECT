@@ -50,10 +50,10 @@ EXPORT void subsystem1_test_run (void)
     bool                b_long  = false;
     bool                b_short = false;
 
-    TEST_INIT();
+    test_report_t report = {0, 0, 0};
 
     /* S1-U01: mbf_telem exists and accepts a record without blocking. */
-    TEST_CHECK("S1-U01",
+    TEST_CHECK(&report, "S1-U01",
                (E_OK == tk_ref_mbf(g_mbf_telem, &rmbf))
                    && subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_COMMS, 1u, 42),
@@ -80,12 +80,12 @@ EXPORT void subsystem1_test_run (void)
     telem.clr_l_mm     = 65535u;
     telem.clr_r_mm     = 65535u;
     len = comms_proto_build_telemetry(&telem, buf, (uint16_t)sizeof(buf));
-    TEST_CHECK("S1-U02", 27u == len,
+    TEST_CHECK(&report, "S1-U02", 27u == len,
                "worst-case telemetry is a 27-byte binary frame");
 
     /* S1-U03: valid commands parse; invalid ones are rejected with a reason. */
     TEST_CHECK(
-        "S1-U03",
+        &report, "S1-U03",
         s1_parse(g_start_7, 3u, &cmd, &err) && (7u == cmd.cmd_id)
             && (COMMS_CMD_START == cmd.cmd)
             && !s1_parse(g_set_99, 5u, &cmd, &err) && (COMMS_ERR_RANGE == err)
@@ -94,7 +94,7 @@ EXPORT void subsystem1_test_run (void)
 
     /* S1-U04: START is refused outside IDLE (FR14), STOP is not. */
     (void)s1_parse(g_start_9, 3u, &cmd, &err);
-    TEST_CHECK("S1-U04",
+    TEST_CHECK(&report, "S1-U04",
                (COMMS_ERR_BUSY == comms_proto_check_cmd(&cmd, false))
                    && (COMMS_ERR_NONE == comms_proto_check_cmd(&cmd, true)),
                "start accepted only in IDLE");
@@ -102,14 +102,15 @@ EXPORT void subsystem1_test_run (void)
     /* S1-U05: ack frame. */
     len =
         comms_proto_build_ack(&cmd, COMMS_ERR_BUSY, buf, (uint16_t)sizeof(buf));
-    TEST_CHECK("S1-U05", (3u == len) && s1_bytes_eq(buf, g_ack_busy, 3u),
+    TEST_CHECK(&report, "S1-U05",
+               (3u == len) && s1_bytes_eq(buf, g_ack_busy, 3u),
                "ack frame: 3 bytes, id 9, err busy");
 
     /* S1-U06: a 10 ms bounce is ignored; a 2 s hold gives one LONG, no SHORT.
      */
     hmi_button_init(&btn);
     (void)hmi_button_update(&btn, true, 20u, 2000u);
-    TEST_CHECK("S1-U06a",
+    TEST_CHECK(&report, "S1-U06a",
                HMI_BTN_EV_NONE == hmi_button_update(&btn, false, 20u, 2000u),
                "single-sample glitch ignored");
     hmi_button_init(&btn);
@@ -121,7 +122,7 @@ EXPORT void subsystem1_test_run (void)
     }
     (void)hmi_button_update(&btn, false, 20u, 2000u);
     b_short = (HMI_BTN_EV_SHORT == hmi_button_update(&btn, false, 20u, 2000u));
-    TEST_CHECK("S1-U06b", b_long && !b_short,
+    TEST_CHECK(&report, "S1-U06b", b_long && !b_short,
                "long press reported once, no short");
 
     /* S1-U07: a delayed QoS 1 redelivery is recognised; a reused id is not. */
@@ -134,14 +135,14 @@ EXPORT void subsystem1_test_run (void)
         comms_proto_dedup_add(&dedup, &cmd, 100u);
         (void)s1_parse(g_reset_11, 3u, &again, &err);
         TEST_CHECK(
-            "S1-U07",
+            &report, "S1-U07",
             (COMMS_DEDUP_REPEAT == comms_proto_dedup_check(&dedup, &cmd, 5000u))
                 && (COMMS_DEDUP_CONFLICT
                     == comms_proto_dedup_check(&dedup, &again, 5000u)),
             "duplicate command ids are suppressed within the window");
     }
 
-    TEST_SUMMARY("subsystem1");
+    test_report_summary(&report, "subsystem1");
 }
 
 #endif

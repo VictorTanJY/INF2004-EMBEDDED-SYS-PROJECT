@@ -52,14 +52,14 @@ EXPORT void subsystem4_test_run (void)
     imu_types_snap_t snap_a;
     imu_types_snap_t snap_b;
 
-    TEST_INIT();
+    test_report_t report = {0, 0, 0};
 
-    TEST_CHECK("S4-U01", E_OK == tk_ref_flg(g_flg_safety, &rflg),
+    TEST_CHECK(&report, "S4-U01", E_OK == tk_ref_flg(g_flg_safety, &rflg),
                "flg_safety exists");
 
     before = subsystem4_heartbeat_count(SAFETY_HB_MOTION);
     (void)tk_dly_tsk(50);
-    TEST_CHECK("S4-U02",
+    TEST_CHECK(&report, "S4-U02",
                ((subsystem4_heartbeat_count(SAFETY_HB_MOTION) - before) & 0xFFu)
                    >= 3u,
                "MotionTask heartbeat advances (8-bit counter, modular)");
@@ -67,13 +67,13 @@ EXPORT void subsystem4_test_run (void)
     subsystem4_get_imu_snap(&snap_a);
     (void)tk_dly_tsk(100);
     subsystem4_get_imu_snap(&snap_b);
-    TEST_CHECK("S4-U04", snap_b.t_ms != snap_a.t_ms,
+    TEST_CHECK(&report, "S4-U04", snap_b.t_ms != snap_a.t_ms,
                "ImuTask publishes its snapshot");
-    TEST_CHECK("S4-U05", safety_task_timer_tick_ok(),
+    TEST_CHECK(&report, "S4-U05", safety_task_timer_tick_ok(),
                "1 us timer ticks at 1 MHz (watchdog tick = 12)");
     tm_printf((UB *)"[INFO] timer: %d us per 100 ms of CPU clock\n",
               (INT)g_safety_tick_us);
-    TEST_CHECK("S4-U06", (in_w(WD_CTRL_REG) & (1uL << 30)) != 0u,
+    TEST_CHECK(&report, "S4-U06", (in_w(WD_CTRL_REG) & (1uL << 30)) != 0u,
                "watchdog enabled and being fed");
 
     /* ---- S4-U07: IMU reads level, no I2C errors in 1 s ----------------- */
@@ -82,8 +82,8 @@ EXPORT void subsystem4_test_run (void)
     subsystem4_get_imu_snap(&snap_b);
     if (0u == snap_b.b_ok)
     {
-        TEST_SKIP("S4-U07", "IMU level and I2C clean",
-                  "IMU not answering: wiring, or emulator");
+        test_report_skip(&report, "S4-U07", "IMU level and I2C clean",
+                         "IMU not answering: wiring, or emulator");
     }
     else
     {
@@ -93,7 +93,7 @@ EXPORT void subsystem4_test_run (void)
             (INT)snap_b.pitch_cdeg, (INT)snap_b.roll_cdeg, (INT)snap_b.accel_mg,
             (INT)(snap_b.i2c_errors - snap_a.i2c_errors), (INT)snap_b.cal);
         TEST_CHECK(
-            "S4-U07",
+            &report, "S4-U07",
             (iabs(snap_b.pitch_cdeg) <= T_LEVEL_CDEG)
                 && (iabs(snap_b.roll_cdeg) <= T_LEVEL_CDEG)
                 && (snap_b.i2c_errors == snap_a.i2c_errors)
@@ -122,7 +122,7 @@ EXPORT void subsystem4_test_run (void)
         tm_printf((UB *)"[INFO] S4-U08 fault flag -> motor_estop() %d us "
                         "(limit %d us)\n",
                   (INT)lat, (INT)T_NFR8_US);
-        TEST_CHECK("S4-U08",
+        TEST_CHECK(&report, "S4-U08",
                    (g_estop_test_us != 0u) && (lat <= T_NFR8_US)
                        && subsystem2_estop_latched() && brake_pins_low()
                        && ((subsystem4_get_latched() & T_FAULT_BIT) != 0u),
@@ -151,7 +151,7 @@ EXPORT void subsystem4_test_run (void)
                   (INT)(subsystem2_estop_latched() ? 1 : 0),
                   (INT)subsystem4_get_latched());
         TEST_CHECK(
-            "S4-U09",
+            &report, "S4-U09",
             b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)
                 && (APP_REGS_FUNCSEL_PWM
                     == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu)),
@@ -159,7 +159,7 @@ EXPORT void subsystem4_test_run (void)
             "IDLE (if it was IDLE)");
     }
 
-    TEST_SUMMARY("subsystem4");
+    test_report_summary(&report, "subsystem4");
 }
 
 #endif

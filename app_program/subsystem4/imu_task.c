@@ -442,7 +442,6 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
     }
 }
 
-/*** end of file ***/
 
 static bool imu_hw_init (void)
 {

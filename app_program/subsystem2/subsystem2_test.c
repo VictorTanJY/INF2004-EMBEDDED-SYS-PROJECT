@@ -61,21 +61,21 @@ EXPORT void subsystem2_test_run (void)
     motion_types_odom_t  snap_b;
     motion_task_timing_t timing;
 
-    TEST_INIT();
+    test_report_t report = {0, 0, 0};
 
-    TEST_CHECK("S2-U01", E_OK == tk_ref_mbf(g_mbf_motion, &rmbf),
+    TEST_CHECK(&report, "S2-U01", E_OK == tk_ref_mbf(g_mbf_motion, &rmbf),
                "mbf_motion exists");
 
     subsystem2_get_odom(&snap_a);
     (void)tk_dly_tsk(50);
     subsystem2_get_odom(&snap_b);
-    TEST_CHECK("S2-U03", snap_b.t_ms != snap_a.t_ms,
+    TEST_CHECK(&report, "S2-U03", snap_b.t_ms != snap_a.t_ms,
                "MotionTask publishes odometry every cycle");
-    TEST_CHECK("S2-U04",
+    TEST_CHECK(&report, "S2-U04",
                (1u == snap_b.hw_ok) && (MOTION_PWM_TOP == in_w(PWM_TOP_SLICE4))
                    && (0x3u == (in_w(PIO0_CTRL_REG) & 0x3u)),
                "PWM 20 kHz configured, PIO0 SM0/SM1 counting");
-    TEST_CHECK("S2-U05",
+    TEST_CHECK(&report, "S2-U05",
                (MOTION_ST_IDLE_BRAKED == snap_b.state) && (0 == snap_b.duty_l)
                    && (0 == snap_b.duty_r),
                "boots braked (duty 0/0)");
@@ -83,7 +83,7 @@ EXPORT void subsystem2_test_run (void)
     (void)motion_api_drive(MOTION_SRC_LINE, 1u, 100, 0);
     (void)tk_dly_tsk(30);
     subsystem2_get_odom(&snap_a);
-    TEST_CHECK("S2-U06",
+    TEST_CHECK(&report, "S2-U06",
                (snap_a.rejected > snap_b.rejected)
                    && (MOTION_ST_IDLE_BRAKED == snap_a.state),
                "DRIVE without LINE authority rejected");
@@ -96,7 +96,7 @@ EXPORT void subsystem2_test_run (void)
                     "%d us, %d cycles\n",
               (INT)timing.per_min_us, (INT)timing.per_max_us,
               (INT)timing.exec_max_us, (INT)timing.cycles);
-    TEST_CHECK("S2-U07",
+    TEST_CHECK(&report, "S2-U07",
                (timing.cycles >= 90u) && (timing.per_min_us >= T_PER_LO_US)
                    && (timing.per_max_us <= T_PER_HI_US)
                    && (timing.exec_max_us <= T_EXEC_MAX_US),
@@ -111,13 +111,16 @@ EXPORT void subsystem2_test_run (void)
         tm_printf((UB *)"[INFO] S2-U08 mission state %d (1 = IDLE; 10 = FAULT, "
                         "e.g. no IMU)\n",
                   (INT)mission.state);
-        TEST_SKIP("S2-U08", "speed step 0 -> 200 mm/s", "MissionTask not IDLE");
-        TEST_SKIP("S2-U09", "left and right wheels match",
-                  "MissionTask not IDLE");
-        TEST_SKIP("S2-U10", "MOVE backward: both encoders count down",
-                  "MissionTask not IDLE");
-        TEST_SKIP("S2-U11", "TURN left: wheels turn opposite ways",
-                  "MissionTask not IDLE");
+        test_report_skip(&report, "S2-U08", "speed step 0 -> 200 mm/s",
+                         "MissionTask not IDLE");
+        test_report_skip(&report, "S2-U09", "left and right wheels match",
+                         "MissionTask not IDLE");
+        test_report_skip(&report, "S2-U10",
+                         "MOVE backward: both encoders count down",
+                         "MissionTask not IDLE");
+        test_report_skip(&report, "S2-U11",
+                         "TURN left: wheels turn opposite ways",
+                         "MissionTask not IDLE");
     }
     else
     {
@@ -197,14 +200,17 @@ EXPORT void subsystem2_test_run (void)
         if (!b_turn)
         {
             (void)motion_api_stop(MOTION_SRC_MISSION, T_SEQ);
-            TEST_SKIP("S2-U08", "speed step 0 -> 200 mm/s",
-                      "no encoder counts: motor battery off, or emulator");
-            TEST_SKIP("S2-U09", "left and right wheels match",
-                      "wheels did not turn");
-            TEST_SKIP("S2-U10", "MOVE backward: both encoders count down",
-                      "wheels did not turn");
-            TEST_SKIP("S2-U11", "TURN left: wheels turn opposite ways",
-                      "wheels did not turn");
+            test_report_skip(
+                &report, "S2-U08", "speed step 0 -> 200 mm/s",
+                "no encoder counts: motor battery off, or emulator");
+            test_report_skip(&report, "S2-U09", "left and right wheels match",
+                             "wheels did not turn");
+            test_report_skip(&report, "S2-U10",
+                             "MOVE backward: both encoders count down",
+                             "wheels did not turn");
+            test_report_skip(&report, "S2-U11",
+                             "TURN left: wheels turn opposite ways",
+                             "wheels did not turn");
             /* A stall fault may have latched meanwhile: clear it for S3..S5. */
             (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
                                           (uint8_t)APP_SRC_MOTION, 0u, 0);
@@ -224,7 +230,7 @@ EXPORT void subsystem2_test_run (void)
                       (INT)dist, (INT)T_DIST_MM,
                       (INT)(odom.enc_l - odom_start.enc_l),
                       (INT)(odom.enc_r - odom_start.enc_r));
-            TEST_CHECK("S2-U08",
+            TEST_CHECK(&report, "S2-U08",
                        b_done && (settle <= T_SETTLE_MAX_MS)
                            && (iabs(dist - (int32_t)T_DIST_MM)
                                <= (int32_t)T_DIST_TOL_MM)
@@ -245,12 +251,12 @@ EXPORT void subsystem2_test_run (void)
                           (INT)(((o_hi.enc_l - o_lo.enc_l) * 1000) / delta_ms),
                           (INT)(((o_hi.enc_r - o_lo.enc_r) * 1000) / delta_ms));
                 TEST_CHECK(
-                    "S2-U09", diff <= band,
+                    &report, "S2-U09", diff <= band,
                     "left and right wheels match within 10 % at 200 mm/s");
             }
             else
             {
-                TEST_CHECK("S2-U09", false,
+                TEST_CHECK(&report, "S2-U09", false,
                            "left and right wheels match (no cruise samples)");
             }
 
@@ -265,7 +271,7 @@ EXPORT void subsystem2_test_run (void)
                       (INT)(odom.dist_mm - odom_start.dist_mm),
                       (INT)(odom.enc_l - odom_start.enc_l),
                       (INT)(odom.enc_r - odom_start.enc_r));
-            TEST_CHECK("S2-U10",
+            TEST_CHECK(&report, "S2-U10",
                        b_done && (odom.enc_l < odom_start.enc_l)
                            && (odom.enc_r < odom_start.enc_r)
                            && (iabs((odom.dist_mm - odom_start.dist_mm)
@@ -284,14 +290,14 @@ EXPORT void subsystem2_test_run (void)
                       (INT)(odom.enc_l - odom_start.enc_l),
                       (INT)(odom.enc_r - odom_start.enc_r));
             TEST_CHECK(
-                "S2-U11",
+                &report, "S2-U11",
                 b_done && (odom.enc_l < odom_start.enc_l)
                     && (odom.enc_r > odom_start.enc_r),
                 "TURN left 90 deg: left wheel back, right wheel forward");
         }
     }
 
-    TEST_SUMMARY("subsystem2");
+    test_report_summary(&report, "subsystem2");
 }
 
 #endif

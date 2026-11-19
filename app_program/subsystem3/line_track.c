@@ -4,6 +4,7 @@
  */
 
 #include "line_track.h"
+#include <stddef.h>
 #include "../app_math.h"
 #include "../app_pack.h"
 #include "../app_types.h"
@@ -15,28 +16,47 @@
  *  Change Requirement 1: data representation of IF-04 (line snapshot).
  * --------------------------------------------------------------------- */
 static app_pack_field_t const g_line_layout[] = {
-    PK_FIELD(line_types_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(line_types_snap_t, blocks, 32u, PK_W), /* counter since boot */
-    PK_FIELD(line_types_snap_t, missed_blocks, 16u,
-             PK_W), /* counter, readers take differences */
-    PK_FIELD(line_types_snap_t, err, 11u, PK_S), /* -1000..1000 */
-    PK_FIELD(line_types_snap_t, omega_mrad_s, 12u,
-             PK_S), /* +-2047 (LINE_OMEGA_MAX 2000)    */
-    PK_FIELD(line_types_snap_t, raw_l, 10u, PK_U), /* 0..1000 */
-    PK_FIELD(line_types_snap_t, raw_r, 10u, PK_U),
-    PK_FIELD(line_types_snap_t, raw_bc, 10u, PK_U),
-    PK_FIELD(line_types_snap_t, barcode_ok, 16u, PK_W), /* counters */
-    PK_FIELD(line_types_snap_t, barcode_err, 16u, PK_W),
-    PK_FIELD(line_types_snap_t, contrast_x10, 10u,
-             PK_U),                               /* saturates at 102.3 : 1 */
-    PK_FIELD(line_types_snap_t, flags, 7u, PK_U), /* LINE_FLAG_* (7 bits) */
-    PK_FIELD(line_types_snap_t, bc_state, 2u, PK_U), /* 4 states */
-    PK_FIELD(line_types_snap_t, last_barcode, 6u,
-             PK_SYM), /* Code 39 symbol or none          */
-    PK_FIELD(line_types_snap_t, last_reject, 4u,
-             PK_U), /* code39_result_t 0..8 */
-    PK_FIELD(line_types_snap_t, turn_gain_pm, 11u, PK_U), /* 0..2047 permille */
-    PK_FIELD(line_types_snap_t, sens, 3u, PK_U) /* LINE_SENS_* (3 bits) */
+    {offsetof(line_types_snap_t, t_ms), sizeof(((line_types_snap_t){0}).t_ms),
+     32u, PK_W},
+    {offsetof(line_types_snap_t, blocks),
+     sizeof(((line_types_snap_t){0}).blocks), 32u,
+     PK_W}, /* counter since boot */
+    {offsetof(line_types_snap_t, missed_blocks),
+     sizeof(((line_types_snap_t){0}).missed_blocks), 16u,
+     PK_W}, /* counter, readers take differences */
+    {offsetof(line_types_snap_t, err), sizeof(((line_types_snap_t){0}).err),
+     11u, PK_S}, /* -1000..1000 */
+    {offsetof(line_types_snap_t, omega_mrad_s),
+     sizeof(((line_types_snap_t){0}).omega_mrad_s), 12u,
+     PK_S}, /* +-2047 (LINE_OMEGA_MAX 2000)    */
+    {offsetof(line_types_snap_t, raw_l), sizeof(((line_types_snap_t){0}).raw_l),
+     10u, PK_U}, /* 0..1000 */
+    {offsetof(line_types_snap_t, raw_r), sizeof(((line_types_snap_t){0}).raw_r),
+     10u, PK_U},
+    {offsetof(line_types_snap_t, raw_bc),
+     sizeof(((line_types_snap_t){0}).raw_bc), 10u, PK_U},
+    {offsetof(line_types_snap_t, barcode_ok),
+     sizeof(((line_types_snap_t){0}).barcode_ok), 16u, PK_W}, /* counters */
+    {offsetof(line_types_snap_t, barcode_err),
+     sizeof(((line_types_snap_t){0}).barcode_err), 16u, PK_W},
+    {offsetof(line_types_snap_t, contrast_x10),
+     sizeof(((line_types_snap_t){0}).contrast_x10), 10u,
+     PK_U}, /* saturates at 102.3 : 1 */
+    {offsetof(line_types_snap_t, flags), sizeof(((line_types_snap_t){0}).flags),
+     7u, PK_U}, /* LINE_FLAG_* (7 bits) */
+    {offsetof(line_types_snap_t, bc_state),
+     sizeof(((line_types_snap_t){0}).bc_state), 2u, PK_U}, /* 4 states */
+    {offsetof(line_types_snap_t, last_barcode),
+     sizeof(((line_types_snap_t){0}).last_barcode), 6u,
+     PK_SYM}, /* Code 39 symbol or none          */
+    {offsetof(line_types_snap_t, last_reject),
+     sizeof(((line_types_snap_t){0}).last_reject), 4u,
+     PK_U}, /* code39_result_t 0..8 */
+    {offsetof(line_types_snap_t, turn_gain_pm),
+     sizeof(((line_types_snap_t){0}).turn_gain_pm), 11u,
+     PK_U}, /* 0..2047 permille */
+    {offsetof(line_types_snap_t, sens), sizeof(((line_types_snap_t){0}).sens),
+     3u, PK_U} /* LINE_SENS_* (3 bits) */
 };
 
 static int32_t steer_toward(int32_t now, int32_t target);

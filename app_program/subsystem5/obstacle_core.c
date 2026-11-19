@@ -4,6 +4,7 @@
  */
 
 #include "obstacle_core.h"
+#include <stddef.h>
 #include "../app_pack.h"
 #include "mission_cfg.h"
 #include "../app_types.h"
@@ -32,23 +33,38 @@
  *  Change Requirement 1: data representation of IF-10 (obstacle part).
  * --------------------------------------------------------------------- */
 static app_pack_field_t const g_obst_layout[] = {
-    PK_FIELD(mission_types_obst_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(mission_types_obst_snap_t, pings, 32u,
-             PK_W), /* counter since boot */
-    PK_FIELD(mission_types_obst_snap_t, d_mm, 12u,
-             PK_UN), /* 0..4094 mm, NONE (0xFFFF) */
-    PK_FIELD(mission_types_obst_snap_t, w_mm, 11u, PK_U), /* 0..2047 mm */
-    PK_FIELD(mission_types_obst_snap_t, closest_mm, 12u, PK_UN),
-    PK_FIELD(mission_types_obst_snap_t, clr_l_mm, 12u, PK_UN),
-    PK_FIELD(mission_types_obst_snap_t, clr_r_mm, 12u, PK_UN),
-    PK_FIELD(mission_types_obst_snap_t, left_lat_mm, 12u, PK_S), /* +-2047 mm */
-    PK_FIELD(mission_types_obst_snap_t, right_lat_mm, 12u, PK_S),
-    PK_FIELD(mission_types_obst_snap_t, no_echo, 8u,
-             PK_U), /* consecutive, saturates at 255   */
-    PK_FIELD(mission_types_obst_snap_t, valid, 1u, PK_U),
-    PK_FIELD(mission_types_obst_snap_t, plan, 3u, PK_U),  /* 5 plans */
-    PK_FIELD(mission_types_obst_snap_t, state, 4u, PK_U), /* 13 states */
-    PK_FIELD(mission_types_obst_snap_t, retries, 3u, PK_U)};
+    {offsetof(mission_types_obst_snap_t, t_ms),
+     sizeof(((mission_types_obst_snap_t){0}).t_ms), 32u, PK_W},
+    {offsetof(mission_types_obst_snap_t, pings),
+     sizeof(((mission_types_obst_snap_t){0}).pings), 32u,
+     PK_W}, /* counter since boot */
+    {offsetof(mission_types_obst_snap_t, d_mm),
+     sizeof(((mission_types_obst_snap_t){0}).d_mm), 12u,
+     PK_UN}, /* 0..4094 mm, NONE (0xFFFF) */
+    {offsetof(mission_types_obst_snap_t, w_mm),
+     sizeof(((mission_types_obst_snap_t){0}).w_mm), 11u, PK_U}, /* 0..2047 mm */
+    {offsetof(mission_types_obst_snap_t, closest_mm),
+     sizeof(((mission_types_obst_snap_t){0}).closest_mm), 12u, PK_UN},
+    {offsetof(mission_types_obst_snap_t, clr_l_mm),
+     sizeof(((mission_types_obst_snap_t){0}).clr_l_mm), 12u, PK_UN},
+    {offsetof(mission_types_obst_snap_t, clr_r_mm),
+     sizeof(((mission_types_obst_snap_t){0}).clr_r_mm), 12u, PK_UN},
+    {offsetof(mission_types_obst_snap_t, left_lat_mm),
+     sizeof(((mission_types_obst_snap_t){0}).left_lat_mm), 12u,
+     PK_S}, /* +-2047 mm */
+    {offsetof(mission_types_obst_snap_t, right_lat_mm),
+     sizeof(((mission_types_obst_snap_t){0}).right_lat_mm), 12u, PK_S},
+    {offsetof(mission_types_obst_snap_t, no_echo),
+     sizeof(((mission_types_obst_snap_t){0}).no_echo), 8u,
+     PK_U}, /* consecutive, saturates at 255   */
+    {offsetof(mission_types_obst_snap_t, valid),
+     sizeof(((mission_types_obst_snap_t){0}).valid), 1u, PK_U},
+    {offsetof(mission_types_obst_snap_t, plan),
+     sizeof(((mission_types_obst_snap_t){0}).plan), 3u, PK_U}, /* 5 plans */
+    {offsetof(mission_types_obst_snap_t, state),
+     sizeof(((mission_types_obst_snap_t){0}).state), 4u, PK_U}, /* 13 states */
+    {offsetof(mission_types_obst_snap_t, retries),
+     sizeof(((mission_types_obst_snap_t){0}).retries), 3u, PK_U}};
 
 /* The obstacle = the run of points around the nearest one at its range.
    Consecutive-angle rule (hysteresis): a single point that misses between

@@ -180,16 +180,6 @@ Inline void app_reset_release (UW mask)
 
 #include "app_main.h" /* app_main_start_task() */
 
-/* Print a readable message if a kernel call failed (negative error code) */
-#define CHECK(er, what)                                           \
-    do                                                            \
-    {                                                             \
-        INT check_er_ = (INT)(er); /* evaluate once */            \
-        if (check_er_ < E_OK)                                     \
-        {                                                         \
-            tm_printf((UB *)"ERROR %s: %d\n", (what), check_er_); \
-        }                                                         \
-    } while (0)
 
 #endif /* APP_H */
 

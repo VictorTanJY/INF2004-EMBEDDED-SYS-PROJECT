@@ -12,6 +12,8 @@
 #include "test_s5_main.h"
 #include <math.h>
 #include <stdio.h>
+#include <inttypes.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include "app_types.h"
@@ -34,19 +36,9 @@
 #define T_CORNER_PTS     5u  /* entries of pts[] */
 #define T_WALL_PTS       13u /* entries of pts[] */
 
-#define CHECK(id, cond)                                                      \
-    do                                                                       \
-    {                                                                        \
-        if (cond)                                                            \
-        {                                                                    \
-            g_pass++;                                                        \
-        }                                                                    \
-        else                                                                 \
-        {                                                                    \
-            g_fail++;                                                        \
-            printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); \
-        }                                                                    \
-    } while (0)
+/* NOTE: a macro rather than a function only so that a failure reports the
+   caller's file and line (__FILE__, __LINE__). */
+#define CHECK(id, cond) (check_result((id), (cond), __FILE__, __LINE__))
 
 typedef struct
 {
@@ -97,6 +89,8 @@ static void     scan_box(box_t const * p_b, int32_t n_b,
 static void     test_obstacle(void);
 static void     test_bench(void);
 static void     test_pack_s5(void);
+static void     check_result(char const * p_id, bool b_ok, char const * p_file,
+                             int32_t line);
 
 int main (void)
 {
@@ -1503,6 +1497,26 @@ static void test_pack_s5 (void)
     obstacle_core_snap_unpack(words_out, &orr);
     CHECK("S5-H26", (4094u == orr.d_mm) && (255u == orr.no_echo));
 }
-/*** end of file ***/
+
+/*!
+ * @brief Count one check; print a FAIL line when it failed.
+ * @param[in] p_id Test id, as in the subsystem's TEST_LOG.md.
+ * @param[in] b_ok Whether the check passed.
+ * @param[in] p_file Source file of the check.
+ * @param[in] line Source line of the check.
+ */
+static void check_result (char const * p_id, bool b_ok, char const * p_file,
+                          int32_t line)
+{
+    if (b_ok)
+    {
+        g_pass++;
+    }
+    else
+    {
+        g_fail++;
+        printf("FAIL %s  (%s:%" PRId32 ")\n", p_id, p_file, line);
+    }
+}
 
 /*** end of file ***/

@@ -54,6 +54,9 @@
 #define MQTT_UTK_RX_TOPIC_MAX 64
 #define MQTT_UTK_RX_DATA_MAX  128
 
+/* lwIP declares this as a struct tag only (Barr-C 5.1b: types via typedef). */
+typedef struct mqtt_connect_client_info_t mqtt_utk_client_info_t;
+
 static mqtt_client_t * gp_client;
 static ip_addr_t       g_broker_addr;
 
@@ -118,9 +121,9 @@ void mqtt_utk_init (void)
 
 void mqtt_utk_start (void)
 {
-    struct mqtt_connect_client_info_t client_info = {0};
-    mqtt_utk_cfg_t const *            p_cfg;
-    err_t                             err;
+    mqtt_utk_client_info_t client_info = {0};
+    mqtt_utk_cfg_t const * p_cfg;
+    err_t                  err;
 
     if (gb_busy || ((gp_client != NULL) && mqtt_client_is_connected(gp_client)))
     {
@@ -197,7 +200,6 @@ uint32_t mqtt_utk_rx_dropped (void)
     return g_rx_dropped;
 }
 
-/*** end of file ***/
 
 /* ------------------------------------------------------------------------ */
 

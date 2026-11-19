@@ -1943,6 +1943,5 @@ static void slot (uint32_t now_ms, motion_types_odom_t const * p_odom)
         break;
     }
 }
-/*** end of file ***/
 
 /*** end of file ***/

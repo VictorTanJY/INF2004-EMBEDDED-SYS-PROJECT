@@ -81,7 +81,6 @@ EXPORT void drv_motor_write (int16_t duty_l, int16_t duty_r)
     out_w(pwm_ch_cc(SLICE_R), cc_for(duty_r, MOTION_MOT_SIGN_R));
 }
 
-/*** end of file ***/
 
 static inline uint32_t pwm_ch_csr (uint32_t slice)
 {

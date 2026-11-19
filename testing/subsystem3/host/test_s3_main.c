@@ -10,6 +10,7 @@
 
 #include "test_s3_main.h"
 #include <stdio.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include "app_pack.h"
@@ -59,19 +60,9 @@
 #define T_TRIES_PER_CHAR 40    /* random damage per character */
 #define T_DAMAGES_U      3u    /* random merges or splits */
 
-#define CHECK(id, cond)                                                      \
-    do                                                                       \
-    {                                                                        \
-        if (cond)                                                            \
-        {                                                                    \
-            g_pass++;                                                        \
-        }                                                                    \
-        else                                                                 \
-        {                                                                    \
-            g_fail++;                                                        \
-            printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); \
-        }                                                                    \
-    } while (0)
+/* NOTE: a macro rather than a function only so that a failure reports the
+   caller's file and line (__FILE__, __LINE__). */
+#define CHECK(id, cond) (check_result((id), (cond), __FILE__, __LINE__))
 
 #define N_SLIDES ((int32_t)SLIDE_VEC_COUNT)
 
@@ -138,6 +129,8 @@ static bool     thin_triplet(uint32_t const * p_w, uint16_t at_idx,
 static void     test_best(void);
 static void     test_light_print(void);
 static void     test_pack_s3(void);
+static void     check_result(char const * p_id, bool b_ok, char const * p_file,
+                             int32_t line);
 
 int main (void)
 {
@@ -1757,6 +1750,26 @@ static void test_pack_s3 (void)
     CHECK("S3-H22", ('\0' == ret.last_barcode) && (1023u == ret.contrast_x10)
                         && (-2048 == ret.omega_mrad_s));
 }
-/*** end of file ***/
+
+/*!
+ * @brief Count one check; print a FAIL line when it failed.
+ * @param[in] p_id Test id, as in the subsystem's TEST_LOG.md.
+ * @param[in] b_ok Whether the check passed.
+ * @param[in] p_file Source file of the check.
+ * @param[in] line Source line of the check.
+ */
+static void check_result (char const * p_id, bool b_ok, char const * p_file,
+                          int32_t line)
+{
+    if (b_ok)
+    {
+        g_pass++;
+    }
+    else
+    {
+        g_fail++;
+        printf("FAIL %s  (%s:%" PRId32 ")\n", p_id, p_file, line);
+    }
+}
 
 /*** end of file ***/

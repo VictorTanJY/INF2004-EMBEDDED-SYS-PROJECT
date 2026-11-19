@@ -48,6 +48,8 @@
 #include "subsystem4/subsystem4_test.h"
 #include "subsystem5/subsystem5_test.h"
 
+static void check_er(ER err, char const * p_what);
+
 /*
  * Create and start one task (declared in app.h for every subsystem).
  *   prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or 0 for "any core".
@@ -77,13 +79,13 @@ EXPORT ID app_main_start_task (FP entry, PRI pri, UW prc, char const * p_name)
     tid = tk_cre_tsk(&ctsk);
     if (tid < E_OK)
     {
-        CHECK(tid, p_name);
+        check_er(tid, p_name);
         return tid;
     }
 
     /* tk_sta_tsk: DORMANT -> READY.  The int is passed as stacd. */
     err = tk_sta_tsk(tid, 0);
-    CHECK(err, p_name);
+    check_er(err, p_name);
     return tid;
 }
 
@@ -105,21 +107,21 @@ EXPORT INT usermain (void)
 
     /* Shared GPIO bank-0 interrupt (GP1 echo, GP19 IMU INT1): registered
        once here; each owner enables its pin on core 1 (app_gpio_irq.h). */
-    CHECK(app_gpio_irq_init(), "app_gpio_irq_init");
+    check_er(app_gpio_irq_init(), "app_gpio_irq_init");
 
     /* Phase 1: every subsystem creates its kernel objects */
-    CHECK(subsystem1_init(), "subsystem1_init");
-    CHECK(subsystem2_init(), "subsystem2_init");
-    CHECK(subsystem3_init(), "subsystem3_init");
-    CHECK(subsystem4_init(), "subsystem4_init");
-    CHECK(subsystem5_init(), "subsystem5_init");
+    check_er(subsystem1_init(), "subsystem1_init");
+    check_er(subsystem2_init(), "subsystem2_init");
+    check_er(subsystem3_init(), "subsystem3_init");
+    check_er(subsystem4_init(), "subsystem4_init");
+    check_er(subsystem5_init(), "subsystem5_init");
 
     /* Phase 2: every subsystem starts its tasks */
-    CHECK(subsystem1_start(), "subsystem1_start");
-    CHECK(subsystem2_start(), "subsystem2_start");
-    CHECK(subsystem3_start(), "subsystem3_start");
-    CHECK(subsystem4_start(), "subsystem4_start");
-    CHECK(subsystem5_start(), "subsystem5_start");
+    check_er(subsystem1_start(), "subsystem1_start");
+    check_er(subsystem2_start(), "subsystem2_start");
+    check_er(subsystem3_start(), "subsystem3_start");
+    check_er(subsystem4_start(), "subsystem4_start");
+    check_er(subsystem5_start(), "subsystem5_start");
 
     tm_printf((UB *)"all subsystems started\n\n");
 
@@ -139,6 +141,19 @@ EXPORT INT usermain (void)
     /* Sleep forever.  Returning from usermain() would shut down. */
     tk_slp_tsk(TMO_FEVR);
     return 0;
+}
+
+/*!
+ * @brief Print a readable message if a kernel call failed.
+ * @param[in] err The call's result: negative is a kernel error code.
+ * @param[in] p_what What was called.
+ */
+static void check_er (ER err, char const * p_what)
+{
+    if (err < E_OK)
+    {
+        tm_printf((UB *)"ERROR %s: %d\n", p_what, err);
+    }
 }
 
 /*** end of file ***/
