@@ -15,6 +15,7 @@
 
 #define MG_PER_G_MM_S2 9807 /* 1 g = 9807 mm/s^2 */
 
+/* Cast (uint16_t)(sizeof ...): the layout table has fewer than 64 entries. */
 #define IMU_FIELDS ((uint16_t)(sizeof(g_imu_layout) / sizeof(g_imu_layout[0])))
 
 /* ---------------------------------------------------------------------
@@ -84,6 +85,7 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
 
     for (kdx = 0u; kdx < IMU_HORIZ_AXES; kdx++)
     {
+        /* Cast (int32_t)p_ic->mag_max[axes[kdx]]: every int16_t value fits. */
         if (((int32_t)p_ic->mag_max[axes[kdx]] - p_ic->mag_min[axes[kdx]])
             < IMU_MAG_MIN_SPAN)
         {
@@ -92,6 +94,9 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
     }
     for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
+        /* Casts (int16_t)(((int32_t)p_ic->mag_min[k ...)): the value is
+           -32768..32767; (int32_t)p_ic->mag_min[kdx]: every int16_t value fits.
+         */
         p_ic->mag_off[kdx] =
             (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx]) / 2);
     }
@@ -118,6 +123,8 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     /* Longitudinal acceleration from the encoders, filtered. */
     if (p_ic->b_have_v)
     {
+        /* Cast (int32_t)dt_ms: dt_ms is the IMU loop period (0 replaced by 10
+           above); a gap of 2^31 ms (24 days) cannot occur. */
         int32_t const raw = ((v_mm_s - p_ic->prev_v) * 1000) / (int32_t)dt_ms;
 
         p_ic->accel_mm_s2 += (raw - p_ic->accel_mm_s2) / 4;
@@ -139,10 +146,12 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
        hump under one wheel. */
     if (ds_um > 0)
     {
+        /* Cast (uint32_t)ds_um: ds_um > 0 here (tested above). */
         events |= hump_step(p_ic, (uint32_t)ds_um);
         if ((IMU_HUMP_FLAT == p_ic->hump_state)
             && (0u == (events & IMU_EV_HUMP_START)))
         {
+            /* Cast (uint32_t)ds_um: ds_um > 0 here (tested above). */
             events |= side_step(p_ic, (uint32_t)ds_um);
         }
         else
@@ -166,6 +175,8 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
 
 void imu_core_init (imu_core_t * p_ic)
 {
+    /* Cast (uint8_t *)p_ic: byte view of the struct for clearing; no value
+       converted. */
     uint8_t * p_b = (uint8_t *)p_ic;
     size_t    idx;
 
@@ -264,6 +275,9 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
     }
     for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
+        /* Casts (int32_t)(p_ic->lvl_sum[kdx] / ...): a mean of readings of the
+           +-4 g sensor (|axis| <= 3998 mg); (int64_t)p_ic->lvl_n: every
+           uint16_t value fits. */
         p_ic->lvl_spread_mg = app_types_max_i32(
             p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
         mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / (int64_t)p_ic->lvl_n);
@@ -284,6 +298,10 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
     {
         return false; /* stuck / saturated output (2 Nov) */
     }
+    /* Casts (int32_t)app_math_isqrt64(...): the root of two squares of +-4 g
+       readings (|axis| <= 3998 mg): below 5655;
+       (uint64_t)(((int64_t)left * left) + ...): a sum of squares is not
+       negative; (int64_t)left, (int64_t)up_mg: every int32_t value fits. */
     p_ic->pitch0_cdeg = app_math_atan2_cdeg(
         fwd, (int32_t)app_math_isqrt64((uint64_t)(((int64_t)left * left)
                                                   + ((int64_t)up_mg * up_mg))));
@@ -358,6 +376,11 @@ static void acc_filter (imu_core_t * p_ic, int32_t const acc_mg[IMU_AXES],
     }
 
     /* |a| for the snapshot (14 Nov: no longer an impact check). */
+    /* Casts (int32_t)app_math_isqrt64(...): the root of three squares of +-4 g
+       readings (|axis| <= 3998 mg): below 6925;
+       (uint64_t)(((int64_t)acc_mg[0] * ...)): a sum of squares is not negative;
+       (int64_t)acc_mg[0], (int64_t)acc_mg[1], (int64_t)acc_mg[2]: every int32_t
+       value fits. */
     mag_mg = (int32_t)app_math_isqrt64(
         (uint64_t)(((int64_t)acc_mg[0] * acc_mg[0])
                    + ((int64_t)acc_mg[1] * acc_mg[1])
@@ -375,6 +398,10 @@ static int32_t attitude (imu_core_t * p_ic, int32_t const accel[IMU_AXES])
     int32_t left;
     int32_t up_mg;
 
+    /* Casts (int32_t)app_math_isqrt64(...): the root of two squares of +-4 g
+       readings (|axis| <= 3998 mg): below 5655;
+       (uint64_t)(((int64_t)left * left) + ...): a sum of squares is not
+       negative; (int64_t)left, (int64_t)up_mg: every int32_t value fits. */
     fwd   = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD)
             - ((app_types_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
                                     IMU_ACC_COMP_MAX_MM_S2)
@@ -398,6 +425,8 @@ static void heading_update (imu_core_t * p_ic, int16_t const mag_raw[IMU_AXES])
 {
     if ((p_ic->cal & IMU_CAL_MAG) != 0u)
     {
+        /* Casts (int32_t)mag_raw[0], (int32_t)mag_raw[1], (int32_t)mag_raw[2]:
+           every int16_t value fits. */
         int32_t const mag[3] = {(int32_t)mag_raw[0] - p_ic->mag_off[0],
                                 (int32_t)mag_raw[1] - p_ic->mag_off[1],
                                 (int32_t)mag_raw[2] - p_ic->mag_off[2]};
@@ -470,6 +499,8 @@ static void hump_reset (imu_core_t * p_ic)
     track the peak. */
 static void integrate (imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
 {
+    /* Casts (int64_t)app_math_sin_q15(theta): every int32_t value fits;
+       (int64_t)ds_um: every uint32_t value fits. */
     p_ic->h_um += ((int64_t)app_math_sin_q15(theta) * (int64_t)ds_um) / 32768;
     if (p_ic->h_um > p_ic->h_peak_um)
     {
@@ -554,6 +585,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             {
                 /* HUMP_DONE: integrated peak, or the wheelbase geometry
                    check for humps shorter than the wheelbase. */
+                /* Cast (int64_t)IMU_WHEELBASE_MM: a constant that fits. */
                 int64_t const geo_um =
                     ((int64_t)IMU_WHEELBASE_MM * 1000
                      * app_math_sin_q15(p_ic->theta_max_cdeg))
@@ -561,6 +593,10 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
                 int64_t const peak =
                     (p_ic->h_peak_um > geo_um) ? p_ic->h_peak_um : geo_um;
 
+                /* Casts (uint16_t)app_types_clamp_i32(...): the value is
+                   0..65535; (int32_t)((peak + 500) / 1000): the peak is at most
+                   the wheelbase or the climb (<= 2 x IMU_RAMP_UM): below 2000
+                   mm. */
                 p_ic->last_hump_mm = (uint16_t)app_types_clamp_i32(
                     (int32_t)((peak + 500) / 1000), 0, 65535);
                 if (p_ic->last_hump_mm > p_ic->hump_max_mm)
@@ -636,10 +672,14 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
         }
         else if (roll_abs < IMU_SIDE_OFF_CDEG)
         {
+            /* Cast (int64_t)IMU_SIDE_LEVER_MM: a constant that fits. */
             int64_t const h_um = ((int64_t)IMU_SIDE_LEVER_MM * 1000
                                   * app_math_sin_q15(p_ic->side_peak_cdeg))
                                  / 32768;
 
+            /* Casts (uint16_t)app_types_clamp_i32(...): the value is 0..65535;
+               (int32_t)((h_um + 500) / 1000): IMU_SIDE_LEVER_MM (76) x sin: at
+               most 76 mm. */
             side_record(p_ic, (uint16_t)app_types_clamp_i32(
                                   (int32_t)((h_um + 500) / 1000), 0, 65535));
             side_reset(p_ic);

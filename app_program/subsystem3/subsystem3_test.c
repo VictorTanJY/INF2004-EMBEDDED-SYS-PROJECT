@@ -91,6 +91,11 @@ EXPORT void subsystem3_test_run (void)
                "Code 39 *F* decodes on target");
 
     /* ---- S3-U05: no ADC block lost in 1 s; live readings (NFR2) ---- */
+    /* Casts (UB *)"[INFO] S3-U05 blocks %d ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)(snap_b.blocks - ...),
+       (INT)(snap_b.missed_blocks - ...): printed with %d: the value is a 32-bit
+       count or measurement below 2^31; (INT)snap_b.raw_l, (INT)snap_b.raw_r,
+       (INT)snap_b.raw_bc: every uint16_t value fits. */
     subsystem3_get_snap(&snap_a);
     (void)tk_dly_tsk(1000);
     subsystem3_get_snap(&snap_b);
@@ -156,6 +161,11 @@ static void test_pipeline (test_report_t * p_report)
             }
         }
     }
+    /* Casts (UB *)"[INFO] S3-U07 result %d ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)found, (INT)worst_us,
+       (INT)(total_us / samples), (INT)samples: printed with %d: the value is a
+       32-bit count or measurement below 2^31; (INT)g_t_bc.pass: every uint8_t
+       value fits. */
     tm_printf((UB *)"[INFO] S3-U07 result %d char '%c' pass %d; worst "
                     "sample %d us, mean %d us over %d samples\n",
               (INT)found, ((out_ok.chr != '\0') ? out_ok.chr : '?'),

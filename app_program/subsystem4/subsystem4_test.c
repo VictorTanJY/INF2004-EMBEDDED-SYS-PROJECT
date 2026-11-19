@@ -68,6 +68,9 @@ EXPORT void subsystem4_test_run (void)
                    >= 3u,
                "MotionTask heartbeat advances (8-bit counter, modular)");
 
+    /* Casts (UB *)"[INFO] timer: %d us per ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)safety_task_tick_us(): printed with %d:
+       the value is a 32-bit count or measurement below 2^31. */
     subsystem4_get_imu_snap(&snap_a);
     (void)tk_dly_tsk(100);
     subsystem4_get_imu_snap(&snap_b);
@@ -91,6 +94,10 @@ EXPORT void subsystem4_test_run (void)
     }
     else
     {
+        /* Casts (UB *)"[INFO] S4-U07 pitch %d ...: tm_printf() takes UB *; the
+           string bytes are unchanged; (INT)snap_b.pitch_cdeg,
+           (INT)snap_b.roll_cdeg, (INT)snap_b.accel_mg: every int16_t value
+           fits; (INT)snap_b.cal: every uint8_t value fits. */
         tm_printf(
             (UB *)"[INFO] S4-U07 pitch %d cdeg, roll %d cdeg, |a|-1g %d mg, "
                   "I2C errors %d in 1 s, cal 0x%x\n",
@@ -126,6 +133,10 @@ static void test_estop (test_report_t * p_report)
     bool                 b_ok = false;
     uint8_t              pre;
 
+    /* Casts (UB *)"[INFO] S4-U08 fault flag ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)lat: printed with %d: the value is a
+       32-bit count or measurement below 2^31; (INT)T_NFR8_US: a constant that
+       fits. */
     subsystem5_get_mission_snap(&mission);
     pre = mission.state;
     subsystem2_estop_test_clear();
@@ -158,6 +169,10 @@ static void test_estop (test_report_t * p_report)
             break;
         }
     }
+    /* Casts (UB *)"[INFO] S4-U09 cleared ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)elapsed, (INT)subsystem4_get_latched():
+       printed with %d: the value is a 32-bit count or measurement below 2^31;
+       (INT)mission.state, (INT)pre: every uint8_t value fits. */
     subsystem2_get_odom(&odom);
     tm_printf((UB *)"[INFO] S4-U09 cleared after %d ms; mission state %d "
                     "(was %d), brake %d, latched 0x%x\n",

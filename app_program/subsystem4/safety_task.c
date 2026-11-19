@@ -124,6 +124,7 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
             latch(SAFETY_FLT_HEARTBEAT, now_ms);
             if (missed != missed_logged)
             {
+                /* Cast (int32_t)missed: a bit mask of SAFETY_HB_COUNT tasks. */
                 missed_logged = missed;
                 (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
                                             SAFETY_LOG_HB_MISSED,
@@ -147,6 +148,8 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
             else
             {
                 /* still present: stay latched and say why */
+                /* Cast (int32_t)g_safety_latched: bit pattern of the fault
+                   bits. */
                 g_safety_latched |= live;
                 (void)subsystem5_mission_post(MISSION_EV_FAULT,
                                               APP_SRC_SAFETY_IMU, 1u,
@@ -191,6 +194,8 @@ static void latch (uint32_t bits, uint32_t now_ms)
     g_safety_latched |= bits;
     if (fresh != 0u)
     {
+        /* Casts (int32_t)g_safety_latched, (int32_t)fresh: bit pattern of the
+           fault bits. */
         (void)subsystem5_mission_post(MISSION_EV_FAULT, APP_SRC_SAFETY_IMU, 0u,
                                       (int32_t)g_safety_latched);
         (void)subsystem1_telem_post(COMMS_KIND_FAULT, APP_SRC_SAFETY_IMU, 0u,
@@ -266,6 +271,9 @@ static void check_timer_tick (void)
     }
     EI(intsts);
 
+    /* Casts (uint32_t)(((uint64_t)delta_us * ...)): delta_us x 50 fits 32 bits
+       for windows below 85 s; the window is about 2000 us; (uint64_t)delta_us:
+       every uint32_t value fits. */
     g_safety_tick_us = (uint32_t)(((uint64_t)delta_us * 100000u)
                                   / 2000u); /* scaled to us per 100 ms */
     gb_tick_ok =

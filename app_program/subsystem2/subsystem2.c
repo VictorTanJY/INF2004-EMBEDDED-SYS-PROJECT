@@ -54,6 +54,8 @@ EXPORT ER subsystem2_init (void)
         return g_mbf_motion;
     }
 
+    /* Cast (FP)motion_cyc_handler: the kernel stores the entry point as FP; it
+       is called with its own type. */
     ccyc.cycatr  = TA_HLNG; /* started in subsystem2_start() */
     ccyc.cychdr  = (FP)motion_cyc_handler;
     ccyc.cyctim  = S2_PERIOD_MS;
@@ -64,6 +66,8 @@ EXPORT ER subsystem2_init (void)
 
 EXPORT ER subsystem2_start (void)
 {
+    /* Cast (FP)motion_task_thread: the kernel stores the entry point as FP; it
+       is called with its own type. */
     g_tid_motion = app_main_start_task((FP)motion_task_thread, S2_PRI_MOTION,
                                        S2_CORE_MOTION, "motion");
     if (g_tid_motion < E_OK)

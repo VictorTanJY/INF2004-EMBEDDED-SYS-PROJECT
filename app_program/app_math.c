@@ -12,6 +12,7 @@ static int32_t atan_unit_cdeg(int64_t ratio);
 
 uint32_t app_math_isqrt64 (uint64_t value)
 {
+    /* Cast (uint64_t)1u: a constant that fits. */
     uint64_t result = 0u;
     uint64_t bit    = (uint64_t)1u << 62;
 
@@ -32,11 +33,14 @@ uint32_t app_math_isqrt64 (uint64_t value)
         }
         bit >>= 2;
     }
+    /* Cast (uint32_t)result: the square root of a 64-bit value is below 2^32.
+     */
     return (uint32_t)result;
 }
 
 uint32_t app_math_isqrt32 (uint32_t value)
 {
+    /* Cast (uint32_t)1u: a constant that fits. */
     uint32_t result = 0u;
     uint32_t bit    = (uint32_t)1u << 30;
 
@@ -62,6 +66,9 @@ uint32_t app_math_isqrt32 (uint32_t value)
 
 int32_t app_math_atan2_cdeg (int32_t y_val, int32_t x_val)
 {
+    /* Casts (uint32_t)x_val, (uint32_t)y_val: magnitude of a negative int32_t:
+       -INT32_MIN is 2^31, which fits uint32_t; (uint32_t)x_val: x_val >= 0 on
+       this branch; (uint32_t)y_val: y_val >= 0 on this branch. */
     uint32_t abs_x = (x_val < 0) ? (0u - (uint32_t)x_val) : (uint32_t)x_val;
     uint32_t abs_y = (y_val < 0) ? (0u - (uint32_t)y_val) : (uint32_t)y_val;
     int32_t  angle;
@@ -72,10 +79,16 @@ int32_t app_math_atan2_cdeg (int32_t y_val, int32_t x_val)
     }
     if (abs_x >= abs_y)
     {
+        /* Casts (int64_t)(((uint64_t)abs_y << 30) ...): abs_y <= abs_x here, so
+           the ratio is at most 2^30; (uint64_t)abs_y: every uint32_t value
+           fits. */
         angle = atan_unit_cdeg((int64_t)(((uint64_t)abs_y << 30) / abs_x));
     }
     else
     {
+        /* Casts (int64_t)(((uint64_t)abs_x << 30) ...): abs_x < abs_y here, so
+           the ratio is below 2^30; (uint64_t)abs_x: every uint32_t value fits.
+         */
         angle = APP_CDEG_90
                 - atan_unit_cdeg((int64_t)(((uint64_t)abs_x << 30) / abs_y));
     }
@@ -135,6 +148,7 @@ int32_t app_math_sin_q15 (int32_t cdeg)
     }
 
     /* t = a * pi / 18000 in Q30: pi / 18000 * 2^30 = 187406.71 */
+    /* Cast (int64_t)angle: every int32_t value fits. */
     term    = ((int64_t)angle * 18740671) / 100;
     term_sq = q30_floor(term * term);
 
@@ -154,6 +168,7 @@ int32_t app_math_sin_q15 (int32_t cdeg)
     {
         sine = -32768;
     }
+    /* Cast (int32_t)sine: sine was clamped to -32768..32767 above. */
     return (int32_t)sine;
 }
 
@@ -164,6 +179,9 @@ int32_t app_math_cos_q15 (int32_t cdeg)
 
 int32_t app_math_mul_q15 (int32_t value, int32_t q15)
 {
+    /* Casts (int32_t)(((int64_t)value * ...)): callers pass |q15|for a Q15
+       factor (|q15| <= 32768) the result is no larger than value;
+       (int64_t)value, (int64_t)q15: every int32_t value fits. */
     return (int32_t)(((int64_t)value * (int64_t)q15) / 32768);
 }
 
@@ -207,6 +225,8 @@ static int32_t atan_unit_cdeg (int64_t ratio)
     poly = q30_floor(ratio * poly);                 /* atan(z), Q30 rad, >= 0 */
 
     /* rad -> cdeg: x 18000 / pi, rounded */
+    /* Cast (int32_t)(((poly * 18000) + ...)): ratio <= 1.0 (Q30), so atan <= 45
+       deg and the result <= 4500. */
     return (int32_t)(((poly * 18000) + (pi_q30 / 2)) / pi_q30);
 }
 

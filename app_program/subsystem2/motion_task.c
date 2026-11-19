@@ -115,6 +115,7 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
         enc_l  = drv_encoder_read(DRV_ENC_LEFT);
         enc_r  = drv_encoder_read(DRV_ENC_RIGHT);
 
+        /* Cast (INT)sizeof(cmd_word): a constant that fits. */
         while ((INT)sizeof(cmd_word)
                == tk_rcv_mbf(subsystem2_mbf_motion(), &cmd_word, TMO_POL))
         {
@@ -255,6 +256,7 @@ static void report_events (void)
             break;
 
             case MOTION_EV_ENC_OK:
+                /* Cast (UINT)SAFETY_FLT_ENC_FAULT: a constant that fits. */
                 (void)tk_clr_flg(subsystem4_flg_safety(),
                                  ~(UINT)SAFETY_FLT_ENC_FAULT);
             break;

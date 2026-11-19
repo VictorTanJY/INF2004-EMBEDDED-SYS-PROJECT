@@ -26,6 +26,7 @@
 /* servo shaft ahead of the axle */
 #define OUT_SHAFT_MM (OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM)
 
+/* Cast (uint16_t)(sizeof ...): the layout table has fewer than 64 entries. */
 #define OBST_FIELDS \
     ((uint16_t)(sizeof(g_obst_layout) / sizeof(g_obst_layout[0])))
 
@@ -131,6 +132,8 @@ uint16_t obstacle_core_echo_to_mm (uint32_t width_us)
     {
         return OBST_RANGE_NONE;
     }
+    /* Cast (uint16_t)((width_us * 10u) / 58u): width_us < OBST_ECHO_MAX_US
+       (tested above), so the range is below 4000 mm. */
     return (uint16_t)((width_us * 10u) / 58u); /* us / 58 = cm */
 }
 
@@ -150,11 +153,14 @@ void obstacle_core_profile (obstacle_core_point_t const * p_fine,
        closer than OBST_GUARD_MM, raw (no background, no range filter),
        the plan is never CONTINUE: plan as for an OBST_WIDTH_MAX object
        centred straight ahead at that range. */
+    /* Cast (uint8_t)(n_fine + n_coarse): at most OBST_SCAN_MAX_POINTS +
+       OBST_COARSE_PINGS (37) points. */
     for (idx = 0u; idx < (uint8_t)(n_fine + n_coarse); idx++)
     {
         obstacle_core_point_t const * p_point =
             (idx < n_fine) ? &p_fine[idx] : &p_coarse[idx - n_fine];
 
+        /* Cast (int32_t)p_point->angle_deg: every int16_t value fits. */
         if ((app_types_abs_i32((int32_t)p_point->angle_deg
                                - OBST_SERVO_CENTRE_DEG)
              <= OBST_GUARD_HALF_DEG)
@@ -186,6 +192,8 @@ void obstacle_core_profile_detected (obstacle_core_point_t const * p_fine,
        back-off (19.2 cm + 6 cm passed the 25 cm limit and the car drove on) */
     if (!p_out->b_valid && (r_det_mm < OBST_GUARD_MM))
     {
+        /* Cast (uint16_t)(r_det_mm + back_mm): a detection range (< 4000 mm)
+           plus a back-off clamped to 1000 mm. */
         force_ahead(p_fine, n_fine, p_coarse, n_coarse,
                     (uint16_t)(r_det_mm + back_mm), p_out);
     }
@@ -221,6 +229,8 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
             p_s->n_coarse++;
             if (p_s->n_coarse < 5u)
             {
+                /* Cast (int16_t)(p_s->angle + 30): the coarse sweep stays
+                   within 30..150 deg. */
                 p_s->angle = (int16_t)(p_s->angle + 30);
             }
             else
@@ -244,6 +254,9 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
                 }
                 else
                 {
+                    /* Casts (int16_t)app_types_max_i32(centre ...): the value
+                       is 20..32727; (int16_t)app_types_min_i32(centre ...): the
+                       value is -32728..160. */
                     p_s->phase = OBST_SCAN_FINE;
                     p_s->angle = (int16_t)app_types_max_i32(
                         centre - OBST_FINE_HALF_DEG, OBST_SCAN_MIN_DEG);
@@ -257,6 +270,8 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
             fine_insert(p_s, p_s->angle, r_mm);
             if ((p_s->angle + OBST_FINE_STEP_DEG) <= p_s->fine_to)
             {
+                /* Cast (int16_t)(p_s->angle + ...): the fine sweep stays within
+                   the servo's 0..180 deg. */
                 p_s->angle = (int16_t)(p_s->angle + OBST_FINE_STEP_DEG);
             }
             else
@@ -281,6 +296,8 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
             {
                 p_s->miss = p_s->angle;
             }
+            /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is
+               -32768..32767. */
             p_s->iter++;
             p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
             if ((p_s->iter >= OBST_REFINE_ITERS) || (p_s->angle == p_s->hit)
@@ -323,10 +340,16 @@ bool obstacle_core_edge_on_face (int32_t phi_cdeg, uint16_t r_mm,
                                  uint16_t face_mm)
 {
     /* forward distance of the echo from the axle vs the face plane */
+    /* Casts (int32_t)((((int64_t)OBST_US_AHEAD_ ...))): |sin|, |cos| <= 1.0 in
+       Q15, so the result is no larger than the int32_t factor;
+       (int64_t)OBST_US_AHEAD_MM: a constant that fits; (int64_t)r_mm: every
+       uint16_t value fits. */
     int32_t const fwd = (int32_t)((((int64_t)OBST_US_AHEAD_MM + (int64_t)r_mm)
                                    * app_math_cos_q15(phi_cdeg))
                                   / 32768);
 
+    /* Casts (int32_t)OBST_US_AHEAD_MM: a constant that fits; (int32_t)face_mm:
+       every uint16_t value fits. */
     return (r_mm != OBST_RANGE_NONE) && (r_mm <= OBST_MAX_RANGE_MM)
            && (fwd <= ((int32_t)OBST_US_AHEAD_MM + (int32_t)face_mm
                        + OBST_EDGE_BAND_MM));
@@ -334,6 +357,8 @@ bool obstacle_core_edge_on_face (int32_t phi_cdeg, uint16_t r_mm,
 
 int32_t obstacle_core_edge_lat (int32_t phi_cdeg)
 {
+    /* Casts (int32_t)(((int64_t)OBST_US_AHEAD_M ...)): the value is
+       -5570560..5570559; (int64_t)OBST_US_AHEAD_MM: a constant that fits. */
     return (int32_t)(((int64_t)OBST_US_AHEAD_MM * app_math_sin_q15(phi_cdeg))
                      / 32768);
 }
@@ -343,6 +368,10 @@ int32_t obstacle_core_edge_wide_lat (int32_t phi_cdeg, uint16_t r_mm,
 {
     int32_t const psi = phi_cdeg - (side * OBST_HALF_BEAM_CDEG);
 
+    /* Casts (int32_t)((((int64_t)OBST_US_AHEAD_ ...))): |sin|, |cos| <= 1.0 in
+       Q15, so the result is no larger than the int32_t factor;
+       (int64_t)OBST_US_AHEAD_MM: a constant that fits; (int64_t)r_mm: every
+       uint16_t value fits. */
     return (int32_t)((((int64_t)OBST_US_AHEAD_MM * app_math_sin_q15(phi_cdeg))
                       + ((int64_t)r_mm * app_math_sin_q15(psi)))
                      / 32768);
@@ -351,6 +380,7 @@ int32_t obstacle_core_edge_wide_lat (int32_t phi_cdeg, uint16_t r_mm,
 uint16_t obstacle_core_edge_width (int32_t phi_l_cdeg, uint16_t r_l_mm,
                                    int32_t phi_r_cdeg, uint16_t r_r_mm)
 {
+    /* Cast (uint16_t)app_types_clamp_i32(...): the value is 0..65535. */
     return (uint16_t)app_types_clamp_i32(
         width_lat(phi_l_cdeg, r_l_mm, 1) - width_lat(phi_r_cdeg, r_r_mm, -1), 0,
         0xFFFF);
@@ -406,6 +436,9 @@ void obstacle_core_edge_plan (obstacle_core_profile_t * p_prof, bool b_has_l,
         lat_l = mid;
         lat_r = mid;
     }
+    /* Casts (int16_t)lat_l, (int16_t)lat_r: lateral edges of echoes within 800
+       mm are within +-800 mm; (uint16_t)(lat_l - lat_r): lat_l >= lat_r here,
+       and both are within +-800 mm. */
     p_prof->b_valid      = true;
     p_prof->b_sure       = b_has_l && b_has_r;
     p_prof->left_lat_mm  = (int16_t)lat_l;
@@ -440,6 +473,8 @@ void obstacle_core_edge_plan (obstacle_core_profile_t * p_prof, bool b_has_l,
             b_left = (OBST_PREF_LEFT != 0);
         }
     }
+    /* Cast (int16_t)(b_left ? (lat_l + extra) ...): edge offsets (+-800 mm)
+       plus a margin of a few hundred mm. */
     p_prof->plan = b_left ? OBST_PLAN_LEFT : OBST_PLAN_RIGHT;
     p_prof->deviation_mm =
         (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
@@ -454,10 +489,14 @@ void obstacle_core_edge_plan_min (obstacle_core_profile_t * p_prof,
 
     if ((OBST_PLAN_LEFT == p_prof->plan) && b_has_l)
     {
+        /* Cast (int16_t)app_types_max_i32(min_l + ...): edge offsets (+-800 mm)
+           plus a margin of a few hundred mm. */
         p_prof->deviation_mm = (int16_t)app_types_max_i32(min_l + extra, extra);
     }
     else if ((OBST_PLAN_RIGHT == p_prof->plan) && b_has_r)
     {
+        /* Cast (int16_t)-app_types_max_i32(-min_r ...): edge offsets (+-800 mm)
+           plus a margin of a few hundred mm. */
         p_prof->deviation_mm =
             (int16_t)-app_types_max_i32(-min_r + extra, extra);
     }
@@ -471,6 +510,11 @@ void obstacle_core_edge_plan_min (obstacle_core_profile_t * p_prof,
 uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
                                    uint8_t side, obstacle_core_step_t * p_steps)
 {
+    /* Casts (int32_t)(((int64_t)dev * 32768) / ...): dev is below 1 m and sin_q
+       is at least sin(45 deg); (int64_t)dev, (int64_t)diag: every int32_t value
+       fits; (int32_t)(((int64_t)diag * cos_q) ...): cos_q <= 1.0 in Q15, so the
+       result is no larger than diag; (int32_t)p_prof->closest_mm: every
+       uint16_t value fits. */
     int32_t const sign  = (OBST_PLAN_LEFT == side) ? 1 : -1;
     int32_t const dev   = app_types_abs_i32(p_prof->deviation_mm);
     int32_t const sin_q = app_math_sin_q15(OBST_TURN_OUT_DDEG * 10);
@@ -479,6 +523,9 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
     int32_t const fwd   = (int32_t)(((int64_t)diag * cos_q) / 32768);
     int32_t const room  = (int32_t)p_prof->closest_mm - OBST_MARGIN_MM;
     /* 7 Nov: the step-out leg may go OBST_OUT_SPARE further out */
+    /* Casts (int32_t)(((int64_t)(dev + ...))): dev is below 1 m and sin_q is at
+       least sin(45 deg); (int64_t)(dev + OBST_OUT_SPARE_MM): every int value
+       fits. */
     int32_t const fwd_r =
         (int32_t)(((int64_t)(dev + OBST_OUT_SPARE_MM) * cos_q) / sin_q);
     int32_t pass;
@@ -489,11 +536,14 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
     /* Not enough room to get sideways before reaching the face: back up. */
     if (fwd_r > room)
     {
+        /* Cast (int16_t)-back: back is a back-off of at most 1000 mm. */
         back                   = (fwd_r - room) + 20;
         p_steps[n_steps].kind  = OBST_STEP_MOVE;
         p_steps[n_steps].value = (int16_t)-back;
         n_steps++;
     }
+    /* Casts (int16_t)(sign * ...), (int16_t)(-sign * ...): +-450 (0.1 deg);
+       (int16_t)diag: the step-out leg is a few hundred mm (dev < 1 m). */
     p_steps[n_steps].kind  = OBST_STEP_TURN;
     p_steps[n_steps].value = (int16_t)(sign * OBST_TURN_OUT_DDEG);
     n_steps++;
@@ -514,6 +564,9 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
        behind it). */
     /* depth (4 Nov): taken as the measured width (square), at most
        OBST_WIDTH_MAX; OBST_WIDTH_MAX when the width is not known */
+    /* Casts (int32_t)p_prof->closest_mm: every uint16_t value fits;
+       (int16_t)app_types_min_i32(pass ...): limited to OBST_PASS_MAX_MM (800);
+       pass is a positive length. */
     depth = ((p_prof->w_mm > 0u) && (p_prof->w_mm <= WIDTH_MAX_MM))
                 ? p_prof->w_mm
                 : OBST_WIDTH_MAX_MM;
@@ -527,6 +580,9 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
        line (not a fixed distance: the turns slip), then OBST_IR_AHEAD_MM
        on so the axle is on the line, then (4 Nov) spin until the line is
        centred under the sensors, wherever it runs. */
+    /* Casts (int16_t)(-sign * ...): +-450 (0.1 deg); (int16_t)(((diag * ...))):
+       1.5 x a step-out leg of a few hundred mm, + 100 mm;
+       (int16_t)(sign * ...): +-900 (0.1 deg). */
     p_steps[n_steps].kind  = OBST_STEP_TURN;
     p_steps[n_steps].value = (int16_t)(-sign * OBST_TURN_OUT_DDEG);
     n_steps++;
@@ -557,6 +613,8 @@ int32_t obstacle_core_out_expect_mm (int32_t face_mm, int32_t axle_fwd_mm,
 {
     /* the sensor: the shaft OUT_SHAFT ahead of the axle along the car,
        then the arm along the line */
+    /* Casts (int32_t)(((int64_t)OUT_SHAFT_MM * ...)): the value is
+       -3670016..3670015; (int64_t)OUT_SHAFT_MM: a constant that fits. */
     int32_t const sensor_fwd =
         axle_fwd_mm
         + (int32_t)(((int64_t)OUT_SHAFT_MM * app_math_cos_q15(theta_cdeg))
@@ -573,10 +631,15 @@ void obstacle_core_out_ping (obstacle_core_out_t * p_o, int32_t axle_lat,
     int32_t const expect =
         obstacle_core_out_expect_mm(face_mm, axle_fwd, theta_cdeg);
 
+    /* Casts (uint8_t)app_types_min_i32(...): the value is 1..255;
+       (int32_t)p_o->pings: every uint8_t value fits; (int32_t)r_mm: every
+       uint16_t value fits. */
     p_o->pings = (uint8_t)app_types_min_i32((int32_t)p_o->pings + 1, 255);
     if ((r_mm != OBST_RANGE_NONE)
         && ((int32_t)r_mm <= (expect + OBST_DEPTH_TOL_MM)))
     {
+        /* Casts (int32_t)(((int64_t)OUT_SHAFT_MM * ...)): the value is
+           -3670016..3670015; (int64_t)OUT_SHAFT_MM: a constant that fits. */
         int32_t const lat =
             axle_lat
             + (int32_t)(((int64_t)OUT_SHAFT_MM * app_math_sin_q15(theta_cdeg))
@@ -612,6 +675,8 @@ bool obstacle_core_out_blocked (int32_t face_mm, int32_t axle_fwd_mm,
                                 int32_t theta_cdeg)
 {
     /* the front corner on the line's side sits half a width further on */
+    /* Casts (int32_t)(((int64_t) ...)): the value is -4259840..4259839;
+       (int64_t)(OBST_ROBOT_WIDTH_MM / 2): a constant that fits. */
     int32_t const corner = (int32_t)(((int64_t)(OBST_ROBOT_WIDTH_MM / 2)
                                       * app_math_sin_q15(theta_cdeg))
                                      / 32768);
@@ -622,6 +687,7 @@ bool obstacle_core_out_blocked (int32_t face_mm, int32_t axle_fwd_mm,
 
 uint16_t obstacle_core_probe_face (uint16_t r_mm, uint16_t expect_mm)
 {
+    /* Casts (int32_t)r_mm, (int32_t)expect_mm: every uint16_t value fits. */
     if ((OBST_RANGE_NONE == r_mm)
         || (app_types_abs_i32((int32_t)r_mm - (int32_t)expect_mm)
             > OBST_PROBE_FACE_TOL_MM))
@@ -641,6 +707,8 @@ void obstacle_core_probe_start (obstacle_core_probe_t * p_p)
 
 int32_t obstacle_core_probe_sensor_lat (int32_t axle_lat, int32_t theta_cdeg)
 {
+    /* Casts (int32_t)(((int64_t)OUT_SHAFT_MM * ...)): the value is
+       -3670016..3670015; (int64_t)OUT_SHAFT_MM: a constant that fits. */
     return axle_lat
            + (int32_t)(((int64_t)OUT_SHAFT_MM * app_math_sin_q15(theta_cdeg))
                        / 32768);
@@ -649,6 +717,7 @@ int32_t obstacle_core_probe_sensor_lat (int32_t axle_lat, int32_t theta_cdeg)
 bool obstacle_core_probe_ping (obstacle_core_probe_t * p_p, int32_t sensor_lat,
                                uint16_t r_mm, int32_t expect_mm)
 {
+    /* Cast (int32_t)r_mm: every uint16_t value fits. */
     bool const b_face = (r_mm != OBST_RANGE_NONE)
                         && ((int32_t)r_mm <= (expect_mm + OBST_DEPTH_TOL_MM));
 
@@ -666,6 +735,8 @@ bool obstacle_core_probe_ping (obstacle_core_probe_t * p_p, int32_t sensor_lat,
     }
     else
     {
+        /* Casts (uint8_t)app_types_min_i32(...): the value is 1..255;
+           (int32_t)p_p->off: every uint8_t value fits. */
         p_p->off = (uint8_t)app_types_min_i32((int32_t)p_p->off + 1, 255);
     }
     return b_face;
@@ -704,12 +775,15 @@ int32_t obstacle_core_out_servo_deg (int32_t theta_cdeg, int32_t side)
 int32_t obstacle_core_cross_track_mm (int32_t x_mm, int32_t y_mm, int32_t x0_mm,
                                       int32_t y0_mm, int32_t h0_cdeg)
 {
+    /* Casts (int64_t)x_mm, (int64_t)y_mm: every int32_t value fits. */
     int64_t const delta_x = (int64_t)x_mm - x0_mm;
     int64_t const delta_y = (int64_t)y_mm - y0_mm;
 
     int64_t const cross = (-delta_x * app_math_sin_q15(h0_cdeg))
                           + (delta_y * app_math_cos_q15(h0_cdeg));
 
+    /* Cast (int32_t)((cross + ((cross >= 0) ? ...))): positions are odometry in
+       mm (|x|, |y| < 2^20), so the cross product / 32768 fits. */
     return (int32_t)((cross + ((cross >= 0) ? 16384 : -16384))
                      / 32768); /* rounded */
 }
@@ -779,10 +853,14 @@ uint32_t obstacle_core_snap_layout_bits (void)
 static int32_t lateral2_mm (int32_t servo_cdeg, int32_t beam_cdeg,
                             uint16_t r_mm)
 {
+    /* Casts (int64_t)r_mm: every uint16_t value fits;
+       (int64_t)OBST_SERVO_ARM_MM: a constant that fits. */
     int64_t const proj =
         ((int64_t)r_mm * app_math_cos_q15(beam_cdeg))
         + ((int64_t)OBST_SERVO_ARM_MM * app_math_cos_q15(servo_cdeg));
 
+    /* Cast (int32_t)(proj / 32768): a projection of a distance in mm with a Q15
+       factor (<= 1.0). */
     return -(int32_t)(proj / 32768);
 }
 
@@ -802,6 +880,7 @@ static bool usable (obstacle_core_point_t const * p_point)
     r_min. */
 static bool same_object (obstacle_core_point_t const * p_point, uint16_t r_min)
 {
+    /* Cast (uint32_t)r_min: every uint16_t value fits. */
     return usable(p_point)
            && (p_point->r_mm <= ((uint32_t)r_min + DEPTH_TOL_MM));
 }
@@ -811,6 +890,7 @@ static bool same_object (obstacle_core_point_t const * p_point, uint16_t r_min)
 static bool in_group (obstacle_core_point_t const * p_point, uint16_t r_min,
                       int32_t lat0)
 {
+    /* Cast (int32_t)p_point->angle_deg: every int16_t value fits. */
     return same_object(p_point, r_min)
            && (app_types_abs_i32(
                    lateral_mm((int32_t)p_point->angle_deg * 100, p_point->r_mm)
@@ -824,6 +904,7 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
                   uint8_t nearest, uint16_t r_min, uint8_t * p_lo,
                   uint8_t * p_hi)
 {
+    /* Cast (int32_t)p_pts[nearest].angle_deg: every int16_t value fits. */
     int32_t const lat0 = lateral_mm((int32_t)p_pts[nearest].angle_deg * 100,
                                     p_pts[nearest].r_mm);
     uint8_t       low  = nearest;
@@ -837,6 +918,8 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
         }
         else if ((low > 1u) && in_group(&p_pts[low - 2u], r_min, lat0))
         {
+            /* Cast (uint8_t)(low - 2u): low > 1 (tested above), so an index
+               0..35. */
             low = (uint8_t)(low - 2u);
         }
         else
@@ -853,6 +936,8 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
         else if (((high + 2u) < count)
                  && in_group(&p_pts[high + 2u], r_min, lat0))
         {
+            /* Cast (uint8_t)(high + 2u): high + 2 < count <= 37 (tested above).
+             */
             high = (uint8_t)(high + 2u);
         }
         else
@@ -912,6 +997,7 @@ static uint16_t nearest_echo (obstacle_core_point_t const * p_fine,
        track can be nearer than the box on the line (02:59 run). */
     for (idx = 0u; idx < n_fine; idx++)
     {
+        /* Cast (int32_t)p_fine[idx].angle_deg: every int16_t value fits. */
         if (usable(&p_fine[idx]) && (p_fine[idx].r_mm < r_min)
             && (app_types_abs_i32(lateral_mm(
                     (int32_t)p_fine[idx].angle_deg * 100, p_fine[idx].r_mm))
@@ -957,6 +1043,8 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
 
     /* The fine scan runs from low to high angle (right to left).  The beam
        sees an edge up to half a beam early: move each edge inward. */
+    /* Casts (int32_t)p_fine[low].angle_deg, (int32_t)p_fine[high].angle_deg:
+       every int16_t value fits. */
     a_right = ((int32_t)p_fine[low].angle_deg * 100) + OBST_HALF_BEAM_CDEG;
     a_left  = ((int32_t)p_fine[high].angle_deg * 100) - OBST_HALF_BEAM_CDEG;
     if (a_left < a_right)
@@ -966,6 +1054,8 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
         a_left  = mid;
         a_right = mid;
     }
+    /* Casts (int32_t)p_fine[high].angle_deg, (int32_t)p_fine[low].angle_deg:
+       every int16_t value fits. */
     lat_l = lateral2_mm((int32_t)p_fine[high].angle_deg * 100, a_left,
                         p_fine[high].r_mm);
     lat_r = lateral2_mm((int32_t)p_fine[low].angle_deg * 100, a_right,
@@ -976,6 +1066,8 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
        middle of what was seen.  An edge that ran out of the scan window: the
        object may reach OBST_WIDTH_MAX from the edge that was seen. */
     {
+        /* Casts (int32_t)p_fine[high].angle_deg,
+           (int32_t)p_fine[low].angle_deg: every int16_t value fits. */
         int32_t const raw_l = lateral_mm((int32_t)p_fine[high].angle_deg * 100,
                                          p_fine[high].r_mm);
         int32_t const raw_r =
@@ -1005,6 +1097,9 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
         }
     }
 
+    /* Casts (int16_t)lat_l, (int16_t)lat_r: lateral edges of echoes within 800
+       mm are within +-800 mm; (uint16_t)app_types_max_i32(lat_l - ...): edges
+       within +-800 mm, so the width is 0..1600 mm. */
     p_out->b_valid       = true;
     p_out->closest_mm    = r_min;
     p_out->nearest_angle = p_fine[nearest].angle_deg;
@@ -1029,6 +1124,8 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     uint8_t       idx;
 
     /* Clearance: nearby points outside the obstacle, from both scans. */
+    /* Cast (uint8_t)(n_fine + n_coarse): at most OBST_SCAN_MAX_POINTS +
+       OBST_COARSE_PINGS (37) points. */
     for (idx = 0u; idx < (uint8_t)(n_fine + n_coarse); idx++)
     {
         obstacle_core_point_t const * p_point =
@@ -1038,6 +1135,7 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
         /* Skipped: the obstacle's own fine pings, unusable or far pings,
            and a coarse ping at the obstacle's own range (the obstacle seen
            through the side of the beam, not a second object). */
+        /* Cast (uint32_t)r_min: every uint16_t value fits. */
         if (((idx < n_fine) && (idx >= low) && (idx <= high))
             || !usable(p_point)
             || (p_point->r_mm
@@ -1049,6 +1147,7 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
         }
         else
         {
+            /* Cast (int32_t)p_point->angle_deg: every int16_t value fits. */
             lat = lateral_mm((int32_t)p_point->angle_deg * 100, p_point->r_mm);
             if (lat > pl_l)
             {
@@ -1065,6 +1164,9 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
         }
     }
 
+    /* Casts (uint16_t)clr_l, (uint16_t)clr_r: clearances are limited to
+       0..OBST_CLEAR_MAX_MM (500); (int16_t)pl_l, (int16_t)pl_r: planning edges
+       are within +-800 mm plus OBST_WIDTH_MAX_MM. */
     p_out->clr_l_mm     = (uint16_t)clr_l;
     p_out->clr_r_mm     = (uint16_t)clr_r;
     p_out->plan_l_mm    = (int16_t)pl_l;
@@ -1086,11 +1188,15 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
 
         if (b_left && (!b_right || (dev_l <= dev_r)))
         {
+            /* Cast (int16_t)dev_l: an edge (+-1000 mm) plus half the car and
+               the margin. */
             p_out->plan         = OBST_PLAN_LEFT;
             p_out->deviation_mm = (int16_t)dev_l;
         }
         else if (b_right)
         {
+            /* Cast (int16_t)-dev_r: an edge (+-1000 mm) plus half the car and
+               the margin. */
             p_out->plan         = OBST_PLAN_RIGHT;
             p_out->deviation_mm = (int16_t)-dev_r;
         }
@@ -1196,6 +1302,8 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
         p_s->phase = OBST_SCAN_DONE;
         return;
     }
+    /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is -32768..32767.
+     */
     p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
     if ((p_s->angle == p_s->hit) || (p_s->angle == p_s->miss))
     {
@@ -1209,6 +1317,10 @@ static int32_t width_lat (int32_t phi_cdeg, uint16_t r_mm, int32_t side)
 {
     int32_t const psi = phi_cdeg - (side * OBST_WIDTH_BEAM_CDEG);
 
+    /* Casts (int32_t)((((int64_t)OBST_US_AHEAD_ ...))): |sin|, |cos| <= 1.0 in
+       Q15, so the result is no larger than the int32_t factor;
+       (int64_t)OBST_US_AHEAD_MM: a constant that fits; (int64_t)r_mm: every
+       uint16_t value fits. */
     return (int32_t)((((int64_t)OBST_US_AHEAD_MM * app_math_sin_q15(phi_cdeg))
                       + ((int64_t)r_mm * app_math_sin_q15(psi)))
                      / 32768);

@@ -94,6 +94,10 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
     app_pack_put(&writer, cmd, 3u);
     if (COMMS_CMD_SET == cmd)
     {
+        /* Casts (uint32_t)param_index: only the low 4 bits are written; a test
+           may pass an index outside the whitelist on purpose;
+           (uint32_t)(value + 32768): offset binary of the test value; only the
+           low 16 bits are written. */
         app_pack_put(&writer, (uint32_t)param_index, 4u);
         app_pack_put(&writer, (uint32_t)(value + 32768) & 0xFFFFu, 16u);
     }
@@ -144,6 +148,7 @@ static void skip (app_pack_reader_t * p_r, uint32_t count)
     {
         uint32_t const kdx = (count > 32u) ? 32u : count;
 
+        /* Cast (uint8_t)kdx: kdx is the smaller of count and 32. */
         (void)app_pack_take(p_r, (uint8_t)kdx);
         count -= kdx;
     }
@@ -201,6 +206,7 @@ static void test_writer (void)
         uint16_t            cap;
         uint8_t             big[64];
 
+        /* Cast (uint16_t)(full + 2u): full <= sizeof(big) (64 bytes). */
         memset(&telem, 0, sizeof(telem));
         telem.obst_d_mm = COMMS_D_NONE;
         full            = comms_proto_build_telemetry(&telem, big, sizeof(big));
@@ -328,6 +334,7 @@ static void test_telemetry_h05 (void)
     app_pack_reader_t   reader;
 
     /* S1-H05: worst case: every field saturates, still 27 bytes */
+    /* Cast (uint32_t)strlen(...): printed with %u: a 22-character string. */
     telem.seq          = 4294967295u;
     telem.t_ms         = 4294967295u;
     telem.state        = 15u;
@@ -510,6 +517,7 @@ static void test_parser_h09 (void)
 
         for (idx = 0u; idx < T_RANGE_PARAMS; idx++)
         {
+            /* Cast (uint8_t)idx: idx < T_RANGE_PARAMS (5). */
             comms_proto_param_t const * p_param =
                 comms_proto_param_by_index((uint8_t)idx);
 
@@ -602,21 +610,26 @@ static void test_parser_h12 (void)
         count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
         for (mid = 0u; mid <= count; mid++)
         {
+            /* Cast (uint16_t)mid: mid <= count, a frame of at most 8 bytes. */
             (void)comms_proto_parse_cmd(frame, (uint16_t)mid, &cmd);
         }
         srand(1234);
         for (kdx = 0u; kdx < T_FUZZ_FRAMES; kdx++)
         {
+            /* Cast (uint32_t)rand(): rand() is not negative. */
             uint32_t len = (uint32_t)rand() % sizeof(junk);
 
             for (mid = 0u; mid < len; mid++)
             {
+                /* Cast (uint8_t)rand(): random byte: the low 8 bits are kept on
+                   purpose. */
                 junk[mid] = (uint8_t)rand();
             }
             if ((kdx & 1u) && (len > 0u))
             {
                 junk[0] = 0x25u; /* a valid header, junk after it */
             }
+            /* Cast (uint16_t)len: len < sizeof(junk) (64 bytes). */
             (void)comms_proto_parse_cmd(junk, (uint16_t)len, &cmd);
         }
         CHECK("S1-H14", 1);
@@ -637,6 +650,8 @@ static void test_ring (void)
     memset(&rec, 0, sizeof(rec));
     for (idx = 1u; idx <= T_RING_PUSHES; idx++)
     {
+        /* Casts (int32_t)idx: idx <= T_RING_PUSHES (20); (uint8_t)(idx + 250u):
+           8-bit sequence numbers that wrap on purpose. */
         rec.data = (int32_t)idx;
         overwrote += comms_proto_ring_push(&ring, &rec, (uint8_t)(idx + 250u))
                          ? 1
@@ -740,6 +755,7 @@ static void test_dedup (void)
     {
         comms_proto_cmd_t other;
 
+        /* Cast (uint8_t)(100u + idx): idx < T_OTHER_CMDS (5), so below 105. */
         (void)parse((uint8_t)(100u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
         comms_proto_dedup_add(&dedup, &other, 2000u + idx);
     }
@@ -764,6 +780,8 @@ static void test_dedup (void)
     {
         comms_proto_cmd_t other;
 
+        /* Cast (uint8_t)(200u + idx): idx < COMMS_DEDUP_LEN (8), so below 208.
+         */
         (void)parse((uint8_t)(200u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
         comms_proto_dedup_add(&dedup, &other, 10u + idx);
     }
@@ -778,6 +796,8 @@ static void test_dedup (void)
 /** S1-H19: the barcode map command. */
 static void test_map (void)
 {
+    /* Casts (uint32_t)'A', (uint32_t)'F', (uint32_t)'Z', (uint32_t)'W': a
+       constant that fits. */
     comms_proto_cmd_t cmd;
     uint8_t           frame[8];
     uint16_t          count;
@@ -785,6 +805,10 @@ static void test_map (void)
                              | ((uint32_t)'Z' << 16) | ((uint32_t)'W' << 24);
 
     /* S1-H19: the barcode map arrives over MQTT (not hard-coded) */
+    /* Casts (uint8_t)(frame[2] & 0x07u): the value is 0..7;
+       (uint8_t)(frame[3] & 0xFEu): the value is 0..254;
+       (uint8_t)(frame[2] | 0xF8u): a frame byte with some bits set: 8 bits;
+       (uint8_t)(frame[3] | 0x01u): a frame byte with a bit set: 8 bits. */
     count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
     CHECK("S1-H19", (6u == count) && hex_eq(frame, count, GOLD_CMD_MAP));
     CHECK("S1-H19",

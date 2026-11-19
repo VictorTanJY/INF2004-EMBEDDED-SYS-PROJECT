@@ -105,6 +105,8 @@ EXPORT int32_t drv_encoder_read (uint32_t which)
             break;
         }
     }
+    /* Cast (int32_t)value: the PIO counter's 32-bit pattern read as a signed
+       count. */
     g_last[sm_idx] = value;
     return (int32_t)value;
 }

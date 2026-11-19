@@ -77,6 +77,7 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
     }
     for (idx = 0u; idx < n_bins; idx++)
     {
+        /* Cast (uint16_t)(p_prof[idx] / 16u): the value is 0..4095. */
         uint16_t const bin = (uint16_t)(p_prof[idx] / 16u);
 
         hist[(bin < HIST_BINS) ? bin : (HIST_BINS - 1u)]++;
@@ -85,15 +86,21 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
     *p_dark  = 1000u;
     for (idx = 0u; idx < HIST_BINS; idx++)
     {
+        /* Cast (uint32_t)n_bins: every uint16_t value fits. */
         sum += hist[idx];
         if (!b_white
             && ((sum * 100u) >= ((uint32_t)n_bins * BC_PROF_WHITE_PCT)))
         {
+            /* Cast (uint16_t)((idx * 16u) + 8u): idx < HIST_BINS (64), so at
+               most 1016. */
             *p_white = (uint16_t)((idx * 16u) + 8u);
             b_white  = true;
         }
+        /* Cast (uint32_t)n_bins: every uint16_t value fits. */
         if ((sum * 100u) >= ((uint32_t)n_bins * BC_PROF_DARK_PCT))
         {
+            /* Cast (uint16_t)((idx * 16u) + 8u): idx < HIST_BINS (64), so at
+               most 1016. */
             *p_dark = (uint16_t)((idx * 16u) + 8u);
             break;
         }
@@ -111,17 +118,23 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
     bool            b_black = true;
 
     /* skip to the first bar */
+    /* Cast (uint16_t)(thr + hyst): callers pass a level threshold (<= 1016) and
+       hysteresis span / 16 (<= 64). */
     while ((idx < n_bins) && (p_prof[idx] < (uint16_t)(thr + hyst)))
     {
         idx++;
     }
     for (; idx < n_bins; idx++)
     {
+        /* Cast (uint16_t)(thr + hyst): callers pass a level threshold (<= 1016)
+           and hysteresis span / 16 (<= 64). */
         bool const b_now = b_black ? ((p_prof[idx] + hyst) >= thr)
                                    : (p_prof[idx] >= (uint16_t)(thr + hyst));
 
         if ((b_now != b_black) && (run > 0u))
         {
+            /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that
+               fits. */
             if (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0])))
             {
                 runs[n_runs] = run;
@@ -132,6 +145,7 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
         }
         run++;
     }
+    /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that fits. */
     if (b_black && (run > 0u)
         && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
     {
@@ -165,6 +179,7 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
 
         if (b_black)
         {
+            /* Cast (uint32_t)level: every uint16_t value fits. */
             ext = (level > ext) ? level : ext;
             if (((uint32_t)level + delta) < ext)
             {
@@ -174,6 +189,8 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         }
         else
         {
+            /* Casts (uint32_t)level, (uint32_t)ext: every uint16_t value fits.
+             */
             ext = (level < ext) ? level : ext;
             if ((uint32_t)level > ((uint32_t)ext + delta))
             {
@@ -183,6 +200,8 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         }
         if (b_now != b_black)
         {
+            /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that
+               fits. */
             if (b_bar_seen
                 && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
             {
@@ -195,6 +214,7 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         }
         run++;
     }
+    /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that fits. */
     if (b_black && (run > 0u)
         && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
     {
@@ -278,6 +298,7 @@ static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
        extreme, so for a full swing bar and gap widths stay unbiased. */
     if (p_bc->b_black)
     {
+        /* Cast (uint32_t)norm: every uint16_t value fits. */
         p_bc->ext = (norm > p_bc->ext) ? norm : p_bc->ext; /* darkest so far */
         if (((uint32_t)norm + BC_DELTA) < p_bc->ext)
         {
@@ -287,6 +308,8 @@ static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
     }
     else
     {
+        /* Casts (uint32_t)norm, (uint32_t)p_bc->ext: every uint16_t value fits.
+         */
         p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext; /* lightest so far */
         if ((norm >= BC_DELTA_MIN)
             && ((uint32_t)norm > ((uint32_t)p_bc->ext + BC_DELTA)))
@@ -343,10 +366,14 @@ static void capture_start (line_barcode_capture_t * p_bc, uint16_t norm,
        oldest first (faint leading bars) */
     for (kdx = 0u; kdx < p_bc->pre_n; kdx++)
     {
+        /* Cast (uint16_t)((((p_bc->pre_i + ...)))): a remainder modulo
+           BC_PRE_BINS. */
         p_bc->prof[kdx] = p_bc->pre[(
             uint16_t)((((p_bc->pre_i + BC_PRE_BINS) - p_bc->pre_n) + kdx)
                       % BC_PRE_BINS)];
     }
+    /* Cast (uint16_t)(p_bc->pre_n + 1u): pre_n <= BC_PRE_BINS, well below the
+       16-bit range. */
     p_bc->prof[p_bc->pre_n] = norm;
     p_bc->prof_n            = (uint16_t)(p_bc->pre_n + 1u);
     p_bc->bin_um            = step_um;
@@ -457,6 +484,7 @@ static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
     p_bc->pre_um += step_um;
     while (p_bc->pre_um >= BC_PROF_BIN_UM)
     {
+        /* Cast (uint16_t)((p_bc->pre_i + 1u) % ...): the value is 0..74. */
         p_bc->pre_um -= BC_PROF_BIN_UM;
         p_bc->pre[p_bc->pre_i] = p_bc->pre_cur;
         p_bc->pre_i            = (uint16_t)((p_bc->pre_i + 1u) % BC_PRE_BINS);
@@ -490,12 +518,16 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
         if ((p_runs[kdx] < BC_PROF_MIN_BINS) && (kdx > 0u)
             && ((kdx + 1u) < n_runs))
         {
+            /* Cast (uint16_t)(p_runs[kdx - 1u] + ...): three run lengths of one
+               profile: at most BC_PROF_BINS bins together. */
             p_runs[kdx - 1u] =
                 (uint16_t)(p_runs[kdx - 1u] + p_runs[kdx] + p_runs[kdx + 1u]);
             for (idx = kdx; (idx + 2u) < n_runs; idx++)
             {
                 p_runs[idx] = p_runs[idx + 2u];
             }
+            /* Cast (uint16_t)(n_runs - 2u): a merge needs kdx > 0 and kdx + 1 <
+               n_runs, so n_runs >= 3. */
             n_runs = (uint16_t)(n_runs - 2u);
         }
         else
@@ -505,6 +537,7 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
     }
     for (kdx = 0u; (kdx < n_runs) && (out < max_elems); kdx++)
     {
+        /* Cast (uint32_t)p_runs[kdx]: every uint16_t value fits. */
         p_widths[out] = (uint32_t)p_runs[kdx] * BC_PROF_BIN_UM;
         out++;
     }
@@ -531,9 +564,12 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
     {
         return 0u;
     }
+    /* Cast (uint16_t)(dark - white): dark > white (tested above). */
     span = (uint16_t)(dark - white);
     if (kdx >= 3u)
     {
+        /* Casts (uint32_t)(p_bc->q_hi - ...): q_hi > q_lo (tested in the same
+           statement); (uint32_t)span: every uint16_t value fits. */
         uint32_t const pct =
             (3u == kdx) ? BC_ADAPT_PCT
                         : ((4u == kdx) ? BC_ADAPT_PCT2 : BC_ADAPT_PCT3);
@@ -542,6 +578,7 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
                                    : 0u;
         uint32_t       delta = ((uint32_t)span * pct) / 100u;
 
+        /* Cast (uint32_t)BC_DELTA: a constant that fits. */
         delta = (delta < (noise * BC_ADAPT_NOISE_X))
                     ? (noise * BC_ADAPT_NOISE_X)
                     : delta;
@@ -550,9 +587,13 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
         {
             return 0u; /* no smaller than the first reading */
         }
+        /* Cast (uint16_t)delta: delta < BC_DELTA (250, tested above). */
         return line_barcode_prof_swing(p_bc->prof, p_bc->prof_n,
                                        (uint16_t)delta, p_w, BC_MAX_ELEMENTS);
     }
+    /* Casts (uint16_t)(white + ((1u == kdx) ? ...)): white plus at most half
+       the span is at most dark, a uint16_t level; (uint16_t)(span / 16u): the
+       value is 0..4095. */
     thr = (uint16_t)(white
                      + ((1u == kdx) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
     return line_barcode_prof_elements(p_bc->prof, p_bc->prof_n, thr,
@@ -594,15 +635,21 @@ static uint16_t trim_specks (uint32_t const * p_w, uint16_t n_elems,
         sorted[jdx] = width;
         mid++;
     }
+    /* Casts (uint64_t)p_w[0], (uint64_t)med: every uint32_t value fits. */
     med = sorted[mid / 2u];
     if (((uint64_t)p_w[0] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
     {
         *p_first = 2u;
     }
+    /* Casts (uint64_t)p_w[n_elems - 1u], (uint64_t)med: every uint32_t value
+       fits. */
     if (((uint64_t)p_w[n_elems - 1u] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
     {
+        /* Cast (uint16_t)(n_elems - 2u): n_elems >= 11 (tested above). */
         last = (uint16_t)(n_elems - 2u);
     }
+    /* Cast (uint16_t)(last - *p_first): *p_first is 0 or 2 and last >= n_elems
+       - 2 >= 9. */
     return (uint16_t)(last - *p_first);
 }
 
@@ -719,6 +766,8 @@ static bool best_pass (line_barcode_capture_t * p_bc,
 
     for (kdx = 0u; kdx < BC_READINGS; kdx++)
     {
+        /* Casts (uint16_t)(n_trim - 29u): n_trim > 29 on this branch;
+           (uint16_t)(29u - n_trim): n_trim <= 29 on this branch. */
         uint16_t       first;
         uint16_t const n_read = line_barcode_reading(p_bc, kdx, read_widths);
         uint16_t const n_trim = trim_specks(read_widths, n_read, &first);

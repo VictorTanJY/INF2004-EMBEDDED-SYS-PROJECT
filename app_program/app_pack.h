@@ -57,6 +57,8 @@ static inline uint32_t app_pack_sat_u (uint32_t value, uint8_t width)
 static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
 {
     /* NOTE: width <= 32, so 2^(width - 1) <= 2^31 fits int64_t. */
+    /* Cast (int64_t)(UINT64_C(1) << (width - ...)): width <= 32, so 2^31 at
+       most. */
     int64_t const half    = (int64_t)(UINT64_C(1) << (width - 1u));
     int64_t       clamped = value;
 
@@ -72,6 +74,9 @@ static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
     {
         /* in range */
     }
+    /* Casts (uint32_t)(uint64_t)(clamped + ...): clamped is within
+       -half..half-1, so the sum is 0..2^width-1; (uint64_t)(clamped + half):
+       clamped >= -half, so the sum is not negative. */
     return (uint32_t)(uint64_t)(clamped + half);
 }
 
@@ -79,8 +84,13 @@ static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
 static inline int32_t app_pack_unoff_s (uint32_t field, uint8_t width)
 {
     /* NOTE: width <= 32, so 2^(width - 1) <= 2^31 fits int64_t. */
+    /* Cast (int64_t)(UINT64_C(1) << (width - ...)): width <= 32, so 2^31 at
+       most. */
     int64_t const half = (int64_t)(UINT64_C(1) << (width - 1u));
 
+    /* Casts (int32_t)((int64_t)(field & ...)): a width-bit field minus half:
+       -half..half-1; (int64_t)(field & app_pack_mask(...)): every uint32_t
+       value fits. */
     return (int32_t)((int64_t)(field & app_pack_mask(width)) - half);
 }
 
@@ -92,6 +102,10 @@ static inline int32_t app_pack_wrap_diff (uint32_t lhs, uint32_t rhs,
     uint32_t const diff = (lhs - rhs) & app_pack_mask(width);
     uint32_t const half = 1uL << (width - 1u);
 
+    /* Casts (int32_t)((int64_t)diff - ...): diff >= 2^(width-1) on this branch,
+       so the result is negative and fits; (int64_t)diff: every uint32_t value
+       fits; (int64_t)(UINT64_C(1) << width): width <= 31 here, so 2^31 at most;
+       (int32_t)diff: diff < 2^(width-1) on this branch. */
     return (diff >= half)
                ? (int32_t)((int64_t)diff - (int64_t)(UINT64_C(1) << width))
                : (int32_t)diff;

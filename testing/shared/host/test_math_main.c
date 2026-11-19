@@ -62,6 +62,9 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
     for (val_a = -T_SIN_RANGE_CDEG; val_a <= T_SIN_RANGE_CDEG; val_a += 7)
     {
+        /* Casts (int32_t)lround(sin(...)): a Q15 sine: -32768..32768;
+           (float64_t)val_a: exact: a 32-bit integer fits the 53-bit mantissa of
+           a double. */
         int32_t ref =
             (int32_t)lround(sin(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
         int32_t got = app_math_sin_q15(val_a);
@@ -76,6 +79,9 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
         {
             *p_worst_sin = diff;
         }
+        /* Casts (int32_t)lround(cos(...)): a Q15 cosine: -32768..32768;
+           (float64_t)val_a: exact: a 32-bit integer fits the 53-bit mantissa of
+           a double. */
         ref =
             (int32_t)lround(cos(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
         if (ref > 32767)
@@ -100,6 +106,9 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
             for (y_start = -T_ATAN_RANGE; y_start <= T_ATAN_RANGE;
                  y_start += 41)
             {
+                /* Casts (float64_t)y_start, (float64_t)x_start,
+                   (float64_t)app_math_atan2_cdeg(...): exact: a 32-bit integer
+                   fits the 53-bit mantissa of a double. */
                 float64_t ref =
                     (atan2((float64_t)y_start, (float64_t)x_start) * 18000.0)
                     / M_PI;
@@ -129,6 +138,7 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
     /* SH-H03: integer square roots, exhaustive near squares */
     for (x_val = 0u; x_val < T_ISQRT_MAX; x_val++)
     {
+        /* Cast (uint64_t)x_val: every uint32_t value fits. */
         uint64_t square = (uint64_t)x_val * x_val;
 
         if ((app_math_isqrt64(square) != x_val)
@@ -138,6 +148,8 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
             CHECK("SH-H03", 0);
             break;
         }
+        /* Cast (uint32_t)square: square <= 0xFFFFFFFF on this branch (tested in
+           the same statement). */
         if ((square <= 0xFFFFFFFFu)
             && (app_math_isqrt32((uint32_t)square) != x_val))
         {
@@ -176,6 +188,8 @@ static void test_pack_h05 (void)
 
     for (idx = 0u; idx < sizeof(widths); idx++)
     {
+        /* Cast (int64_t)(UINT64_C(1) << (width - ...)): width <= 32, so 2^31 at
+           most. */
         uint8_t const width = widths[idx];
         int64_t const half  = (int64_t)(UINT64_C(1) << (width - 1u));
         int64_t       value;
@@ -184,6 +198,8 @@ static void test_pack_h05 (void)
         for (value = -half - T_PAST_RANGE; value <= (half + T_PAST_RANGE);
              value += (width <= 12u) ? 1 : ((half / 7) + 1))
         {
+            /* Cast (int32_t)((value < INT32_MIN) ? ...): clamped to
+               INT32_MIN..INT32_MAX in the same expression. */
             int32_t const input =
                 (int32_t)((value < INT32_MIN)
                               ? INT32_MIN
@@ -256,6 +272,8 @@ static void test_pack_h05_part2 (void)
     app_pack_writer_init(&writer, buf, sizeof(buf));
     while (count < T_RANDOM_FIELDS)
     {
+        /* Casts (uint8_t)(1 + (rand() % 32)): 1..32; (uint32_t)rand(): rand()
+           is not negative; (uint32_t)writer.bits: every uint16_t value fits. */
         bit_widths[count] = (uint8_t)(1 + (rand() % 32));
         vals[count]       = (((uint32_t)rand() << 16) ^ (uint32_t)rand())
                             & app_pack_mask(bit_widths[count]);

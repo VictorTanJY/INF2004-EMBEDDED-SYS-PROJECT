@@ -27,6 +27,8 @@ EXPORT ER app_gpio_irq_init (void)
 
     if (!gb_defined)
     {
+        /* Cast (FP)gpio_bank0_isr: the kernel stores the entry point as FP; it
+           is called with its own type. */
         dint.intatr = TA_HLNG;
         dint.inthdr = (FP)gpio_bank0_isr;
         err         = tk_def_int(APP_GPIO_IRQ_NO, &dint);
@@ -146,6 +148,7 @@ static void gpio_bank0_isr (UINT intno)
 
         while (ints != 0u)
         {
+            /* Cast (uint32_t)__builtin_ctz(ints): ints != 0 here, so 0..31. */
             uint32_t const bit    = (uint32_t)__builtin_ctz(ints);
             uint32_t const pin    = (reg * 8u) + (bit / 4u);
             uint32_t const shift  = (bit / 4u) * 4u;

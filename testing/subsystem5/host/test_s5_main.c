@@ -166,6 +166,7 @@ static uint8_t last_seq (void)
 {
     int32_t idx;
 
+    /* Cast (int32_t)g_out.n_acts: every uint8_t value fits. */
     for (idx = (int32_t)g_out.n_acts - 1; idx >= 0; idx--)
     {
         if ((MISSION_ACT_MOTION == g_out.act[idx].kind)
@@ -233,6 +234,7 @@ static void test_mission_h01 (void)
                         && (MISSION_CAUSE_SELFTEST == g_mc.snap.cause));
 
     /* S5-H02: START refused until calibrated; calibration sequence */
+    /* Cast (uint16_t)(seq + 1u): the value is 1..256. */
     boot_to_idle();
     ev(MISSION_EV_REMOTE_START, 0u, 0);
     CHECK("S5-H02",
@@ -485,6 +487,8 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
             {
                 ret = g_edge_clutter;
             } /* something to the right */
+            /* Cast (uint16_t)diff: diff is a simulated box distance of 150..326
+               mm. */
             if (obstacle_core_edge_on_face(phi, ret, (uint16_t)diff))
             {
                 if (obstacle_core_edge_past_max(
@@ -518,6 +522,8 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
         {
             uint16_t ret;
 
+            /* Cast (uint16_t)diff: diff is a simulated box distance of 150..326
+               mm. */
             phi = (low + high) / 2;
             ret = edge_ping(diff, omega, coef, phi / 100.0);
             if (obstacle_core_edge_on_face(phi, ret, (uint16_t)diff)
@@ -579,8 +585,12 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
         float64_t x_val;
         uint16_t  ret;
 
+        /* Cast (int32_t)accel_x: time_s < 2000 and sin 45 deg < 1, so below
+           1415 mm. */
         if (obstacle_core_out_done(&out_state, (int32_t)accel_x))
         {
+            /* Cast (int32_t)accel_x: time_s < 2000 and sin 45 deg < 1, so below
+               1415 mm. */
             return (int32_t)accel_x;
         }
         for (x_val = low; x_val <= high; x_val += 1.0)
@@ -598,6 +608,10 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
                 best = radius2;
             }
         }
+        /* Casts (uint16_t)best: best is a distance (>= 0) of at most 4000 mm on
+           this branch; (int32_t)accel_x, (int32_t)accel_y: time_s < 2000 and
+           sin, cos 45 deg < 1, so below 1415 mm; (int32_t)face:
+           OBST_US_AHEAD_MM (85) plus a box distance of 200..326 mm. */
         ret = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
         obstacle_core_out_ping(&out_state, (int32_t)accel_x, (int32_t)accel_y,
                                4500, ret, (int32_t)face);
@@ -630,6 +644,8 @@ static uint16_t edge_ping (float64_t diff, float64_t omega, float64_t coef,
             best = radius;
         }
     }
+    /* Cast (uint16_t)best: best is a distance (>= 0) of at most 4000 mm on this
+       branch. */
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
 }
 
@@ -665,6 +681,8 @@ static uint16_t ping (box_t const * p_b, int32_t n_b, int32_t angle_deg)
             }
         }
     }
+    /* Cast (uint16_t)lround(best): best is a distance (>= 0) of at most 4000 mm
+       on this branch. */
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)lround(best);
 }
 
@@ -724,15 +742,22 @@ static void test_obstacle_h09 (void)
         for (cnt = -T_BOX_OFFSET_MM; cnt <= T_BOX_OFFSET_MM;
              cnt += T_BOX_OFFSET_MM)
         {
+            /* Casts (float64_t)width, (float64_t)cnt: exact: a 32-bit integer
+               fits the 53-bit mantissa of a double. */
             box_t     box = {200.0, (float64_t)width, (float64_t)cnt};
             float64_t err;
 
+            /* Cast (float64_t)prof.w_mm: exact: a 16-bit integer fits a double.
+             */
             scan_box(&box, 1, &prof);
             err = fabs((float64_t)prof.w_mm - width) / width;
             if (err > worst)
             {
                 worst = err;
             }
+            /* Casts (uint32_t)prof.w_mm, (uint32_t)prof.closest_mm: every
+               uint16_t value fits; (uint32_t)prof.plan: every uint8_t value
+               fits. */
             printf("box %3d mm at %+3d mm: width %3u mm  edges %+d/%+d  "
                    "closest %u  plan %u  pings %d\n",
                    width, cnt, (uint32_t)prof.w_mm, prof.left_lat_mm,
@@ -780,9 +805,13 @@ static void test_obstacle_h11 (void)
 
         for (col = -T_COL_LEFT_MM; col <= T_COL_RIGHT_MM; col += 20)
         {
+            /* Cast (float64_t)col: exact: a 32-bit integer fits the 53-bit
+               mantissa of a double. */
             box_t box[2] = {{240.0, 150.0, (float64_t)col},
                             {170.0, 300.0, -330.0}}; /* wall 18-48 cm right */
 
+            /* Casts (uint32_t)prof.closest_mm: every uint16_t value fits;
+               (uint32_t)prof.plan: every uint8_t value fits. */
             scan_box(box, 2, &prof);
             printf("box at %+d mm, wall right: edges %+d / %+d, closest %u, "
                    "plan %u\n",
@@ -804,11 +833,15 @@ static void test_obstacle_h11 (void)
 
         for (col = -T_COL_SIDE_MM; col <= T_COL_SIDE_MM; col += T_COL_SIDE_MM)
         {
+            /* Cast (float64_t)col: exact: a 32-bit integer fits the 53-bit
+               mantissa of a double. */
             box_t         box   = {200.0, 150.0, (float64_t)col};
             int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2);
 
             uint16_t w_seen;
 
+            /* Casts (int32_t)w_seen, (uint32_t)prof.w_mm: every uint16_t value
+               fits; (uint32_t)prof.plan: every uint8_t value fits. */
             scan_box(&box, 1, &prof);
             w_seen = prof.w_mm;
             obstacle_core_edge_plan(&prof, false, 0, false, 0);
@@ -951,6 +984,8 @@ static void test_obstacle_h21 (void)
         int32_t   lat;
         float64_t edge;
 
+        /* Cast (int32_t)(edge: a box edge of at most 160 mm plus fixed margins:
+           below 1000 mm. */
         memset(&prof, 0, sizeof(prof));
         prof.clr_l_mm = OBST_CLEAR_MAX_MM;
         prof.clr_r_mm = OBST_CLEAR_MAX_MM;
@@ -1016,10 +1051,13 @@ static void test_obstacle_h22 (void)
             {
                 worst_w = elem;
             }
+            /* Cast (uint32_t)width: every uint16_t value fits. */
             printf("width: %3.0f mm box at %3.0f mm -> %3u mm (%4.1f %%)\n",
                    widths[val_a], dists[val_b2], (uint32_t)width, elem * 100.0);
         }
     }
+    /* Cast (uint32_t)obstacle_core_edge_width(...): every uint16_t value fits.
+     */
     CHECK("S5-H22", worst_w <= 0.10);
     memset(&prof, 0, sizeof(prof));
     g_edge_beam = 36.0;
@@ -1052,6 +1090,9 @@ static void probe_sim (obstacle_core_probe_t * p_probe, float64_t omega,
         p_probe->off = 0u;
         for (;;)
         {
+            /* Casts (int32_t)(diff * sin((th_deg * ...))),
+               (int32_t)(diff * cos((th_deg * ...))): the loop stops once |lat|
+               reaches OBST_PROBE_MAX_MM (250), so |diff| < 300 mm. */
             int32_t const lat = (int32_t)(diff * sin((th_deg * M_PI) / 180.0));
             int32_t const fwd = (int32_t)(diff * cos((th_deg * M_PI) / 180.0));
             int32_t const slope = obstacle_core_probe_sensor_lat(lat, theta);
@@ -1060,6 +1101,8 @@ static void probe_sim (obstacle_core_probe_t * p_probe, float64_t omega,
             bool const b_on = (slope <= (coef + (omega / 2.0) + run))
                               && (slope >= ((coef - (omega / 2.0)) - run));
 
+            /* Cast (uint16_t)expected: the face (335 mm) less the sensor travel
+               (|fwd| < 130 mm, mount 53 mm): 155..410 mm. */
             if (obstacle_core_probe_ping(
                     p_probe, slope, b_on ? (uint16_t)expected : OBST_RANGE_NONE,
                     expected))
@@ -1175,6 +1218,7 @@ static void test_obstacle_h21_part2 (void)
 
         for (elapsed = 0; elapsed < T_COS_VALS; elapsed++)
         {
+            /* Cast (uint32_t)prof.plan: every uint8_t value fits. */
             memset(&prof, 0, sizeof(prof));
             prof.clr_l_mm = OBST_CLEAR_MAX_MM;
             prof.clr_r_mm = OBST_CLEAR_MAX_MM;
@@ -1259,6 +1303,7 @@ static void test_obstacle_h17 (void)
            right on: its echoes are past where any 20 cm obstacle's edge can be,
            so the right edge stays the box's own and the offset clears the box
          */
+        /* Cast (uint32_t)prof.plan: every uint8_t value fits. */
         memset(&prof, 0, sizeof(prof));
         prof.clr_l_mm  = OBST_CLEAR_MAX_MM;
         prof.clr_r_mm  = OBST_CLEAR_MAX_MM;
@@ -1301,6 +1346,8 @@ static void test_obstacle_h12 (void)
         count = obstacle_core_bypass_plan(&prof, prof.plan, steps);
         for (idx = 0; idx < count; idx++)
         {
+            /* Cast (float64_t)steps[idx].value: exact: a 16-bit integer fits a
+               double. */
             float64_t       diff = ((OBST_STEP_TURN == steps[idx].kind)
                                     || (OBST_STEP_LINESCAN == steps[idx].kind))
                                        ? 0.0
@@ -1340,6 +1387,7 @@ static void test_obstacle_h12 (void)
                           >= ((float64_t)prof.closest_mm + 150.0));
             }
         }
+        /* Cast (uint32_t)count: every uint8_t value fits. */
         printf("bypass: %u steps, axle ends (%.0f, %.0f) heading %.1f, max "
                "lateral %.0f mm\n",
                (uint32_t)count, x_val, y_val, height, max_lat);
@@ -1398,6 +1446,8 @@ static void test_obstacle_h15 (void)
 
         for (kdx = 0u; kdx < T_CORNER_PTS; kdx++)
         {
+            /* Casts (int16_t)(30 + (30 * ...)): the value is 30..7680;
+               (int32_t)kdx: every uint8_t value fits. */
             pts[kdx].angle_deg = (int16_t)(30 + (30 * (int32_t)kdx));
             pts[kdx].r_mm      = OBST_RANGE_NONE;
         }
@@ -1416,6 +1466,8 @@ static void test_obstacle_h15 (void)
 
         for (kdx = 0u; kdx < T_WALL_PTS; kdx++)
         {
+            /* Casts (int16_t)(60 + (5 * (int32_t)kdx)): the value is 60..1335;
+               (int32_t)kdx: every uint8_t value fits. */
             pts[kdx].angle_deg = (int16_t)(60 + (5 * (int32_t)kdx));
             pts[kdx].r_mm =
                 ((0u == kdx) || (12u == kdx)) ? OBST_RANGE_NONE : 200u;
@@ -1504,6 +1556,8 @@ static void test_pack_h26 (void)
 
     for (kdx = 0u; kdx < (sizeof(datas) / sizeof(datas[0])); kdx++)
     {
+        /* Cast (uint16_t)(kdx * 15u): kdx < 8 entries of datas[], so at most
+           105. */
         evt.type = MISSION_EV_REMOTE_SET;
         evt.src  = 5u;
         evt.arg  = (uint16_t)(kdx * 15u);
@@ -1515,6 +1569,9 @@ static void test_pack_h26 (void)
             b_ok = false;
         }
     }
+    /* Casts (int32_t)((uint32_t)'A' | ...): bit pattern of a packed LOG word,
+       not an arithmetic value; (uint32_t)'A', (uint32_t)'F', (uint32_t)'Z',
+       (uint32_t)'%': a constant that fits. */
     CHECK("S5-H26", b_ok);
     evt.type = MISSION_EV_OBSTACLE;
     evt.arg  = 200u;

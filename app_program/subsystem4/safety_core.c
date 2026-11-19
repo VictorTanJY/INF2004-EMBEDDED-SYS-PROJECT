@@ -10,6 +10,7 @@ static uint32_t const g_timeout_ms[SAFETY_HB_COUNT] = {50u, 50u, 300u, 300u,
 
 uint32_t safety_core_hb_timeout_ms (imu_types_safety_hb_t task)
 {
+    /* Cast (uint32_t)task: every imu_types_safety_hb_t value fits. */
     return ((uint32_t)task < SAFETY_HB_COUNT) ? g_timeout_ms[task] : 0u;
 }
 

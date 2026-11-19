@@ -42,8 +42,11 @@ hmi_button_ev_t hmi_button_update (hmi_button_t * p_btn, bool b_pressed_raw,
     }
     else if (p_btn->b_stable)
     {
+        /* Cast (uint16_t)(0xFFFFu - dt_ms): the value is 0..65535. */
         if (p_btn->held_ms < (uint16_t)(0xFFFFu - dt_ms))
         {
+            /* Cast (uint16_t)(p_btn->held_ms + dt_ms): held_ms < 0xFFFF - dt_ms
+               (tested above). */
             p_btn->held_ms = (uint16_t)(p_btn->held_ms + dt_ms);
         }
         if (!p_btn->b_long_sent && (p_btn->held_ms >= long_ms))

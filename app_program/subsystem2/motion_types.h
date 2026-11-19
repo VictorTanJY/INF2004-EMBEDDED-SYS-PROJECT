@@ -66,6 +66,7 @@ typedef struct
 /** Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */
 static inline uint8_t motion_types_seq_next (uint8_t seq)
 {
+    /* Cast (uint8_t)((seq + 1u) & ...): the value is 0..31. */
     return (uint8_t)((seq + 1u) & MOTION_SEQ_MASK);
 }
 

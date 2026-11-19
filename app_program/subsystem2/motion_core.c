@@ -29,6 +29,7 @@
 #define AMOUNT_BITS   13u /* MOVE mm, TURN 0.1 deg   */
 #define RATE_BITS     9u  /* MOVE mm/s, TURN deg/s   */
 
+/* Cast (uint16_t)(sizeof ...): the layout table has fewer than 64 entries. */
 #define ODOM_FIELDS \
     ((uint16_t)(sizeof(g_odom_layout) / sizeof(g_odom_layout[0])))
 
@@ -127,6 +128,8 @@ uint32_t motion_core_expected_ms (int64_t distance_um, int32_t vmax_mm_s)
         return 0u;
     }
     /* um / (mm/s) = ms; plus the time lost accelerating and braking */
+    /* Casts (int64_t)vmax_mm_s: every int32_t value fits; (uint32_t)t_ms: t_ms
+       <= 600000 (tested in the same statement). */
     t_ms = (distance_um / vmax_mm_s)
            + (((int64_t)vmax_mm_s * 1000) / MOTION_ACCEL_MM_S2);
     return (t_ms > 600000) ? 600000u : (uint32_t)t_ms;
@@ -135,6 +138,8 @@ uint32_t motion_core_expected_ms (int64_t distance_um, int32_t vmax_mm_s)
 /* ------------------------------------------------------------------ */
 void motion_core_init (motion_core_t * p_mc, uint32_t now_ms)
 {
+    /* Cast (uint8_t *)p_mc: byte view of the struct for clearing; no value
+       converted. */
     uint8_t * p_byte = (uint8_t *)p_mc;
     size_t    idx;
 
@@ -234,6 +239,9 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
     switch (p_mc->state)
     {
         case MOTION_ST_VELOCITY_TRACK:
+            /* Casts (int32_t)(((uint32_t)MOTION_ACCEL_M ...)): an acceleration
+               step: MOTION_ACCEL_MM_S2 x dt_ms (<= 100 ms) / 1000;
+               (uint32_t)MOTION_ACCEL_MM_S2: a constant that fits. */
             p_mc->sp_v =
                 ramp(p_mc->sp_v, p_mc->drive_v,
                      (int32_t)(((uint32_t)MOTION_ACCEL_MM_S2 * dt_ms) / 1000u));
@@ -242,6 +250,9 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
         case MOTION_ST_STOPPING:
         {
+            /* Casts (int32_t)(((uint32_t)MOTION_STOP_DE ...)): a deceleration
+               step: MOTION_STOP_DECEL_MM_S2 x dt_ms (<= 100 ms) / 1000;
+               (uint32_t)MOTION_STOP_DECEL_MM_S2: a constant that fits. */
             int32_t const dv_step =
                 (int32_t)(((uint32_t)MOTION_STOP_DECEL_MM_S2 * dt_ms) / 1000u);
             int32_t const dw_step = (dv_step * 2000) / MOTION_TRACK_MM;
@@ -269,6 +280,9 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
     if (b_drive)
     {
+        /* Casts (int32_t)(((int64_t)p_mc->sp_w * ...)): the value is
+           -118111600..118111600; (int64_t)p_mc->sp_w: every int32_t value fits.
+         */
         int32_t const half_w =
             (int32_t)(((int64_t)p_mc->sp_w * MOTION_TRACK_MM) / 2000);
         int32_t const sp_l = app_types_clamp_i32(
@@ -287,6 +301,11 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 void motion_core_snapshot (motion_core_t const * p_mc,
                            motion_types_odom_t * p_out)
 {
+    /* Casts (int32_t)((p_mc->dist_l_um + ...)): distance in mm: fits int32_t
+       for the first 2147 km; (int32_t)(p_mc->x_um / 1000),
+       (int32_t)(p_mc->y_um / 1000): position in mm: fits int32_t for 2147 km
+       from the start; (int16_t)app_types_clamp_i32(...): the value is
+       -32768..32767. */
     p_out->enc_l        = p_mc->enc_l;
     p_out->enc_r        = p_mc->enc_r;
     p_out->dist_mm      = (int32_t)((p_mc->dist_l_um + p_mc->dist_r_um) / 2000);
@@ -335,6 +354,7 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
     uint8_t const arg0_bits = p0_bits(cmd);
     uint32_t      word      = 0u;
 
+    /* Cast (uint32_t)p_cmd->seq: every uint8_t value fits. */
     word = app_pack_set(word, CMD_SRC_SHIFT, CMD_SRC_BITS,
                         app_pack_sat_u(p_cmd->src, CMD_SRC_BITS));
     word = app_pack_set(word, CMD_CMD_SHIFT, CMD_CMD_BITS,
@@ -350,6 +370,8 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
     }
     else if (AMOUNT_BITS == arg0_bits)
     {
+        /* Cast (uint32_t)p_cmd->arg1: arg1 >= 0 on this branch (tested in the
+           same statement). */
         word = app_pack_set(word, CMD_P0_SHIFT, AMOUNT_BITS,
                             app_pack_off_s(p_cmd->arg0, AMOUNT_BITS));
         word = app_pack_set(
@@ -359,6 +381,8 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
     }
     else if (arg0_bits > 0u)
     {
+        /* Cast (uint32_t)p_cmd->arg0: arg0 >= 0 on this branch (tested in the
+           same statement). */
         word = app_pack_set(
             word, CMD_P0_SHIFT, arg0_bits,
             app_pack_sat_u((p_cmd->arg0 < 0) ? 0u : (uint32_t)p_cmd->arg0,
@@ -373,10 +397,13 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
 
 void motion_core_cmd_unpack (uint32_t word, motion_types_cmd_t * p_cmd)
 {
+    /* Cast (uint8_t)app_pack_get(word ...): the value is 0..7. */
     uint8_t const cmd =
         (uint8_t)app_pack_get(word, CMD_CMD_SHIFT, CMD_CMD_BITS);
     uint8_t const arg0_bits = p0_bits(cmd);
 
+    /* Casts (uint8_t)app_pack_get(word ...): the value is 0..3;
+       (uint8_t)app_pack_get(word ...): the value is 0..31. */
     p_cmd->src = (uint8_t)app_pack_get(word, CMD_SRC_SHIFT, CMD_SRC_BITS);
     p_cmd->cmd = cmd;
     p_cmd->seq = (uint8_t)app_pack_get(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS);
@@ -385,6 +412,8 @@ void motion_core_cmd_unpack (uint32_t word, motion_types_cmd_t * p_cmd)
     p_cmd->arg1     = 0;
     if (MOTION_CMD_DRIVE == cmd)
     {
+        /* Casts (int16_t)app_pack_unoff_s(...): the value is -512..511;
+           (int16_t)app_pack_unoff_s(...): the value is -2048..2047. */
         p_cmd->arg0 = (int16_t)app_pack_unoff_s(
             app_pack_get(word, CMD_P0_SHIFT, DRIVE_V_BITS), DRIVE_V_BITS);
         p_cmd->arg1 = (int16_t)app_pack_unoff_s(
@@ -393,6 +422,8 @@ void motion_core_cmd_unpack (uint32_t word, motion_types_cmd_t * p_cmd)
     }
     else if (AMOUNT_BITS == arg0_bits)
     {
+        /* Casts (int16_t)app_pack_unoff_s(...): the value is -4096..4095;
+           (int16_t)app_pack_get(word ...): the value is 0..511. */
         p_cmd->arg0 = (int16_t)app_pack_unoff_s(
             app_pack_get(word, CMD_P0_SHIFT, AMOUNT_BITS), AMOUNT_BITS);
         p_cmd->arg1 =
@@ -400,6 +431,8 @@ void motion_core_cmd_unpack (uint32_t word, motion_types_cmd_t * p_cmd)
     }
     else if (arg0_bits > 0u)
     {
+        /* Cast (int16_t)app_pack_get(word ...): a field of arg0_bits (<= 13)
+           bits. */
         p_cmd->arg0 = (int16_t)app_pack_get(word, CMD_P0_SHIFT, arg0_bits);
     }
     else
@@ -437,6 +470,7 @@ static motion_core_result_t command_run (motion_core_t *            p_mc,
     switch (p_cmd->cmd)
     {
         case MOTION_CMD_SET_AUTH:
+            /* Cast (int16_t)MOTION_SRC_COUNT: a constant that fits. */
             if (p_cmd->src != MOTION_SRC_MISSION)
             {
                 res = MOTION_RES_REJECTED_AUTH;
@@ -448,6 +482,8 @@ static motion_core_result_t command_run (motion_core_t *            p_mc,
             }
             else
             {
+                /* Cast (uint8_t)p_cmd->arg0: arg0 was checked to be
+                   0..MOTION_SRC_COUNT-1 above. */
                 p_mc->auth = (uint8_t)p_cmd->arg0;
             }
         break;
@@ -519,12 +555,16 @@ static void command_move (motion_core_t *            p_mc,
     end_maneuver(p_mc, false);
     if (MOTION_CMD_MOVE == p_cmd->cmd)
     {
+        /* Cast (int64_t)app_types_abs_i32(...): every int32_t value fits. */
         target = (int64_t)app_types_abs_i32(p_cmd->arg0) * 1000;
         vmax   = app_types_min_i32(p_cmd->arg1, MOTION_V_MAX_MM_S);
     }
     else
     {
         /* p0 in 0.1 deg; p1 in deg/s -> wheel speed in mm/s */
+        /* Casts (int32_t)p_cmd->arg0, (int64_t)p_cmd->arg1: every int16_t value
+           fits; (int32_t)(((int64_t)p_cmd->arg1 * ...)): the value is
+           -31455..31454. */
         target = turn_arc_um((int32_t)p_cmd->arg0 * 10);
         vmax   = (int32_t)(((int64_t)p_cmd->arg1 * MOTION_TRACK_MM * PI_E6)
                            / 360000000);
@@ -599,12 +639,14 @@ static void end_maneuver (motion_core_t * p_mc, bool b_ok)
 /** Wheel travel of counts encoder counts, um. */
 static int64_t counts_to_um (int32_t counts)
 {
+    /* Cast (int64_t)counts: every int32_t value fits. */
     return ((int64_t)counts * MOTION_WHEEL_CIRC_UM) / MOTION_COUNTS_PER_REV;
 }
 
 /** Wheel arc (um) for a turn of angle_cdeg about the robot centre. */
 static int64_t turn_arc_um (int32_t angle_cdeg)
 {
+    /* Cast (int64_t)app_types_abs_i32(...): every int32_t value fits. */
     return ((int64_t)app_types_abs_i32(angle_cdeg) * MOTION_TRACK_MM * PI_E6)
            / 36000000;
 }
@@ -652,6 +694,8 @@ static int32_t ramp (int32_t value, int32_t target, int32_t step)
 static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
                           int8_t * p_dir, uint32_t dt_ms)
 {
+    /* Casts (int32_t)(((int64_t)MOTION_I_MAX * ...)): the constant 0x1046A
+       fits; (int64_t)MOTION_I_MAX: a constant that fits. */
     int32_t const integ_max =
         (int32_t)(((int64_t)MOTION_I_MAX * 1000000) / MOTION_KI_MILLI);
     int8_t const dir = (setpoint > 0) ? 1 : -1;
@@ -675,6 +719,8 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
         *p_integ_um = 0;
         *p_dir      = dir;
     }
+    /* Casts (int32_t)(((int64_t)MOTION_KI_MILLI ...)): the value is
+       -12884901..12884901; (int64_t)MOTION_KI_MILLI: a constant that fits. */
     error   = setpoint - speed;
     feedfwd = ((MOTION_KFF_MILLI * setpoint) / 1000)
               + ((setpoint > 0) ? MOTION_MIN_DUTY : -MOTION_MIN_DUTY);
@@ -686,12 +732,17 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
     if ((app_types_abs_i32(output) < MOTION_DUTY_MAX)
         || ((error > 0) != (output > 0)))
     {
+        /* Casts (int32_t)dt_ms: dt_ms is one control period (<= 100 ms);
+           (int32_t)(((int64_t)MOTION_KI_MILLI ...)): the value is
+           -12884901..12884901; (int64_t)MOTION_KI_MILLI: a constant that fits.
+         */
         *p_integ_um = app_types_clamp_i32(
             *p_integ_um + (error * (int32_t)dt_ms), -integ_max, integ_max);
         output =
             feedfwd + ((MOTION_KP_MILLI * error) / 1000)
             + (int32_t)(((int64_t)MOTION_KI_MILLI * *p_integ_um) / 1000000);
     }
+    /* Cast (int16_t)app_types_clamp_i32(...): the value is -1000..1000. */
     return (int16_t)app_types_clamp_i32(output, -MOTION_DUTY_MAX,
                                         MOTION_DUTY_MAX);
 }
@@ -720,6 +771,12 @@ static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
         return;
     }
     /* Modular difference: correct across the 32-bit counter wrap. */
+    /* Casts (int32_t)((uint32_t)enc_left - ...),
+       (int32_t)((uint32_t)enc_right - ...): difference of two wrapping 32-bit
+       counters, read as signed: they are less than 2^31 apart;
+       (uint32_t)enc_left, (uint32_t)p_mc->enc_l, (uint32_t)enc_right,
+       (uint32_t)p_mc->enc_r: counts as a wrapping 32-bit pattern for the
+       difference. */
     dcl         = (int32_t)((uint32_t)enc_left - (uint32_t)p_mc->enc_l);
     dcr         = (int32_t)((uint32_t)enc_right - (uint32_t)p_mc->enc_r);
     p_mc->enc_l = enc_left;
@@ -730,6 +787,9 @@ static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
     p_mc->dist_l_um += delta_left;
     p_mc->dist_r_um += delta_right;
 
+    /* Casts (int32_t)(((p_mc->dist_r_um - ...))): the heading change of one 10
+       ms period, a few degrees in 0.01 deg; (int64_t)PI_E6: a constant that
+       fits. */
     h_old = p_mc->heading_cdeg;
     p_mc->heading_cdeg =
         (int32_t)(((p_mc->dist_r_um - p_mc->dist_l_um) * 18000000)
@@ -739,6 +799,10 @@ static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
     p_mc->x_um += (delta_mid * app_math_cos_q15(h_mid)) / 32768;
     p_mc->y_um += (delta_mid * app_math_sin_q15(h_mid)) / 32768;
 
+    /* Casts (int32_t)(delta_left / ...), (int32_t)(delta_right / ...): wheel
+       speed in mm/s: travel of one period over its length; (int64_t)dt_ms:
+       every uint32_t value fits; (int32_t)dt_ms: dt_ms is one control period
+       (<= 100 ms). */
     vraw = (int32_t)(delta_left / (int64_t)dt_ms); /* um / ms = mm/s */
     p_mc->v_l += (vraw - p_mc->v_l) / 2;
     vraw = (int32_t)(delta_right / (int64_t)dt_ms);
@@ -842,6 +906,12 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
 
     /* Trapezoid: limited by acceleration, by the speed from which the
        remaining distance still allows braking, and by the cruise speed. */
+    /* Casts (int32_t)(((uint32_t)MOTION_ACCEL_M ...)): an acceleration step:
+       MOTION_ACCEL_MM_S2 x dt_ms (<= 100 ms) / 1000;
+       (uint32_t)MOTION_ACCEL_MM_S2, (int64_t)MOTION_ACCEL_MM_S2: a constant
+       that fits; (int32_t)app_math_isqrt64(...): the square root of a speed
+       squared in (mm/s)^2: a speed below 2^31; (uint64_t)((2 * ...)): remaining
+       >= 0 here, so the product is not negative. */
     v_acc = p_mc->m_prof_v
             + (int32_t)(((uint32_t)MOTION_ACCEL_MM_S2 * dt_ms) / 1000u);
     v_dec = (int32_t)app_math_isqrt64(
@@ -866,6 +936,8 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     {
         /* Straight-line correction: steer against the wheel-distance
          * difference. */
+        /* Cast (int32_t)(((rel_l - rel_r) * ...)): the wheel travel difference
+           of one move (< 1 m) x MOTION_STRAIGHT_K / 1000. */
         p_mc->sp_v = p_mc->m_dir * speed;
         p_mc->sp_w = app_types_clamp_i32(
             (int32_t)(((rel_l - rel_r) * MOTION_STRAIGHT_K) / 1000), -1000,
@@ -874,6 +946,10 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     else
     {
         /* Spin about the centre; pull any translation back to zero. */
+        /* Casts (int32_t)(((int64_t)p_mc->m_dir * ...)): a turn rate from speed
+           (<= MOTION_V_MAX_MM_S) and the track width; (int64_t)p_mc->m_dir:
+           every int8_t value fits; (int32_t)((-4 * ((rel_l + rel_r) / ...))): a
+           correction from the travel of one move (< 1 m) / 1000. */
         p_mc->sp_w =
             (int32_t)(((int64_t)p_mc->m_dir * speed * 2000) / MOTION_TRACK_MM);
         p_mc->sp_v = (int32_t)((-4 * ((rel_l + rel_r) / 2)) / 1000);

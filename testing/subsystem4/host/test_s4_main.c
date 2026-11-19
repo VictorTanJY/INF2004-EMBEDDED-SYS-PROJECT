@@ -201,6 +201,7 @@ static void test_h10 (void)
         g_ev  = 0u;
         for (kdx = 0; kdx < T_4_S; kdx++)
         {
+            /* Cast (int32_t)(val_a / 100.0): val_a is +-1500, so +-15. */
             float64_t val_a =
                 (0 == ((kdx / 50) % 2)) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
             value += (int32_t)(val_a / 100.0);
@@ -490,6 +491,8 @@ static void test_h05e (void)
             step(0.0, 0.0, 0.0, 300, 3000, 0);
         }
     }
+    /* Casts (uint32_t)g_ic.hump_max_mm, (uint32_t)real_max: every uint16_t
+       value fits. */
     printf("in the air: %u fake hump(s), max %u mm (real %u)\n",
            (g_ic.humps - 1u), (uint32_t)g_ic.hump_max_mm, (uint32_t)real_max);
     CHECK("S4-H05e", ((g_ev & IMU_EV_HUMP_END) != 0u)
@@ -498,6 +501,8 @@ static void test_h05e (void)
     CHECK("S4-H05e", (g_ic.hump_max_mm == real_max) && (1u == g_ic.humps)
                          && (IMU_HUMP_FLAT == g_ic.hump_state));
 
+    /* Cast (uint16_t)(real_max + 5u): real_max is a simulated hump height (19
+       mm). */
     imu_core_hump_save(&g_ic); /* crossing line */
     g_ic.hump_max_mm =
         (uint16_t)(real_max + 5u); /* a hump measured meanwhile */
@@ -565,6 +570,9 @@ static void test_h06 (void)
             float64_t radius = (diff * M_PI) / 180.0;
             int16_t   mag[3] = {0, 0, 0};
             /* field of 400 counts; hard-iron offset (+120, -80, +30) */
+            /* Casts (int16_t)(((400.0 * cos(radius)) * ...)): 400 x cos plus
+               120 is -280..520; (int16_t)(((400.0 * sin(radius)) * ...)): 400 x
+               sin minus 80 is -480..320. */
             mag[IMU_AXIS_FWD] =
                 (int16_t)(((400.0 * cos(radius)) * IMU_SIGN_FWD) + 120);
             mag[IMU_AXIS_LEFT] =
@@ -717,6 +725,9 @@ static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
     float64_t       up_mg   = 1000.0 * cos(time_s) * cos(pos);
     float64_t       body[3] = {0.0, 0.0, 0.0};
 
+    /* Casts (int32_t)lround(body[0]), (int32_t)lround(body[1]),
+       (int32_t)lround(body[2]): 1000 mg x sin or cos plus a_lin / 9.807
+       (|a_lin| <= 1500): within +-1200 mg. */
     body[IMU_AXIS_FWD]  = fwd * IMU_SIGN_FWD;
     body[IMU_AXIS_LEFT] = left * IMU_SIGN_LEFT;
     body[IMU_AXIS_UP]   = up_mg * IMU_SIGN_UP;

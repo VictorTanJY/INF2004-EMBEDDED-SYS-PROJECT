@@ -72,6 +72,8 @@ EXPORT ER subsystem5_init (void)
         return g_flg_obst;
     }
 
+    /* Cast (FP)range_cyc_handler: the kernel stores the entry point as FP; it
+       is called with its own type. */
     ccyc.cycatr = TA_HLNG;
     ccyc.cychdr = (FP)range_cyc_handler;
     ccyc.cyctim = S5_RANGE_PERIOD_MS;
@@ -84,12 +86,16 @@ EXPORT ER subsystem5_start (void)
 {
     ID tid;
 
+    /* Cast (FP)mission_task_thread: the kernel stores the entry point as FP; it
+       is called with its own type. */
     tid = app_main_start_task((FP)mission_task_thread, S5_PRI_MISSION, S5_CORE,
                               "mission");
     if (tid < E_OK)
     {
         return tid;
     }
+    /* Cast (FP)obstacle_task_thread: the kernel stores the entry point as FP;
+       it is called with its own type. */
     tid = app_main_start_task((FP)obstacle_task_thread, S5_PRI_OBSTACLE,
                               S5_CORE, "obstacle");
     if (tid < E_OK)

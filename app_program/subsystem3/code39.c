@@ -330,6 +330,8 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
     }
     for (entry = 0u; entry < n_elems; entry++)
     {
+        /* Cast (uint16_t)entry: entry < n_elems <= BEST_N_MAX (33, tested
+           above). */
         b_speck[entry] = is_speck(p_widths[entry], (uint16_t)entry, levels);
     }
     fit.p_w     = p_widths;
@@ -344,6 +346,9 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
             best_try_char(&fit, &g_code39_table[entry], &rank);
         }
     }
+    /* Casts (uint32_t)BEST_ELEM_MAX: a constant that fits;
+       (uint64_t)rank.next_cost, (uint64_t)rank.best_cost: every uint32_t value
+       fits. */
     if (('\0' == rank.ch1)
         || (rank.best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T))
         || (((uint64_t)rank.next_cost * 10u)
@@ -394,6 +399,8 @@ static void best_template (uint16_t pat, uint32_t const levels[4],
 
     for (kdx = 0u; kdx < BEST_T; kdx++)
     {
+        /* Casts (uint8_t)(kdx / 10u): the value is 0..25; (uint8_t)(kdx % 10u):
+           the value is 0..9. */
         uint8_t const  char_idx = (uint8_t)(kdx / 10u);
         uint8_t const  pos      = (uint8_t)(kdx % 10u);
         uint16_t const pattern  = (1u == char_idx) ? pat : star;
@@ -454,6 +461,8 @@ static uint16_t bits_of (char const * p_bits)
 
     for (idx = 0u; idx < CHAR_ELEMS; idx++)
     {
+        /* Cast (uint16_t)((pattern << 1) | (('1' ...))): 9 one-bit shifts: 9
+           bits. */
         pattern = (uint16_t)((pattern << 1) | (('1' == p_bits[idx]) ? 1u : 0u));
     }
     return pattern;
@@ -520,8 +529,12 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
 
     for (idx = 0u; idx < CHAR_ELEMS; idx++)
     {
+        /* Cast (uint16_t)(first + idx): first = char_idx x 10 <= n_elems - 9
+           and idx < 9, so below n_elems. */
         widths[idx] = width_at(p_w, n_elems, (uint16_t)(first + idx), b_rev);
     }
+    /* Casts (uint64_t)bar_w2, (uint64_t)bar_w3, (uint64_t)space_w1,
+       (uint64_t)space_w2: every uint32_t value fits. */
     (void)kth_widest(widths, 0u, 0u, &ib1);
     bar_w2   = kth_widest(widths, 0u, 1u, &ib2);
     bar_w3   = kth_widest(widths, 0u, 2u, &ib3); /* widest narrow bar   */
@@ -547,6 +560,8 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
         uint32_t const bar_w1   = kth_widest(widths, 0u, 0u, &ib1);
         uint32_t const bar_w5   = kth_widest(widths, 0u, 4u, &ib5);
 
+        /* Casts (uint64_t)space_w3, (uint64_t)space_w4, (uint64_t)bar_w1,
+           (uint64_t)bar_w5: every uint32_t value fits. */
         if ((0u == space_w4)
             || (((uint64_t)space_w3 * 10u)
                 < ((uint64_t)space_w4 * ratio_min_x10))
@@ -559,6 +574,8 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
     }
     for (idx = 0u; idx < CHAR_ELEMS; idx++)
     {
+        /* Cast (uint16_t)((pattern << 1) | (((wide ...)))): 9 one-bit shifts: 9
+           bits. */
         pattern = (uint16_t)((pattern << 1)
                              | (((wide & (1u << idx)) != 0u) ? 1u : 0u));
     }
@@ -573,12 +590,15 @@ static code39_result_t decode_dir (uint32_t const * p_w, uint16_t n_elems,
                                    uint16_t ratio_min_x10, bool b_rev,
                                    char * p_text)
 {
+    /* Cast (uint16_t)((n_elems + 1u) / 10u): the value is 0..6553. */
     uint16_t const chars = (uint16_t)((n_elems + 1u) / 10u);
     uint16_t       char_idx;
     uint16_t       out = 0u;
 
     for (char_idx = 0u; char_idx < chars; char_idx++)
     {
+        /* Cast (uint16_t)(char_idx * 10u): char_idx < (n_elems + 1) / 10, so
+           char_idx x 10 <= n_elems. */
         uint16_t        pattern = 0u;
         code39_result_t result =
             classify(p_w, n_elems, (uint16_t)(char_idx * 10u), b_rev,
@@ -696,6 +716,8 @@ static uint32_t sq_err (uint32_t meas, uint32_t expect, uint32_t inv)
     best-match table (BEST_BAND). */
 static bool in_band (uint16_t idx, uint16_t jdx)
 {
+    /* Casts (uint16_t)(idx - jdx): idx > jdx on this branch;
+       (uint16_t)(jdx - idx): jdx >= idx on this branch. */
     uint16_t const diff =
         (idx > jdx) ? (uint16_t)(idx - jdx) : (uint16_t)(jdx - idx);
 
@@ -708,6 +730,7 @@ static bool is_speck (uint32_t width, uint16_t idx, uint32_t const * p_lv)
 {
     uint32_t const narrow = p_lv[((idx % 2u) != 0u) ? 2u : 0u];
 
+    /* Casts (uint64_t)width, (uint64_t)narrow: every uint32_t value fits. */
     return ((uint64_t)width * 100u) < ((uint64_t)narrow * BEST_SPECK_PCT);
 }
 
@@ -743,6 +766,7 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
         {
             b_over = true; /* no fit below the bound: BEST_INF */
         }
+        /* Cast (uint16_t)(idx - BEST_BAND): idx > BEST_BAND on this branch. */
         for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u;
              !b_over && (jdx < BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
         {
@@ -776,6 +800,7 @@ static void best_clear (uint16_t n_elems)
 
     for (idx = 0u; idx <= n_elems; idx++)
     {
+        /* Cast (uint16_t)(idx - BEST_BAND): idx > BEST_BAND on this branch. */
         for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u;
              (jdx <= BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
         {
@@ -804,22 +829,31 @@ static void best_steps (best_fit_in_t const * p_fit, uint32_t const * p_e,
         best_relax(idx + 1u, jdx + 1u,
                    cost_here + sq_err(p_w[idx], p_e[jdx], p_fit->inv), edits);
     }
+    /* Casts (uint16_t)(idx + 3u): idx + 3 <= n_elems (tested in the same
+       statement); (uint16_t)(jdx + 1u): jdx <= BEST_T (29), a table index. */
     if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= p_fit->n_elems)
         && in_band((uint16_t)(idx + 3u), (uint16_t)(jdx + 1u))
         && p_fit->p_speck[idx + 1u])
     {
         /* 3 measured : 1 printed */
+        /* Cast (uint8_t)(edits + 1u): edits < BEST_MAX_EDITS (2, tested above).
+         */
         best_relax(idx + 3u, jdx + 1u,
                    cost_here + BEST_EDIT
                        + sq_err(p_w[idx] + p_w[idx + 1u] + p_w[idx + 2u],
                                 p_e[jdx], p_fit->inv),
                    (uint8_t)(edits + 1u));
     }
+    /* Casts (uint16_t)(idx + 1u): idx <= n_elems <= BEST_N_MAX (33), a table
+       index; (uint16_t)(jdx + 3u): jdx + 3 <= BEST_T (tested in the same
+       statement). */
     if ((edits < BEST_MAX_EDITS) && ((jdx + 3u) <= BEST_T)
         && in_band((uint16_t)(idx + 1u), (uint16_t)(jdx + 3u))
         && !p_wide[jdx + 1u])
     {
         /* 1 measured : 3 printed */
+        /* Cast (uint8_t)(edits + 1u): edits < BEST_MAX_EDITS (2, tested above).
+         */
         best_relax(idx + 1u, jdx + 3u,
                    cost_here + BEST_EDIT
                        + sq_err(p_w[idx],

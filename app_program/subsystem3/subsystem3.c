@@ -27,6 +27,8 @@ EXPORT ER subsystem3_init (void)
 
 EXPORT ER subsystem3_start (void)
 {
+    /* Cast (FP)line_task_thread: the kernel stores the entry point as FP; it is
+       called with its own type. */
     ID const tid = app_main_start_task((FP)line_task_thread, S3_PRI_LINE,
                                        S3_CORE_LINE, "line");
 

@@ -80,6 +80,8 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
     for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
     {
         /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
+        /* Cast (int32_t)le16(raw[2u * kdx], raw[ ...): every int16_t value
+           fits. */
         acc_mg[kdx] =
             ((int32_t)le16(raw[2u * kdx], raw[(2u * kdx) + 1u]) * 122) / 1000;
     }
@@ -117,6 +119,9 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
  */
 static ER init_result (uint8_t stage, ER err, uint8_t chip_id)
 {
+    /* Casts (uint32_t)stage, (uint32_t)chip_id: every uint8_t value fits;
+       (uint32_t)(-err): -err of a negative kernel error code; the mask keeps
+       its low byte. */
     g_diag = ((uint32_t)stage << 24) | (((uint32_t)(-err) & 0xFFu) << 16)
              | ((uint32_t)chip_id << 8);
     return err;
@@ -209,9 +214,13 @@ static ER init_once (void)
 /** Signed 16-bit value from its low and high bytes. */
 static int16_t le16 (uint8_t low, uint8_t high)
 {
+    /* Casts (uint16_t)((uint16_t)low | ...): two bytes make 16 bits;
+       (uint16_t)low, (uint16_t)high: every uint8_t value fits. */
     uint16_t const word = (uint16_t)((uint16_t)low | ((uint16_t)high << 8));
 
     /* Avoid implementation-defined unsigned-to-signed overflow. */
+    /* Casts (int16_t)((word & 0x8000u) ? ...): the 16-bit pattern read as two's
+       complement: -32768..32767; (int32_t)word: every uint16_t value fits. */
     return (int16_t)((word & 0x8000u) ? ((int32_t)word - 65536) : word);
 }
 

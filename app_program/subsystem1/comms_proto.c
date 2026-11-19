@@ -87,6 +87,9 @@ void comms_proto_rec_unpack (comms_proto_rec_t const * p_rec, uint32_t now_ms,
         app_pack_get(p_rec->hdr, COMMS_REC_T_SHIFT, COMMS_REC_T_BITS);
     uint32_t const age10 = (now10 - t10) & app_pack_mask(COMMS_REC_T_BITS);
 
+    /* Casts (uint8_t)(app_pack_get(p_rec->hdr ...)): the value is 1..4;
+       (uint8_t)app_pack_get(p_rec->hdr ...): the value is 0..7;
+       (uint16_t)app_pack_get(p_rec->hdr ...): the value is 0..127. */
     p_ev->kind = (uint8_t)(app_pack_get(p_rec->hdr, COMMS_REC_KIND_SHIFT,
                                         COMMS_REC_KIND_BITS)
                            + 1u);
@@ -107,6 +110,10 @@ uint16_t comms_proto_build_telemetry (comms_proto_telem_t const * p_t,
     app_pack_writer_t writer;
     bool const        b_prof = p_t->b_obst_valid;
 
+    /* Casts (uint32_t)p_t->enc_l, (uint32_t)p_t->enc_r: the low 16 bits of the
+       two's complement count are sent (a wrap field); (uint32_t)p_t->dist_mm:
+       the low 16 bits of the two's complement distance are sent (a wrap field).
+     */
     app_pack_writer_init(&writer, p_buf, cap);
     put_header(&writer, COMMS_FT_TELEMETRY);
     app_pack_put(&writer, p_t->seq, 8u);
@@ -185,6 +192,8 @@ uint16_t comms_proto_build_event (comms_proto_event_t const * p_ev,
     app_pack_put(&writer, dlen, 2u);
     if (width > 0u)
     {
+        /* Cast (uint32_t)data: two's complement: the low width bits are sent.
+         */
         app_pack_put(&writer, (uint32_t)data,
                      width); /* two's complement, low bits */
     }
@@ -195,6 +204,9 @@ uint16_t comms_proto_build_status (uint32_t uptime_s, int32_t rssi,
                                    uint32_t drops, char const * p_map,
                                    uint8_t * p_buf, uint16_t cap)
 {
+    /* Casts (uint32_t)(-(int64_t)rssi): rssi < 0 (tested in the same
+       statement); negated in 64 bits, so even INT32_MIN fits; (int64_t)rssi:
+       every int32_t value fits. */
     app_pack_writer_t writer;
     uint32_t          neg_rssi = (rssi < 0) ? (uint32_t)(-(int64_t)rssi) : 0u;
     bool const        b_map    = (p_map != NULL) && (p_map[0] != '\0');
@@ -274,11 +286,13 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
     {
         return COMMS_ERR_BAD_FRAME;
     }
+    /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..255. */
     p_cmd->cmd_id = (uint8_t)app_pack_take(&reader, COMMS_ID_BITS);
     if (reader.b_short)
     {
         return COMMS_ERR_NO_ID;
     }
+    /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..7. */
     p_cmd->b_has_id = true;
     p_cmd->cmd      = (uint8_t)app_pack_take(&reader, COMMS_CMD_BITS);
     if (reader.b_short)
@@ -383,6 +397,7 @@ void comms_proto_dedup_add (comms_proto_dedup_t *     p_dd,
 {
     comms_proto_dedup_entry_t * p_e = &p_dd->entries[p_dd->next];
 
+    /* Cast (uint8_t)((p_dd->next + 1u) % ...): the value is 0..7. */
     p_e->cmd_id   = p_cmd->cmd_id;
     p_e->t_ms     = now_ms;
     p_e->cmd      = p_cmd->cmd;
@@ -412,11 +427,13 @@ bool comms_proto_ring_push (comms_proto_ring_t *      p_ring,
 
     if (COMMS_RING_LEN == p_ring->count)
     {
+        /* Cast (uint8_t)((p_ring->head + 1u) % ...): the value is 0..15. */
         p_ring->head =
             (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN); /* drop oldest */
         p_ring->count--;
         b_overwrote = true;
     }
+    /* Cast (uint8_t)((p_ring->head + ...)): the value is 0..15. */
     idx = (uint8_t)((p_ring->head + p_ring->count) % COMMS_RING_LEN);
     p_ring->rec[idx] = *p_rec;
     p_ring->seq[idx] = seq;
@@ -440,6 +457,7 @@ void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
 {
     if (p_ring->count > 0u)
     {
+        /* Cast (uint8_t)((p_ring->head + 1u) % ...): the value is 0..15. */
         p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);
         p_ring->count--;
     }
@@ -456,6 +474,7 @@ static comms_proto_err_t parse_set (app_pack_reader_t * p_reader, uint16_t len,
     {
         return COMMS_ERR_BAD_FRAME;
     }
+    /* Cast (uint8_t)param_index: a COMMS_PARAM_BITS (4-bit) field: 0..15. */
     param_index  = app_pack_take(p_reader, COMMS_PARAM_BITS);
     p_cmd->value = app_pack_unoff_s(app_pack_take(p_reader, COMMS_VALUE_BITS),
                                     COMMS_VALUE_BITS);
@@ -487,6 +506,7 @@ static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
     }
     for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
     {
+        /* Cast (uint8_t)app_pack_take(p_reader ...): the value is 0..63. */
         chars[kdx] =
             comms_proto_symbol_char((uint8_t)app_pack_take(p_reader, 6u));
         if ('\0' == chars[kdx])
@@ -500,8 +520,12 @@ static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
                 return COMMS_ERR_BAD_MAP;
             }
         }
+        /* Casts (uint32_t)(uint8_t)chars[kdx]: every uint8_t value fits;
+           (uint8_t)chars[kdx]: every char value fits. */
         packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
     }
+    /* Cast (int32_t)packed: bit pattern of four packed characters, carried as
+       int32_t. */
     p_cmd->value = (int32_t)packed;
     return COMMS_ERR_NONE;
 }
@@ -531,6 +555,7 @@ static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
     {
         return none_code;
     }
+    /* Cast (uint32_t)value_mm: every uint16_t value fits. */
     value_cm = ((uint32_t)value_mm + 5u) / 10u;
     return (value_cm >= none_code) ? (none_code - 1u) : value_cm;
 }

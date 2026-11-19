@@ -144,6 +144,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 /** I2C error handling: three in a row raise IMU_FAULT, once per episode. */
 static void imu_read_failed (imu_task_state_t * p_st, ER err)
 {
+    /* Cast (uint8_t)(p_st->errors + 1u): errors < 255 on this branch. */
     p_st->errors =
         (p_st->errors < 255u) ? (uint8_t)(p_st->errors + 1u) : p_st->errors;
 
@@ -158,6 +159,8 @@ static void imu_read_failed (imu_task_state_t * p_st, ER err)
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 110u,
                                     err);
 
+        /* Cast (int32_t)(((in_w(APP_REGS_GPIO_IN) ...))): two pin levels: 0..3.
+         */
         (void)subsystem1_telem_post(
             COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 111u,
             (int32_t)(((in_w(APP_REGS_GPIO_IN) >> S4_PIN_IMU_SDA) & 1u)
@@ -208,6 +211,7 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 112u,
                                     1);
 
+        /* Cast (UINT)SAFETY_FLT_IMU_FAULT: a constant that fits. */
         (void)tk_clr_flg(subsystem4_flg_safety(), ~(UINT)SAFETY_FLT_IMU_FAULT);
     }
 
@@ -215,6 +219,10 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
     subsystem2_get_odom(&odom);
     subsystem5_get_mission_snap(&mission);
 
+    /* Casts (int32_t)((uint32_t)dist_um - ...): difference of two wrapping
+       32-bit counters, read as signed: they are less than 2^31 apart;
+       (uint32_t)dist_um, (uint32_t)p_st->prev_dist_um: distances as a wrapping
+       32-bit pattern for the difference. */
     dist_um = odom.dist_mm * 1000;
     ds_um   = p_st->b_have_dist
                   ? (int32_t)((uint32_t)dist_um - (uint32_t)p_st->prev_dist_um)
@@ -256,10 +264,14 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
     imu_report(p_st, events, &mission);
 
     /* ---- Snapshot ---- */
+    /* Casts (int16_t)g_ic.pitch_cdeg, (int16_t)g_ic.roll_cdeg: a wrapped angle:
+       +-18000 0.01 deg; (uint16_t)g_ic.heading_cdeg: the heading is 0..35999
+       (imu_core wraps it); (int16_t)(g_ic.prev_mag_mg - 1000): with the +-4 g
+       sensor |a| <= 6925 mg, so -1000..5925. */
     p_st->snap.t_ms             = app_time_ms();
     p_st->snap.pitch_cdeg       = (int16_t)g_ic.pitch_cdeg;
     p_st->snap.roll_cdeg        = (int16_t)g_ic.roll_cdeg;
-    p_st->snap.heading_cdeg     = (int16_t)g_ic.heading_cdeg;
+    p_st->snap.heading_cdeg     = (uint16_t)g_ic.heading_cdeg;
     p_st->snap.turn_rate_cdeg_s = odom.yaw_rate_cdeg_s;
     p_st->snap.accel_mg         = (int16_t)(g_ic.prev_mag_mg - 1000);
     p_st->snap.tilt             = g_ic.b_tilt ? 1u : 0u;
@@ -562,6 +574,8 @@ static bool imu_hw_init (void)
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u,
                                     sensor_er);
 
+        /* Cast (int32_t)diagnostic: bit pattern of the packed diagnosis word.
+         */
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
                                     IMU_LOG_INIT, (int32_t)diagnostic);
     }

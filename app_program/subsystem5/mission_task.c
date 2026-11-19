@@ -56,6 +56,7 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
         subsystem4_heartbeat(SAFETY_HB_MISSION);
         now_ms = app_time_ms();
 
+        /* Cast (INT)sizeof(ev_word): a constant that fits. */
         out.n_acts = 0u;
         if ((INT)sizeof(ev_word) == msg_len)
         {
@@ -91,6 +92,7 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
    CLEAR_ESTOP have no named form and use subsystem2_post. */
 static ER mission_motion (mission_core_act_t const * p_a)
 {
+    /* Cast (uint16_t)app_types_abs_i32(...): the value is 0..32768. */
     uint8_t const  src    = MOTION_SRC_MISSION;
     uint16_t const amount = (uint16_t)app_types_abs_i32(p_a->arg0);
     ER             err;
@@ -98,6 +100,8 @@ static ER mission_motion (mission_core_act_t const * p_a)
     switch (p_a->cmd)
     {
         case MOTION_CMD_MOVE:
+            /* Cast (uint16_t)p_a->arg1: a speed from mission_core; a negative
+               value becomes > MOTION_API_MAX_RATE and is rejected (E_PAR). */
             err = (p_a->arg0 >= 0)
                       ? motion_api_move_forward(src, p_a->seq, amount,
                                                 (uint16_t)p_a->arg1)
@@ -106,6 +110,8 @@ static ER mission_motion (mission_core_act_t const * p_a)
         break;
 
         case MOTION_CMD_TURN:
+            /* Cast (uint16_t)p_a->arg1: a rate from mission_core; a negative
+               value becomes > MOTION_API_MAX_RATE and is rejected (E_PAR). */
             err = (p_a->arg0 >= 0)
                       ? motion_api_turn_left(src, p_a->seq, amount,
                                              (uint16_t)p_a->arg1)
@@ -161,6 +167,7 @@ static void run_actions (mission_core_out_t const * p_out)
             break;
 
             case MISSION_ACT_STATE:
+                /* Cast (uint16_t)p_a->arg0: a state number 0..10. */
                 (void)subsystem1_telem_post(COMMS_KIND_STATE,
                                             APP_SRC_OBST_MISSION,
                                             (uint16_t)p_a->arg0, 0);
@@ -179,6 +186,12 @@ static void run_actions (mission_core_out_t const * p_out)
                 }
                 else
                 {
+                    /* Casts (int32_t)(((uint32_t) ...)): bit pattern of a
+                       packed LOG word, not an arithmetic value;
+                       (uint32_t)(uint16_t)p_a->arg0: every uint16_t value fits;
+                       (uint16_t)p_a->arg0, (uint16_t)p_a->arg1: low 16 bits
+                       (two's complement) of the value, packed into a LOG word.
+                     */
                     (void)subsystem1_telem_post(
                         COMMS_KIND_LOG, APP_SRC_OBST_MISSION, p_a->cmd,
                         (int32_t)(((uint32_t)(uint16_t)p_a->arg0 << 16)

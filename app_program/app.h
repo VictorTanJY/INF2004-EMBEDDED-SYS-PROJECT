@@ -170,6 +170,7 @@ Inline uint64_t app_time_us64 (void)
         low = in_w(TIMER_TIMERAWL);
         hi1 = in_w(TIMER_TIMERAWH);
     } while (hi0 != hi1);
+    /* Cast (uint64_t)hi0: every uint32_t value fits. */
     return ((uint64_t)hi0 << 32) | low;
 }
 
@@ -177,6 +178,8 @@ Inline uint64_t app_time_us64 (void)
    used by the 10 ms loops, which need better than the 10 ms tick. */
 Inline uint32_t app_time_ms_hw (void)
 {
+    /* Cast (uint32_t)(app_time_us64() / ...): milliseconds since boot, low 32
+       bits (wraps after 49.7 days, as app_time_ms()). */
     return (uint32_t)(app_time_us64() / 1000u);
 }
 

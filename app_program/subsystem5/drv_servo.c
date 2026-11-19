@@ -44,6 +44,7 @@ EXPORT void drv_servo_set_deg (int32_t angle_deg)
 #if !OBST_SERVO_LEFT_IS_HIGH
     angle = 180 - angle;
 #endif
+    /* Cast (uint32_t)pulse_us: angle is clamped to 0..180, so 500..2500 us. */
     pulse_us = OBST_SERVO_MIN_US
                + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
     out_w(pwm_ch_cc(SERVO_SLICE),

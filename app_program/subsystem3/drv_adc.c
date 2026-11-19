@@ -100,6 +100,8 @@ EXPORT ER drv_adc_init (void)
     }
 
     /* Two chained channels, B configured without triggering. */
+    /* Casts (uint32_t)&g_buf[0][0], (uint32_t)&g_buf[1][0]: the DMA register
+       takes the 32-bit address of the buffer. */
     out_w(DMA_CHAN_ABORT, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
     out_w(dma_read_addr(DMA_CH_A), ADC_FIFO);
     out_w(dma_write_addr(DMA_CH_A), (uint32_t)&g_buf[0][0]);
@@ -116,6 +118,8 @@ EXPORT ER drv_adc_start (ID task)
     T_DINT dint;
     ER     err;
 
+    /* Cast (FP)adc_dma_isr: the kernel stores the entry point as FP; it is
+       called with its own type. */
     g_task      = task;
     dint.intatr = TA_HLNG;
     dint.inthdr = (FP)adc_dma_isr;
@@ -152,6 +156,7 @@ EXPORT bool drv_adc_get_block (uint16_t   p_out[DRV_ADC_BLOCK_LEN],
     /* The other buffer is being filled now; this one is stable for 10 ms. */
     for (idx = 0u; idx < DRV_ADC_BLOCK_LEN; idx++)
     {
+        /* Cast (uint16_t)(g_buf[which][idx] & ...): the value is 0..4095. */
         p_out[idx] = (uint16_t)(g_buf[which][idx] & 0x0FFFu);
     }
     return true;
@@ -225,6 +230,8 @@ static void adc_dma_isr (UINT intno)
     out_w(DMA_INTS1, ints); /* write 1 to clear */
     if ((ints & (1uL << DMA_CH_A)) != 0u)
     {
+        /* Cast (uint32_t)&g_buf[0][0]: the DMA register takes the 32-bit
+           address of the buffer. */
         out_w(dma_write_addr(DMA_CH_A),
               (uint32_t)&g_buf[0][0]); /* re-arm, no trigger */
         g_ready = 0u;
@@ -232,6 +239,8 @@ static void adc_dma_isr (UINT intno)
     }
     if ((ints & (1uL << DMA_CH_B)) != 0u)
     {
+        /* Cast (uint32_t)&g_buf[1][0]: the DMA register takes the 32-bit
+           address of the buffer. */
         out_w(dma_write_addr(DMA_CH_B), (uint32_t)&g_buf[1][0]);
         g_ready = 1u;
         g_seq++;

@@ -118,6 +118,11 @@ EXPORT void subsystem2_test_run (void)
                "DRIVE without LINE authority rejected");
 
     /* ---- S2-U07: loop period and run time over 1 s (NFR1) ---------- */
+    /* Casts (UB *)"[INFO] S2-U07 period min ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)timing.per_min_us,
+       (INT)timing.per_max_us, (INT)timing.exec_max_us, (INT)timing.cycles:
+       printed with %d: the value is a 32-bit count or measurement below 2^31.
+     */
     motion_task_timing_restart();
     (void)tk_dly_tsk(1000);
     motion_task_test_timing(&timing);
@@ -136,6 +141,9 @@ EXPORT void subsystem2_test_run (void)
     {
         mission_types_snap_t mission;
 
+        /* Casts (UB *)"[INFO] S2-U08 mission ...: tm_printf() takes UB *; the
+           string bytes are unchanged; (INT)mission.state: every uint8_t value
+           fits. */
         subsystem5_get_mission_snap(&mission);
         tm_printf((UB *)"[INFO] S2-U08 mission state %d (1 = IDLE; 10 = FAULT, "
                         "e.g. no IMU)\n",
@@ -211,6 +219,8 @@ static void step_measure (step_rec_t * p_rec)
     {
         int32_t elapsed;
 
+        /* Cast (int32_t)(app_time_ms() - t_start): signed difference of two
+           wrapping time stamps; they are less than 2^31 apart. */
         (void)tk_dly_tsk(10);
         subsystem2_get_odom(&p_rec->odom);
         elapsed = (int32_t)(app_time_ms() - t_start);
@@ -238,6 +248,8 @@ static void step_measure (step_rec_t * p_rec)
 /** S2-U08 / U09: peak, settling time and the cruise window of one sample. */
 static void step_sample (step_rec_t * p_rec, int32_t elapsed)
 {
+    /* Casts (int32_t)p_rec->odom.v_l_mm_s, (int32_t)p_rec->odom.v_r_mm_s: every
+       int16_t value fits. */
     int32_t const value =
         ((int32_t)p_rec->odom.v_l_mm_s + (int32_t)p_rec->odom.v_r_mm_s) / 2;
 
@@ -260,6 +272,8 @@ static void step_sample (step_rec_t * p_rec, int32_t elapsed)
             p_rec->t_lo = elapsed;
             p_rec->b_lo = true;
         }
+        /* Casts (int32_t)p_rec->odom.v_l_mm_s, (int32_t)p_rec->odom.v_r_mm_s:
+           every int16_t value fits. */
         p_rec->o_hi = p_rec->odom;
         p_rec->t_hi = elapsed;
         p_rec->diff_sum +=
@@ -277,6 +291,10 @@ static void test_step_result (test_report_t *    p_report,
     int32_t const                     dist = p_odom->dist_mm - p_start->dist_mm;
     int32_t const over = ((p_rec->peak - T_SPEED_MM_S) * 100) / T_SPEED_MM_S;
 
+    /* Casts (UB *)"[INFO] S2-U08 settle %d ...,
+       (UB *)"[INFO] S2-U08 distance ...: tm_printf() takes UB *; the string
+       bytes are unchanged; (INT)p_rec->settle, (INT)p_rec->peak, (INT)dist:
+       every int32_t value fits; (INT)T_DIST_MM: a constant that fits. */
     tm_printf((UB *)"[INFO] S2-U08 settle %d ms (within +-%d mm/s), "
                     "peak %d mm/s, overshoot %d %%\n",
               (INT)p_rec->settle, T_BAND_MM_S, (INT)p_rec->peak,
@@ -299,6 +317,9 @@ static void test_step_result (test_report_t *    p_report,
         int32_t const diff     = p_rec->diff_sum / p_rec->n_win;
         int32_t const delta_ms = p_rec->t_hi - p_rec->t_lo;
 
+        /* Casts (UB *)"[INFO] S2-U09 mean |vL - ...: tm_printf() takes UB *;
+           the string bytes are unchanged; (INT)diff, (INT)p_rec->n_win: every
+           int32_t value fits. */
         tm_printf(
             (UB *)"[INFO] S2-U09 mean |vL - vR| %d mm/s over %d "
                   "samples; "
@@ -323,6 +344,8 @@ static void test_reverse (test_report_t * p_report)
     motion_types_odom_t odom;
     bool                b_done;
 
+    /* Cast (UB *)"[INFO] S2-U10 distance ...: tm_printf() takes UB *; the
+       string bytes are unchanged. */
     subsystem2_get_odom(&odom_start);
     (void)motion_api_move_backward(MOTION_SRC_MISSION, (T_SEQ + 1u), T_DIST_MM,
                                    T_BACK_SPEED_MM_S);
@@ -348,6 +371,8 @@ static void test_spin (test_report_t * p_report)
     motion_types_odom_t odom;
     bool                b_done;
 
+    /* Cast (UB *)"[INFO] S2-U11 encoders L ...: tm_printf() takes UB *; the
+       string bytes are unchanged. */
     subsystem2_get_odom(&odom_start);
     (void)motion_api_turn_left(MOTION_SRC_MISSION, (T_SEQ + 2u), T_TURN_DDEG,
                                T_TURN_RATE_DEG_S);

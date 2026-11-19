@@ -150,6 +150,7 @@ void mqtt_utk_app_poll (void)
     /* 2. New records. */
     for (count = 0u; count < COMMS_DRAIN_MAX; count++)
     {
+        /* Cast (INT)sizeof(rec): a constant that fits. */
         if (tk_rcv_mbf(mbf, &rec, TMO_POL) != (INT)sizeof(rec))
         {
             break;
@@ -262,6 +263,7 @@ static void comms_set_wifi_loss (bool b_lost)
         }
         else
         {
+            /* Cast (UINT)SAFETY_FLT_WIFI_LOSS: a constant that fits. */
             (void)tk_clr_flg(subsystem4_flg_safety(),
                              ~(UINT)SAFETY_FLT_WIFI_LOSS);
         }
@@ -364,10 +366,14 @@ static void comms_publish_telemetry (uint32_t now_ms)
 static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
                        uint32_t period_ms)
 {
+    /* Cast (int32_t)(now_ms - *p_next_ms): signed difference of two wrapping
+       time stamps; they are less than 2^31 apart. */
     if ((int32_t)(now_ms - *p_next_ms) < 0)
     {
         return false;
     }
+    /* Cast (int32_t)(now_ms - *p_next_ms): signed difference of two wrapping
+       time stamps; they are less than 2^31 apart. */
     *p_next_ms += period_ms;
     if ((int32_t)(now_ms - *p_next_ms) >= 0)
     {

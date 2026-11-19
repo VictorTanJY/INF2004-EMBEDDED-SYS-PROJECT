@@ -330,6 +330,7 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
 
         if ((ptn & OBST_FLG_REQ) != 0u)
         {
+            /* Cast (INT)sizeof(req_word): a constant that fits. */
             while ((INT)sizeof(req_word)
                    == tk_rcv_mbf(subsystem5_mbf_scan(), &req_word, TMO_POL))
             {
@@ -343,6 +344,7 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
             g_o.no_echo    = 0u;
             if (g_o.b_no_echo_set)
             {
+                /* Cast (UINT)SAFETY_FLT_NO_ECHO: a constant that fits. */
                 g_o.b_no_echo_set = false;
                 (void)tk_clr_flg(subsystem4_flg_safety(),
                                  ~(UINT)SAFETY_FLT_NO_ECHO);
@@ -393,6 +395,8 @@ static void servo_to (int32_t deg, uint32_t now_ms)
 
     if (delta != 0)
     {
+        /* Cast (uint32_t)((delta * ...)): delta is a servo move of at most 180
+           deg, so the settle time is a few hundred ms. */
         drv_servo_set_deg(deg);
         g_o.servo_deg       = deg;
         g_o.settle_until_ms = now_ms
@@ -404,6 +408,8 @@ static void servo_to (int32_t deg, uint32_t now_ms)
 /** True once the servo has had time to reach its last position. */
 static bool servo_settled (uint32_t now_ms)
 {
+    /* Cast (int32_t)(now_ms - ...): signed difference of two wrapping time
+       stamps; they are less than 2^31 apart. */
     return ((int32_t)(now_ms - g_o.settle_until_ms) >= 0);
 }
 
@@ -454,6 +460,8 @@ static int16_t slip_ddeg (int16_t ddeg)
 {
     int32_t const gain = turn_gain();
 
+    /* Casts (int16_t)app_types_clamp_i32(...): the value is -3600..3600;
+       (int32_t)ddeg: every int16_t value fits. */
     return (int16_t)app_types_clamp_i32(((int32_t)ddeg * gain) / OBST_GAIN_UNIT,
                                         -3600, 3600);
 }
@@ -473,6 +481,9 @@ static void drive (int32_t speed, int32_t target_h,
     int32_t const omega =
         app_types_clamp_i32(err * OBST_HOLD_K, -OBST_HOLD_MAX, OBST_HOLD_MAX);
 
+    /* Casts (int16_t)speed: speed is one of the OBST_*_SPEED_MM_S constants (<=
+       60 mm/s); (int16_t)omega: omega is clamped to +-OBST_HOLD_MAX just above.
+     */
     g_o.drive_seq = motion_types_seq_next(g_o.drive_seq);
     (void)motion_api_drive(MOTION_SRC_AVOID, g_o.drive_seq, (int16_t)speed,
                            (int16_t)omega);
@@ -488,6 +499,7 @@ static void stop_motion (void)
 static void send_step (uint8_t kind, int16_t value,
                        motion_types_odom_t const * p_odom)
 {
+    /* Cast (uint16_t)app_types_abs_i32(value): the value is 0..32768. */
     uint16_t const amount = (uint16_t)app_types_abs_i32(value);
 
     g_o.seq             = motion_types_seq_next(g_o.seq); /* 5-bit seq (CR1) */
@@ -570,6 +582,7 @@ static bool scan_sample (uint16_t range, uint16_t * p_r)
 static void send_turn (int16_t ddeg, uint16_t rate_deg_s,
                        motion_types_odom_t const * p_odom)
 {
+    /* Cast (uint16_t)app_types_abs_i32(ddeg): the value is 0..32768. */
     uint16_t const amount = (uint16_t)app_types_abs_i32(ddeg);
 
     g_o.seq             = motion_types_seq_next(g_o.seq); /* 5-bit seq (CR1) */
@@ -645,12 +658,18 @@ static void plan (uint32_t now_ms, motion_types_odom_t const * p_odom)
 {
     obstacle_core_profile_t const * const p_pr = &g_prof;
 
+    /* Cast (uint16_t)app_types_clamp_i32(...): the value is 0..1000. */
     obstacle_core_scan_detected(
         &g_scan, g_o.det_mm,
         (uint16_t)app_types_clamp_i32(g_o.back_mm, 0, 1000), &g_prof);
     publish_profile();
     if (p_pr->b_valid)
     {
+        /* Casts (int32_t)(((uint32_t) ...)): bit pattern of a packed LOG word,
+           not an arithmetic value; (uint32_t)(uint16_t)p_pr->left_lat_m ...:
+           every uint16_t value fits; (uint16_t)p_pr->left_lat_mm,
+           (uint16_t)p_pr->right_lat_mm: low 16 bits (two's complement) of the
+           value, packed into a LOG word. */
         log_ev(OBST_LOG_EDGES,
                (int32_t)(((uint32_t)(uint16_t)p_pr->left_lat_mm << 16)
                          | (uint16_t)p_pr->right_lat_mm));
@@ -778,6 +797,18 @@ static void edge_finish (void)
         g_prof.w_mm = obstacle_core_edge_width(g_o.edge_phi[0], g_o.edge_r[0],
                                                g_o.edge_phi[1], g_o.edge_r[1]);
     }
+    /* Casts (int32_t)(((uint32_t) ...)),
+       (int32_t)(((uint32_t)g_o.edge_face ...)),
+       (int32_t)(((uint32_t)g_o.edge_hits[ ...)): bit pattern of a packed LOG
+       word, not an arithmetic value; (uint32_t)(uint16_t)g_o.edge_phi[0] ...,
+       (uint32_t)(uint16_t)g_o.edge_phi[1] ..., (uint32_t)g_o.edge_face,
+       (uint32_t)(uint16_t)g_prof.left_lat_ ...: every uint16_t value fits;
+       (uint16_t)g_o.edge_phi[0], (uint16_t)g_o.edge_phi[1],
+       (uint16_t)g_prof.left_lat_mm, (uint16_t)g_prof.right_lat_mm: low 16 bits
+       (two's complement) of the value, packed into a LOG word;
+       (uint32_t)g_o.edge_hits[0], (uint32_t)g_o.edge_deg[0],
+       (uint32_t)g_o.edge_hits[1], (uint32_t)g_o.edge_deg[1]: every uint8_t
+       value fits. */
     log_ev(OBST_LOG_EDGE_RAW_L,
            g_o.b_edge_has[0]
                ? (int32_t)(((uint32_t)(uint16_t)g_o.edge_phi[0] << 16)
@@ -813,6 +844,12 @@ static void probe_finish (uint32_t now_ms)
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
     if (b_ok)
     {
+        /* Casts (uint16_t)app_types_max_i32(left - ...): edges are within the
+           800 mm profile range, so the width is 0..1600 mm;
+           (int32_t)(((uint32_t) ...)): bit pattern of a packed LOG word, not an
+           arithmetic value; (uint32_t)(uint16_t)left: every uint16_t value
+           fits; (uint16_t)left, (uint16_t)right: low 16 bits (two's complement)
+           of the value, packed into a LOG word. */
         obstacle_core_edge_plan(&g_prof, true, left, true, right);
         obstacle_core_edge_plan_min(&g_prof, true, left, true, right);
         g_prof.w_mm = (uint16_t)app_types_max_i32(left - right, 0);
@@ -847,6 +884,9 @@ static void probe_slot (uint32_t now_ms, motion_types_odom_t const * p_odom)
     int32_t const theta = probe_theta(p_odom);
     int32_t const done  = p_odom->dist_mm - g_o.phase_start_mm;
 
+    /* Casts (int32_t)(((int64_t)done * ...)): |sin|, |cos| <= 1.0 in Q15, so
+       the result is no larger than the int32_t factor; (int64_t)done: every
+       int32_t value fits. */
     g_o.probe_lat =
         (int32_t)(((int64_t)done * app_math_sin_q15(theta)) / 32768);
     switch (g_o.probe_ph)
@@ -940,6 +980,8 @@ static void probe_motion (uint32_t now_ms, motion_types_odom_t const * p_odom)
 
         if (app_types_abs_i32(dh_cdeg) > 100)
         {
+            /* Cast (int16_t)(dh_cdeg / 10): a wrapped heading difference is
+               within +-18000 0.01 deg, so /10 fits. */
             send_step(OBST_STEP_TURN, (int16_t)(dh_cdeg / 10), p_odom);
         }
         else
@@ -957,6 +999,9 @@ static void probe_motion (uint32_t now_ms, motion_types_odom_t const * p_odom)
 static void probe_range (uint16_t range, uint32_t now_ms,
                          motion_types_odom_t const * p_odom)
 {
+    /* Casts (int32_t)(((int64_t)done * ...)): |sin|, |cos| <= 1.0 in Q15, so
+       the result is no larger than the int32_t factor; (int64_t)done: every
+       int32_t value fits. */
     int32_t const theta = probe_theta(p_odom);
     int32_t const done  = p_odom->dist_mm - g_o.phase_start_mm;
     int32_t const lat =
@@ -975,11 +1020,15 @@ static void probe_range (uint16_t range, uint32_t now_ms,
         /* 9 Nov: only a ping near where the face should be is the face
            (02:59 the beam passed an off-centre box, hit something 20 cm
            further, and the approach drove into the box) */
+        /* Cast (int32_t)g_o.edge_face: every uint16_t value fits. */
         g_o.edge_face = obstacle_core_probe_face(range_min, g_o.edge_face);
         if (!g_o.b_pb_moved
             && (app_types_abs_i32((int32_t)g_o.edge_face - OBST_PROBE_FACE_MM)
                 > 15))
         {
+            /* Casts (int16_t)((int32_t)g_o.edge_face - ...): edge_face is a
+               range below 4000 mm; (int32_t)g_o.edge_face: every uint16_t value
+               fits. */
             g_o.probe_ph = PB_MOVE;
             send_step(OBST_STEP_MOVE,
                       (int16_t)((int32_t)g_o.edge_face - OBST_PROBE_FACE_MM),
@@ -989,6 +1038,8 @@ static void probe_range (uint16_t range, uint32_t now_ms,
         }
         else
         {
+            /* Casts (int32_t)OBST_US_AHEAD_MM: a constant that fits;
+               (int32_t)g_o.edge_face: every uint16_t value fits. */
             g_o.probe_face_mm =
                 (int32_t)OBST_US_AHEAD_MM + (int32_t)g_o.edge_face;
             g_o.probe_ph = PB_TURN;
@@ -1067,6 +1118,8 @@ static void handle_request (mission_types_scan_req_t const * p_req,
             if (g_prof.plan != g_o.side)
             {
                 /* deviation from the profile is signed by the planned side */
+                /* Cast (int16_t)((OBST_PLAN_LEFT == ...)): edge offsets are
+                   within +-800 mm plus fixed margins of a few hundred mm. */
                 g_prof.deviation_mm =
                     (int16_t)((OBST_PLAN_LEFT == g_o.side)
                                   ? (g_prof.left_lat_mm + OBST_MARGIN_MM
@@ -1093,6 +1146,12 @@ static void handle_request (mission_types_scan_req_t const * p_req,
                 {
                     if (OBST_STEP_PASS == g_steps[kdx].kind)
                     {
+                        /* Casts (int32_t)(((uint32_t) ...)): bit pattern of a
+                           packed LOG word, not an arithmetic value;
+                           (uint32_t)(uint16_t)g_prof.deviation ...: every
+                           uint16_t value fits; (uint16_t)g_prof.deviation_mm,
+                           (uint16_t)g_steps[kdx].value: low 16 bits (two's
+                           complement) of the value, packed into a LOG word. */
                         log_ev(
                             OBST_LOG_PLAN,
                             (int32_t)(((uint32_t)(uint16_t)g_prof.deviation_mm
@@ -1295,6 +1354,7 @@ static void edge_range (uint16_t range_min, motion_types_odom_t const * p_odom)
     {
         bool b_past;
 
+        /* Cast (uint8_t)app_types_min_i32(...): the value is 0..255. */
         g_o.edge_deg[side_idx] =
             (uint8_t)app_types_min_i32(app_types_abs_i32(phi) / 100, 255);
         if ((0u == side_idx) && (0u == g_o.edge_first_l))
@@ -1401,6 +1461,8 @@ static int16_t edge_next_step (int32_t phi)
                                : -OBST_EDGE_MIN_TURN_DDEG;
         }
     }
+    /* Cast (int16_t)step: step is at most OBST_EDGE_STEP_DDEG or half an edge
+       interval (< 180 deg). */
     return (int16_t)step;
 }
 
@@ -1408,6 +1470,7 @@ static int16_t edge_next_step (int32_t phi)
 static void bypass_range (uint16_t range, uint32_t now_ms,
                           motion_types_odom_t const * p_odom)
 {
+    /* Cast (int32_t)range: every uint16_t value fits. */
     if ((g_o.step_i < g_o.n_steps)
         && (OBST_STEP_OUT == g_steps[g_o.step_i].kind) && g_o.b_wait_motion
         && servo_settled(now_ms))
@@ -1416,6 +1479,9 @@ static void bypass_range (uint16_t range, uint32_t now_ms,
         int32_t const theta = out_theta(p_odom, sign);
         int32_t const done  = p_odom->dist_mm - g_o.phase_start_mm;
 
+        /* Casts (int32_t)(((int64_t)done * ...)): |sin|, |cos| <= 1.0 in Q15,
+           so the result is no larger than the int32_t factor; (int64_t)done:
+           every int32_t value fits. */
         obstacle_core_out_ping(
             &g_o.out,
             (int32_t)(((int64_t)done * app_math_sin_q15(theta)) / 32768),
@@ -1521,6 +1587,8 @@ static void edge_slot (uint32_t now_ms, motion_types_odom_t const * p_odom)
         break;
 
         case EDGE_PH_SETTLE:
+            /* Cast (int32_t)(now_ms - ...): signed difference of two wrapping
+               time stamps; they are less than 2^31 apart. */
             if ((int32_t)(now_ms - g_o.edge_until_ms) >= 0)
             {
                 g_o.sw_n    = 0u;
@@ -1556,6 +1624,8 @@ static void edge_return (motion_types_odom_t const * p_odom)
 
         if (app_types_abs_i32(dh_cdeg) > 100)
         {
+            /* Cast (int16_t)(dh_cdeg / 10): a wrapped heading difference is
+               within +-18000 0.01 deg, so /10 fits. */
             send_step(OBST_STEP_TURN, (int16_t)(dh_cdeg / 10), p_odom);
         }
         else if (g_o.edge_side > 0)
@@ -1580,6 +1650,8 @@ static void edge_return (motion_types_odom_t const * p_odom)
 /** BLOCKED, one slot: give up after the timeout, or rescan now and then. */
 static void blocked_slot (uint32_t now_ms)
 {
+    /* Cast (int32_t)(now_ms - ...): signed difference of two wrapping time
+       stamps; they are less than 2^31 apart. */
     if ((now_ms - g_o.blocked_start_ms) >= OBST_BLOCKED_TIMEOUT_MS)
     {
         post(MISSION_EV_BLOCKED_TIMEOUT, 0u, 0);
@@ -1655,6 +1727,9 @@ static void bypass_out (uint32_t now_ms, motion_types_odom_t const * p_odom,
     {
         out_start(now_ms, p_odom, theta, sign);
     }
+    /* Casts (int32_t)(((int64_t)done_mm * ...)): |sin|, |cos| <= 1.0 in Q15, so
+       the result is no larger than the int32_t factor; (int64_t)done_mm: every
+       int32_t value fits. */
     done_mm = p_odom->dist_mm - g_o.phase_start_mm;
     lat     = (int32_t)(((int64_t)done_mm * app_math_sin_q15(theta)) / 32768);
     if (obstacle_core_out_done(&g_o.out, lat)
@@ -1685,6 +1760,8 @@ static void out_start (uint32_t now_ms, motion_types_odom_t const * p_odom,
     {
         back = -g_steps[0].value;
     }
+    /* Casts (int32_t)OBST_US_AHEAD_MM: a constant that fits;
+       (int32_t)(g_o.b_edge_face ? ...): the value is 0..65535. */
     g_o.b_wait_motion  = true;
     g_o.phase_start_mm = p_odom->dist_mm;
     g_o.out_h          = p_odom->heading_cdeg;
@@ -1700,11 +1777,20 @@ static void out_start (uint32_t now_ms, motion_types_odom_t const * p_odom,
 static void out_end (uint32_t now_ms, obstacle_core_step_t const * p_st,
                      int32_t done_mm, int32_t lat, int32_t theta)
 {
+    /* Casts (int32_t)(((int64_t)(done_mm - ...))): |sin|, |cos| <= 1.0 in Q15,
+       so the result is no larger than the int32_t factor;
+       (int64_t)(done_mm - p_st->value): every int value fits. */
     int32_t const extra_fwd =
         (int32_t)(((int64_t)(done_mm - p_st->value) * app_math_cos_q15(theta))
                   / 32768);
     uint8_t kdx;
 
+    /* Casts (int32_t)(((g_o.out.b_seen ? ...))): bit pattern of a packed LOG
+       word, not an arithmetic value; (uint16_t)g_o.out.seen_lat: low 16 bits
+       (two's complement) of the value, packed into a LOG word;
+       (uint32_t)app_types_clamp_i32(lat ...): the value is 0..65535;
+       (uint8_t)(g_o.step_i + 1u): step_i < n_steps <= OBST_BYPASS_MAX_STEPS
+       (10). */
     stop_motion();
     servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
     log_ev(OBST_LOG_OUT,
@@ -1715,11 +1801,16 @@ static void out_end (uint32_t now_ms, obstacle_core_step_t const * p_st,
     {
         if (OBST_STEP_PASS == g_steps[kdx].kind)
         {
+            /* Casts (int16_t)app_types_max_i32(...): the planned PASS leg (<=
+               OBST_PASS_MAX_MM) only gets shorter, never below 0;
+               (int32_t)g_steps[kdx].value: every int16_t value fits. */
             g_steps[kdx].value = (int16_t)app_types_max_i32(
                 (int32_t)g_steps[kdx].value - extra_fwd, 0);
         }
         else if (OBST_STEP_JOIN == g_steps[kdx].kind)
         {
+            /* Cast (int16_t)app_types_min_i32(...): clamped to 0x7FFF; the leg
+               is a positive distance. */
             g_steps[kdx].value = (int16_t)app_types_min_i32(
                 ((done_mm * OBST_JOIN_MAX_PERMILLE) / 1000)
                     + OBST_JOIN_EXTRA_MM,
@@ -1766,6 +1857,9 @@ static void bypass_pass (uint32_t now_ms, motion_types_odom_t const * p_odom,
                  >= (OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM))))
         || (done_mm >= OBST_PASS_MAX_MM))
     {
+        /* Casts (int32_t)(((g_o.b_seen ? 1u : 0u) ...)): bit pattern of a
+           packed LOG word, not an arithmetic value;
+           (uint32_t)app_types_clamp_i32(...): the value is 0..65535. */
         stop_motion();
         servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
         log_ev(OBST_LOG_PASS,
@@ -1865,6 +1959,8 @@ static void bypass_linescan (uint32_t                     now_ms,
 static void linescan_align (uint32_t now_ms, motion_types_odom_t const * p_odom,
                             int32_t rel)
 {
+    /* Cast (int32_t)(now_ms - ...): signed difference of two wrapping time
+       stamps; they are less than 2^31 apart. */
     if (g_o.b_wait_motion)
     {
         (void)motion_result(p_odom); /* the turn to the middle */
@@ -1889,6 +1985,8 @@ static void linescan_align (uint32_t now_ms, motion_types_odom_t const * p_odom,
         }
         else if (MOTION_ST_IDLE_BRAKED == p_odom->state)
         {
+            /* Cast (int16_t)(delta / 10): a wrapped heading difference is
+               within +-18000 0.01 deg, so /10 fits. */
             g_o.b_scan_turned = true;
             send_step(OBST_STEP_TURN, (int16_t)(delta / 10), p_odom);
         }
@@ -1924,6 +2022,8 @@ static void linescan_next_sweep (uint32_t                     now_ms,
         else
         {
             /* back to OBST_LINESCAN_SPARE past where the scan began */
+            /* Cast (int16_t)((-sign * ...)): rel is a wrapped heading (+-18000
+               0.01 deg), so the turn is within +-2250 0.1 deg. */
             amount =
                 (int16_t)((-sign
                            * ((OBST_LINESCAN_SPARE_DDEG * 10) + (sign * rel)))
@@ -2118,6 +2218,8 @@ static void align_slot (motion_types_odom_t const * p_odom)
         && (app_types_abs_i32(dh_cdeg) > OBST_ALIGN_TOL_CDEG)
         && (MOTION_ST_IDLE_BRAKED == p_odom->state))
     {
+        /* Cast (int16_t)(dh_cdeg / 10): a wrapped heading difference is within
+           +-18000 0.01 deg, so /10 fits. */
         send_step(OBST_STEP_TURN, (int16_t)(dh_cdeg / 10), p_odom);
     }
     else if (g_o.b_wait_motion)

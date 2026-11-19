@@ -34,6 +34,7 @@ typedef struct
     int16_t arg1;
 } step_t;
 
+/* Cast (uint16_t)(sizeof ...): the layout table has fewer than 64 entries. */
 #define MISSION_FIELDS \
     ((uint16_t)(sizeof(g_mission_layout) / sizeof(g_mission_layout[0])))
 
@@ -180,8 +181,12 @@ int32_t mission_core_map_pack (char const map[MISSION_NAV_COUNT])
 
     for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
     {
+        /* Casts (uint32_t)(uint8_t)map[kdx]: every uint8_t value fits;
+           (uint8_t)map[kdx]: every char value fits. */
         packed |= ((uint32_t)(uint8_t)map[kdx]) << (8u * kdx);
     }
+    /* Cast (int32_t)packed: bit pattern of four packed characters, carried as
+       int32_t. */
     return (int32_t)packed;
 }
 
@@ -192,6 +197,9 @@ bool mission_core_map_unpack (int32_t packed, char map[MISSION_NAV_COUNT])
 
     for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
     {
+        /* Casts (char)(((uint32_t)packed >> (8u ...))): the value is 0..255;
+           (uint32_t)packed: bit pattern of four packed characters, read back as
+           unsigned. */
         map[kdx] = (char)(((uint32_t)packed >> (8u * kdx)) & 0xFFu);
         if (!mission_core_map_char_ok(map[kdx]))
         {
@@ -226,6 +234,8 @@ uint8_t mission_core_nav_for (mission_types_snap_t const * p_snap, char chr)
  */
 void mission_core_init (mission_core_t * p_mc, uint32_t now_ms)
 {
+    /* Cast (uint8_t *)p_mc: byte view of the struct for memset-style clearing;
+       no value converted. */
     uint8_t * p_b = (uint8_t *)p_mc;
     size_t    idx;
 
@@ -323,6 +333,8 @@ void mission_core_tick (mission_core_t *              p_mc,
     /* A dropped event means a decision may have been missed (Week 6 8.3). */
     if (p_in->mbf_drops != p_mc->last_drops)
     {
+        /* Cast (int16_t)p_in->mbf_drops: LOG argument: the drop count, logged
+           modulo 2^16. */
         p_mc->last_drops = p_in->mbf_drops;
         log_act(p_out, MISSION_LOG_MBF_DROP, (int16_t)p_in->mbf_drops, 0);
         if (is_active(p_mc->snap.state))
@@ -347,11 +359,16 @@ uint32_t mission_core_evt_pack (mission_types_evt_t const * p_ev)
                         app_pack_sat_u(p_ev->src, EVT_SRC_BITS));
     if (MISSION_EV_REMOTE_MAP == p_ev->type)
     {
+        /* Cast (uint32_t)p_ev->data: fault bits carried in the int32_t data
+           field, read back as unsigned. */
         uint32_t const packed = (uint32_t)p_ev->data;
         uint32_t       kdx;
 
         for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
         {
+            /* Casts (uint8_t)(EVT_A_SHIFT + (kdx * ...)): a bit position below
+               32; (uint8_t)(packed >> (8u * kdx)): one character byte of the
+               packed map (low 8 bits kept). */
             word = app_pack_set(
                 word, (uint8_t)(EVT_A_SHIFT + (kdx * EVT_SYM_BITS)),
                 EVT_SYM_BITS,
@@ -370,6 +387,8 @@ uint32_t mission_core_evt_pack (mission_types_evt_t const * p_ev)
 
 void mission_core_evt_unpack (uint32_t word, mission_types_evt_t * p_ev)
 {
+    /* Casts (uint8_t)app_pack_get(word ...): the value is 0..31;
+       (uint8_t)app_pack_get(word ...): the value is 0..7. */
     p_ev->type = (uint8_t)app_pack_get(word, EVT_TYPE_SHIFT, EVT_TYPE_BITS);
     p_ev->src  = (uint8_t)app_pack_get(word, EVT_SRC_SHIFT, EVT_SRC_BITS);
     if (MISSION_EV_REMOTE_MAP == p_ev->type)
@@ -379,17 +398,25 @@ void mission_core_evt_unpack (uint32_t word, mission_types_evt_t * p_ev)
 
         for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
         {
+            /* Casts (uint8_t)app_pack_get(word ...): the value is 0..63;
+               (uint8_t)(EVT_A_SHIFT + (kdx * ...)): a bit position below 32. */
             uint8_t const sym = (uint8_t)app_pack_get(
                 word, (uint8_t)(EVT_A_SHIFT + (kdx * EVT_SYM_BITS)),
                 EVT_SYM_BITS);
 
+            /* Casts (uint32_t)(uint8_t)app_pack_sym_char(...): every uint8_t
+               value fits; (uint8_t)app_pack_sym_char(sym): every char value
+               fits. */
             packed |= ((uint32_t)(uint8_t)app_pack_sym_char(sym)) << (8u * kdx);
         }
+        /* Cast (int32_t)packed: bit pattern of four packed characters, carried
+           as int32_t. */
         p_ev->arg  = 0u;
         p_ev->data = (int32_t)packed;
     }
     else
     {
+        /* Cast (uint16_t)app_pack_get(word ...): the value is 0..127. */
         p_ev->arg =
             (uint16_t)app_pack_get(word, EVT_A_SHIFT, MISSION_EVT_A_BITS);
         p_ev->data = app_pack_unoff_s(
@@ -402,6 +429,10 @@ uint16_t mission_core_scan_req_pack (mission_types_scan_req_t const * p_req)
 {
     uint32_t word = 0u;
 
+    /* Casts (uint32_t)p_req->seq: every uint8_t value fits;
+       (uint32_t)p_req->param: two's complement bit pattern, saturated into the
+       field by app_pack_sat_s; (uint16_t)word: the packed request is 16 bits
+       wide. */
     word = app_pack_set(word, 0u, REQ_TYPE_BITS,
                         app_pack_sat_u(p_req->type, REQ_TYPE_BITS));
     word = app_pack_set(word, REQ_TYPE_BITS, REQ_SEQ_BITS,
@@ -416,6 +447,9 @@ uint16_t mission_core_scan_req_pack (mission_types_scan_req_t const * p_req)
 void mission_core_scan_req_unpack (uint16_t                   word,
                                    mission_types_scan_req_t * p_req)
 {
+    /* Casts (uint8_t)app_pack_get(word, 0u ...): the value is 0..7;
+       (uint8_t)app_pack_get(word ...): the value is 0..31;
+       (int16_t)app_pack_get(word ...): the value is 0..255. */
     p_req->type  = (uint8_t)app_pack_get(word, 0u, REQ_TYPE_BITS);
     p_req->seq   = (uint8_t)app_pack_get(word, REQ_TYPE_BITS, REQ_SEQ_BITS);
     p_req->param = (int16_t)app_pack_get(word, REQ_TYPE_BITS + REQ_SEQ_BITS,
@@ -519,6 +553,8 @@ static void tick_boot (mission_core_t *              p_mc,
     }
     else if (age >= MISSION_BOOT_TIMEOUT_MS)
     {
+        /* Cast (int16_t)(0x100u | failed): failed holds 4 self-test bits, so
+           the value is below 0x110. */
         log_act(p_out, MISSION_LOG_CAL_RESULT, (int16_t)(0x100u | failed), 0);
         enter_fault(p_mc, MISSION_CAUSE_SELFTEST, 0x0400u | (failed << 16),
                     now_ms, p_out);
@@ -571,12 +607,18 @@ static void mission_core_ev_safety (mission_core_t *            p_mc,
                 /* 14 Nov: lifting the robot ends the run in the demo; it is
                    braked and latched like any fault, and the run summary
                    (highest hump) is published as on STOP. */
+                /* Cast (uint32_t)p_ev->data: fault bits carried in the int32_t
+                   data field, read back as unsigned. */
                 if (is_active(state)
                     && (((uint32_t)p_ev->data & SAFETY_FLT_LIFT) != 0u))
                 {
+                    /* Cast (int16_t)p_mc->snap.runs: LOG argument: the run
+                       count, logged modulo 2^16. */
                     log_act(p_out, MISSION_LOG_SUMMARY,
                             (int16_t)p_mc->snap.runs, 0);
                 }
+                /* Cast (uint32_t)p_ev->data: fault bits carried in the int32_t
+                   data field, read back as unsigned. */
                 enter_fault(p_mc, MISSION_CAUSE_SAFETY, (uint32_t)p_ev->data,
                             now_ms, p_out);
             }
@@ -695,6 +737,12 @@ static void mission_core_ev_operator (mission_core_t *            p_mc,
                     {
                         p_mc->snap.nav_map[kdx] = map[kdx];
                     }
+                    /* Casts (int16_t)((uint32_t)p_ev->data & ...): LOG
+                       argument: the low 16 bits of the packed map, as a bit
+                       pattern; (uint32_t)p_ev->data: bit pattern of the packed
+                       map; (int16_t)((uint32_t)p_ev->data >> ...): LOG
+                       argument: the high 16 bits of the packed map, as a bit
+                       pattern. */
                     log_act(p_out, MISSION_LOG_MAP_SET,
                             (int16_t)((uint32_t)p_ev->data & 0xFFFFu),
                             (int16_t)((uint32_t)p_ev->data >> 16));
@@ -796,6 +844,8 @@ static void mission_core_ev_line (mission_core_t *            p_mc,
         case MISSION_EV_BARCODE:
             if (is_active(state))
             {
+                /* Cast (char)p_ev->data: a Code 39 character code (< 128)
+                   stored back in a char. */
                 char const    chr = (char)p_ev->data;
                 uint8_t const nav = mission_core_nav_for(&p_mc->snap, chr);
 
@@ -867,6 +917,8 @@ static void mission_core_ev_obstacle (mission_core_t *            p_mc,
         case MISSION_EV_CONTINUE:
             if (MISSION_ST_OBSTACLE_HANDLING == state)
             {
+                /* Cast (uint8_t)p_ev->arg: the motion sequence number (5 bits)
+                   carried in arg. */
                 uint8_t const plan = (MISSION_EV_CONTINUE == p_ev->type)
                                          ? OBST_PLAN_CONTINUE
                                          : (uint8_t)p_ev->arg;
@@ -973,6 +1025,8 @@ static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
             update_speed_cap(p_mc);
             if (MISSION_ST_MISSION_COMPLETE == state)
             {
+                /* Cast (int16_t)p_mc->snap.runs: LOG argument: the run count,
+                   logged modulo 2^16. */
                 log_act(p_out, MISSION_LOG_SUMMARY, (int16_t)p_mc->snap.runs,
                         0);
             }
@@ -1045,6 +1099,8 @@ static void start_run (mission_core_t * p_mc, uint32_t now_ms,
         log_act(p_out, MISSION_LOG_NOT_CALIBRATED, p_mc->snap.calibrated, 0);
         return;
     }
+    /* Cast (int16_t)p_mc->snap.runs: LOG argument: the run count, logged modulo
+       2^16. */
     p_mc->snap.runs++;
     p_mc->snap.pending_nav  = MISSION_NAV_NONE;
     p_mc->snap.pending_char = '\0';
@@ -1060,35 +1116,53 @@ static void apply_param (mission_core_t * p_mc, uint16_t param_id,
     switch (param_id)
     {
         case 1u:
+            /* Cast (uint16_t)value: commsTask checked the value against the
+               whitelist: 150..350. */
             p_mc->snap.cruise_mm_s = (uint16_t)value;
         break;
         case 2u:
+            /* Cast (uint16_t)(value * 10): commsTask checked the value against
+               the whitelist: 25..60 cm, so 250..600 mm. */
             p_mc->snap.slow_mm = (uint16_t)(value * 10);
         break;
         case 3u:
+            /* Cast (uint16_t)(value * 10): commsTask checked the value against
+               the whitelist: 15..40 cm, so 150..400 mm. */
             p_mc->snap.stop_mm = (uint16_t)(value * 10);
         break;
         case 4u:
+            /* Cast (uint16_t)value: commsTask checked the value against the
+               whitelist: 55..150. */
             p_mc->snap.lost_mm = (uint16_t)value;
         break;
         case 5u:
+            /* Cast (uint16_t)value: commsTask checked the value against the
+               whitelist: 10..40. */
             p_mc->snap.junction_mm = (uint16_t)value;
         break;
 #if APP_BENCH
         /* bring-up only (app_config.h): drive the hardware from the laptop */
         case 101u:
+            /* Cast (int16_t)value: commsTask checked the value against the
+               whitelist: -2000..2000. */
             motion(p_mc, p_out, MOTION_CMD_MOVE, (int16_t)value, 200);
             return;
         case 102u:
+            /* Cast (int16_t)value: commsTask checked the value against the
+               whitelist: -3600..3600. */
             motion(p_mc, p_out, MOTION_CMD_TURN, (int16_t)value, 90);
             return;
         case 103u:
+            /* Cast (int16_t)value: commsTask checked the value against the
+               whitelist: 50..450. */
             motion(p_mc, p_out, MOTION_CMD_MOVE, 1000, (int16_t)value);
             return;
 #endif
         default:
             return;
     }
+    /* Casts (int16_t)param_id: parameter ids are below 256; (int16_t)value:
+       whitelisted values are within -3600..3600. */
     update_speed_cap(p_mc);
     log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id, (int16_t)value);
 }
@@ -1098,6 +1172,8 @@ static void apply_param (mission_core_t * p_mc, uint16_t param_id,
 static bool seq_matches (mission_core_t *            p_mc,
                          mission_types_evt_t const * p_ev)
 {
+    /* Casts (uint8_t)p_ev->arg: the motion sequence number (5 bits) carried in
+       arg; (int32_t)MOTION_SRC_MISSION: a constant that fits. */
     if (p_mc->b_waiting && ((uint8_t)p_ev->arg == p_mc->wait_seq)
         && ((int32_t)MOTION_SRC_MISSION == p_ev->data))
     {

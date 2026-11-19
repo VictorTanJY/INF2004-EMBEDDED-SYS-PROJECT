@@ -60,11 +60,15 @@ static motion_api_err_t post_signed (uint8_t src, uint8_t seq, uint8_t cmd,
                                      uint16_t limit, uint16_t rate)
 {
     /* amount 0 is allowed: MotionTask completes it at once (MOTION_DONE). */
+    /* Cast (uint16_t)MOTION_API_MAX_RATE: a constant that fits. */
     if ((amount > limit) || (0u == rate)
         || (rate > (uint16_t)MOTION_API_MAX_RATE))
     {
         return MOTION_API_E_PAR;
     }
+    /* Casts (int16_t)(sign * (int32_t)amount): amount <= limit (<= 4095, tested
+       above); (int32_t)amount: every uint16_t value fits; (int16_t)rate: rate
+       <= MOTION_API_MAX_RATE (511, tested above). */
     return subsystem2_post(src, seq, cmd, (int16_t)(sign * (int32_t)amount),
                            (int16_t)rate);
 }

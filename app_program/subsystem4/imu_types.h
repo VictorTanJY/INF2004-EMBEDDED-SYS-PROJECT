@@ -76,7 +76,7 @@ typedef struct
     uint32_t t_ms;
     int16_t  pitch_cdeg;       /**< pitch, 0.01 deg, + nose up             */
     int16_t  roll_cdeg;        /**< + = right side up (checked on robot)   */
-    int16_t  heading_cdeg;     /**< magnetometer, 0..35999                 */
+    uint16_t heading_cdeg;     /**< magnetometer, 0..35999                 */
     int16_t  turn_rate_cdeg_s; /**< encoder yaw rate, + left               */
     int16_t  accel_mg;         /**< |a| - 1 g, mg                          */
     uint16_t hump_max_mm;      /**< highest hump peak of the run           */

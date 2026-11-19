@@ -95,11 +95,15 @@ EXPORT INT usermain (void)
     T_RVER ver;
 
     /* tk_ref_ver: ask the kernel who it is */
+    /* Cast (UB *)"\n=== micro T-Kernel on ...: tm_printf() takes UB *; the
+       string bytes are unchanged. */
     tk_ref_ver(&ver);
     tm_printf((UB *)"\n=== micro T-Kernel on Raspberry Pi Pico W"
                     " (spec 0x%04x, product 0x%04x) ===\n",
               ver.spver, ver.prver);
 #if TK_SUPPORT_SMP
+    /* Cast (UB *)"dual-core (SMP) build ...: tm_printf() takes UB *; the string
+       bytes are unchanged. */
     tm_printf((UB *)"dual-core (SMP) build, usermain on core %d\n",
               tk_get_prc() - 1); /* tk_get_prc() counts from 1 */
 #else
@@ -124,12 +128,16 @@ EXPORT INT usermain (void)
     check_er(subsystem4_start(), "subsystem4_start");
     check_er(subsystem5_start(), "subsystem5_start");
 
+    /* Cast (UB *)"all subsystems started\n\n": tm_printf() takes UB *; the
+       string bytes are unchanged. */
     tm_printf((UB *)"all subsystems started\n\n");
 
 #if APP_TEST
     /* Test build (make TEST=1): run every subsystem's tests in turn,
        here in the initial task, while the system is running.  Tests may
        call tk_dly_tsk() to let the other tasks work for a while. */
+    /* Casts (UB *)"[TEST] === test run ..., (UB *)"[TEST] === test run end ...:
+       tm_printf() takes UB *; the string bytes are unchanged. */
     tm_printf((UB *)"[TEST] === test run start ===\n");
     subsystem1_test_run();
     subsystem2_test_run();
@@ -153,6 +161,8 @@ static void check_er (ER err, char const * p_what)
 {
     if (err < E_OK)
     {
+        /* Cast (UB *)"ERROR %s: %d\n": tm_printf() takes UB *; the string bytes
+           are unchanged. */
         tm_printf((UB *)"ERROR %s: %d\n", p_what, err);
     }
 }

@@ -64,6 +64,10 @@ EXPORT void subsystem5_test_run (void)
                "echo conversion and median on target");
 
     /* ---- S5-U08: ping rate ------------------------------------------ */
+    /* Casts (UB *)"[INFO] S5-U08 %d pings ...: tm_printf() takes UB *; the
+       string bytes are unchanged; (INT)(snap_b.pings - snap_a.pings): printed
+       with %d: the value is a 32-bit count or measurement below 2^31;
+       (INT)T_PING_WIN_MS, (INT)T_PINGS: a constant that fits. */
     (void)subsystem5_scan_request(SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
     (void)tk_dly_tsk(T_SETTLE_MS); /* servo to 90 deg, first 3 pings */
     subsystem5_get_obst_snap(&snap_a);
@@ -86,6 +90,9 @@ EXPORT void subsystem5_test_run (void)
     }
     else
     {
+        /* Casts (UB *)"[INFO] S5-U09 range %d ...: tm_printf() takes UB *; the
+           string bytes are unchanged; (INT)snap_b.d_mm: every uint16_t value
+           fits. */
         tm_printf((UB *)"[INFO] S5-U09 range %d mm (median of 3); compare with "
                         "a tape measure\n",
                   (INT)snap_b.d_mm);

@@ -46,6 +46,8 @@ void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
 {
     uint8_t idx;
 
+    /* Casts (uint32_t)p_w->bits, (uint32_t)p_w->cap: every uint16_t value fits.
+     */
     if ((width > 32u)
         || (((uint32_t)p_w->bits + width) > ((uint32_t)p_w->cap * 8u)))
     {
@@ -56,6 +58,8 @@ void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
     {
         if (((value >> idx) & 1u) != 0u)
         {
+            /* Cast (uint8_t)(1u << (p_w->bits & 7u)): a single bit 0..7 of a
+               byte. */
             p_w->p_buf[p_w->bits >> 3] |= (uint8_t)(1u << (p_w->bits & 7u));
         }
         p_w->bits++;
@@ -65,6 +69,7 @@ void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
 /** Frame length in whole bytes, 0 if anything overflowed. */
 uint16_t app_pack_writer_len (app_pack_writer_t const * p_w)
 {
+    /* Cast (uint16_t)((p_w->bits + 7u) >> 3): the value is 0..8192. */
     return p_w->b_overflow ? 0u : (uint16_t)((p_w->bits + 7u) >> 3);
 }
 
@@ -83,6 +88,8 @@ uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
     uint32_t value = 0u;
     uint8_t  idx;
 
+    /* Casts (uint32_t)p_r->bits, (uint32_t)p_r->len: every uint16_t value fits.
+     */
     if ((width > 32u)
         || (((uint32_t)p_r->bits + width) > ((uint32_t)p_r->len * 8u)))
     {
@@ -91,6 +98,8 @@ uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
     }
     for (idx = 0u; idx < width; idx++)
     {
+        /* Cast (uint8_t)(1u << (p_r->bits & 7u)): a single bit 0..7 of a byte.
+         */
         if ((p_r->p_buf[p_r->bits >> 3] & (uint8_t)(1u << (p_r->bits & 7u)))
             != 0u)
         {
@@ -110,6 +119,7 @@ uint8_t app_pack_sym_index (char chr)
     {
         if (g_symbols[idx] == chr)
         {
+            /* Cast (uint8_t)(idx + 1u): a symbol index 1..PK_SYM_COUNT (43). */
             return (uint8_t)(idx + 1u);
         }
     }
@@ -177,6 +187,8 @@ void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
             }
             break;
             case PK_SYM:
+                /* Cast (uint8_t)raw: a PK_SYM member is a 1-byte char; raw
+                   holds that byte. */
                 value = app_pack_sym_index((uint8_t)raw);
             break;
             default: /* PK_U */
@@ -204,12 +216,15 @@ void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
         switch (p_f[idx].kind)
         {
             case PK_S:
+                /* Cast (uint32_t)app_pack_unoff_s(value ...): two's complement
+                   bit pattern of a value of width bits. */
                 raw = (uint32_t)app_pack_unoff_s(value, width);
             break;
             case PK_UN:
                 raw = (value == app_pack_mask(width)) ? 0xFFFFFFFFuL : value;
             break;
             case PK_SYM:
+                /* Cast (uint8_t)value: a PK_SYM field is 6 bits (0..63). */
                 raw = app_pack_sym_char((uint8_t)value);
             break;
             default: /* PK_U, PK_W */
@@ -257,6 +272,8 @@ static uint32_t pk_word_take (uint32_t const * p_w, uint32_t * p_pos,
 /** Read a member of size 1, 2 or 4 as unsigned / signed. */
 static uint32_t pk_member_u (void const * p_rec, app_pack_field_t const * p_f)
 {
+    /* Cast (uint8_t const *)p_rec: byte view of the record; the member is read
+       with memcpy. */
     uint8_t const * p_byte = (uint8_t const *)p_rec + p_f->offset;
     uint32_t        value  = 0u;
 
@@ -289,12 +306,20 @@ static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
 
     if (1u == p_f->size)
     {
+        /* Casts (int8_t)(uint8_t)raw: the member is 1 byte: its bit pattern
+           read back as signed; (uint8_t)raw: the member is 1 byte: raw holds 8
+           bits. */
         return (int8_t)(uint8_t)raw;
     }
     if (2u == p_f->size)
     {
+        /* Casts (int16_t)(uint16_t)raw: the member is 2 bytes: its bit pattern
+           read back as signed; (uint16_t)raw: the member is 2 bytes: raw holds
+           16 bits. */
         return (int16_t)(uint16_t)raw;
     }
+    /* Cast (int32_t)raw: the member is 4 bytes: its bit pattern read back as
+       signed. */
     return (int32_t)raw;
 }
 
@@ -302,16 +327,22 @@ static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
 static void pk_member_set (void * p_rec, app_pack_field_t const * p_f,
                            uint32_t value)
 {
+    /* Cast (uint8_t *)p_rec: byte view of the record; the member is written
+       with memcpy. */
     uint8_t * p_byte = (uint8_t *)p_rec + p_f->offset;
 
     if (1u == p_f->size)
     {
+        /* Cast (uint8_t)value: the member is 1 byte: the field width is at most
+           8 bits. */
         uint8_t const byte = (uint8_t)value;
 
         (void)memcpy(p_byte, &byte, 1u);
     }
     else if (2u == p_f->size)
     {
+        /* Cast (uint16_t)value: the member is 2 bytes: the field width is at
+           most 16 bits. */
         uint16_t const half = (uint16_t)value;
 
         (void)memcpy(p_byte, &half, 2u);

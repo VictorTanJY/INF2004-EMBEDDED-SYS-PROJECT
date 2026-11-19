@@ -127,6 +127,9 @@ static uint32_t cc_for (int32_t duty, int32_t sign)
     {
         drive = -MOTION_DUTY_MAX;
     }
+    /* Casts (uint32_t)((drive < 0) ? -drive : ...): drive is limited to
+       +-MOTION_DUTY_MAX above; (uint32_t)MOTION_DUTY_MAX: a constant that fits.
+     */
     mag = (uint32_t)((drive < 0) ? -drive : drive);
     mag = (mag * (MOTION_PWM_TOP + 1u)) / (uint32_t)MOTION_DUTY_MAX;
 

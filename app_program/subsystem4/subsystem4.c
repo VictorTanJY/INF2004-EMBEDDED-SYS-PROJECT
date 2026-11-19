@@ -52,6 +52,8 @@ EXPORT ER subsystem4_init (void)
         return g_flg_safety;
     }
 
+    /* Cast (FP)imu_cyc_handler: the kernel stores the entry point as FP; it is
+       called with its own type. */
     ccyc.cycatr = TA_HLNG;
     ccyc.cychdr = (FP)imu_cyc_handler;
     ccyc.cyctim = S4_IMU_PERIOD_MS;
@@ -64,12 +66,16 @@ EXPORT ER subsystem4_start (void)
 {
     ID tid;
 
+    /* Cast (FP)safety_task_thread: the kernel stores the entry point as FP; it
+       is called with its own type. */
     tid = app_main_start_task((FP)safety_task_thread, S4_PRI_SAFETY,
                               S4_CORE_SAFETY, "safety");
     if (tid < E_OK)
     {
         return tid;
     }
+    /* Cast (FP)imu_task_thread: the kernel stores the entry point as FP; it is
+       called with its own type. */
     g_tid_imu = app_main_start_task((FP)imu_task_thread, S4_PRI_IMU,
                                     S4_CORE_IMU, "imu");
     if (g_tid_imu < E_OK)
@@ -91,14 +97,18 @@ EXPORT void subsystem4_request_reset (void)
 
 EXPORT void subsystem4_heartbeat (imu_types_safety_hb_t task)
 {
+    /* Cast (uint32_t)task: every imu_types_safety_hb_t value fits. */
     if ((uint32_t)task < SAFETY_HB_COUNT)
     {
+        /* Cast (uint8_t)(g_hb[task] + 1u): an 8-bit heartbeat counter that
+           wraps on purpose. */
         g_hb[task] = (uint8_t)(g_hb[task] + 1u); /* single writer per byte */
     }
 }
 
 EXPORT uint32_t subsystem4_heartbeat_count (imu_types_safety_hb_t task)
 {
+    /* Cast (uint32_t)task: every imu_types_safety_hb_t value fits. */
     return ((uint32_t)task < SAFETY_HB_COUNT) ? g_hb[task] : 0u;
 }
 

@@ -9,6 +9,7 @@
 #include "../app_pack.h"
 #include "../app_types.h"
 
+/* Cast (uint16_t)(sizeof ...): the layout table has fewer than 64 entries. */
 #define LINE_FIELDS \
     ((uint16_t)(sizeof(g_line_layout) / sizeof(g_line_layout[0])))
 
@@ -133,6 +134,9 @@ bool line_track_cal_finish (line_track_cal_t * p_cal)
                 contrast = (0u == low) ? 999u : ((high * 10u) / low);
             }
 #if LINE_BLACK_IS_HIGH
+            /* Casts (uint16_t)low: the stored uint16_t minimum of 12-bit
+               readings; (uint16_t)high: the stored uint16_t maximum of 12-bit
+               readings. */
             white[chan] = (uint16_t)low;
             black[chan] = (uint16_t)high;
 #else
@@ -141,6 +145,8 @@ bool line_track_cal_finish (line_track_cal_t * p_cal)
 #endif
             if (contrast < worst)
             {
+                /* Cast (uint16_t)contrast: contrast < worst, a uint16_t (tested
+                   above). */
                 worst = (uint16_t)contrast;
             }
         }
@@ -173,6 +179,8 @@ uint16_t line_track_cal_norm (line_track_cal_t const * p_cal, uint8_t chan,
     {
         return 0u;
     }
+    /* Casts (int32_t)raw: every uint16_t value fits;
+       (uint16_t)app_types_clamp_i32(norm ...): the value is 0..1000. */
     norm = (((int32_t)raw - white) * 1000) / (black - white);
     return (uint16_t)app_types_clamp_i32(norm, 0, 1000);
 }
@@ -204,6 +212,7 @@ void line_track_init (line_track_t * p_t)
 uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
                          uint16_t norm_l, uint16_t norm_r, uint32_t step_um)
 {
+    /* Casts (int32_t)norm_l, (int32_t)norm_r: every uint16_t value fits. */
     uint8_t events;
     int32_t sum = (int32_t)norm_l + (int32_t)norm_r;
 
@@ -222,6 +231,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
     p_t->prev_err = p_t->err;
     if (sum >= LINE_ERR_VALID_SUM)
     {
+        /* Casts (int32_t)norm_l, (int32_t)norm_r: every uint16_t value fits. */
         p_t->err        = (int32_t)norm_l - (int32_t)norm_r;
         p_t->b_have_err = true;
     }
@@ -272,6 +282,7 @@ void line_track_slip_sample (line_track_slip_t * p_s, int32_t heading_cdeg,
     p_s->acc_cdeg += delta;
     if (p_s->n_samples < LINE_SLIP_MAX_BLOCKS)
     {
+        /* Cast (int16_t)app_types_clamp_i32(...): the value is 0..32767. */
         p_s->h_ddeg[p_s->n_samples] = (int16_t)app_types_clamp_i32(
             app_types_abs_i32(p_s->acc_cdeg) / 10, 0, 32767);
         p_s->raw_l[p_s->n_samples] = raw_l;
@@ -304,12 +315,16 @@ uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
         runs_r = 0u;
     }
     /* diagnosis: dark runs L << 24 | R << 16 | encoder deg spun */
+    /* Casts (uint32_t)runs_l, (uint32_t)runs_r: every uint8_t value fits;
+       (uint32_t)app_types_clamp_i32(tot / ...): the value is 0..65535. */
     *p_diag = ((uint32_t)runs_l << 24) | ((uint32_t)runs_r << 16)
               | (uint32_t)app_types_clamp_i32(tot / 10, 0, 0xFFFF);
     if ((c_l < 0) || (c_r < 0))
     {
         return 0u;
     }
+    /* Cast (uint16_t)gain: gain is within LINE_SLIP_GAIN_MIN_PM..MAX_PM (1900,
+       tested in the same statement). */
     gain = ((((c_l + c_r) / 2) * 1000) + 900) / 1800;
     return ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM))
                ? (uint16_t)gain
@@ -488,6 +503,7 @@ static int32_t slip_centre (line_track_slip_t const * p_s,
 
         if (b_dark)
         {
+            /* Cast (int64_t)norm: every uint16_t value fits. */
             sum_weight += norm;
             swh += (int64_t)norm * p_s->h_ddeg[idx];
             len++;
@@ -502,6 +518,8 @@ static int32_t slip_centre (line_track_slip_t const * p_s,
             if ((len >= LINE_SLIP_MIN_BLOCKS) && (found < 0)
                 && (sum_weight > 0))
             {
+                /* Cast (int32_t)(swh / sum_weight): a weighted mean of int16_t
+                   h_ddeg values. */
                 found = (int32_t)(swh / sum_weight);
             }
             sum_weight = 0;

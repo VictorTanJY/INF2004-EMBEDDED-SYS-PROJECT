@@ -64,6 +64,7 @@
    caller's file and line (__FILE__, __LINE__). */
 #define CHECK(id, cond) (check_result((id), (cond), __FILE__, __LINE__))
 
+/* Cast (int32_t)SLIDE_VEC_COUNT: the constant 12 fits. */
 #define N_SLIDES ((int32_t)SLIDE_VEC_COUNT)
 
 /* ---- sample-stream simulation ---------------------------------------- */
@@ -192,12 +193,19 @@ static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
 
         for (elem = 0; elem < T_CHAR_ELEMS; elem++)
         {
+            /* Casts (float64_t)narrow: exact: a 32-bit integer fits the 53-bit
+               mantissa of a double; (uint32_t)(omega * (1.0 + (jitter * ...))):
+               narrow <= 6900 um, ratio <= 3.0 and jitter <= 15 %, so below
+               24000 um. */
             float64_t omega =
                 (float64_t)narrow * (((pat >> (8 - elem)) & 1u) ? ratio : 1.0);
             p_w[n_elems++] = (uint32_t)(omega * (1.0 + (jitter * rndu())));
         }
         if (kdx < 2)
         {
+            /* Casts (uint32_t)((float64_t)narrow * (1.0 ...)): narrow <= 6900
+               um and jitter <= 15 %, so below 8000 um; (float64_t)narrow:
+               exact: a 32-bit integer fits the 53-bit mantissa of a double. */
             p_w[n_elems++] = (uint32_t)((float64_t)narrow
                                         * (1.0 + (jitter * rndu()))); /* gap */
         }
@@ -283,6 +291,7 @@ static void test_rejects (void)
     int32_t  wrong = 0;
 
     /* a wide bar printed narrow: rejected, never a different character */
+    /* Cast (int32_t)(sizeof(g_data_chars) - ...): a constant that fits. */
     for (idx = 0; idx < (int32_t)(sizeof(g_data_chars) - 1u); idx++)
     {
         int32_t elem;
@@ -405,6 +414,10 @@ static void test_capture_h05 (void)
 
                 for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                 {
+                    /* Casts (uint32_t)((((float64_t)vectors_slid ...))): slide
+                       widths are below 21000 um; x 297/338.67 x 1.1 stays below
+                       21000 um; (float64_t)vectors_slides_get(step) ...: exact:
+                       a 32-bit integer fits the 53-bit mantissa of a double. */
                     widths[kdx] =
                         (uint32_t)((((float64_t)vectors_slides_get(step)
                                          ->p_w[kdx]
@@ -628,6 +641,8 @@ static void test_capture_h18_bleed (void)
 
     for (idx = 0u; idx < T_LETTERS; idx++)
     {
+        /* Cast (char)('A' + idx): a Code 39 character code (< 128) stored back
+           in a char. */
         uint32_t widths[29];
         uint16_t n_elems =
             make_code((char)('A' + idx), 3000u, 2.5, 0.0, widths);
@@ -645,6 +660,8 @@ static void test_capture_h18_bleed (void)
         total++;
         if (CODE39_OK == code39_decode_one(widths, n_elems, 15, &chr, &b_rev))
         {
+            /* Cast (char)('A' + idx): a Code 39 character code (< 128) stored
+               back in a char. */
             if (chr == (char)('A' + idx))
             {
                 good++;
@@ -790,6 +807,9 @@ static void test_capture_h19 (void)
                     }
                     else
                     {
+                        /* Casts (int32_t)result: printed with %d: a small enum
+                           value; (uint32_t)out.elements: every uint16_t value
+                           fits. */
                         printf("  Z slide %d dir %d noise %d: result %d, %u "
                                "elements, %u mm\n",
                                vectors_slides_get(step)->slide, diff, noise,
@@ -867,6 +887,9 @@ static void test_capture_h20 (void)
                 }
                 else
                 {
+                    /* Casts (int32_t)result: printed with %d: a small enum
+                       value; (uint32_t)out.reason: every uint8_t value fits;
+                       (uint32_t)out.elements: every uint16_t value fits. */
                     printf("  14 Nov read %d dir %d noise %d: result %d reason "
                            "%u, %u elements\n",
                            (diff / 2) + 1, diff % 2, noise, (int32_t)result,
@@ -909,6 +932,8 @@ static uint32_t rnd (void)
 /** uniform in [-1, 1] */
 static float64_t rndu (void)
 {
+    /* Cast (float64_t)rnd(): exact: a 32-bit integer fits the 53-bit mantissa
+       of a double. */
     return ((float64_t)rnd() / 32767.5) - 1.0;
 }
 
@@ -946,6 +971,8 @@ static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
         }
         level += here;
     }
+    /* Cast (uint16_t)(level / taps): a mean of simulated levels, each at most
+       920. */
     return (uint16_t)(level / taps);
 }
 
@@ -963,6 +990,9 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
     line_barcode_init(&capture);
     for (x_val = 0u; x_val < TRACK_LEN_UM; x_val += step)
     {
+        /* Casts (int32_t)profile_at(p_w, n_elems ...): every uint16_t value
+           fits; (int32_t)(noise * rndu()): |rndu()| <= 1, so |noise x rndu()|
+           <= |noise|, an int32_t. */
         int32_t               sample = (int32_t)profile_at(p_w, n_elems, x_val)
                                        + (int32_t)(noise * rndu());
         line_barcode_out_t    out;
@@ -976,6 +1006,7 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
         {
             sample = 1000;
         }
+        /* Cast (uint16_t)sample: sample was clamped to 0..1000 just above. */
         memset(&out, 0, sizeof(out));
         result = line_barcode_sample(&capture, (uint16_t)sample, step, &out);
         if ((result != BC_NONE) && (BC_NONE == found))
@@ -1062,6 +1093,8 @@ static void test_slides (void)
         {
             for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
             {
+                /* Cast (uint32_t)(vectors_slides_get(...)): slide widths are
+                   below 21000 um and scale <= 1.0. */
                 widths[kdx] =
                     (uint32_t)(vectors_slides_get(step)->p_w[kdx] * scale);
             }
@@ -1235,6 +1268,9 @@ static void test_track_h12 (void)
     line_track_cal_start(&cal);
     for (idx = 0; idx < T_CAL_SAMPLES; idx++)
     {
+        /* Casts (uint16_t)((idx < 50) ? 300 : ...): the value is 300..3000;
+           (uint16_t)((idx < 50) ? 350 : ...): the value is 350..2900;
+           (uint16_t)((idx < 50) ? 250 : ...): the value is 250..2500. */
         raw[0] =
             (uint16_t)((idx < 50) ? 300 : 3000); /* white 300, black 3000 */
         raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
@@ -1249,6 +1285,7 @@ static void test_track_h12 (void)
     line_track_cal_start(&cal);
     for (idx = 0; idx < T_CAL_SAMPLES; idx++)
     {
+        /* Cast (uint16_t)((idx < 50) ? 1000 : ...): the value is 1000..2000. */
         raw[0] = (uint16_t)((idx < 50) ? 1000 : 2000); /* 2:1 only */
         raw[1] = 1000;
         raw[2] = 1000;
@@ -1261,6 +1298,8 @@ static void test_track_h12 (void)
     line_track_cal_start(&cal);
     for (idx = 0; idx < T_CAL_SAMPLES; idx++)
     {
+        /* Casts (uint16_t)((idx < 50) ? 300 : ...): the value is 300..3000;
+           (uint16_t)((idx < 50) ? 350 : ...): the value is 350..2900. */
         raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);
         raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
         raw[2] = 3700; /* stuck */
@@ -1281,6 +1320,8 @@ static uint16_t slip_raw (float64_t x_val, float64_t y_val)
     float64_t const half = 9.0;
     float64_t       factor;
 
+    /* Cast (uint16_t)(300.0 + (factor * ...)): factor is limited to 0..1, so
+       300..3000. */
     (void)x_val;
     factor = ((half - fabs(y_val)) + 4.0) / 8.0;
     factor = (factor < 0.0) ? 0.0 : ((factor > 1.0) ? 1.0 : factor);
@@ -1300,6 +1341,8 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
     line_track_slip_start(&slip, start_cdeg);
     for (kdx = 1; kdx <= T_SLIP_STEPS; kdx++)
     {
+        /* Cast (int32_t)(enc * 100.0): kdx <= T_SLIP_STEPS (400), so enc <= 360
+           deg and enc x 100 <= 36000. */
         float64_t const enc     = (360.0 * kdx) / 400.0;
         float64_t const real    = (((enc * 1000.0) / gain_pm) * M_PI) / 180.0;
         float64_t const x_start = 120.0 * cos(real);
@@ -1343,6 +1386,7 @@ static void test_slip (void)
     {
         uint16_t const gap = slip_run(gains[idx], true, 17000);
 
+        /* Casts (uint32_t)gap, (int32_t)gap: every uint16_t value fits. */
         printf("turn slip: real gain %d -> measured %u\n", gains[idx],
                (uint32_t)gap);
         CHECK("S3-H16", abs((int32_t)gap - gains[idx]) <= 25);
@@ -1354,6 +1398,7 @@ static void test_slip (void)
     {
         uint16_t const gap = slip_run(gains[idx], true, 0);
 
+        /* Casts (uint32_t)gap, (int32_t)gap: every uint16_t value fits. */
         printf("turn slip, wide sensors: real gain %d -> measured %u\n",
                gains[idx], (uint32_t)gap);
         CHECK("S3-H16", abs((int32_t)gap - gains[idx]) <= 25);
@@ -1405,6 +1450,7 @@ static uint16_t merge_at (uint32_t const * p_in, uint16_t n_elems,
     {
         if ((idx == at_idx) && ((idx + 2u) < n_elems))
         {
+            /* Cast (uint16_t)(idx + 2u): idx + 2 < n_elems (tested above). */
             p_out[out_n++] = p_in[idx] + p_in[idx + 1u] + p_in[idx + 2u];
             idx            = (uint16_t)(idx + 2u);
         }
@@ -1523,6 +1569,7 @@ static void best_one (int32_t kind, size_t cnt, uint16_t at_idx, int32_t diff,
         }
         else
         {
+            /* Cast (uint32_t)at_idx: every uint16_t value fits. */
             p_count->wrong++;
             printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n", kind,
                    g_data_chars[cnt], (uint32_t)at_idx, diff, chr);
@@ -1563,6 +1610,7 @@ static bool best_damage (int32_t kind, uint32_t widths[29], uint16_t n_elems,
     }
     else if (2 == kind)
     {
+        /* Cast (uint16_t)((at_idx + 12u) % 27u): the value is 0..26. */
         uint16_t const setpoint = (uint16_t)((at_idx + 12u) % 27u);
 
         if ((at_idx > 26u) || !thin_triplet(widths, at_idx, 3000u)
@@ -1573,6 +1621,9 @@ static bool best_damage (int32_t kind, uint32_t widths[29], uint16_t n_elems,
         }
         else
         {
+            /* Cast (uint16_t)(setpoint - 2u): setpoint >= at_idx here and
+               setpoints within 2 of at_idx were excluded above, so setpoint >
+               2. */
             mid = merge_at(widths, n_elems, at_idx, buf);
             mid = split_at(buf, mid,
                            (setpoint < at_idx) ? setpoint
@@ -1588,6 +1639,9 @@ static bool best_damage (int32_t kind, uint32_t widths[29], uint16_t n_elems,
         } /* first bar lost, speck in a bar */
         else
         {
+            /* Casts (uint16_t)(n_elems - 2u): n_elems is a whole read of 29
+               elements; (uint16_t)(at_idx - 2u): at_idx >= 2 on this branch
+               (tested above). */
             mid = split_at(&widths[2], (uint16_t)(n_elems - 2u),
                            (uint16_t)(at_idx - 2u), 1000u, accel);
         }
@@ -1610,6 +1664,8 @@ static void test_best_h20_part2 (void)
 
         for (ret = 0; ret < T_RANDOM_CODES; ret++)
         {
+            /* Cast (uint16_t)(25u + (2u * (rnd() % ...))): the value is 25..33.
+             */
             uint32_t widths[60];
             uint16_t n_elems = (uint16_t)(25u + (2u * (rnd() % 5u)));
             uint16_t elem;
@@ -1650,6 +1706,8 @@ static void test_best_h20_part2 (void)
                 }
                 for (proj = 0u; proj < T_DAMAGES_U; proj++)
                 {
+                    /* Cast (uint16_t)(1u + (rnd() % (mid - ...))): an element
+                       index 1..mid - 4. */
                     uint16_t const at_idx =
                         (uint16_t)(1u + (rnd() % (mid - 4u)));
                     uint16_t x_val;
@@ -1739,6 +1797,9 @@ static void test_best_h20_part3 (void)
             }
             else
             {
+                /* Casts (int32_t)result2: printed with %d: a small enum value;
+                   (int32_t)out.reason: every uint8_t value fits;
+                   (uint32_t)out.elements: every uint16_t value fits. */
                 printf("  speck slide %d dir %d: result %d reason %d, %u "
                        "elements\n",
                        vectors_slides_get(step2)->slide, diff2,
@@ -1816,6 +1877,10 @@ static void test_light_print (void)
                         }
                         else if (BC_VALID == result)
                         {
+                            /* Casts (uint32_t)spots[setpoint],
+                               (uint32_t)speeds[value]: every uint32_t value
+                               fits; (uint32_t)g_last_pass: every uint8_t value
+                               fits. */
                             wrong++;
                             printf("  WRONG light '%c' spot %u v %u d %d -> "
                                    "'%c' pass %u\n",
@@ -1830,6 +1895,7 @@ static void test_light_print (void)
                     }
                 }
             }
+            /* Cast (uint32_t)thin[theta]: every uint32_t value fits. */
             printf("light print, thin bars %u, %u mm spot: %d / %d so far (%d "
                    "by the adaptive swing, %d by the first three readings)\n",
                    (uint32_t)thin[theta], (spots[setpoint] / 1000u), good,

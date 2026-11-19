@@ -187,10 +187,13 @@ static void test_h09 (void)
 
         for (elapsed = 0; elapsed < T_DRIVE_MS; elapsed += 10u)
         {
+            /* Cast (uint8_t)elapsed: an 8-bit sequence number: the low 8 bits,
+               wrapping on purpose. */
             (void)cmd(MOTION_SRC_LINE, (uint8_t)elapsed, MOTION_CMD_DRIVE, 250,
                       0);
             run_ms(10u, false);
         }
+        /* Cast (int32_t)odom.v_mm_s: every int16_t value fits. */
         motion_core_snapshot(&g_mc, &odom);
         CHECK("S2-H09", abs(odom.v_mm_s - 250) <= 25); /* NFR5 logic: +-10 % */
         printf("DRIVE 250 mm/s: measured %d mm/s\n", (int32_t)odom.v_mm_s);
@@ -376,6 +379,8 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
 
     for (width = 0; width < T_WHEELS; width++)
     {
+        /* Cast (float64_t)duty[width]: exact: a 16-bit integer fits a double.
+         */
         float64_t diff   = (float64_t)duty[width];
         float64_t sum_sq = 0.0;
 
@@ -409,11 +414,16 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
     offset. */
 static int32_t enc_of (int32_t width)
 {
+    /* Cast (int32_t)((counts >= 0) ? (counts ...)): 12 counts per mm and moves
+       of at most 4095 mm: about 50000 counts. */
     float64_t counts =
         (g_pl.pos_um[width] * MOTION_COUNTS_PER_REV) / MOTION_WHEEL_CIRC_UM;
     int32_t cnt  = (int32_t)((counts >= 0) ? (counts + 0.5) : (counts - 0.5));
     int32_t sign = (0 == width) ? MOTION_ENC_SIGN_L : MOTION_ENC_SIGN_R;
 
+    /* Casts (int32_t)((uint32_t)(cnt * sign) + ...): wrapping 32-bit counter,
+       as the PIO counter does; (uint32_t)(cnt * sign),
+       (uint32_t)g_pl.enc_offset: bit pattern for the wrapping sum. */
     return (int32_t)((uint32_t)(cnt * sign) + (uint32_t)g_pl.enc_offset);
 }
 
@@ -501,6 +511,7 @@ static void test_pack_h16 (void)
     memset(&cmd, 0, sizeof(cmd));
     for (kdx = 0; kdx < T_MOVES; kdx++)
     {
+        /* Cast (uint8_t)(kdx * 9): kdx < T_MOVES (4). */
         cmd.src  = 1u;
         cmd.seq  = (uint8_t)(kdx * 9);
         cmd.cmd  = MOTION_CMD_DRIVE;

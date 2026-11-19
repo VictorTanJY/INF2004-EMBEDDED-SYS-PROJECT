@@ -92,6 +92,7 @@ EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
     {
         return err;
     }
+    /* Cast (uint32_t)value: every uint8_t value fits. */
     t_start = app_time_us();
     out_w(IC_DATA_CMD, reg);
     out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
@@ -144,6 +145,8 @@ EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
                 return E_TMOUT;
             }
         }
+        /* Cast (uint8_t)in_w(IC_DATA_CMD): the data byte is the low 8 bits of
+           the register. */
         p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
     }
     return E_OK;
