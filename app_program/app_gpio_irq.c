@@ -10,33 +10,33 @@
  */
 static inline uint32_t io_intr (uint32_t gpio_bank)
 {
-    return IO_BANK0_BASE + 0x0F0u + (4u * gpio_bank);
+    return APP_REGS_IO_BANK0_BASE + 0x0F0u + (4u * gpio_bank);
 }
 
 static inline uint32_t io_proc0_inte (uint32_t gpio_bank)
 {
-    return IO_BANK0_BASE + 0x100u + (4u * gpio_bank);
+    return APP_REGS_IO_BANK0_BASE + 0x100u + (4u * gpio_bank);
 }
 
 static inline uint32_t io_proc0_ints (uint32_t gpio_bank)
 {
-    return IO_BANK0_BASE + 0x120u + (4u * gpio_bank);
+    return APP_REGS_IO_BANK0_BASE + 0x120u + (4u * gpio_bank);
 }
 
 static inline uint32_t io_proc1_inte (uint32_t gpio_bank)
 {
-    return IO_BANK0_BASE + 0x130u + (4u * gpio_bank);
+    return APP_REGS_IO_BANK0_BASE + 0x130u + (4u * gpio_bank);
 }
 
 static inline uint32_t io_proc1_ints (uint32_t gpio_bank)
 {
-    return IO_BANK0_BASE + 0x150u + (4u * gpio_bank);
+    return APP_REGS_IO_BANK0_BASE + 0x150u + (4u * gpio_bank);
 }
 
 #define IO_INT_REGS  4u
 #define IO_EDGE_BITS (APP_GPIO_EDGE_FALL | APP_GPIO_EDGE_RISE)
 
-static app_gpio_irq_cb_t g_cb[GPIO_NUM];
+static app_gpio_irq_cb_t g_cb[APP_REGS_GPIO_NUM];
 static uint32_t volatile g_count;
 static bool gb_defined;
 
@@ -70,7 +70,7 @@ static void gpio_bank0_isr (UINT intno)
             out_w(io_intr(reg), (events & IO_EDGE_BITS) << shift);
             ints &= ~(0xFuL << shift);
 
-            if ((pin < GPIO_NUM) && (g_cb[pin] != NULL))
+            if ((pin < APP_REGS_GPIO_NUM) && (g_cb[pin] != NULL))
             {
                 g_cb[pin](pin, events, t_us);
             }
@@ -100,7 +100,7 @@ EXPORT ER app_gpio_irq_attach (uint32_t pin, uint32_t edges,
     uint32_t const shift = (pin % 8u) * 4u;
     UINT           intsts;
 
-    if ((pin >= GPIO_NUM) || (NULL == p_callback)
+    if ((pin >= APP_REGS_GPIO_NUM) || (NULL == p_callback)
         || ((edges & ~IO_EDGE_BITS) != 0u) || !gb_defined)
     {
         return E_PAR;
@@ -129,7 +129,7 @@ EXPORT void app_gpio_irq_detach (uint32_t pin)
     uint32_t const shift = (pin % 8u) * 4u;
     UINT           intsts;
 
-    if (pin >= GPIO_NUM)
+    if (pin >= APP_REGS_GPIO_NUM)
     {
         return;
     }

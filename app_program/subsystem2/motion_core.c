@@ -454,8 +454,8 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
         return false;
     }
 
-    progress  = b_move ? (p_mc->m_dir * (rel_l + rel_r)) / 2
-                       : (p_mc->m_dir * (rel_r - rel_l)) / 2;
+    progress  = b_move ? ((p_mc->m_dir * (rel_l + rel_r)) / 2)
+                       : ((p_mc->m_dir * (rel_r - rel_l)) / 2);
     remaining = p_mc->m_target_um - progress;
     tol =
         b_move ? (int64_t)MOTION_POS_TOL_UM : turn_arc_um(MOTION_ANG_TOL_CDEG);

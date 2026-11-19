@@ -102,7 +102,7 @@ static ER init_once (void)
     }
     wait_ms(BOOT_WAIT_MS);
 
-    for (idx = 0u; idx < sizeof(g_reg_init) / sizeof(g_reg_init[0]); ++idx)
+    for (idx = 0u; idx < (sizeof(g_reg_init) / sizeof(g_reg_init[0])); ++idx)
     {
         uint8_t check = 0u;
 
@@ -159,7 +159,8 @@ static int16_t le16 (uint8_t low, uint8_t high)
     uint16_t const word = (uint16_t)((uint16_t)low | ((uint16_t)high << 8));
 
     /* Avoid implementation-defined unsigned-to-signed overflow. */
-    return (int16_t)((word & 0x8000u) ? (int32_t)word - 65536 : (int32_t)word);
+    return (int16_t)((word & 0x8000u) ? ((int32_t)word - 65536)
+                                      : (int32_t)word);
 }
 
 EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
@@ -178,7 +179,7 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
     {
         /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
         acc_mg[kdx] =
-            ((int32_t)le16(raw[2u * kdx], raw[2u * kdx + 1u]) * 122) / 1000;
+            ((int32_t)le16(raw[2u * kdx], raw[(2u * kdx) + 1u]) * 122) / 1000;
     }
 
     return E_OK;
@@ -198,7 +199,7 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
 
     for (kdx = 0u; kdx < 3u; ++kdx)
     {
-        mag[kdx] = le16(raw[2u * kdx], raw[2u * kdx + 1u]);
+        mag[kdx] = le16(raw[2u * kdx], raw[(2u * kdx) + 1u]);
     }
 
     return E_OK;

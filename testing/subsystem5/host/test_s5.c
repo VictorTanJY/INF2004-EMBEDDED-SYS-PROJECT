@@ -358,13 +358,13 @@ static float64_t g_edge_beam = 36.0;
 static uint16_t  edge_ping (float64_t diff, float64_t omega, float64_t coef,
                             float64_t phi_deg)
 {
-    float64_t const phase = phi_deg * M_PI / 180.0;
+    float64_t const phase = (phi_deg * M_PI) / 180.0;
     float64_t const sum_x = OBST_US_AHEAD_MM * sin(phase);
     float64_t const sum_y = OBST_US_AHEAD_MM * cos(phase);
     float64_t       best  = 1e9;
     float64_t       x_val;
 
-    for (x_val = coef - (omega / 2.0); x_val <= coef + (omega / 2.0);
+    for (x_val = coef - (omega / 2.0); x_val <= (coef + (omega / 2.0));
          x_val += 1.0)
     {
         float64_t const delta_x = x_val - sum_x;
@@ -373,7 +373,7 @@ static uint16_t  edge_ping (float64_t diff, float64_t omega, float64_t coef,
         float64_t const radius =
             sqrt((delta_x * delta_x) + (delta_y * delta_y));
 
-        if ((fabs(ang) <= (g_edge_beam * M_PI / 180.0)) && (radius < best))
+        if ((fabs(ang) <= ((g_edge_beam * M_PI) / 180.0)) && (radius < best))
         {
             best = radius;
         }
@@ -489,7 +489,7 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
                         int32_t sign, int32_t min_lat, float64_t beam_deg,
                         float64_t * p_edge)
 {
-    float64_t const     theta = 45.0 * M_PI / 180.0;
+    float64_t const     theta = (45.0 * M_PI) / 180.0;
     float64_t const     shaft = OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM;
     float64_t const     face  = OBST_US_AHEAD_MM + diff; /* ahead of the axle */
     float64_t const     low   = (sign * coef) - (omega / 2.0);
@@ -524,7 +524,7 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
 
             if ((delta_y > 0.0)
                 && (fabs(atan2(delta_x, delta_y))
-                    <= (fmax(beam_deg, 0.2) * M_PI / 180.0))
+                    <= ((fmax(beam_deg, 0.2) * M_PI) / 180.0))
                 && (radius2 < best))
             {
                 best = radius2;
@@ -551,20 +551,20 @@ static uint16_t ping (box_t const * p_b, int32_t n_b, int32_t angle_deg)
     {
         float64_t lat;
 
-        for (lat = p_b[kdx].coef - p_b[kdx].omega / 2.0;
-             lat <= p_b[kdx].coef + p_b[kdx].omega / 2.0 + 1e-9; lat += 1.0)
+        for (lat = p_b[kdx].coef - (p_b[kdx].omega / 2.0);
+             lat <= (p_b[kdx].coef + (p_b[kdx].omega / 2.0) + 1e-9); lat += 1.0)
         {
             /* 7 Nov: the sensor faces along the servo horn, OBST_SERVO_ARM_MM
                out from the shaft; box d is from the face with the servo at
                90 deg, so the shaft sits ARM behind that point */
-            float64_t const accel_r = angle_deg * M_PI / 180.0;
+            float64_t const accel_r = (angle_deg * M_PI) / 180.0;
             float64_t const sum_x   = -OBST_SERVO_ARM_MM * cos(accel_r);
             float64_t const sum_y   = OBST_SERVO_ARM_MM * (sin(accel_r) - 1.0);
             float64_t       val_a =
-                atan2(p_b[kdx].diff - sum_y, -(lat - sum_x)) * 180.0 / M_PI;
+                (atan2(p_b[kdx].diff - sum_y, -(lat - sum_x)) * 180.0) / M_PI;
             float64_t radius =
-                sqrt((p_b[kdx].diff - sum_y) * (p_b[kdx].diff - sum_y)
-                     + (lat - sum_x) * (lat - sum_x));
+                sqrt(((p_b[kdx].diff - sum_y) * (p_b[kdx].diff - sum_y))
+                     + ((lat - sum_x) * (lat - sum_x)));
 
             if ((fabs(val_a - angle_deg) <= 7.5) && (radius < best))
             {
@@ -603,8 +603,8 @@ static void test_obstacle (void)
 
     /* S5-H09: helpers */
     CHECK("S5-H09",
-          (200 == obstacle_core_median3(300, 120, 200))
-              && (100 == obstacle_core_median3(OBST_RANGE_NONE, 100, 90)));
+          (200u == obstacle_core_median3(300u, 120u, 200u))
+              && (100u == obstacle_core_median3(OBST_RANGE_NONE, 100u, 90u)));
     CHECK("S5-H09",
           (200u == obstacle_core_echo_to_mm(1160u))
               && (OBST_RANGE_NONE == obstacle_core_echo_to_mm(23200u)));
@@ -652,9 +652,10 @@ static void test_obstacle (void)
         box_t box[2] = {{200.0, 150.0, 0.0},
                         {260.0, 120.0, -200.0}}; /* wall on the right */
         scan_box(box, 2, &prof);
-        CHECK("S5-H11", (OBST_PLAN_LEFT == prof.plan)
-                            && (prof.clr_r_mm
-                                < (OBST_ROBOT_WIDTH_MM + 2 * OBST_MARGIN_MM)));
+        CHECK("S5-H11",
+              (OBST_PLAN_LEFT == prof.plan)
+                  && (prof.clr_r_mm < (uint32_t)(OBST_ROBOT_WIDTH_MM
+                                                 + (2 * OBST_MARGIN_MM))));
     }
     {
         /* 9 Nov 02:59: a wall right of the track, NEARER than the box on
@@ -676,8 +677,8 @@ static void test_obstacle (void)
             CHECK("S5-H24", prof.b_valid && (prof.plan != OBST_PLAN_CONTINUE)
                                 && (prof.closest_mm >= 225u)
                                 && (prof.closest_mm <= 260u)
-                                && (prof.right_lat_mm > (col - 75 - 60))
-                                && (prof.left_lat_mm < (col + 75 + 60)));
+                                && (prof.right_lat_mm > ((col - 75) - 60))
+                                && (prof.left_lat_mm < ((col + 75) + 60)));
         }
     }
     {
@@ -707,19 +708,20 @@ static void test_obstacle (void)
             {
                 CHECK("S5-H25",
                       (OBST_PLAN_RIGHT == prof.plan)
-                          && (-prof.deviation_mm >= (75 - col) + extra));
+                          && (-prof.deviation_mm >= ((75 - col) + extra)));
             }
             else if (col < 0)
             {
                 CHECK("S5-H25",
                       (OBST_PLAN_LEFT == prof.plan)
-                          && (prof.deviation_mm >= (75 + col) + extra));
+                          && (prof.deviation_mm >= ((75 + col) + extra)));
             }
             else
             {
-                CHECK("S5-H25", ((OBST_PLAN_LEFT == prof.plan)
-                                 || (OBST_PLAN_RIGHT == prof.plan))
-                                    && (abs(prof.deviation_mm) >= 75 + extra));
+                CHECK("S5-H25",
+                      ((OBST_PLAN_LEFT == prof.plan)
+                       || (OBST_PLAN_RIGHT == prof.plan))
+                          && (abs(prof.deviation_mm) >= (75 + extra)));
             }
         }
     }
@@ -751,8 +753,8 @@ static void test_obstacle (void)
         box_t box = {200.0, 100.0, 260.0};
         scan_box(&box, 1, &prof);
         CHECK("S5-H11", !prof.b_sure && (OBST_PLAN_CONTINUE == prof.plan)
-                            && (prof.plan_r_mm
-                                > (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM));
+                            && (prof.plan_r_mm > ((OBST_ROBOT_WIDTH_MM / 2)
+                                                  + OBST_MARGIN_MM)));
     }
     {
         obstacle_core_point_t none[3] = {{80, OBST_RANGE_NONE},
@@ -951,16 +953,16 @@ static void test_obstacle (void)
                         for (;;)
                         {
                             int32_t const lat =
-                                (int32_t)(diff * sin(th_deg * M_PI / 180.0));
+                                (int32_t)(diff * sin((th_deg * M_PI) / 180.0));
                             int32_t const fwd =
-                                (int32_t)(diff * cos(th_deg * M_PI / 180.0));
+                                (int32_t)(diff * cos((th_deg * M_PI) / 180.0));
                             int32_t const slope =
                                 obstacle_core_probe_sensor_lat(lat, theta);
                             int32_t const expected =
                                 obstacle_core_out_expect_mm(face, fwd, theta);
                             bool const b_on =
                                 (slope <= (coef + (omega / 2.0) + run))
-                                && (slope >= (coef - (omega / 2.0) - run));
+                                && (slope >= ((coef - (omega / 2.0)) - run));
 
                             if (obstacle_core_probe_ping(
                                     &probe, slope,
@@ -1009,8 +1011,8 @@ static void test_obstacle (void)
                                (int32_t)(left - ret), elem * 100.0);
                     }
                     CHECK("S5-H23",
-                          (fabs(left - (coef + omega / 2.0)) <= 15.0)
-                              && (fabs(ret - (coef - omega / 2.0)) <= 15.0));
+                          (fabs(left - (coef + (omega / 2.0))) <= 15.0)
+                              && (fabs(ret - (coef - (omega / 2.0))) <= 15.0));
                 }
             }
         }
@@ -1047,9 +1049,9 @@ static void test_obstacle (void)
                    (uint32_t)prof.plan, prof.deviation_mm);
             CHECK("S5-H17", prof.b_sure
                                 && (prof.left_lat_mm
-                                    >= (cos_vals[elapsed] + 77.0 - 5.0)));
+                                    >= ((cos_vals[elapsed] + 77.0) - 5.0)));
             CHECK("S5-H17",
-                  prof.right_lat_mm <= (cos_vals[elapsed] - 77.0 + 5.0));
+                  prof.right_lat_mm <= ((cos_vals[elapsed] - 77.0) + 5.0));
             CHECK("S5-H17", (cos_vals[elapsed] > 0.0)
                                 ? (OBST_PLAN_RIGHT == prof.plan)
                                 : (OBST_PLAN_LEFT == prof.plan));
@@ -1108,7 +1110,7 @@ static void test_obstacle (void)
         /* without a servo reading: as far as the largest obstacle */
         memset(&prof, 0, sizeof(prof));
         obstacle_core_edge_plan(&prof, false, 0, true, -88);
-        CHECK("S5-H17", (-88 + OBST_WIDTH_MAX_MM == prof.left_lat_mm));
+        CHECK("S5-H17", ((-88 + OBST_WIDTH_MAX_MM) == prof.left_lat_mm));
     }
     {
         /* 4 Nov run: box 150 at 245 mm; clutter answering at 320 mm from 25 deg
@@ -1154,8 +1156,8 @@ static void test_obstacle (void)
                                     || (OBST_STEP_LINESCAN == steps[idx].kind))
                                        ? 0.0
                                        : (float64_t)steps[idx].value;
-            float64_t const coef = cos(height * M_PI / 180.0);
-            float64_t const sine = sin(height * M_PI / 180.0);
+            float64_t const coef = cos((height * M_PI) / 180.0);
+            float64_t const sine = sin((height * M_PI) / 180.0);
 
             if (OBST_STEP_TURN == steps[idx].kind)
             {
@@ -1196,9 +1198,10 @@ static void test_obstacle (void)
         CHECK("S5-H12", (fabs(y_val) < 2.0) && (fabs(height) < 0.1)
                             && (x_val > ((float64_t)prof.closest_mm + 150.0)));
         /* FR11: max deviation <= w/2 + robot/2 + 100 mm; clearance >= 50 mm */
-        CHECK("S5-H12", max_lat <= 150.0 / 2 + OBST_ROBOT_WIDTH_MM / 2 + 100.0);
         CHECK("S5-H12",
-              max_lat - OBST_ROBOT_WIDTH_MM / 2.0 - 75.0 >= OBST_MARGIN_MM);
+              max_lat <= (((150.0 / 2) + (OBST_ROBOT_WIDTH_MM / 2)) + 100.0));
+        CHECK("S5-H12", ((max_lat - (OBST_ROBOT_WIDTH_MM / 2.0)) - 75.0)
+                            >= OBST_MARGIN_MM);
     }
     {
         /* 45 deg turns, slow bypass, turns at the calibration spin rate */
@@ -1217,8 +1220,8 @@ static void test_obstacle (void)
                              + OBST_MARGIN_MM;
 
         scan_box(&box, 1, &prof);
-        CHECK("S5-H15",
-              prof.b_valid && !prof.b_sure && (prof.w_mm < OBST_WIDTH_MIN_MM));
+        CHECK("S5-H15", prof.b_valid && !prof.b_sure
+                            && ((int32_t)prof.w_mm < OBST_WIDTH_MIN_MM));
         CHECK("S5-H15",
               ((OBST_PLAN_LEFT == prof.plan) || (OBST_PLAN_RIGHT == prof.plan))
                   && (abs(prof.deviation_mm) >= need));
@@ -1240,7 +1243,7 @@ static void test_obstacle (void)
 
         for (kdx = 0u; kdx < 5u; kdx++)
         {
-            pts[kdx].angle_deg = (int16_t)(30 + (30 * kdx));
+            pts[kdx].angle_deg = (int16_t)(30 + (30 * (int32_t)kdx));
             pts[kdx].r_mm      = OBST_RANGE_NONE;
         }
         pts[2].r_mm = 150u; /* 90 deg */
@@ -1258,7 +1261,7 @@ static void test_obstacle (void)
 
         for (kdx = 0u; kdx < 13u; kdx++)
         {
-            pts[kdx].angle_deg = (int16_t)(60 + (5 * kdx));
+            pts[kdx].angle_deg = (int16_t)(60 + (5 * (int32_t)kdx));
             pts[kdx].r_mm =
                 ((0u == kdx) || (12u == kdx)) ? OBST_RANGE_NONE : 200u;
         }
@@ -1339,7 +1342,7 @@ static void test_pack_s5 (void)
     uint32_t                  kdx;
     bool                      b_ok = true;
 
-    for (kdx = 0u; kdx < sizeof(datas) / sizeof(datas[0]); kdx++)
+    for (kdx = 0u; kdx < (sizeof(datas) / sizeof(datas[0])); kdx++)
     {
         evt.type = MISSION_EV_REMOTE_SET;
         evt.src  = 5u;

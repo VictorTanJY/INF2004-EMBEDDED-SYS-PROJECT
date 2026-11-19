@@ -14,27 +14,27 @@
 
 static inline uint32_t pwm_ch_csr (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x00u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
 }
 
 static inline uint32_t pwm_ch_div (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x04u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
 }
 
 static inline uint32_t pwm_ch_ctr (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x08u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x08u;
 }
 
 static inline uint32_t pwm_ch_cc (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x0Cu;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
 }
 
 static inline uint32_t pwm_ch_top (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x10u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
 }
 
 #define PWM_DIV_INT_1 (1u << 4)
@@ -76,17 +76,17 @@ EXPORT ER drv_motor_init (void)
 
     /* 1. Brake first: GP8-GP11 SIO outputs, LOW (BOOT order, Section 5). */
     DI(intsts);
-    out_w(GPIO_OUT_CLR, MOTOR_PIN_MASK);
-    out_w(GPIO_OE_SET, MOTOR_PIN_MASK);
+    out_w(APP_REGS_GPIO_OUT_CLR, MOTOR_PIN_MASK);
+    out_w(APP_REGS_GPIO_OE_SET, MOTOR_PIN_MASK);
     for (idx = 0u; idx < 4u; idx++)
     {
-        clr_w(GPIO(pins[idx]), GPIO_OD);
-        out_w(GPIO_CTRL(pins[idx]), GPIO_CTRL_FUNCSEL_SIO);
+        clr_w(app_regs_pad(pins[idx]), APP_REGS_PAD_OD);
+        out_w(app_regs_gpio_ctrl(pins[idx]), APP_REGS_FUNCSEL_SIO);
     }
     EI(intsts);
 
     /* 2. PWM block out of reset, slices 4 and 5 at 20 kHz, duty 0. */
-    app_reset_release(RESETS_RESET_PWM);
+    app_reset_release(APP_REGS_RESET_PWM);
     for (idx = 0u; idx < 2u; idx++)
     {
         out_w(pwm_ch_csr(slices[idx]), 0u);
@@ -94,7 +94,7 @@ EXPORT ER drv_motor_init (void)
         out_w(pwm_ch_top(slices[idx]), MOTION_PWM_TOP);
         out_w(pwm_ch_cc(slices[idx]), 0u);
         out_w(pwm_ch_ctr(slices[idx]), 0u);
-        out_w(pwm_ch_csr(slices[idx]), PWM_CH_CSR_EN);
+        out_w(pwm_ch_csr(slices[idx]), APP_REGS_PWM_CSR_EN);
     }
 
     /* Read back: the block really left reset and took the settings. */
@@ -103,10 +103,10 @@ EXPORT ER drv_motor_init (void)
 
 EXPORT void drv_motor_connect (void)
 {
-    out_w(GPIO_CTRL(S2_PIN_MOT_L_A), GPIO_CTRL_FUNCSEL_PWM);
-    out_w(GPIO_CTRL(S2_PIN_MOT_L_B), GPIO_CTRL_FUNCSEL_PWM);
-    out_w(GPIO_CTRL(S2_PIN_MOT_R_A), GPIO_CTRL_FUNCSEL_PWM);
-    out_w(GPIO_CTRL(S2_PIN_MOT_R_B), GPIO_CTRL_FUNCSEL_PWM);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A), APP_REGS_FUNCSEL_PWM);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_B), APP_REGS_FUNCSEL_PWM);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_A), APP_REGS_FUNCSEL_PWM);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_B), APP_REGS_FUNCSEL_PWM);
 }
 
 EXPORT void drv_motor_write (int16_t duty_l, int16_t duty_r)

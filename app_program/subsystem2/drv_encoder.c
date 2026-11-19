@@ -98,8 +98,9 @@ static uint32_t g_last[2]; /* returned if no fresh value arrives */
 
 static void pin_setup (uint32_t pin)
 {
-    out_w(GPIO(pin), GPIO_IE | GPIO_PUE | GPIO_SHEMITT); /* input, pull-up */
-    out_w(GPIO_CTRL(pin), GPIO_CTRL_FUNCSEL_PIO0);
+    out_w(app_regs_pad(pin), APP_REGS_PAD_IE | APP_REGS_PAD_PUE
+                                 | APP_REGS_PAD_SHEMITT); /* input, pull-up */
+    out_w(app_regs_gpio_ctrl(pin), APP_REGS_FUNCSEL_PIO0);
 }
 
 static void sm_setup (uint32_t sm_idx, uint32_t pin_a)
@@ -119,7 +120,7 @@ EXPORT ER drv_encoder_init (void)
     uint32_t idx;
 
     /* With WIFI=cyw43 the kernel releases PIO0 at boot; otherwise do it. */
-    app_reset_release(RESETS_RESET_PIO0);
+    app_reset_release(APP_REGS_RESET_PIO0);
 
     if ((in_w(PIO_CTRL) & (pio_ctrl_sm_enable(0u) | pio_ctrl_sm_enable(1u)))
         != 0u)

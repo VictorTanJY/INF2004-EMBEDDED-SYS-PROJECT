@@ -16,10 +16,10 @@
    bypass turns are asked for x this gain.  Blocks are 10 ms: 90 deg/s
    for 360 deg is 400 blocks; 800 allow a slow spin.                     */
 #define LINE_SLIP_MAX_BLOCKS  800u
-#define LINE_SLIP_SKIP_DDEG   600 /* ignore the line the spin starts on */
-#define LINE_SLIP_DARK        500 /* normalised: a sensor on the line   */
-#define LINE_SLIP_MIN_BLOCKS  3u  /* an 18 mm line at 120 mm, 90 deg/s: ~10 */
-#define LINE_SLIP_GAIN_MIN_PM 800 /* plausible gains, permille          */
+#define LINE_SLIP_SKIP_DDEG   600  /* ignore the line the spin starts on */
+#define LINE_SLIP_DARK        500u /* normalised: a sensor on the line   */
+#define LINE_SLIP_MIN_BLOCKS  3u   /* an 18 mm line at 120 mm, 90 deg/s: ~10 */
+#define LINE_SLIP_GAIN_MIN_PM 800  /* plausible gains, permille          */
 #define LINE_SLIP_GAIN_MAX_PM 1900
 
 /* ---- Sensors --------------------------------------------------------- */
@@ -38,17 +38,17 @@
 /* 1 if the module's AO voltage is HIGHER over black (less reflection).
    MEASURE (A7): log raw values over black and white.                    */
 #define LINE_BLACK_IS_HIGH    1
-#define LINE_CONTRAST_MIN_X10 30  /* 3:1 (Week 6 Section 5)  */
-#define LINE_CAL_MIN_SPAN     200 /* raw counts black - white */
+#define LINE_CONTRAST_MIN_X10 30u  /* 3:1 (Week 6 Section 5)  */
+#define LINE_CAL_MIN_SPAN     200u /* raw counts black - white */
 
 /* Normalised 0..1000 (1000 = black).  The two line sensors straddle the
    line edges, so on the line both read ~500: "black" (junction) means
    fully black, "white" (gap / lost) means fully white; between the two
    is normal tracking.  Each has its own hysteresis.                     */
-#define LINE_BLACK_ON  750
-#define LINE_BLACK_OFF 600
-#define LINE_WHITE_ON  150
-#define LINE_WHITE_OFF 250
+#define LINE_BLACK_ON  750u
+#define LINE_BLACK_OFF 600u
+#define LINE_WHITE_ON  150u
+#define LINE_WHITE_OFF 250u
 /* Barcode sensor: FIXED levels, not calibrated by the GP21 spin.  The
    spin sees the solid 18 mm line, which reads darker than a 3 mm bar under the
    sensor's spot, so spin levels made narrow bars too weak to detect.
@@ -57,16 +57,16 @@
    track shows max << 16 | min of the barcode sensor).  These only scale
    the reading to 0..1000; bars are found by swing (BC_DELTA below), so
    an exact level matters much less than a sharp, low-mounted sensor.   */
-#define LINE_BC_WHITE_RAW 117  /* measured 1 Nov, LOG 34    */
-#define LINE_BC_BLACK_RAW 3345 /* measured 1 Nov, LOG 34    */
+#define LINE_BC_WHITE_RAW 117u  /* measured 1 Nov, LOG 34    */
+#define LINE_BC_BLACK_RAW 3345u /* measured 1 Nov, LOG 34    */
 /* Bars and gaps by swing (2 Nov; replaces the fixed 350 / 220 levels,
    which missed every 3 mm element on the robot: darkest ~900 on wide
    bars, 3 elements instead of 29).  A bar starts when the reading rises
    BC_DELTA above the lightest point of the gap before it, and ends when
    it falls BC_DELTA below the darkest point of the bar.  Must stay above
    the peak-to-peak sample noise (host model +-120).                    */
-#define BC_DELTA     250
-#define BC_DELTA_MIN 200 /* a bar is at least this dark */
+#define BC_DELTA     250u
+#define BC_DELTA_MIN 200u /* a bar is at least this dark */
 
 /* ---- Steering (DRIVE every 10 ms) ----------------------------------- */
 /* omega [mrad/s] = KP x err / 1000 + KD x d(err)/dt.
@@ -97,8 +97,8 @@
    before both went white, not the last one: on a curve the error fades as
    the line slides out past the outer sensor, and the car took the curve
    for a gap and drove straight off it. */
-#define LINE_EXIT_PEAK_UM  40000 /* 40 mm */
-#define LINE_RECOVER_OMEGA 900   /* mrad/s: firm, never reverses a wheel */
+#define LINE_EXIT_PEAK_UM  40000u /* 40 mm */
+#define LINE_RECOVER_OMEGA 900    /* mrad/s: firm, never reverses a wheel */
 /* Steering ramp (2 Nov): the turn command changes by at most this much per
    10 ms block, so straight -> full steering (850) takes ~0.09 s instead of
    one step.  Lower = smoother but slower to react; 2000 = off (instant). */
@@ -106,10 +106,10 @@
 #define LINE_OMEGA_STEP 2000
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */
-#define LINE_STRAIGHT_OMEGA      500    /* |omega| < 0.5 rad/s ...   */
-#define LINE_STRAIGHT_UM         50000  /* ... over the last 50 mm   */
-#define LINE_JUNCTION_REFRACT_UM 150000 /* no 2nd junction within 150 mm */
-#define LINE_ERR_VALID_SUM       80     /* L + R below this: no error */
+#define LINE_STRAIGHT_OMEGA      500     /* |omega| < 0.5 rad/s ...   */
+#define LINE_STRAIGHT_UM         50000u  /* ... over the last 50 mm   */
+#define LINE_JUNCTION_REFRACT_UM 150000u /* no 2nd junction within 150 mm */
+#define LINE_ERR_VALID_SUM       80      /* L + R below this: no error */
 
 /* ---- Barcode (FR3, A6) -----------------------------------------------
    Element widths are measured in encoder distance, so they do not depend
@@ -117,30 +117,30 @@
    come in three scales (narrow bar ~3.4 / 5.1 / 6.9 mm on screen, ~144 /
    213 / 288 mm per code when printed on A4), so the end of a code is a
    white run longer than both the quiet zone and 2.5 x its widest element. */
-#define BC_QUIET_UM       25000 /* 25 mm white before a code */
-#define BC_END_FACTOR_X10 25    /* end: white > 2.5 x widest */
+#define BC_QUIET_UM       25000u /* 25 mm white before a code */
+#define BC_END_FACTOR_X10 25u    /* end: white > 2.5 x widest */
 /* 7 Nov: and at least this.  On the robot only the 9 mm bars of "*Z*" were
    seen (3 mm bars too faint at speed): the white between them inside the
    code reached 33 mm and ended the capture after 51 mm, before the
    profile pass could look for the faint bars.  After a real code the mat
    is white, so a longer end costs nothing.                            */
-#define BC_END_MIN_UM    40000
-#define BC_MAX_LEN_UM    420000 /* 420 mm: longer = REJECT   */
-#define BC_MAX_ELEMENTS  59     /* 6 characters              */
-#define BC_COOLDOWN_UM   100000 /* 100 mm after a read       */
-#define BC_RATIO_MIN_X10 15     /* wide >= 1.5 x narrow      */
+#define BC_END_MIN_UM    40000u
+#define BC_MAX_LEN_UM    420000u /* 420 mm: longer = REJECT   */
+#define BC_MAX_ELEMENTS  59u     /* 6 characters              */
+#define BC_COOLDOWN_UM   100000u /* 100 mm after a read       */
+#define BC_RATIO_MIN_X10 15      /* wide >= 1.5 x narrow      */
 /* 14 Nov: an end bar thinner than this % of the read's median bar is a
    speck before the start or after the stop (a crease, a hair, a tape
    edge): 1.4 mm on the car beside 2.0-3.6 mm narrow bars.  It is dropped
    with the space beside it if the read does not decode as it is.      */
-#define BC_SPECK_PCT 67
+#define BC_SPECK_PCT 67u
 /* 7 Nov second try: the capture keeps the darkest reading of every
    BC_PROF_BIN_UM of travel; if the swing reading does not decode, bars
    are found again from that profile against this code's own levels
    (light = BC_PROF_WHITE_PCT percentile, dark = BC_PROF_DARK_PCT):
    first at mid-way, then at BC_PROF_LOW_DIV of the way up for faint thin
    bars.  Bars or spaces under BC_PROF_MIN_BINS bins are noise.          */
-#define BC_PROF_BIN_UM 330
+#define BC_PROF_BIN_UM 330u
 /* 7 Nov: the darkness record also keeps this much from before the first
    bar the swing reading saw ("*" starts with a narrow bar, and faint
    narrow bars do not start a capture): 25 mm = the quiet zone.       */

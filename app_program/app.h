@@ -31,6 +31,7 @@
 
 /* Build switches (timing pins, bench mode): app_config.h */
 #include "app_config.h"
+#include "app_regs.h" /* unsigned RP2040 register constants */
 
 /* ---------------------------------------------------------------------
  *  PicoCar core placement (Week 6 design review, Section 3).

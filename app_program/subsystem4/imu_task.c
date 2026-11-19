@@ -173,8 +173,9 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 
                 (void)subsystem1_telem_post(
                     COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 111u,
-                    (int32_t)(((in_w(GPIO_IN) >> S4_PIN_IMU_SDA) & 1u)
-                              | (((in_w(GPIO_IN) >> S4_PIN_IMU_SCL) & 1u)
+                    (int32_t)(((in_w(APP_REGS_GPIO_IN) >> S4_PIN_IMU_SDA) & 1u)
+                              | (((in_w(APP_REGS_GPIO_IN) >> S4_PIN_IMU_SCL)
+                                  & 1u)
                                  << 1)));
 
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_IMU_FAULT);
@@ -286,7 +287,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                 && (app_types_elapsed_ms(now_ms, still_ms)
                     >= IMU_LEVEL_SETTLE_MS))
             {
-                /* low-pass filtered (IMU_ACC_LPF_SHIFT), not single samples */
+                /* low-pass filtered (IMU_ACC_LPF_DIV), not single samples */
                 int32_t filt[3];
                 uint8_t kdx;
 

@@ -129,13 +129,13 @@ EXPORT ER drv_adc_init (void)
     uint32_t       spin;
     uint32_t       idx;
 
-    app_reset_release(RESETS_RESET_ADC | RESETS_RESET_DMA);
+    app_reset_release(APP_REGS_RESET_ADC | APP_REGS_RESET_DMA);
 
     /* Analog pins: digital input and pulls off (RP2040 datasheet 4.9.1). */
     for (idx = 0u; idx < 3u; idx++)
     {
-        out_w(GPIO(pins[idx]), GPIO_OD);
-        out_w(GPIO_CTRL(pins[idx]), GPIO_CTRL_FUNCSEL_NULL);
+        out_w(app_regs_pad(pins[idx]), APP_REGS_PAD_OD);
+        out_w(app_regs_gpio_ctrl(pins[idx]), APP_REGS_FUNCSEL_NULL);
     }
 
     out_w(ADC_CS, ADC_CS_EN);

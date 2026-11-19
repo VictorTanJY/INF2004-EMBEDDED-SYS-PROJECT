@@ -55,8 +55,8 @@ bool line_track_cal_finish (line_track_cal_t * p_cal)
         {
             /* Barcode sensor: fixed levels (line_cfg.h), never judged by
                the spin.  min/max are still kept for LOG 34.            */
-            white[chan] = (uint16_t)LINE_BC_WHITE_RAW;
-            black[chan] = (uint16_t)LINE_BC_BLACK_RAW;
+            white[chan] = LINE_BC_WHITE_RAW;
+            black[chan] = LINE_BC_BLACK_RAW;
         }
         else
         {

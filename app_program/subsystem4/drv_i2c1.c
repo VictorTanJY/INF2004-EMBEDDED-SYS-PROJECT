@@ -97,8 +97,8 @@ static void recovery_delay (void)
 static ER scl_release (void)
 {
     uint32_t const t_start = (uint32_t)app_time_us();
-    out_w(GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
-    while (0u == (in_w(GPIO_IN) & (1uL << S4_PIN_IMU_SCL)))
+    out_w(APP_REGS_GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
+    while (0u == (in_w(APP_REGS_GPIO_IN) & (1uL << S4_PIN_IMU_SCL)))
     {
         if ((uint32_t)((uint32_t)app_time_us() - t_start) >= 100u)
         {
@@ -115,20 +115,23 @@ static ER clear_bus (void)
     uint32_t const scl = 1uL << S4_PIN_IMU_SCL;
     uint8_t        idx;
     ER             err;
-    out_w(GPIO_OE_CLR, sda | scl);
-    out_w(GPIO_OUT_CLR, sda | scl);
-    out_w(GPIO_CTRL(S4_PIN_IMU_SDA), GPIO_CTRL_FUNCSEL_SIO);
-    out_w(GPIO_CTRL(S4_PIN_IMU_SCL), GPIO_CTRL_FUNCSEL_SIO);
-    out_w(GPIO(S4_PIN_IMU_SDA),
-          GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
-    out_w(GPIO(S4_PIN_IMU_SCL),
-          GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
+    out_w(APP_REGS_GPIO_OE_CLR, sda | scl);
+    out_w(APP_REGS_GPIO_OUT_CLR, sda | scl);
+    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SDA), APP_REGS_FUNCSEL_SIO);
+    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SCL), APP_REGS_FUNCSEL_SIO);
+    out_w(app_regs_pad(S4_PIN_IMU_SDA), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
+                                            | APP_REGS_PAD_PUE
+                                            | APP_REGS_PAD_SHEMITT);
+    out_w(app_regs_pad(S4_PIN_IMU_SCL), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
+                                            | APP_REGS_PAD_PUE
+                                            | APP_REGS_PAD_SHEMITT);
     err = scl_release();
-    if ((E_OK == err) && (0u == (in_w(GPIO_IN) & sda)))
+    if ((E_OK == err) && (0u == (in_w(APP_REGS_GPIO_IN) & sda)))
     {
-        for (idx = 0u; (idx < 9u) && (0u == (in_w(GPIO_IN) & sda)); idx++)
+        for (idx = 0u; (idx < 9u) && (0u == (in_w(APP_REGS_GPIO_IN) & sda));
+             idx++)
         {
-            out_w(GPIO_OE_SET, scl);
+            out_w(APP_REGS_GPIO_OE_SET, scl);
             recovery_delay();
             err = scl_release();
             if (err != E_OK)
@@ -139,16 +142,17 @@ static ER clear_bus (void)
         if (E_OK == err)
         {
             /* STOP: SDA rises while SCL is HIGH. */
-            out_w(GPIO_OE_SET, scl);
-            out_w(GPIO_OE_SET, sda);
+            out_w(APP_REGS_GPIO_OE_SET, scl);
+            out_w(APP_REGS_GPIO_OE_SET, sda);
             recovery_delay();
             err = scl_release();
-            out_w(GPIO_OE_CLR, sda);
+            out_w(APP_REGS_GPIO_OE_CLR, sda);
             recovery_delay();
         }
     }
-    out_w(GPIO_OE_CLR, sda | scl);
-    if ((E_OK == err) && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
+    out_w(APP_REGS_GPIO_OE_CLR, sda | scl);
+    if ((E_OK == err)
+        && ((in_w(APP_REGS_GPIO_IN) & (sda | scl)) != (sda | scl)))
     {
         err = E_IO;
     }
@@ -160,16 +164,18 @@ EXPORT ER drv_i2c1_init (void)
     /* I2C1 is not released at boot and has one owner: a full reset pulse
        also recovers a wedged controller. */
     ER bus_er;
-    set_w(RESETS_RESET, RESETS_RESET_I2C1);
+    set_w(RESETS_RESET, APP_REGS_RESET_I2C1);
     bus_er = clear_bus();
-    app_reset_release(RESETS_RESET_I2C1);
+    app_reset_release(APP_REGS_RESET_I2C1);
 
-    out_w(GPIO_CTRL(S4_PIN_IMU_SDA), GPIO_CTRL_FUNCSEL_I2C);
-    out_w(GPIO(S4_PIN_IMU_SDA),
-          GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
-    out_w(GPIO_CTRL(S4_PIN_IMU_SCL), GPIO_CTRL_FUNCSEL_I2C);
-    out_w(GPIO(S4_PIN_IMU_SCL),
-          GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
+    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SDA), APP_REGS_FUNCSEL_I2C);
+    out_w(app_regs_pad(S4_PIN_IMU_SDA), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
+                                            | APP_REGS_PAD_PUE
+                                            | APP_REGS_PAD_SHEMITT);
+    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SCL), APP_REGS_FUNCSEL_I2C);
+    out_w(app_regs_pad(S4_PIN_IMU_SCL), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
+                                            | APP_REGS_PAD_PUE
+                                            | APP_REGS_PAD_SHEMITT);
 
     out_w(IC_ENABLE, 0u);
     out_w(IC_CON, CON_MASTER);

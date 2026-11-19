@@ -59,15 +59,16 @@ EXPORT ER drv_ultrasonic_init (void)
 #if !US_PINS_FREE
     return E_NOSPT;
 #else
-    out_w(GPIO_OUT_CLR, 1uL << S5_PIN_US_TRIG);
-    out_w(GPIO_OE_SET, 1uL << S5_PIN_US_TRIG);
-    clr_w(GPIO(S5_PIN_US_TRIG), GPIO_OD);
-    out_w(GPIO_CTRL(S5_PIN_US_TRIG), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S5_PIN_US_TRIG);
+    out_w(APP_REGS_GPIO_OE_SET, 1uL << S5_PIN_US_TRIG);
+    clr_w(app_regs_pad(S5_PIN_US_TRIG), APP_REGS_PAD_OD);
+    out_w(app_regs_gpio_ctrl(S5_PIN_US_TRIG), APP_REGS_FUNCSEL_SIO);
 
-    out_w(GPIO_OE_CLR, 1uL << S5_PIN_US_ECHO);
-    out_w(GPIO(S5_PIN_US_ECHO),
-          GPIO_IE | GPIO_PDE | GPIO_SHEMITT); /* pull-down: unplugged = low */
-    out_w(GPIO_CTRL(S5_PIN_US_ECHO), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(APP_REGS_GPIO_OE_CLR, 1uL << S5_PIN_US_ECHO);
+    out_w(app_regs_pad(S5_PIN_US_ECHO),
+          APP_REGS_PAD_IE | APP_REGS_PAD_PDE
+              | APP_REGS_PAD_SHEMITT); /* pull-down: unplugged = low */
+    out_w(app_regs_gpio_ctrl(S5_PIN_US_ECHO), APP_REGS_FUNCSEL_SIO);
     return E_OK;
 #endif
 }
@@ -92,13 +93,13 @@ EXPORT void drv_ultrasonic_trigger (void)
 #endif
     gb_rise = false;
     g_echo  = 0u;
-    out_w(GPIO_OUT_SET, 1uL << S5_PIN_US_TRIG);
+    out_w(APP_REGS_GPIO_OUT_SET, 1uL << S5_PIN_US_TRIG);
     t_start = app_time_us();
     while ((UW)(app_time_us() - t_start) < 12u)
     {
         ; /* >= 10 us (datasheet) */
     }
-    out_w(GPIO_OUT_CLR, 1uL << S5_PIN_US_TRIG);
+    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S5_PIN_US_TRIG);
 }
 
 EXPORT bool drv_ultrasonic_take (uint32_t * p_width_us)

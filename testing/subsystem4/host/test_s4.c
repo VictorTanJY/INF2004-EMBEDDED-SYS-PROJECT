@@ -45,9 +45,9 @@ static uint8_t    g_ev;
 static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
                        int32_t out[3])
 {
-    float64_t const time_s  = theta * M_PI / 180.0;
-    float64_t const pos     = phi * M_PI / 180.0;
-    float64_t       fwd     = 1000.0 * sin(time_s) + a_lin / 9.807;
+    float64_t const time_s  = (theta * M_PI) / 180.0;
+    float64_t const pos     = (phi * M_PI) / 180.0;
+    float64_t       fwd     = (1000.0 * sin(time_s)) + (a_lin / 9.807);
     float64_t       left    = 1000.0 * cos(time_s) * sin(pos);
     float64_t       up_mg   = 1000.0 * cos(time_s) * cos(pos);
     float64_t       body[3] = {0.0, 0.0, 0.0};
@@ -84,11 +84,11 @@ static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
 static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
                        float64_t height)
 {
-    if ((x_val < start) || (x_val > start + len))
+    if ((x_val < start) || (x_val > (start + len)))
     {
         return 0.0;
     }
-    return 0.5 * height * (1.0 - cos(2.0 * M_PI * (x_val - start) / len));
+    return 0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
 }
 
 /* Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */
@@ -104,10 +104,11 @@ static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
     *p_ends   = 0;
     for (x_val = 0.0; x_val < 1500.0; x_val += 3.0)
     {
-        float64_t theta = atan((z_of(x_val + len, 300.0, len_mm, h_mm)
-                                - z_of(x_val, 300.0, len_mm, h_mm))
-                               / len)
-                          * 180.0 / M_PI;
+        float64_t theta = (atan((z_of(x_val + len, 300.0, len_mm, h_mm)
+                                 - z_of(x_val, 300.0, len_mm, h_mm))
+                                / len)
+                           * 180.0)
+                          / M_PI;
 
         g_ev = 0u;
         step(theta, 0.0, 0.0, 300, 3000, 0);
@@ -141,8 +142,8 @@ static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
     for (x_val = 0.0; x_val < 1200.0; x_val += 1.0)
     {
         float64_t z_val = z_of(x_val, 300.0, len_mm, h_mm);
-        float64_t roll  = side * asin(z_val / period) * 180.0 / M_PI;
-        float64_t theta = -atan((0.5 * z_val) / len) * 180.0 / M_PI;
+        float64_t roll  = (side * asin(z_val / period) * 180.0) / M_PI;
+        float64_t theta = (-atan((0.5 * z_val) / len) * 180.0) / M_PI;
 
         g_ev = 0u;
         step(theta, roll, 0.0, 100, 1000, 0);
@@ -314,7 +315,7 @@ int main (void)
         for (kdx = 0; kdx < 400; kdx++)
         {
             float64_t val_a =
-                (0 == (kdx / 50) % 2) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
+                (0 == ((kdx / 50) % 2)) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
             value += (int32_t)(val_a / 100.0);
             if (value < 0)
             {
@@ -401,7 +402,7 @@ int main (void)
         int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
-            step(0.0, 0.0, 0.0, (kdx < 2) ? 200 * (kdx + 1) : 400, 4000, 0);
+            step(0.0, 0.0, 0.0, (kdx < 2) ? (200 * (kdx + 1)) : 400, 4000, 0);
         }
     }
     {
@@ -601,7 +602,7 @@ int main (void)
             (uint16_t)(real_max + 5u); /* a hump measured meanwhile */
         imu_core_hump_drop(&g_ic);     /* floor again */
         imu_core_hump_restore(&g_ic);  /* nothing saved: keeps it */
-        CHECK("S4-H05e", g_ic.hump_max_mm == real_max + 5u);
+        CHECK("S4-H05e", g_ic.hump_max_mm == (real_max + 5u));
     }
 
     /* S4-H06: level calibration removes a 3 deg mounting offset */
@@ -657,13 +658,13 @@ int main (void)
         int32_t diff;
         for (diff = 0; diff < 360; diff += 5)
         {
-            float64_t radius = diff * M_PI / 180.0;
+            float64_t radius = (diff * M_PI) / 180.0;
             int16_t   mag[3] = {0, 0, 0};
             /* field of 400 counts; hard-iron offset (+120, -80, +30) */
             mag[IMU_AXIS_FWD] =
-                (int16_t)((400.0 * cos(radius)) * IMU_SIGN_FWD + 120);
+                (int16_t)(((400.0 * cos(radius)) * IMU_SIGN_FWD) + 120);
             mag[IMU_AXIS_LEFT] =
-                (int16_t)((400.0 * sin(radius)) * IMU_SIGN_LEFT - 80);
+                (int16_t)(((400.0 * sin(radius)) * IMU_SIGN_LEFT) - 80);
             mag[IMU_AXIS_UP] = 30;
             imu_core_cal_mag_sample(&g_ic, mag);
         }
@@ -672,8 +673,8 @@ int main (void)
             int16_t mag[3] = {0, 0, 0};
             int32_t accel[3];
             /* facing east: north is to the left */
-            mag[IMU_AXIS_FWD]  = (int16_t)(0 * IMU_SIGN_FWD + 120);
-            mag[IMU_AXIS_LEFT] = (int16_t)(400 * IMU_SIGN_LEFT - 80);
+            mag[IMU_AXIS_FWD]  = (int16_t)((0 * IMU_SIGN_FWD) + 120);
+            mag[IMU_AXIS_LEFT] = (int16_t)((400 * IMU_SIGN_LEFT) - 80);
             mag[IMU_AXIS_UP]   = 30;
             accel_for(0.0, 0.0, 0.0, accel);
             (void)imu_core_step(&g_ic, accel, mag, 0, 0, 0, 10u, 10u);

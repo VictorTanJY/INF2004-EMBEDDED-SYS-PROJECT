@@ -23,7 +23,7 @@
 #define S5_PIN_SERVO   15u /* PWM7 B, 50 Hz */
 
 #define S5_MISSION_TICK_MS 100 /* tk_rcv_mbf timeout (supervision) */
-#define S5_RANGE_PERIOD_MS 60  /* range_cyc: HC-SR04 minimum cycle */
+#define S5_RANGE_PERIOD_MS 60u /* range_cyc: HC-SR04 minimum cycle */
 
 /* ---------------------------------------------------------------------
  *  IF-06  mbf_mission: every event to MissionTask (owned by S5).

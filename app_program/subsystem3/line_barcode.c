@@ -150,7 +150,7 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
     }
     for (; idx < n_bins; idx++)
     {
-        bool const b_now = b_black ? (p_prof[idx] + hyst >= thr)
+        bool const b_now = b_black ? ((p_prof[idx] + hyst) >= thr)
                                    : (p_prof[idx] >= (uint16_t)(thr + hyst));
 
         if ((b_now != b_black) && (run > 0u))
@@ -567,10 +567,10 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
                    oldest first (faint leading bars) */
                 for (kdx = 0u; kdx < p_bc->pre_n; kdx++)
                 {
-                    p_bc->prof[kdx] =
-                        p_bc->pre[(uint16_t)((p_bc->pre_i + BC_PRE_BINS
-                                              - p_bc->pre_n + kdx)
-                                             % BC_PRE_BINS)];
+                    p_bc->prof[kdx] = p_bc->pre[(
+                        uint16_t)((((p_bc->pre_i + BC_PRE_BINS) - p_bc->pre_n)
+                                   + kdx)
+                                  % BC_PRE_BINS)];
                 }
                 p_bc->prof[p_bc->pre_n] = norm;
                 p_bc->prof_n            = (uint16_t)(p_bc->pre_n + 1u);

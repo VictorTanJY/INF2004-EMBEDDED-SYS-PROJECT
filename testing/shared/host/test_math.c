@@ -40,20 +40,20 @@ static void test_pack (void)
     for (idx = 0u; idx < sizeof(widths); idx++)
     {
         uint8_t const width = widths[idx];
-        int64_t const half  = (int64_t)1 << (width - 1u);
+        int64_t const half  = (int64_t)(UINT64_C(1) << (width - 1u));
         int64_t       value;
 
         /* signed: exact inside the range, saturated outside it */
-        for (value = -half - 3; value <= half + 3;
-             value += (width <= 12u) ? 1 : (half / 7 + 1))
+        for (value = -half - 3; value <= (half + 3);
+             value += (width <= 12u) ? 1 : ((half / 7) + 1))
         {
             int32_t const input =
                 (int32_t)((value < INT32_MIN)
                               ? INT32_MIN
                               : ((value > INT32_MAX) ? INT32_MAX : value));
-            int64_t const  exp = (input < -half)
-                                     ? -half
-                                     : ((input > half - 1) ? half - 1 : input);
+            int64_t const exp =
+                (input < -half) ? -half
+                                : ((input > (half - 1)) ? (half - 1) : input);
             uint32_t const factor = app_pack_off_s(input, width);
 
             if ((factor > app_pack_mask(width))
@@ -117,9 +117,10 @@ static void test_pack (void)
         while (count < 100u)
         {
             bit_widths[count] = (uint8_t)(1 + (rand() % 32));
-            vals[count]       = ((uint32_t)rand() << 16 ^ (uint32_t)rand())
+            vals[count]       = (((uint32_t)rand() << 16) ^ (uint32_t)rand())
                                 & app_pack_mask(bit_widths[count]);
-            if ((uint32_t)writer.bits + bit_widths[count] > sizeof(buf) * 8u)
+            if (((uint32_t)writer.bits + bit_widths[count])
+                > (sizeof(buf) * 8u))
             {
                 break;
             }
@@ -155,7 +156,7 @@ int main (void)
     for (val_a = -72000; val_a <= 72000; val_a += 7)
     {
         int32_t ref =
-            (int32_t)lround(sin((float64_t)val_a * M_PI / 18000.0) * 32768.0);
+            (int32_t)lround(sin(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
         int32_t got = app_math_sin_q15(val_a);
         int32_t diff;
 
@@ -168,7 +169,8 @@ int main (void)
         {
             worst_sin = diff;
         }
-        ref = (int32_t)lround(cos((float64_t)val_a * M_PI / 18000.0) * 32768.0);
+        ref =
+            (int32_t)lround(cos(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
         if (ref > 32767)
         {
             ref = 32767;
@@ -190,8 +192,9 @@ int main (void)
         {
             for (y_start = -3000; y_start <= 3000; y_start += 41)
             {
-                float64_t ref  = atan2((float64_t)y_start, (float64_t)x_start)
-                                 * 18000.0 / M_PI;
+                float64_t ref =
+                    (atan2((float64_t)y_start, (float64_t)x_start) * 18000.0)
+                    / M_PI;
                 float64_t diff = fabs(
                     (float64_t)app_math_atan2_cdeg(y_start, x_start) - ref);
 

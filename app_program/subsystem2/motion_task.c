@@ -93,16 +93,16 @@ EXPORT void motion_task_test_timing (subsystem2_test_timing_t * p_out)
 static void timing_pin_init (void)
 {
 #if APP_TIMING_PINS
-    out_w(GPIO_OUT_CLR, 1uL << S2_PIN_TIMING);
-    out_w(GPIO_OE_SET, 1uL << S2_PIN_TIMING);
-    out_w(GPIO_CTRL(S2_PIN_TIMING), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S2_PIN_TIMING);
+    out_w(APP_REGS_GPIO_OE_SET, 1uL << S2_PIN_TIMING);
+    out_w(app_regs_gpio_ctrl(S2_PIN_TIMING), APP_REGS_FUNCSEL_SIO);
 #endif
 }
 
 static void timing_pin_toggle (void)
 {
 #if APP_TIMING_PINS
-    out_w(GPIO_OUT_XOR, 1uL << S2_PIN_TIMING);
+    out_w(APP_REGS_GPIO_OUT_XOR, 1uL << S2_PIN_TIMING);
 #endif
 }
 

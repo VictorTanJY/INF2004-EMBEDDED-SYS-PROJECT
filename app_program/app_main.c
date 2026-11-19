@@ -53,7 +53,7 @@ EXPORT ID app_main_start_task (FP entry, PRI pri, UW prc, char const * p_name)
     ctsk.tskatr  = TA_HLNG          /* written in a high-level language (C) */
                    | TA_RNG3;       /* runs at user protection level */
 #if TK_SUPPORT_SMP
-    if (prc != 0)
+    if (prc != 0u)
     {
         ctsk.tskatr |= TA_ASSPRC; /* honour the affinity below */
         ctsk.assprc = prc;        /* which core(s) it may run on */

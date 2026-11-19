@@ -55,6 +55,29 @@ uint32_t app_math_isqrt32 (uint32_t value)
     return result;
 }
 
+#define Q30_ONE 1073741824 /* 2^30: 1.0 in Q30 */
+
+/*!
+ * @brief Divide by 2^30, rounding toward minus infinity.
+ *
+ * Gives exactly the result of an arithmetic right shift by 30 bits (the
+ * fixed-point rescale after a Q30 multiply) without applying a bitwise
+ * operator to signed data (Barr-C 5.3b).
+ *
+ * @param[in] value A Q60 product.
+ * @return value / 2^30, rounded down.
+ */
+static int64_t q30_floor (int64_t value)
+{
+    int64_t quot = value / Q30_ONE;
+
+    if ((value < 0) && ((quot * Q30_ONE) != value))
+    {
+        quot--;
+    }
+    return quot;
+}
+
 /*
  * atan(z) for 0 <= z <= 1, z in Q30, result in cdeg.  Abramowitz & Stegun
  * 4.4.49: atan(z) = z (a1 + a3 z^2 + a5 z^4 + a7 z^6 + a9 z^8), |err| <= 1e-5
@@ -63,15 +86,15 @@ uint32_t app_math_isqrt32 (uint32_t value)
 static int32_t atan_unit_cdeg (int64_t ratio)
 {
     int64_t const pi_q30   = 3373259426; /* pi * 2^30 */
-    int64_t const ratio_sq = (ratio * ratio) >> 30;
+    int64_t const ratio_sq = q30_floor(ratio * ratio);
     int64_t       poly;
 
-    poly = 22371518;                               /*  0.0208351 */
-    poly = -91410863 + ((ratio_sq * poly) >> 30);  /* -0.0851330 */
-    poly = 193424926 + ((ratio_sq * poly) >> 30);  /*  0.1801410 */
-    poly = -354656388 + ((ratio_sq * poly) >> 30); /* -0.3302995 */
-    poly = 1073597943 + ((ratio_sq * poly) >> 30); /*  0.9998660 */
-    poly = (ratio * poly) >> 30;                   /* atan(z), Q30 rad, >= 0 */
+    poly = 22371518;                                /*  0.0208351 */
+    poly = -91410863 + q30_floor(ratio_sq * poly);  /* -0.0851330 */
+    poly = 193424926 + q30_floor(ratio_sq * poly);  /*  0.1801410 */
+    poly = -354656388 + q30_floor(ratio_sq * poly); /* -0.3302995 */
+    poly = 1073597943 + q30_floor(ratio_sq * poly); /*  0.9998660 */
+    poly = q30_floor(ratio * poly);                 /* atan(z), Q30 rad, >= 0 */
 
     /* rad -> cdeg: x 18000 / pi, rounded */
     return (int32_t)(((poly * 18000) + (pi_q30 / 2)) / pi_q30);
@@ -153,14 +176,14 @@ int32_t app_math_sin_q15 (int32_t cdeg)
 
     /* t = a * pi / 18000 in Q30: pi / 18000 * 2^30 = 187406.71 */
     term    = ((int64_t)angle * 18740671) / 100;
-    term_sq = (term * term) >> 30;
+    term_sq = q30_floor(term * term);
 
     /* Horner: t (1 - t2/6 (1 - t2/20 (1 - t2/42 (1 - t2/72)))) */
-    sine = ((int64_t)1 << 30) - (term_sq / 72);
-    sine = ((int64_t)1 << 30) - (((term_sq * sine) >> 30) / 42);
-    sine = ((int64_t)1 << 30) - (((term_sq * sine) >> 30) / 20);
-    sine = ((int64_t)1 << 30) - (((term_sq * sine) >> 30) / 6);
-    sine = (term * sine) >> 30; /* Q30 */
+    sine = Q30_ONE - (term_sq / 72);
+    sine = Q30_ONE - (q30_floor(term_sq * sine) / 42);
+    sine = Q30_ONE - (q30_floor(term_sq * sine) / 20);
+    sine = Q30_ONE - (q30_floor(term_sq * sine) / 6);
+    sine = q30_floor(term * sine); /* Q30 */
 
     sine = (sine + ((sine >= 0) ? 16384 : -16384)) / 32768; /* Q15, rounded */
     if (sine > 32767)

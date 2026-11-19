@@ -105,7 +105,7 @@ static void skip (app_pack_reader_t * p_r, uint32_t count)
 static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
                        char const * p_hex)
 {
-    char     text[2 * COMMS_FRAME_MAX + 1];
+    char     text[(2u * COMMS_FRAME_MAX) + 1u];
     uint16_t idx;
 
     for (idx = 0u; idx < count; idx++)
@@ -569,7 +569,7 @@ static void test_ring (void)
           (0u == ring.count) && !comms_proto_ring_peek(&ring, &rec, &seq));
     comms_proto_ring_pop(&ring); /* pop on empty is harmless */
     CHECK("S1-H15", 0u == ring.count);
-    CHECK("S1-H15", sizeof(ring) <= (COMMS_RING_LEN * 9u) + 4u);
+    CHECK("S1-H15", sizeof(ring) <= ((COMMS_RING_LEN * 9u) + 4u));
 }
 
 static int32_t run_button (char const * p_pattern, uint16_t long_ms,

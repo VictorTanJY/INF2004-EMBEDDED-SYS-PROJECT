@@ -23,19 +23,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum
-{
-    CODE39_OK = 0,
-    CODE39_NOT_BARCODE =
-        1, /* fewer than 9 elements (e.g. a crossing line): ignore */
-    CODE39_ERR_COUNT      = 2, /* element count is not 10 k - 1     */
-    CODE39_ERR_RATIO      = 3, /* wide and narrow not separable       */
-    CODE39_ERR_PATTERN    = 4, /* a character is not in the table     */
-    CODE39_ERR_START_STOP = 5, /* not framed by '*' in either direction */
-    CODE39_ERR_LENGTH     = 6, /* not exactly one data character      */
-    CODE39_ERR_TOO_LONG   = 7, /* physical length guard (capture)     */
-    CODE39_ERR_TOO_MANY   = 8  /* too many elements (capture)         */
-} code39_result_t;
+typedef uint8_t code39_result_t; /* one of the constants below */
+#define CODE39_OK 0u
+#define CODE39_NOT_BARCODE \
+    1u /* fewer than 9 elements (e.g. a crossing line): ignore */
+#define CODE39_ERR_COUNT      2u /* element count is not 10 k - 1 */
+#define CODE39_ERR_RATIO      3u /* wide and narrow not separable */
+#define CODE39_ERR_PATTERN    4u /* a character is not in the table */
+#define CODE39_ERR_START_STOP 5u /* not framed by '*' in either direction */
+#define CODE39_ERR_LENGTH     6u /* not exactly one data character */
+#define CODE39_ERR_TOO_LONG   7u /* physical length guard (capture) */
+#define CODE39_ERR_TOO_MANY   8u /* too many elements (capture) */
 
 #define CODE39_MAX_CHARS 6u
 

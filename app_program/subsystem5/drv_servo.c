@@ -11,34 +11,34 @@
 #define SERVO_SLICE 7u
 static inline uint32_t pwm_ch_csr (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x00u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
 }
 
 static inline uint32_t pwm_ch_div (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x04u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
 }
 
 static inline uint32_t pwm_ch_cc (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x0Cu;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
 }
 
 static inline uint32_t pwm_ch_top (uint32_t slice)
 {
-    return PWM_BASE + (0x14u * slice) + 0x10u;
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
 }
 
 EXPORT ER drv_servo_init (void)
 {
-    app_reset_release(RESETS_RESET_PWM);
+    app_reset_release(APP_REGS_RESET_PWM);
     out_w(pwm_ch_csr(SERVO_SLICE), 0u);
     out_w(pwm_ch_div(SERVO_SLICE), 125uL << 4);
     out_w(pwm_ch_top(SERVO_SLICE), 19999u);
     drv_servo_set_deg(OBST_SERVO_CENTRE_DEG);
-    out_w(pwm_ch_csr(SERVO_SLICE), PWM_CH_CSR_EN);
-    clr_w(GPIO(S5_PIN_SERVO), GPIO_OD);
-    out_w(GPIO_CTRL(S5_PIN_SERVO), GPIO_CTRL_FUNCSEL_PWM);
+    out_w(pwm_ch_csr(SERVO_SLICE), APP_REGS_PWM_CSR_EN);
+    clr_w(app_regs_pad(S5_PIN_SERVO), APP_REGS_PAD_OD);
+    out_w(app_regs_gpio_ctrl(S5_PIN_SERVO), APP_REGS_FUNCSEL_PWM);
     return (19999u == in_w(pwm_ch_top(SERVO_SLICE))) ? E_OK : E_IO;
 }
 

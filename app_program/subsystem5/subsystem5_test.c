@@ -69,8 +69,8 @@ EXPORT void subsystem5_test_run (void)
               (INT)(snap_b.pings - snap_a.pings), (INT)T_PING_WIN_MS,
               (INT)T_PINGS);
     TEST_CHECK("S5-U08",
-               ((snap_b.pings - snap_a.pings) + 1u >= T_PINGS)
-                   && ((snap_b.pings - snap_a.pings) <= T_PINGS + 1u),
+               (((snap_b.pings - snap_a.pings) + 1u) >= T_PINGS)
+                   && ((snap_b.pings - snap_a.pings) <= (T_PINGS + 1u)),
                "ultrasonic pings every 60 ms");
 
     /* ---- S5-U09: one range against the object in front -------------- */

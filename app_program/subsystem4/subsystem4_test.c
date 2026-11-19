@@ -18,7 +18,7 @@
 #if APP_TEST
 
 #define WD_CTRL_REG  0x40058000u
-#define SIO_GPIO_OUT (SIO_BASE + 0x010u)
+#define SIO_GPIO_OUT (APP_REGS_SIO_BASE + 0x010u)
 
 #define T_NFR8_US    20000u /* NFR8: brake within 20 ms of a fault       */
 #define T_LEVEL_CDEG 500    /* level bench: |pitch|, |roll| <= 5.0 deg   */
@@ -31,14 +31,14 @@ static bool brake_pins_low (void)
                     | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
 
     return (0u == (in_w(SIO_GPIO_OUT) & mask))
-           && (GPIO_CTRL_FUNCSEL_SIO
-               == (in_w(GPIO_CTRL(S2_PIN_MOT_L_A)) & 0x1Fu))
-           && (GPIO_CTRL_FUNCSEL_SIO
-               == (in_w(GPIO_CTRL(S2_PIN_MOT_L_B)) & 0x1Fu))
-           && (GPIO_CTRL_FUNCSEL_SIO
-               == (in_w(GPIO_CTRL(S2_PIN_MOT_R_A)) & 0x1Fu))
-           && (GPIO_CTRL_FUNCSEL_SIO
-               == (in_w(GPIO_CTRL(S2_PIN_MOT_R_B)) & 0x1Fu));
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_B)) & 0x1Fu))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_A)) & 0x1Fu))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_B)) & 0x1Fu));
 }
 
 static int32_t iabs (int32_t value)
@@ -153,12 +153,13 @@ EXPORT void subsystem4_test_run (void)
                   (INT)elapsed, (INT)mission.state, (INT)pre,
                   (INT)(subsystem2_estop_latched() ? 1 : 0),
                   (INT)subsystem4_get_latched());
-        TEST_CHECK("S4-U09",
-                   b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)
-                       && (GPIO_CTRL_FUNCSEL_PWM
-                           == (in_w(GPIO_CTRL(S2_PIN_MOT_L_A)) & 0x1Fu)),
-                   "Reset clears the latch, PWM reconnected, mission back to "
-                   "IDLE (if it was IDLE)");
+        TEST_CHECK(
+            "S4-U09",
+            b_ok && (MOTION_ST_IDLE_BRAKED == odom.state)
+                && (APP_REGS_FUNCSEL_PWM
+                    == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu)),
+            "Reset clears the latch, PWM reconnected, mission back to "
+            "IDLE (if it was IDLE)");
     }
 
     TEST_SUMMARY("subsystem4");

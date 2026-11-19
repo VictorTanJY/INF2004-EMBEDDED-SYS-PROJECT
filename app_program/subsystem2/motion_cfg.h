@@ -33,7 +33,7 @@
 #define MOTION_V_MAX_MM_S       450  /* set-point clamp          */
 #define MOTION_ACCEL_MM_S2      800  /* MOVE / TURN profile      */
 #define MOTION_STOP_DECEL_MM_S2 1000 /* STOPPING ramp, ~1 m/s^2  */
-#define MOTION_DRIVE_TIMEOUT_MS 100  /* no DRIVE -> stop (6.1)   */
+#define MOTION_DRIVE_TIMEOUT_MS 100u /* no DRIVE -> stop (6.1)   */
 #define MOTION_DUTY_MAX         1000 /* per mille                */
 
 /* ---- Wheel-speed PID, duty in per mille.  MEASURE (NFR5): tune so the
@@ -53,14 +53,14 @@
 /* ---- Manoeuvres ----------------------------------------------------- */
 #define MOTION_POS_TOL_UM        2000 /* MOVE done within 2 mm    */
 #define MOTION_ANG_TOL_CDEG      100  /* TURN done within 1 deg   */
-#define MOTION_SETTLE_MS         100  /* brake time before DONE   */
+#define MOTION_SETTLE_MS         100u /* brake time before DONE   */
 #define MOTION_STRAIGHT_K        40   /* mrad/s per mm of wheel difference */
-#define MOTION_TIMEOUT_MARGIN_MS 500  /* timeout = 2 x expected + margin */
+#define MOTION_TIMEOUT_MARGIN_MS 500u /* timeout = 2 x expected + margin */
 
 /* ---- Faults --------------------------------------------------------- */
-#define MOTION_STALL_DUTY       600 /* |duty| above this ...    */
-#define MOTION_STALL_SPEED_MM_S 10  /* ... with |v| below this  */
-#define MOTION_STALL_MS         300 /* ... for this long = STALL */
+#define MOTION_STALL_DUTY       600  /* |duty| above this ...    */
+#define MOTION_STALL_SPEED_MM_S 10   /* ... with |v| below this  */
+#define MOTION_STALL_MS         300u /* ... for this long = STALL */
 /* More counts in one 10 ms cycle than the motor can produce = glitch
    (ENC_FAULT, report only): 3 x the counts at MOTION_V_MAX_MM_S.
    counts per 10 ms = v [mm/s] x CPR x 10 / circumference [um].        */

@@ -130,8 +130,8 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
 static int32_t enc_of (int32_t width)
 {
     float64_t counts =
-        g_pl.pos_um[width] * MOTION_COUNTS_PER_REV / MOTION_WHEEL_CIRC_UM;
-    int32_t cnt  = (int32_t)(counts >= 0 ? counts + 0.5 : counts - 0.5);
+        (g_pl.pos_um[width] * MOTION_COUNTS_PER_REV) / MOTION_WHEEL_CIRC_UM;
+    int32_t cnt  = (int32_t)((counts >= 0) ? (counts + 0.5) : (counts - 0.5));
     int32_t sign = (0 == width) ? MOTION_ENC_SIGN_L : MOTION_ENC_SIGN_R;
 
     return (int32_t)((uint32_t)(cnt * sign) + (uint32_t)g_pl.enc_offset);
@@ -223,7 +223,7 @@ static void test_pack_s2 (void)
             b_ok = false;
         }
         cmd.src  = 0u;
-        cmd.cmd  = (uint8_t)((kdx & 1) ? MOTION_CMD_TURN : MOTION_CMD_MOVE);
+        cmd.cmd  = (0 != (kdx % 2)) ? MOTION_CMD_TURN : MOTION_CMD_MOVE;
         cmd.arg0 = move[kdx][0];
         cmd.arg1 = move[kdx][1];
         motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
@@ -347,8 +347,8 @@ int main (void)
         CHECK("S2-H02", abs(odom.dist_mm - 1000) <= 20);
         CHECK("S2-H02",
               (abs(odom.x_mm - 1000) <= 20) && (abs(odom.y_mm) <= 30));
-        CHECK("S2-H02", elapsed < 2u * motion_core_expected_ms(1000000, 300)
-                                      + MOTION_TIMEOUT_MARGIN_MS);
+        CHECK("S2-H02", elapsed < ((2u * motion_core_expected_ms(1000000, 300))
+                                   + MOTION_TIMEOUT_MARGIN_MS));
         CHECK("S2-H02", (10u == odom.last_done_seq) && (1u == odom.done_count)
                             && (MOTION_ST_IDLE_BRAKED == odom.state));
         printf("MOVE 1000 mm: %d mm in %u ms (x %d, y %d)\n",
@@ -444,13 +444,14 @@ int main (void)
     reset_all(0.03);
     (void)cmd(MOTION_SRC_MISSION, 50, MOTION_CMD_MOVE, 500, 300);
     {
-        uint32_t limit   = 2u * motion_core_expected_ms(500000, 300)
+        uint32_t limit   = (2u * motion_core_expected_ms(500000, 300))
                            + MOTION_TIMEOUT_MARGIN_MS;
         uint32_t elapsed = run_until_event(MOTION_EV_FAILED, 20000u);
 
         CHECK("S2-H08",
               (1 == g_ev[MOTION_EV_FAILED]) && (0 == g_ev[MOTION_EV_DONE]));
-        CHECK("S2-H08", (elapsed >= limit - 20u) && (elapsed <= limit + 20u));
+        CHECK("S2-H08",
+              (elapsed >= (limit - 20u)) && (elapsed <= (limit + 20u)));
         CHECK("S2-H08", (50u == g_mc.last_fail_seq)
                             && (MOTION_ST_IDLE_BRAKED == g_mc.state));
     }

@@ -56,7 +56,8 @@ static inline uint32_t app_pack_sat_u (uint32_t value, uint8_t width)
    -2^(width-1) .. 2^(width-1) - 1. */
 static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
 {
-    int64_t const half    = (int64_t)1 << (width - 1u);
+    /* NOTE: width <= 32, so 2^(width - 1) <= 2^31 fits int64_t. */
+    int64_t const half    = (int64_t)(UINT64_C(1) << (width - 1u));
     int64_t       clamped = (int64_t)value;
 
     if (clamped < -half)
@@ -77,7 +78,8 @@ static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
 /* Offset-binary field -> signed value. */
 static inline int32_t app_pack_unoff_s (uint32_t field, uint8_t width)
 {
-    int64_t const half = (int64_t)1 << (width - 1u);
+    /* NOTE: width <= 32, so 2^(width - 1) <= 2^31 fits int64_t. */
+    int64_t const half = (int64_t)(UINT64_C(1) << (width - 1u));
 
     return (int32_t)((int64_t)(field & app_pack_mask(width)) - half);
 }
@@ -90,8 +92,9 @@ static inline int32_t app_pack_wrap_diff (uint32_t lhs, uint32_t rhs,
     uint32_t const diff = (lhs - rhs) & app_pack_mask(width);
     uint32_t const half = 1uL << (width - 1u);
 
-    return (diff >= half) ? (int32_t)((int64_t)diff - ((int64_t)1 << width))
-                          : (int32_t)diff;
+    return (diff >= half)
+               ? (int32_t)((int64_t)diff - (int64_t)(UINT64_C(1) << width))
+               : (int32_t)diff;
 }
 
 /* ---- Fields in a word: value already in range (saturate first) ------ */

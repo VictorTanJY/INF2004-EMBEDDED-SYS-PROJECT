@@ -76,7 +76,7 @@ char code39_char (uint16_t pattern)
 static uint32_t width_at (uint32_t const * p_w, uint16_t n_elems, uint16_t pos,
                           bool b_rev)
 {
-    return b_rev ? p_w[n_elems - 1u - pos] : p_w[pos];
+    return b_rev ? p_w[(n_elems - 1u) - pos] : p_w[pos];
 }
 
 /* The k-th widest (k = 0, 1, ...) of the elements of one kind: bars at
@@ -436,8 +436,9 @@ static void best_levels (uint32_t const * p_w, uint16_t n_elems,
         sorted[idx] = p_w[idx];
     }
     nar = median_of(sorted, n_elems);
-    wid = sorted[n_elems - 1u - ((n_elems / 3u) / 2u)]; /* median of the widest
-                                                           third (sorted) */
+    wid =
+        sorted[(n_elems - 1u) - ((n_elems / 3u) / 2u)]; /* median of the widest
+                                                         third (sorted) */
     thr = (nar + wid) / 2u;
     for (kind = 0u; kind < 2u; kind++)
     {
@@ -678,10 +679,10 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
                         uint32_t const exp_width     = expect[kdx];
                         bool const     b_expect_wide = b_wide[kdx];
 
-                        expect[kdx]               = expect[BEST_T - 1u - kdx];
-                        b_wide[kdx]               = b_wide[BEST_T - 1u - kdx];
-                        expect[BEST_T - 1u - kdx] = exp_width;
-                        b_wide[BEST_T - 1u - kdx] = b_expect_wide;
+                        expect[kdx] = expect[(BEST_T - 1u) - kdx];
+                        b_wide[kdx] = b_wide[(BEST_T - 1u) - kdx];
+                        expect[(BEST_T - 1u) - kdx] = exp_width;
+                        b_wide[(BEST_T - 1u) - kdx] = b_expect_wide;
                     }
                 }
                 /* A fit costing c2 or more changes neither result, and the

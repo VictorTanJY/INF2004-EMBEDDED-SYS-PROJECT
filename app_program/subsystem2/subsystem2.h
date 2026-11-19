@@ -18,7 +18,7 @@
 /* Task placement (TEAM.md section 4) */
 #define S2_PRI_MOTION  6 /* MotionTask, core 1 */
 #define S2_CORE_MOTION APP_CORE1
-#define S2_PERIOD_MS   10 /* motion_cyc period */
+#define S2_PERIOD_MS   10u /* motion_cyc period */
 
 /* Pins (TEAM.md section 2) */
 #define S2_PIN_MOT_L_A 8u  /* PWM4 A */

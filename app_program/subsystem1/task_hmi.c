@@ -22,8 +22,8 @@
 static void hmi_pin_init (UW pin)
 {
     (void)gpio_set_pin(pin, GPIO_MODE_IN);
-    clr_w(GPIO(pin), GPIO_PDE);
-    set_w(GPIO(pin), GPIO_PUE);
+    clr_w(app_regs_pad(pin), APP_REGS_PAD_PDE);
+    set_w(app_regs_pad(pin), APP_REGS_PAD_PUE);
 }
 
 static bool hmi_pressed (UW pin)

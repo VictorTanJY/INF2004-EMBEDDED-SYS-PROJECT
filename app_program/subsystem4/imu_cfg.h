@@ -24,16 +24,16 @@
 /* LSM303DLHC accelerometer at +-4 g, high resolution: 2 mg per LSB of the
    12-bit left-justified value (datasheet table 3).                      */
 #define IMU_ACC_MG_PER_LSB 2
-#define IMU_ACC_LPF_SHIFT  2 /* EMA, alpha = 1/4 */
+#define IMU_ACC_LPF_DIV    4 /* EMA, alpha = 1/4 */
 
 /* ---- Hump detection (FR6, FR7, Week 6 Section 6.3) ------------------- */
-#define IMU_HUMP_ON_CDEG   500    /* +5 deg: climbing          */
-#define IMU_CREST_CDEG     200    /* below +2 deg: crest       */
-#define IMU_DESC_CDEG      (-500) /* below -5 deg: descending  */
-#define IMU_FLAT_CDEG      200    /* |pitch| < 2 deg: flat     */
-#define IMU_DWELL_UM       20000  /* 20 mm of travel guards    */
-#define IMU_RAMP_UM        600000 /* climb > 600 mm = ramp     */
-#define IMU_ACC_GATE_MM_S2 500    /* |dv/dt| < 0.5 m/s^2       */
+#define IMU_HUMP_ON_CDEG   500     /* +5 deg: climbing          */
+#define IMU_CREST_CDEG     200     /* below +2 deg: crest       */
+#define IMU_DESC_CDEG      (-500)  /* below -5 deg: descending  */
+#define IMU_FLAT_CDEG      200     /* |pitch| < 2 deg: flat     */
+#define IMU_DWELL_UM       20000u  /* 20 mm of travel guards    */
+#define IMU_RAMP_UM        600000u /* climb > 600 mm = ramp     */
+#define IMU_ACC_GATE_MM_S2 500     /* |dv/dt| < 0.5 m/s^2       */
 /* Wheelbase for the short-hump geometry check, peak >= L x sin(theta max):
    distance from the drive axle to the front caster.  MEASURE.           */
 #define IMU_WHEELBASE_MM 110
@@ -46,11 +46,11 @@
    raised wheel = IMU_SIDE_LEVER_MM x sin(peak |roll|).  MEASURE the lever
    with 1 cm and 2 cm test humps under one wheel: scale it by
    measured / reported height.                                          */
-#define IMU_SIDE_ON_CDEG   300    /* 3.0 deg                   */
-#define IMU_SIDE_OFF_CDEG  150    /* 1.5 deg                   */
-#define IMU_SIDE_DWELL_UM  20000  /* 20 mm                     */
-#define IMU_SIDE_DESC_CDEG 100    /* 1 deg below the peak: descending */
-#define IMU_SIDE_MAX_UM    600000 /* longer = a side slope, not a hump */
+#define IMU_SIDE_ON_CDEG   300     /* 3.0 deg                   */
+#define IMU_SIDE_OFF_CDEG  150     /* 1.5 deg                   */
+#define IMU_SIDE_DWELL_UM  20000u  /* 20 mm                     */
+#define IMU_SIDE_DESC_CDEG 100     /* 1 deg below the peak: descending */
+#define IMU_SIDE_MAX_UM    600000u /* longer = a side slope, not a hump */
 /* 2 Nov: 117 read a 10 mm hump as 14-16 mm (5 passes, mean 15.4): 117 x 10 /
    15.4 */
 #define IMU_SIDE_LEVER_MM 76
@@ -66,7 +66,7 @@
    The angle must stay beyond IMU_TILT_ON_CDEG this long, so a start or
    stop of the wheels (the encoder acceleration in the pitch estimate,
    below) does not raise it.                                            */
-#define IMU_TILT_HOLD_MS 200
+#define IMU_TILT_HOLD_MS 200u
 /* The forward acceleration measured by the encoders is subtracted from the
    accelerometer before pitch is taken (so braking is not seen as a hill).
    Clamp it: with uncalibrated encoder counts, or wheels spinning in the
@@ -74,26 +74,26 @@
 #define IMU_ACC_COMP_MAX_MM_S2 3000 /* ~0.3 g */
 /* Lift (14 Nov): a level lift shows only while the hand accelerates the
    robot upward: the up axis reads more than the level reading.  The low-
-   pass filtered up axis (IMU_ACC_LPF_SHIFT, ~35 ms) must stay this far
+   pass filtered up axis (IMU_ACC_LPF_DIV, ~35 ms) must stay this far
    above the level calibration's mean for IMU_LIFT_HOLD_MS, on flat ground
    only (no hump or one-wheel hump in progress).  It brakes the motors
    (SAFETY_FLT_LIFT) while a run is active; LOG 77 reports every lift seen,
    idle too, and LOG 78 the largest rise while driving, to set these on
    the robot (MEASURE: lift it a few times, drive over the humps).       */
 #define IMU_LIFT_RISE_MG    250
-#define IMU_LIFT_HOLD_MS    40
+#define IMU_LIFT_HOLD_MS    40u
 #define IMU_LIFT_REARM_MG   100 /* below this again: armed for the next lift */
 #define IMU_RISE_LOG_MG     100 /* LOG 78 only for rises above this */
 #define IMU_RISE_END_MG     50  /* a rise has ended below this */
-#define IMU_I2C_FAULT_COUNT 3   /* consecutive errors        */
-#define IMU_RECOVER_SAMPLES 10  /* good samples before pitch_valid */
+#define IMU_I2C_FAULT_COUNT 3u  /* consecutive errors        */
+#define IMU_RECOVER_SAMPLES 10u /* good samples before pitch_valid */
 
 
 /* ---- Motion classification (FR8) -------------------------------------- */
 #define IMU_STATIONARY_MM_S 10
 #define IMU_TURNING_CDEG_S  3000 /* > 30 deg/s */
 #define IMU_ACCEL_MM_S2     300
-#define IMU_CLASS_HOLD_MS   200 /* minimum time between reports */
+#define IMU_CLASS_HOLD_MS   200u /* minimum time between reports */
 
 /* ---- Calibration ----------------------------------------------------- */
 #define IMU_LEVEL_MAX_SPREAD_MG 60 /* robot must stand still      */
@@ -104,7 +104,7 @@
    leaving the robot shook it by ~180 mg (LOG 58, 1 Nov).  The level is
    then taken from the low-pass filtered acceleration over the rest of
    MISSION_CAL_STILL_MS (1.5 s - 0.5 s = ~100 samples).               */
-#define IMU_LEVEL_SETTLE_MS 500
+#define IMU_LEVEL_SETTLE_MS 500u
 #define IMU_MAG_MIN_SPAN    100 /* raw counts, per axis, in the spin */
 
 /* 1: send raw acceleration, pitch and roll as LOG 100..104 once a second

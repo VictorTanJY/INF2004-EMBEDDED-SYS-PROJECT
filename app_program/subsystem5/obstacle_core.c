@@ -10,7 +10,12 @@
 #include "../app_math.h"
 
 /* other objects this close matter for clearance */
-#define OBST_NEAR_EXTRA_MM 300
+#define OBST_NEAR_EXTRA_MM 300u
+/* NOTE: OBST_DEPTH_TOL_MM and OBST_WIDTH_MAX_MM are positive int constants
+   (mission_cfg.h) also used in signed lateral arithmetic; these unsigned
+   copies, for comparisons with ranges, keep their values. */
+#define DEPTH_TOL_MM ((uint32_t)OBST_DEPTH_TOL_MM)
+#define WIDTH_MAX_MM ((uint32_t)OBST_WIDTH_MAX_MM)
 
 uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
 {
@@ -71,7 +76,7 @@ static bool usable (obstacle_core_point_t const * p_point)
 static bool same_object (obstacle_core_point_t const * p_point, uint16_t r_min)
 {
     return usable(p_point)
-           && (p_point->r_mm <= ((uint32_t)r_min + OBST_DEPTH_TOL_MM));
+           && (p_point->r_mm <= ((uint32_t)r_min + DEPTH_TOL_MM));
 }
 
 /* The obstacle = the run of points around the nearest one at its range.
@@ -288,9 +293,9 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
         if (((idx < n_fine) && (idx >= low) && (idx <= high))
             || !usable(p_point)
             || (p_point->r_mm
-                > ((uint32_t)r_min + OBST_DEPTH_TOL_MM + OBST_NEAR_EXTRA_MM))
+                > (((uint32_t)r_min + DEPTH_TOL_MM) + OBST_NEAR_EXTRA_MM))
             || ((idx >= n_fine)
-                && (p_point->r_mm <= ((uint32_t)r_min + OBST_DEPTH_TOL_MM))))
+                && (p_point->r_mm <= ((uint32_t)r_min + DEPTH_TOL_MM))))
         {
             /* not a clearance point */
         }
@@ -638,7 +643,7 @@ bool obstacle_core_edge_on_face (int32_t phi_cdeg, uint16_t r_mm,
                                  uint16_t face_mm)
 {
     /* forward distance of the echo from the axle vs the face plane */
-    int32_t const fwd = (int32_t)((((int64_t)OBST_US_AHEAD_MM + r_mm)
+    int32_t const fwd = (int32_t)((((int64_t)OBST_US_AHEAD_MM + (int64_t)r_mm)
                                    * app_math_cos_q15(phi_cdeg))
                                   / 32768);
 
@@ -813,7 +818,7 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
     /* Not enough room to get sideways before reaching the face: back up. */
     if (fwd_r > room)
     {
-        back                   = fwd_r - room + 20;
+        back                   = (fwd_r - room) + 20;
         p_steps[n_steps].kind  = OBST_STEP_MOVE;
         p_steps[n_steps].value = (int16_t)-back;
         n_steps++;
@@ -838,10 +843,10 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
        behind it). */
     /* depth (4 Nov): taken as the measured width (square), at most
        OBST_WIDTH_MAX; OBST_WIDTH_MAX when the width is not known */
-    depth = ((p_prof->w_mm > 0u) && (p_prof->w_mm <= OBST_WIDTH_MAX_MM))
+    depth = ((p_prof->w_mm > 0u) && (p_prof->w_mm <= WIDTH_MAX_MM))
                 ? (int32_t)p_prof->w_mm
                 : OBST_WIDTH_MAX_MM;
-    pass  = app_types_max_i32((int32_t)p_prof->closest_mm + back - fwd, 0)
+    pass  = app_types_max_i32(((int32_t)p_prof->closest_mm + back) - fwd, 0)
             + depth + OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM;
     p_steps[n_steps].kind  = OBST_STEP_PASS;
     p_steps[n_steps].value = (int16_t)app_types_min_i32(pass, OBST_PASS_MAX_MM);

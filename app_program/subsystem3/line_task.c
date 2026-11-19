@@ -140,11 +140,12 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
                                           ? ((widths[kdx + jdx] + 100u) / 200u)
                                           : 0u; /* 0.2 mm */
 
-                data |= ((elem > 255u)
-                             ? 255u
-                             : ((0u == elem) && ((kdx + jdx) < n_elems) ? 1u
-                                                                        : elem))
-                        << (8u * (2u - jdx));
+                data |=
+                    ((elem > 255u)
+                         ? 255u
+                         : (((0u == elem) && ((kdx + jdx) < n_elems)) ? 1u
+                                                                      : elem))
+                    << (8u * (2u - jdx));
             }
             (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
                                         LINE_LOG_BC_ELEM, (int32_t)data);
@@ -169,16 +170,16 @@ static void bc_levels_log (line_barcode_capture_t const * p_bc)
 static void timing_pin_init (void)
 {
 #if APP_TIMING_PINS
-    out_w(GPIO_OUT_CLR, 1uL << S3_PIN_TIMING);
-    out_w(GPIO_OE_SET, 1uL << S3_PIN_TIMING);
-    out_w(GPIO_CTRL(S3_PIN_TIMING), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S3_PIN_TIMING);
+    out_w(APP_REGS_GPIO_OE_SET, 1uL << S3_PIN_TIMING);
+    out_w(app_regs_gpio_ctrl(S3_PIN_TIMING), APP_REGS_FUNCSEL_SIO);
 #endif
 }
 
 static void timing_pin_toggle (void)
 {
 #if APP_TIMING_PINS
-    out_w(GPIO_OUT_XOR, 1uL << S3_PIN_TIMING);
+    out_w(APP_REGS_GPIO_OUT_XOR, 1uL << S3_PIN_TIMING);
 #endif
 }
 

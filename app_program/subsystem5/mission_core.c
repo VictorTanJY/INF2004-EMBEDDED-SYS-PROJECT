@@ -543,7 +543,7 @@ void mission_core_event (mission_core_t *            p_mc,
                         p_mc->snap.nav_map[kdx] = map[kdx];
                     }
                     log_act(p_out, MISSION_LOG_MAP_SET,
-                            (int16_t)(p_ev->data & 0xFFFF),
+                            (int16_t)((uint32_t)p_ev->data & 0xFFFFu),
                             (int16_t)((uint32_t)p_ev->data >> 16));
                 }
                 else

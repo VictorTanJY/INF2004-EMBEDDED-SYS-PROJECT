@@ -54,7 +54,7 @@
 #define OBST_ALIGN_TOL_CDEG  300
 /* after CONTINUE: no new OBSTACLE for this far */
 #define OBST_CONTINUE_IGNORE_MM 300
-#define OBST_TOO_CLOSE_RESET_MM 120
+#define OBST_TOO_CLOSE_RESET_MM 120u
 /* Event-history diagnostics (3 Nov) */
 /* bypass plan: offset mm (+ left) << 16 | pass mm */
 #define OBST_LOG_PLAN 39u

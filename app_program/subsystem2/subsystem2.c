@@ -140,12 +140,12 @@ EXPORT void subsystem2_motor_estop (void)
 #if APP_TEST
     g_estop_test_us = (uint32_t)app_time_us();
 #endif
-    out_w(GPIO_OUT_CLR, mask); /* LOW first, so no glitch HIGH  */
-    out_w(GPIO_OE_SET, mask);  /* drive the pins                 */
-    out_w(GPIO_CTRL(S2_PIN_MOT_L_A), GPIO_CTRL_FUNCSEL_SIO);
-    out_w(GPIO_CTRL(S2_PIN_MOT_L_B), GPIO_CTRL_FUNCSEL_SIO);
-    out_w(GPIO_CTRL(S2_PIN_MOT_R_A), GPIO_CTRL_FUNCSEL_SIO);
-    out_w(GPIO_CTRL(S2_PIN_MOT_R_B), GPIO_CTRL_FUNCSEL_SIO);
+    out_w(APP_REGS_GPIO_OUT_CLR, mask); /* LOW first, so no glitch HIGH  */
+    out_w(APP_REGS_GPIO_OE_SET, mask);  /* drive the pins                 */
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A), APP_REGS_FUNCSEL_SIO);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_B), APP_REGS_FUNCSEL_SIO);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_A), APP_REGS_FUNCSEL_SIO);
+    out_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_B), APP_REGS_FUNCSEL_SIO);
     EI(intsts);
 }
 

@@ -16,8 +16,9 @@
 
 #if APP_TEST
 
-#define PWM_TOP_SLICE4 (PWM_BASE + (0x14u * 4u) + 0x10u) /* PWM CH4_TOP */
-#define PIO0_CTRL_REG  0x50200000u
+#define PWM_TOP_SLICE4 \
+    (APP_REGS_PWM_BASE + (0x14u * 4u) + 0x10u) /* PWM CH4_TOP */
+#define PIO0_CTRL_REG 0x50200000u
 
 /* S2-U07: the cycle is motion_cyc (S2_PERIOD_MS).  One kernel tick of
    jitter is allowed either way between the tick interrupt on core 0 and

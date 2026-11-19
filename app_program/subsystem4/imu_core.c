@@ -124,7 +124,7 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
     {
         p_ic->lvl_spread_mg = app_types_max_i32(
             p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
-        mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / p_ic->lvl_n);
+        mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / (int64_t)p_ic->lvl_n);
     }
     fwd             = axis(mean, IMU_AXIS_FWD, IMU_SIGN_FWD);
     left            = axis(mean, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
@@ -143,8 +143,8 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
         return false; /* stuck / saturated output (2 Nov) */
     }
     p_ic->pitch0_cdeg = app_math_atan2_cdeg(
-        fwd, (int32_t)app_math_isqrt64(
-                 (uint64_t)((int64_t)left * left + (int64_t)up_mg * up_mg)));
+        fwd, (int32_t)app_math_isqrt64((uint64_t)(((int64_t)left * left)
+                                                  + ((int64_t)up_mg * up_mg))));
     p_ic->roll0_cdeg = app_math_atan2_cdeg(left, up_mg);
     p_ic->cal |= IMU_CAL_LEVEL;
     return true;
@@ -214,7 +214,7 @@ static void hump_reset (imu_core_t * p_ic)
 
 static void integrate (imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
 {
-    p_ic->h_um += ((int64_t)app_math_sin_q15(theta) * ds_um) / 32768;
+    p_ic->h_um += ((int64_t)app_math_sin_q15(theta) * (int64_t)ds_um) / 32768;
     if (p_ic->h_um > p_ic->h_peak_um)
     {
         p_ic->h_peak_um = p_ic->h_um;
@@ -531,15 +531,15 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
             p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
         }
         p_ic->acc_f[kdx] +=
-            ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / (1 << IMU_ACC_LPF_SHIFT);
+            ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / IMU_ACC_LPF_DIV;
         accel[kdx] = p_ic->acc_f[kdx] / 16;
     }
 
     /* |a| for the snapshot (14 Nov: no longer an impact check). */
-    mag_mg =
-        (int32_t)app_math_isqrt64((uint64_t)((int64_t)acc_mg[0] * acc_mg[0]
-                                             + (int64_t)acc_mg[1] * acc_mg[1]
-                                             + (int64_t)acc_mg[2] * acc_mg[2]));
+    mag_mg = (int32_t)app_math_isqrt64(
+        (uint64_t)(((int64_t)acc_mg[0] * acc_mg[0])
+                   + ((int64_t)acc_mg[1] * acc_mg[1])
+                   + ((int64_t)acc_mg[2] * acc_mg[2])));
     p_ic->prev_mag_mg = mag_mg;
     p_ic->b_have_acc  = true;
 
@@ -563,9 +563,9 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     left  = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
     up_mg = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
     p_ic->pitch_cdeg = app_math_wrap_cdeg(
-        app_math_atan2_cdeg(
-            fwd, (int32_t)app_math_isqrt64(
-                     (uint64_t)((int64_t)left * left + (int64_t)up_mg * up_mg)))
+        app_math_atan2_cdeg(fwd, (int32_t)app_math_isqrt64(
+                                     (uint64_t)(((int64_t)left * left)
+                                                + ((int64_t)up_mg * up_mg))))
         - p_ic->pitch0_cdeg);
     p_ic->roll_cdeg =
         app_math_wrap_cdeg(app_math_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
