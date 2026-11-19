@@ -47,6 +47,8 @@
 #include "../subsystem3/subsystem3.h"
 #include "../subsystem4/subsystem4.h"
 
+#define OBST_LINE_SENSORS 2u /* left and right line sensors */
+
 #define OBST_WAIT_TIMEOUT_MS 100
 #define OBST_SIDE_SERVO_DEG  75 /* PASS: look 75 deg to the obstacle's side */
 #define OBST_HOLD_K          2  /* heading hold: mrad/s per cdeg of error */
@@ -153,10 +155,12 @@ typedef struct
     uint8_t  sweep_i;       /* SEEK_SWEEP step */
     int32_t  join_h;        /* JOIN: heading held while driving back in */
     bool     b_joined;      /* the line was found: accept it in SEEK    */
-    uint8_t  scan_pass;  /* LINESCAN: 0 not started, 1 first sweep, 2 second */
-    uint8_t  scan_ph;    /* LINESCAN: LS_PH_* */
-    uint8_t  ls_seen[2]; /* per sensor: 0 not yet, 1 on, 2 on and off */
-    bool     b_ls_prev[2];  /* per sensor: on the line at the last slot  */
+    uint8_t  scan_pass; /* LINESCAN: 0 not started, 1 first sweep, 2 second */
+    uint8_t  scan_ph;   /* LINESCAN: LS_PH_* */
+    uint8_t  ls_seen[OBST_LINE_SENSORS]; /* per sensor: 0 not yet, 1 on,
+                                            OBST_LINE_SENSORS on and off */
+    bool b_ls_prev[OBST_LINE_SENSORS];   /* per sensor: on the line at the last
+                                            slot  */
     int32_t  ls_on[2];      /* heading (from scan_h0) it went on, 0.01 deg */
     int32_t  ls_off[2];     /* ... and off */
     int32_t  scan_target;   /* the line's heading: midway between them   */
@@ -1574,7 +1578,7 @@ static void slot (uint32_t now_ms, motion_types_odom_t const * p_odom)
                                               + (sign * rel)))
                                           / 10);
                         }
-                        for (idx = 0u; idx < 2u; idx++)
+                        for (idx = 0u; idx < OBST_LINE_SENSORS; idx++)
                         {
                             g_o.ls_seen[idx]   = 0u;
                             g_o.b_ls_prev[idx] = false;
@@ -1609,7 +1613,7 @@ static void slot (uint32_t now_ms, motion_types_odom_t const * p_odom)
                 }
                 else
                 {
-                    for (idx = 0u; idx < 2u; idx++)
+                    for (idx = 0u; idx < OBST_LINE_SENSORS; idx++)
                     {
                         bool const b_on =
                             ((line.sens

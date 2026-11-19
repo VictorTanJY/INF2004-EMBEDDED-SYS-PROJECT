@@ -19,6 +19,21 @@
 #include "imu_cfg.h"
 #include "safety_core.h"
 
+#define T_100_MS        10  /* 10 ms steps in 100 ms */
+#define T_150_MS        15  /* 10 ms steps in 150 ms */
+#define T_200_MS        20  /* 10 ms steps in 200 ms */
+#define T_300_MS        30  /* 10 ms steps in 300 ms */
+#define T_400_MS        40  /* 10 ms steps in 400 ms */
+#define T_600_MS        60  /* 10 ms steps in 600 ms */
+#define T_1_S           100 /* 10 ms steps in 1 s */
+#define T_2_S           200 /* 10 ms steps in 2 s */
+#define T_3_S           300 /* 10 ms steps in 3 s */
+#define T_4_S           400 /* 10 ms steps in 4 s */
+#define T_HUMP_HEIGHTS  3   /* entries of heights[] */
+#define T_FULL_TURN_DEG 360
+#define T_HB_START_MS   1000u /* supervision starts */
+#define T_HB_END_MS     1320u /* past the slowest timeout */
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -212,7 +227,7 @@ int main (void)
         float64_t const heights[3] = {15.0, 20.0, 30.0};
         int32_t         idx;
 
-        for (idx = 0; idx < 3; idx++)
+        for (idx = 0; idx < T_HUMP_HEIGHTS; idx++)
         {
             int32_t start_idx;
             int32_t end_idx;
@@ -249,7 +264,7 @@ int main (void)
 
         for (side = -1; side <= 1; side += 2)
         {
-            for (idx = 0; idx < 3; idx++)
+            for (idx = 0; idx < T_HUMP_HEIGHTS; idx++)
             {
                 int32_t   start_idx;
                 int32_t   end_idx;
@@ -274,7 +289,7 @@ int main (void)
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
-        for (kdx = 0; kdx < 200; kdx++)
+        for (kdx = 0; kdx < T_2_S; kdx++)
         {
             step(0.0, 10.0, 0.0, 0, 0, 0);
         }
@@ -288,15 +303,15 @@ int main (void)
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
-        for (kdx = 0; kdx < 100; kdx++)
+        for (kdx = 0; kdx < T_1_S; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 0);
         }
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step(0.0, 6.0, 0.0, 100, 1000, 0);
         }
-        for (kdx = 0; kdx < 100; kdx++)
+        for (kdx = 0; kdx < T_1_S; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 0);
         }
@@ -312,7 +327,7 @@ int main (void)
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
-        for (kdx = 0; kdx < 400; kdx++)
+        for (kdx = 0; kdx < T_4_S; kdx++)
         {
             float64_t val_a =
                 (0 == ((kdx / 50) % 2)) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
@@ -335,7 +350,7 @@ int main (void)
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
-        for (kdx = 0; kdx < 300; kdx++)
+        for (kdx = 0; kdx < T_3_S; kdx++)
         {
             step(8.0, 0.0, 0.0, 300, 3000, 0);
         }
@@ -350,7 +365,7 @@ int main (void)
     g_ev  = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step(35.0, 0.0, 0.0, 0, 0, 0);
         }
@@ -359,7 +374,7 @@ int main (void)
                         && !g_ic.b_tilt); /* 100 ms: not yet */
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(35.0, 0.0, 0.0, 0, 0, 0);
         }
@@ -368,7 +383,7 @@ int main (void)
     g_ev = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step(20.0, 0.0, 0.0, 0, 0, 0);
         }
@@ -377,7 +392,7 @@ int main (void)
     g_ev = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, -40.0, 0.0, 0, 0, 0);
         }
@@ -393,28 +408,28 @@ int main (void)
     g_ev  = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 0, 0, 0);
         }
     }
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, (kdx < 2) ? (200 * (kdx + 1)) : 400, 4000, 0);
         }
     }
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 15; kdx++)
+        for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step(40.0, 0.0, 0.0, 400, 4000, 0);
         }
     }
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 400, 4000, 0);
         }
@@ -429,7 +444,7 @@ int main (void)
     g_ev  = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step_up(0, 200, 2000);
         }
@@ -437,7 +452,7 @@ int main (void)
     CHECK("S4-H05", 0u == (g_ev & IMU_EV_LIFT));
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 15; kdx++)
+        for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(400, 0, 0);
         }
@@ -450,7 +465,7 @@ int main (void)
     g_ev = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step_up(0, 0, 0);
         }
@@ -458,7 +473,7 @@ int main (void)
     CHECK("S4-H05", (0u == (g_ev & IMU_EV_LIFT)) && !g_ic.b_lift);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 15; kdx++)
+        for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(400, 0, 0);
         }
@@ -472,7 +487,7 @@ int main (void)
     g_ev  = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step_up(0, 200, 2000);
         }
@@ -480,7 +495,7 @@ int main (void)
     step_up(1500, 200, 2000);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
         }
@@ -489,21 +504,21 @@ int main (void)
     step_up(1000, 200, 2000);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
         }
     }
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step_up(200, 200, 2000);
         }
     }
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
         }
@@ -522,7 +537,7 @@ int main (void)
     g_ev  = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 10; kdx++)
+        for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
         }
@@ -530,7 +545,7 @@ int main (void)
     g_ic.hump_state = IMU_HUMP_CLIMBING;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 15; kdx++)
+        for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(400, 200, 2000);
         }
@@ -545,7 +560,7 @@ int main (void)
     g_ic.lvl_up_mg = 890;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 15; kdx++)
+        for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(-110 + 300, 0, 0);
         }
@@ -569,21 +584,21 @@ int main (void)
         g_ev = 0u;
         {
             int32_t kdx;
-            for (kdx = 0; kdx < 60; kdx++)
+            for (kdx = 0; kdx < T_600_MS; kdx++)
             {
                 step(10.0, 0.0, 0.0, 300, 3000, 0);
             }
         } /* nose up in the air */
         {
             int32_t kdx;
-            for (kdx = 0; kdx < 60; kdx++)
+            for (kdx = 0; kdx < T_600_MS; kdx++)
             {
                 step(-10.0, 0.0, 0.0, 300, 3000, 0);
             }
         }
         {
             int32_t kdx;
-            for (kdx = 0; kdx < 30; kdx++)
+            for (kdx = 0; kdx < T_300_MS; kdx++)
             {
                 step(0.0, 0.0, 0.0, 300, 3000, 0);
             }
@@ -614,12 +629,12 @@ int main (void)
         int32_t accel[3];
 
         accel_for(3.0, -2.0, 0.0, accel);
-        for (kdx = 0; kdx < 100; kdx++)
+        for (kdx = 0; kdx < T_1_S; kdx++)
         {
             imu_core_cal_level_sample(&g_ic, accel);
         }
         CHECK("S4-H06", imu_core_cal_level_finish(&g_ic));
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(3.0, -2.0, 0.0, 0, 0, 0);
         }
@@ -627,7 +642,7 @@ int main (void)
               (abs(g_ic.pitch_cdeg) <= 10) && (abs(g_ic.roll_cdeg) <= 10));
         /* moving robot: calibration refused */
         imu_core_cal_level_start(&g_ic);
-        for (kdx = 0; kdx < 100; kdx++)
+        for (kdx = 0; kdx < T_1_S; kdx++)
         {
             accel_for((kdx % 2) ? 5.0 : -5.0, 0.0, 0.0, accel);
             imu_core_cal_level_sample(&g_ic, accel);
@@ -641,7 +656,7 @@ int main (void)
         accel[0] = -3997;
         accel[1] = 0;
         accel[2] = -3997;
-        for (kdx = 0; kdx < 100; kdx++)
+        for (kdx = 0; kdx < T_1_S; kdx++)
         {
             imu_core_cal_level_sample(&g_ic, accel);
         }
@@ -656,7 +671,7 @@ int main (void)
     imu_core_cal_mag_start(&g_ic);
     {
         int32_t diff;
-        for (diff = 0; diff < 360; diff += 5)
+        for (diff = 0; diff < T_FULL_TURN_DEG; diff += 5)
         {
             float64_t radius = (diff * M_PI) / 180.0;
             int16_t   mag[3] = {0, 0, 0};
@@ -687,7 +702,7 @@ int main (void)
     g_now = 0u;
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 0, 0, 0);
         }
@@ -695,7 +710,7 @@ int main (void)
     CHECK("S4-H08", IMU_MOTION_STATIONARY == g_ic.motion);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 6000);
         }
@@ -703,7 +718,7 @@ int main (void)
     CHECK("S4-H08", IMU_MOTION_TURNING == g_ic.motion);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 250, 2500, 0);
         }
@@ -712,7 +727,7 @@ int main (void)
     /* speed up then slow down, forward: 1000 mm/s^2 each way */
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 250 + (10 * kdx), 2600, 0);
         }
@@ -720,7 +735,7 @@ int main (void)
     CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 20; kdx++)
+        for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 440 - (10 * kdx), 2600, 0);
         }
@@ -731,7 +746,7 @@ int main (void)
     imu_core_init(&g_ic);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 40; kdx++)
+        for (kdx = 0; kdx < T_400_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, -20 - (10 * kdx), -1000, 0);
         }
@@ -739,7 +754,7 @@ int main (void)
     CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     {
         int32_t kdx;
-        for (kdx = 0; kdx < 30; kdx++)
+        for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, -410 + (10 * kdx), -1000, 0);
         }
@@ -758,7 +773,7 @@ int main (void)
               0u
                   == safety_core_hb_check(&hb_state, coefs,
                                           1000u)); /* starts supervision */
-        for (elapsed = 1000u; elapsed <= 1320u; elapsed += 20u)
+        for (elapsed = T_HB_START_MS; elapsed <= T_HB_END_MS; elapsed += 20u)
         {
             coefs[SAFETY_HB_MISSION]++; /* only Mission keeps running */
             mid = safety_core_hb_check(&hb_state, coefs, elapsed);

@@ -12,6 +12,8 @@
 #include <stdint.h>
 #include "../app.h"
 
+#define LSM303_AXES 3u /* X, Y, Z */
+
 #define DRV_LSM303_ADDR 0x1Du /* SA0 ("DRDY" pin) high: board default */
 
 /* E_OBJ for an unexpected identity; bus/configuration errors propagate. */

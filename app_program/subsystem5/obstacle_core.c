@@ -549,7 +549,7 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
                 uint16_t best   = OBST_RANGE_NONE;
                 int16_t  centre = OBST_SERVO_CENTRE_DEG;
 
-                for (idx = 0u; idx < 5u; idx++)
+                for (idx = 0u; idx < OBST_COARSE_PINGS; idx++)
                 {
                     if (usable(&p_s->coarse[idx])
                         && (p_s->coarse[idx].r_mm < best))

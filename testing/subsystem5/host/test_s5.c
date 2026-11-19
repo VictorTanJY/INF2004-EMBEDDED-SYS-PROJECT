@@ -19,6 +19,20 @@
 #include "mission_cfg.h"
 #include "obstacle_core.h"
 
+#define T_SIDES          2   /* left, right */
+#define T_SCAN_MAX_PINGS 60  /* a scan ends well before this */
+#define T_BOX_MIN_MM     100 /* box widths 10..20 cm */
+#define T_BOX_MAX_MM     200
+#define T_BOX_OFFSET_MM  40 /* box centre offsets */
+#define T_COL_LEFT_MM    40 /* obstacle columns -40..60 mm */
+#define T_COL_RIGHT_MM   60
+#define T_COL_SIDE_MM    60  /* obstacle columns -60, 0, 60 mm */
+#define T_CASES3         3   /* values tried per parameter */
+#define T_PROBE_PASSES   2   /* step out, step back */
+#define T_COS_VALS       3   /* entries of cos_vals[] */
+#define T_CORNER_PTS     5u  /* entries of pts[] */
+#define T_WALL_PTS       13u /* entries of pts[] */
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -395,7 +409,7 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
     int32_t minimum[2] = {0, 0};
     int32_t kdx;
 
-    for (kdx = 0; kdx < 2; kdx++)
+    for (kdx = 0; kdx < T_SIDES; kdx++)
     {
         int32_t const side = (0 == kdx) ? 1 : -1;
         int32_t       phi  = 0;
@@ -584,7 +598,7 @@ static void scan_box (box_t const * p_b, int32_t n_b,
 
     obstacle_core_scan_start(&scan);
     g_pings = 0;
-    while (!obstacle_core_scan_done(&scan) && (g_pings < 60))
+    while (!obstacle_core_scan_done(&scan) && (g_pings < T_SCAN_MAX_PINGS))
     {
         obstacle_core_scan_feed(
             &scan, ping(p_b, n_b, obstacle_core_scan_angle(&scan)));
@@ -612,9 +626,10 @@ static void test_obstacle (void)
 
     /* S5-H10: width of 10-20 cm boxes (instructor, 23 Oct) at 20 cm, centred
        and offset; model error target: within 10 % (grade A) */
-    for (width = 100; width <= 200; width += 50)
+    for (width = T_BOX_MIN_MM; width <= T_BOX_MAX_MM; width += 50)
     {
-        for (cnt = -40; cnt <= 40; cnt += 40)
+        for (cnt = -T_BOX_OFFSET_MM; cnt <= T_BOX_OFFSET_MM;
+             cnt += T_BOX_OFFSET_MM)
         {
             box_t     box = {200.0, (float64_t)width, (float64_t)cnt};
             float64_t err;
@@ -664,7 +679,7 @@ static void test_obstacle (void)
            obstacle; never CONTINUE, edges around the box. */
         int32_t col;
 
-        for (col = -40; col <= 60; col += 20)
+        for (col = -T_COL_LEFT_MM; col <= T_COL_RIGHT_MM; col += 20)
         {
             box_t box[2] = {{240.0, 150.0, (float64_t)col},
                             {170.0, 300.0, -330.0}}; /* wall 18-48 cm right */
@@ -688,7 +703,7 @@ static void test_obstacle (void)
            by half the car + the margin (the step-out leg still pings live) */
         int32_t col;
 
-        for (col = -60; col <= 60; col += 60)
+        for (col = -T_COL_SIDE_MM; col <= T_COL_SIDE_MM; col += T_COL_SIDE_MM)
         {
             box_t         box   = {200.0, 150.0, (float64_t)col};
             int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2);
@@ -868,9 +883,9 @@ static void test_obstacle (void)
         int32_t                val_a;
         int32_t                val_b2;
 
-        for (val_a = 0; val_a < 3; val_a++)
+        for (val_a = 0; val_a < T_CASES3; val_a++)
         {
-            for (val_b2 = 0; val_b2 < 3; val_b2++)
+            for (val_b2 = 0; val_b2 < T_CASES3; val_b2++)
             {
                 uint16_t  width;
                 float64_t elem;
@@ -925,11 +940,11 @@ static void test_obstacle (void)
         int32_t                val_b3;
         int32_t                cnt4;
 
-        for (val_a2 = 0; val_a2 < 3; val_a2++)
+        for (val_a2 = 0; val_a2 < T_CASES3; val_a2++)
         {
-            for (val_b3 = 0; val_b3 < 3; val_b3++)
+            for (val_b3 = 0; val_b3 < T_CASES3; val_b3++)
             {
-                for (cnt4 = 0; cnt4 < 3; cnt4++)
+                for (cnt4 = 0; cnt4 < T_CASES3; cnt4++)
                 {
                     float64_t const omega = widths[val_a2];
                     float64_t const coef  = cos_vals[val_b3];
@@ -945,7 +960,7 @@ static void test_obstacle (void)
                     float64_t             elem;
 
                     obstacle_core_probe_start(&probe);
-                    for (pass = 0; pass < 2; pass++)
+                    for (pass = 0; pass < T_PROBE_PASSES; pass++)
                     {
                         bool b_seen = false;
 
@@ -1037,7 +1052,7 @@ static void test_obstacle (void)
         static float64_t const cos_vals[3] = {0.0, -62.0, 62.0};
         int32_t                elapsed;
 
-        for (elapsed = 0; elapsed < 3; elapsed++)
+        for (elapsed = 0; elapsed < T_COS_VALS; elapsed++)
         {
             memset(&prof, 0, sizeof(prof));
             prof.clr_l_mm = OBST_CLEAR_MAX_MM;
@@ -1241,7 +1256,7 @@ static void test_obstacle (void)
         obstacle_core_point_t pts[5];
         uint8_t               kdx;
 
-        for (kdx = 0u; kdx < 5u; kdx++)
+        for (kdx = 0u; kdx < T_CORNER_PTS; kdx++)
         {
             pts[kdx].angle_deg = (int16_t)(30 + (30 * (int32_t)kdx));
             pts[kdx].r_mm      = OBST_RANGE_NONE;
@@ -1259,7 +1274,7 @@ static void test_obstacle (void)
         obstacle_core_point_t pts[13];
         uint8_t               kdx;
 
-        for (kdx = 0u; kdx < 13u; kdx++)
+        for (kdx = 0u; kdx < T_WALL_PTS; kdx++)
         {
             pts[kdx].angle_deg = (int16_t)(60 + (5 * (int32_t)kdx));
             pts[kdx].r_mm =

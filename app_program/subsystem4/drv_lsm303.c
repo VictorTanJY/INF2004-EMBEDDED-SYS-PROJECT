@@ -132,7 +132,7 @@ static ER init_once (void)
     {
         return init_result(4u, err, chip_id);
     }
-    for (idx = 0u; idx < 3u; ++idx)
+    for (idx = 0u; idx < LSM303_AXES; ++idx)
     {
         if ((acc[idx] >= STUCK_MG) || (acc[idx] <= -STUCK_MG))
         {
@@ -175,7 +175,7 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
         return err;
     }
 
-    for (kdx = 0u; kdx < 3u; ++kdx)
+    for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
     {
         /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
         acc_mg[kdx] =
@@ -197,7 +197,7 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
         return err;
     }
 
-    for (kdx = 0u; kdx < 3u; ++kdx)
+    for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
     {
         mag[kdx] = le16(raw[2u * kdx], raw[(2u * kdx) + 1u]);
     }

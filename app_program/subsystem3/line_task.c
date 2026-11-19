@@ -26,6 +26,9 @@
 #include "../subsystem4/subsystem4.h"
 #include "../subsystem5/subsystem5.h"
 
+#define LOG_READ_SETS      4u /* entries of k_count_rd */
+#define LOG_ELEMS_PER_WORD 3u /* 8-bit widths in one LOG word */
+
 #define LINE_WAKE_TIMEOUT_MS 30 /* still heartbeats if the DMA stops */
 #define LINE_LOG_BC_REJECT                            \
     31u /* comms_proto_rec_t code for a rejected read \
@@ -108,10 +111,10 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
     uint8_t         reading;
 
     {
-        static uint8_t const k_count_rd[4] = {0u, 2u, 3u, 5u};
+        static uint8_t const k_count_rd[LOG_READ_SETS] = {0u, 2u, 3u, 5u};
         uint8_t              jdx;
 
-        for (jdx = 0u; jdx < 4u; jdx++)
+        for (jdx = 0u; jdx < LOG_READ_SETS; jdx++)
         {
             uint16_t const n_elems =
                 line_barcode_reading(p_bc, k_count_rd[jdx], widths);
@@ -128,13 +131,14 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
         uint16_t const n_elems = line_barcode_reading(p_bc, reading, widths);
         uint16_t       kdx;
 
-        for (kdx = 0u; (kdx < n_elems) && (kdx < LINE_LOG_ELEM_MAX); kdx += 3u)
+        for (kdx = 0u; (kdx < n_elems) && (kdx < LINE_LOG_ELEM_MAX);
+             kdx += LOG_ELEMS_PER_WORD)
         {
             uint32_t data = ((uint32_t)((0u == reading) ? 0u : 3u) << 30)
                             | ((uint32_t)kdx << 24);
             uint8_t  jdx;
 
-            for (jdx = 0u; jdx < 3u; jdx++)
+            for (jdx = 0u; jdx < LOG_ELEMS_PER_WORD; jdx++)
             {
                 uint32_t const elem = ((kdx + jdx) < n_elems)
                                           ? ((widths[kdx + jdx] + 100u) / 200u)

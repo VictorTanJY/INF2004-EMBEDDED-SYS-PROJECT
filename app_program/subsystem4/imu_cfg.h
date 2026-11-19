@@ -8,6 +8,8 @@
 #ifndef IMU_CFG_H
 #define IMU_CFG_H
 
+#define IMU_AXES 3u /* X, Y, Z */
+
 /* ---- Mounting: which accelerometer axis points forward / left / up,
    and its sign.  MEASURE (A8): tilt the robot nose-up and right-side-up by
    hand and check that pitch and roll go positive.  Team convention

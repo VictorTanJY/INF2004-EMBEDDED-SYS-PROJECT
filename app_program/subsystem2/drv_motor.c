@@ -12,6 +12,10 @@
 #include "motion_cfg.h"
 #include "subsystem2.h"
 
+#define MOTOR_SLICE_COUNT 2u /* SLICE_L, SLICE_R */
+
+#define MOTOR_PIN_COUNT 4u /* GP8..GP11 */
+
 static inline uint32_t pwm_ch_csr (uint32_t slice)
 {
     return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
@@ -68,9 +72,9 @@ static uint32_t cc_for (int32_t duty, int32_t sign)
 
 EXPORT ER drv_motor_init (void)
 {
-    uint32_t const pins[4]   = {S2_PIN_MOT_L_A, S2_PIN_MOT_L_B, S2_PIN_MOT_R_A,
-                                S2_PIN_MOT_R_B};
-    uint32_t const slices[2] = {SLICE_L, SLICE_R};
+    uint32_t const pins[MOTOR_PIN_COUNT] = {S2_PIN_MOT_L_A, S2_PIN_MOT_L_B,
+                                            S2_PIN_MOT_R_A, S2_PIN_MOT_R_B};
+    uint32_t const slices[2]             = {SLICE_L, SLICE_R};
     UINT           intsts;
     uint32_t       idx;
 
@@ -78,7 +82,7 @@ EXPORT ER drv_motor_init (void)
     DI(intsts);
     out_w(APP_REGS_GPIO_OUT_CLR, MOTOR_PIN_MASK);
     out_w(APP_REGS_GPIO_OE_SET, MOTOR_PIN_MASK);
-    for (idx = 0u; idx < 4u; idx++)
+    for (idx = 0u; idx < MOTOR_PIN_COUNT; idx++)
     {
         clr_w(app_regs_pad(pins[idx]), APP_REGS_PAD_OD);
         out_w(app_regs_gpio_ctrl(pins[idx]), APP_REGS_FUNCSEL_SIO);
@@ -87,7 +91,7 @@ EXPORT ER drv_motor_init (void)
 
     /* 2. PWM block out of reset, slices 4 and 5 at 20 kHz, duty 0. */
     app_reset_release(APP_REGS_RESET_PWM);
-    for (idx = 0u; idx < 2u; idx++)
+    for (idx = 0u; idx < MOTOR_SLICE_COUNT; idx++)
     {
         out_w(pwm_ch_csr(slices[idx]), 0u);
         out_w(pwm_ch_div(slices[idx]), PWM_DIV_INT_1);

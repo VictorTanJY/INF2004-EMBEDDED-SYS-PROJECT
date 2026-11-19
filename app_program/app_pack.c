@@ -105,10 +105,11 @@ uint8_t app_pack_sym_index (char chr)
     return 0u;
 }
 
-char app_pack_sym_char (uint8_t index)
+char app_pack_sym_char (uint8_t sym_index)
 {
-    return ((index >= 1u) && (index <= PK_SYM_COUNT)) ? g_symbols[index - 1u]
-                                                      : '\0';
+    return ((sym_index >= 1u) && (sym_index <= PK_SYM_COUNT))
+               ? g_symbols[sym_index - 1u]
+               : '\0';
 }
 
 /* ---- Records: table-driven packing of a struct into words ------------ */

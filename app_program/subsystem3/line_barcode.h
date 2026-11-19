@@ -77,13 +77,13 @@ void line_barcode_init(line_barcode_capture_t * p_bc);
    element count (widths in um), the trailing white run excluded. */
 uint16_t line_barcode_prof_elements(uint16_t const * p_prof, uint16_t n_bins,
                                     uint16_t thr, uint16_t hyst,
-                                    uint32_t * p_widths, uint16_t max);
+                                    uint32_t * p_widths, uint16_t max_elems);
 /* As line_barcode_prof_elements() but by swing: a bar starts delta above the
    lightest point of the space before it and ends delta below its darkest
    point (BC_ADAPT_*, 9 Nov). */
 uint16_t line_barcode_prof_swing(uint16_t const * p_prof, uint16_t n_bins,
                                  uint16_t delta, uint32_t * p_widths,
-                                 uint16_t max);
+                                 uint16_t max_elems);
 /* The widths of one reading of the capture just ended (for the log):
    reading 0 swing, 1 mid, 2 low, 3 / 4 / 5 adaptive swing at
    BC_ADAPT_PCT / PCT2 / PCT3 (0 if not tried); returns the count. */

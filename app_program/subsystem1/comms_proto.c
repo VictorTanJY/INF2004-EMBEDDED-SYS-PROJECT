@@ -44,9 +44,9 @@ uint8_t comms_proto_symbol_index (char chr)
     return app_pack_sym_index(chr);
 }
 
-char comms_proto_symbol_char (uint8_t index)
+char comms_proto_symbol_char (uint8_t sym_index)
 {
-    return app_pack_sym_char(index);
+    return app_pack_sym_char(sym_index);
 }
 
 static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)
@@ -230,7 +230,7 @@ uint16_t comms_proto_build_status (uint32_t uptime_s, int32_t rssi,
     app_pack_put(&writer, b_map ? 1u : 0u, 1u);
     if (b_map)
     {
-        for (kdx = 0u; kdx < 4u; kdx++)
+        for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
         {
             app_pack_put(&writer, comms_proto_symbol_index(p_map[kdx]), 6u);
         }
@@ -256,9 +256,9 @@ uint16_t comms_proto_build_ack (comms_proto_cmd_t const * p_cmd,
 /* ---------------------------------------------------------------------
  *  Command parser
  * --------------------------------------------------------------------- */
-comms_proto_param_t const * comms_proto_param_by_index (uint8_t index)
+comms_proto_param_t const * comms_proto_param_by_index (uint8_t param_index)
 {
-    return (index < COMMS_PARAM_COUNT) ? &g_params[index] : NULL;
+    return (param_index < COMMS_PARAM_COUNT) ? &g_params[param_index] : NULL;
 }
 
 comms_proto_param_t const * comms_proto_param_by_id (uint8_t param_id)
@@ -321,17 +321,17 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
 
         case COMMS_CMD_SET:
         {
-            comms_proto_param_t const * p_param;
-            uint32_t                    index;
+            comms_proto_param_t const * p_param = NULL;
+            uint32_t                    param_index;
 
             if (len != 5u)
             {
                 return COMMS_ERR_BAD_FRAME;
             }
-            index        = app_pack_take(&reader, COMMS_PARAM_BITS);
+            param_index  = app_pack_take(&reader, COMMS_PARAM_BITS);
             p_cmd->value = app_pack_unoff_s(
                 app_pack_take(&reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
-            p_param = comms_proto_param_by_index((uint8_t)index);
+            p_param = comms_proto_param_by_index((uint8_t)param_index);
             if (NULL == p_param)
             {
                 return COMMS_ERR_BAD_PARAM;
@@ -355,7 +355,7 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
             {
                 return COMMS_ERR_BAD_FRAME;
             }
-            for (kdx = 0u; kdx < 4u; kdx++)
+            for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
             {
                 chars[kdx] = comms_proto_symbol_char(
                     (uint8_t)app_pack_take(&reader, 6u));

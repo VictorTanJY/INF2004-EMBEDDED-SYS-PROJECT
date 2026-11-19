@@ -47,9 +47,9 @@ static inline uint32_t app_pack_mask (uint8_t width)
 /* Unsigned value saturated to a width-bit field. */
 static inline uint32_t app_pack_sat_u (uint32_t value, uint8_t width)
 {
-    uint32_t const max = app_pack_mask(width);
+    uint32_t const field_max = app_pack_mask(width);
 
-    return (value > max) ? max : value;
+    return (value > field_max) ? field_max : value;
 }
 
 /* Signed value -> offset-binary field of width bits (2..32), saturated to
@@ -143,7 +143,7 @@ uint32_t app_pack_take(app_pack_reader_t * p_r,
 /* ---- Code 39 data character in 6 bits (index 1..43, 0 = none) ------- */
 #define PK_SYM_COUNT 43u
 uint8_t app_pack_sym_index(char chr);
-char    app_pack_sym_char(uint8_t index);
+char    app_pack_sym_char(uint8_t sym_index);
 
 /* ---- Records: table-driven packing of a struct into words ------------ */
 typedef uint8_t app_pack_kind_t; /* one of the constants below */

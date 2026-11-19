@@ -15,6 +15,8 @@
 #include "../subsystem5/subsystem5.h" /* subsystem5_mission_post / subsystem5_get_mission_snap */
 #include "../test_report.h"
 
+#define T_RESET_WAIT_MS 8000u /* MissionTask reaches IDLE well within */
+
 #if APP_TEST
 
 #define WD_CTRL_REG  0x40058000u
@@ -135,7 +137,7 @@ EXPORT void subsystem4_test_run (void)
         /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
         (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET,
                                       (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
-        for (elapsed = 0u; elapsed < 8000u; elapsed += 50u)
+        for (elapsed = 0u; elapsed < T_RESET_WAIT_MS; elapsed += 50u)
         {
             (void)tk_dly_tsk(50);
             subsystem5_get_mission_snap(&mission);

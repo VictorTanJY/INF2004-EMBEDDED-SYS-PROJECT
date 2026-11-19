@@ -19,6 +19,14 @@
 #include "app_pack.h"
 #include "golden.h"
 
+#define T_MAP_CHARS    4      /* characters in a MAP command */
+#define T_PARAMS       9      /* entries of names[] */
+#define T_RANGE_PARAMS 5u     /* entries of the second names[] */
+#define T_FUZZ_FRAMES  20000u /* random frames */
+#define T_RING_PUSHES  20u    /* more than COMMS_RING_LEN */
+#define T_RING_OLDEST  5u     /* the first push still held */
+#define T_OTHER_CMDS   5u     /* commands between the two copies */
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -38,7 +46,8 @@ static int32_t g_fail;
 
 /* Build a command frame the way the laptop does (picocar_codec.py). */
 static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
-                           int32_t index, int32_t value, char const * p_map)
+                           int32_t param_index, int32_t value,
+                           char const * p_map)
 {
     app_pack_writer_t writer;
     int32_t           kdx;
@@ -50,12 +59,12 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
     app_pack_put(&writer, cmd, 3u);
     if (COMMS_CMD_SET == cmd)
     {
-        app_pack_put(&writer, (uint32_t)index, 4u);
+        app_pack_put(&writer, (uint32_t)param_index, 4u);
         app_pack_put(&writer, (uint32_t)(value + 32768) & 0xFFFFu, 16u);
     }
     if (COMMS_CMD_MAP == cmd)
     {
-        for (kdx = 0; kdx < 4; kdx++)
+        for (kdx = 0; kdx < T_MAP_CHARS; kdx++)
         {
             app_pack_put(&writer, comms_proto_symbol_index(p_map[kdx]), 6u);
         }
@@ -63,12 +72,12 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
     return app_pack_writer_len(&writer);
 }
 
-static comms_proto_err_t parse (uint8_t ident, uint8_t cmd, int32_t index,
+static comms_proto_err_t parse (uint8_t ident, uint8_t cmd, int32_t param_index,
                                 int32_t value, char const * p_map,
                                 comms_proto_cmd_t * p_cmd)
 {
     uint8_t  buf[8];
-    uint16_t count = cmd_frame(buf, ident, cmd, index, value, p_map);
+    uint16_t count = cmd_frame(buf, ident, cmd, param_index, value, p_map);
 
     return comms_proto_parse_cmd(buf, count, p_cmd);
 }
@@ -80,7 +89,7 @@ static int32_t param_index (char const * p_name)
         "junction_mm", "bench_move", "bench_turn", "bench_speed"};
     int32_t idx;
 
-    for (idx = 0; idx < 9; idx++)
+    for (idx = 0; idx < T_PARAMS; idx++)
     {
         if (0 == strcmp(p_names[idx], p_name))
         {
@@ -432,7 +441,7 @@ static void test_parser (void)
             "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm"};
         uint32_t idx;
 
-        for (idx = 0u; idx < 5u; idx++)
+        for (idx = 0u; idx < T_RANGE_PARAMS; idx++)
         {
             comms_proto_param_t const * p_param =
                 comms_proto_param_by_index((uint8_t)idx);
@@ -521,7 +530,7 @@ static void test_parser (void)
             (void)comms_proto_parse_cmd(frame, (uint16_t)mid, &cmd);
         }
         srand(1234);
-        for (kdx = 0u; kdx < 20000u; kdx++)
+        for (kdx = 0u; kdx < T_FUZZ_FRAMES; kdx++)
         {
             uint32_t len = (uint32_t)rand() % sizeof(junk);
 
@@ -550,7 +559,7 @@ static void test_ring (void)
     comms_proto_ring_init(&ring);
     CHECK("S1-H15", !comms_proto_ring_peek(&ring, &rec, &seq));
     memset(&rec, 0, sizeof(rec));
-    for (idx = 1u; idx <= 20u; idx++)
+    for (idx = 1u; idx <= T_RING_PUSHES; idx++)
     {
         rec.data = (int32_t)idx;
         overwrote += comms_proto_ring_push(&ring, &rec, (uint8_t)(idx + 250u))
@@ -558,7 +567,7 @@ static void test_ring (void)
                          : 0; /* seq wraps */
     }
     CHECK("S1-H15", (4 == overwrote) && (COMMS_RING_LEN == ring.count));
-    for (idx = 5u; idx <= 20u; idx++)
+    for (idx = T_RING_OLDEST; idx <= T_RING_PUSHES; idx++)
     {
         CHECK("S1-H15", comms_proto_ring_peek(&ring, &rec, &seq)
                             && (seq == (uint8_t)(idx + 250u))
@@ -646,7 +655,7 @@ static void test_dedup (void)
           COMMS_DEDUP_NEW == comms_proto_dedup_check(&dedup, &cmd_a, 1000u));
     comms_proto_dedup_add(&dedup, &cmd_a, 1000u);
     /* delayed redelivery after other commands, inside the window */
-    for (idx = 0u; idx < 5u; idx++)
+    for (idx = 0u; idx < T_OTHER_CMDS; idx++)
     {
         comms_proto_cmd_t other;
 

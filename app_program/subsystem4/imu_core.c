@@ -10,6 +10,8 @@
 #include "../app_types.h"
 #include "../app_math.h"
 
+#define IMU_HORIZ_AXES 2u /* forward and left: the horizontal plane */
+
 #define MG_PER_G_MM_S2 9807 /* 1 g = 9807 mm/s^2 */
 
 /* body-frame value of one raw axis triple */
@@ -79,7 +81,7 @@ void imu_core_cal_level_start (imu_core_t * p_ic)
 {
     uint8_t kdx;
 
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         p_ic->lvl_sum[kdx] = 0;
         p_ic->lvl_min[kdx] = 0x7FFFFFFF;
@@ -96,7 +98,7 @@ void imu_core_cal_level_sample (imu_core_t * p_ic, int32_t const acc_mg[3])
     {
         return;
     }
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         p_ic->lvl_sum[kdx] += acc_mg[kdx];
         p_ic->lvl_min[kdx] = app_types_min_i32(p_ic->lvl_min[kdx], acc_mg[kdx]);
@@ -120,7 +122,7 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
     {
         return false;
     }
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         p_ic->lvl_spread_mg = app_types_max_i32(
             p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
@@ -154,7 +156,7 @@ void imu_core_cal_mag_start (imu_core_t * p_ic)
 {
     uint8_t kdx;
 
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         p_ic->mag_min[kdx] = 32767;
         p_ic->mag_max[kdx] = -32768;
@@ -165,7 +167,7 @@ void imu_core_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
 {
     uint8_t kdx;
 
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         if (mag[kdx] < p_ic->mag_min[kdx])
         {
@@ -180,11 +182,11 @@ void imu_core_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
 
 bool imu_core_cal_mag_finish (imu_core_t * p_ic)
 {
-    int32_t const axes[2] = {IMU_AXIS_FWD,
-                             IMU_AXIS_LEFT}; /* horizontal plane */
+    int32_t const axes[IMU_HORIZ_AXES] = {IMU_AXIS_FWD,
+                                          IMU_AXIS_LEFT}; /* horizontal plane */
     uint8_t       kdx;
 
-    for (kdx = 0u; kdx < 2u; kdx++)
+    for (kdx = 0u; kdx < IMU_HORIZ_AXES; kdx++)
     {
         if (((int32_t)p_ic->mag_max[axes[kdx]] - p_ic->mag_min[axes[kdx]])
             < IMU_MAG_MIN_SPAN)
@@ -192,7 +194,7 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
             return false;
         }
     }
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         p_ic->mag_off[kdx] =
             (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx]) / 2);
@@ -524,7 +526,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     }
 
     /* Low-pass filter (alpha 1/4), mg x 16. */
-    for (kdx = 0u; kdx < 3u; kdx++)
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
     {
         if (!p_ic->b_have_acc)
         {

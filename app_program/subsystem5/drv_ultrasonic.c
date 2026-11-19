@@ -7,6 +7,8 @@
 #include "subsystem5.h"
 #include "../app_gpio_irq.h"
 
+#define US_TRIG_PULSE_US 12u /* trigger pulse >= 10 us (datasheet) */
+
 /* CONSOLE=uart and CRASH_REPORT=1 builds put UART0 on GP0/GP1 (Week 6
    2.2, A3): the HC-SR04 is unplugged then, and these pins must not be
    touched, or the console dies.  Every call below becomes a no-op. */
@@ -95,7 +97,7 @@ EXPORT void drv_ultrasonic_trigger (void)
     g_echo  = 0u;
     out_w(APP_REGS_GPIO_OUT_SET, 1uL << S5_PIN_US_TRIG);
     t_start = app_time_us();
-    while ((UW)(app_time_us() - t_start) < 12u)
+    while ((UW)(app_time_us() - t_start) < US_TRIG_PULSE_US)
     {
         ; /* >= 10 us (datasheet) */
     }

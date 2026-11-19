@@ -31,6 +31,8 @@
 #include "../subsystem2/subsystem2.h"
 #include "../subsystem5/subsystem5.h"
 
+#define CHK_GUARD_SPINS 1000000u /* polls before the check gives up */
+
 #define SAFETY_WD_TIMEOUT_MS 200u
 #define SAFETY_TOO_CLOSE_MM  80u
 /* comms_proto_rec_t code: data = missed-task mask */
@@ -142,7 +144,7 @@ static void check_timer_tick (void)
     reload = (in_w(CHK_SYST_RVR) & 0x00FFFFFFu) + 1u;
     prev   = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
     us0    = app_time_us();
-    while ((acc < CHK_SYS_COUNTS) && (guard < 1000000u))
+    while ((acc < CHK_SYS_COUNTS) && (guard < CHK_GUARD_SPINS))
     {
         UW const cur = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
 

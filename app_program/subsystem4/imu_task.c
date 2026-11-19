@@ -291,7 +291,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                 int32_t filt[3];
                 uint8_t kdx;
 
-                for (kdx = 0u; kdx < 3u; kdx++)
+                for (kdx = 0u; kdx < IMU_AXES; kdx++)
                 {
                     filt[kdx] =
                         g_ic.b_have_acc ? (g_ic.acc_f[kdx] / 16) : acc[kdx];

@@ -8,6 +8,9 @@
 #include "drv_i2c1.h"
 #include "subsystem4.h"
 
+#define I2C_RECOVERY_CLOCKS  9u /* SCL pulses that free a stuck slave */
+#define I2C_RECOVERY_HALF_US 5u /* half period: 100 kHz */
+
 #define I2C1_BASE_ADDR   0x40048000u
 #define IC_CON           (I2C1_BASE_ADDR + 0x00u)
 #define IC_TAR           (I2C1_BASE_ADDR + 0x04u)
@@ -89,7 +92,7 @@ static ER finish (uint32_t t_start)
 static void recovery_delay (void)
 {
     uint32_t const t_start = (uint32_t)app_time_us();
-    while ((uint32_t)((uint32_t)app_time_us() - t_start) < 5u)
+    while ((uint32_t)((uint32_t)app_time_us() - t_start) < I2C_RECOVERY_HALF_US)
     {
     }
 }
@@ -128,7 +131,8 @@ static ER clear_bus (void)
     err = scl_release();
     if ((E_OK == err) && (0u == (in_w(APP_REGS_GPIO_IN) & sda)))
     {
-        for (idx = 0u; (idx < 9u) && (0u == (in_w(APP_REGS_GPIO_IN) & sda));
+        for (idx = 0u; (idx < I2C_RECOVERY_CLOCKS)
+                       && (0u == (in_w(APP_REGS_GPIO_IN) & sda));
              idx++)
         {
             out_w(APP_REGS_GPIO_OE_SET, scl);

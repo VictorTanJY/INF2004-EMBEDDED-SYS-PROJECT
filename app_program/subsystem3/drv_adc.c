@@ -11,6 +11,9 @@
 
 #include "drv_adc.h"
 
+#define ADC_PIN_COUNT   3u      /* GP26..GP28 */
+#define ADC_READY_SPINS 100000u /* polls of READY before giving up */
+
 #define ADC_BASE_ADDR 0x4004C000u
 #define ADC_CS        (ADC_BASE_ADDR + 0x00u)
 #define ADC_FCS       (ADC_BASE_ADDR + 0x08u)
@@ -125,21 +128,22 @@ static void adc_dma_isr (UINT intno)
 
 EXPORT ER drv_adc_init (void)
 {
-    uint32_t const pins[3] = {26u, 27u, 28u};
+    uint32_t const pins[ADC_PIN_COUNT] = {26u, 27u, 28u};
     uint32_t       spin;
     uint32_t       idx;
 
     app_reset_release(APP_REGS_RESET_ADC | APP_REGS_RESET_DMA);
 
     /* Analog pins: digital input and pulls off (RP2040 datasheet 4.9.1). */
-    for (idx = 0u; idx < 3u; idx++)
+    for (idx = 0u; idx < ADC_PIN_COUNT; idx++)
     {
         out_w(app_regs_pad(pins[idx]), APP_REGS_PAD_OD);
         out_w(app_regs_gpio_ctrl(pins[idx]), APP_REGS_FUNCSEL_NULL);
     }
 
     out_w(ADC_CS, ADC_CS_EN);
-    for (spin = 0u; (spin < 100000u) && (0u == (in_w(ADC_CS) & ADC_CS_READY));
+    for (spin = 0u;
+         (spin < ADC_READY_SPINS) && (0u == (in_w(ADC_CS) & ADC_CS_READY));
          spin++)
     {
         ;

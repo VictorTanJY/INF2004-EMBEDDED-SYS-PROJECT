@@ -10,6 +10,7 @@
 #include "subsystem1.h"
 #include "hmi_button.h"
 #include "../test_report.h"
+#define T_HOLD_SAMPLES 120u /* x 20 ms = 2.4 s, past the 2 s long press */
 
 #if APP_TEST
 
@@ -121,7 +122,7 @@ EXPORT void subsystem1_test_run (void)
                HMI_BTN_EV_NONE == hmi_button_update(&btn, false, 20u, 2000u),
                "single-sample glitch ignored");
     hmi_button_init(&btn);
-    for (idx = 0u; idx < 120u; idx++)
+    for (idx = 0u; idx < T_HOLD_SAMPLES; idx++)
     {
         hmi_button_ev_t event = hmi_button_update(&btn, true, 20u, 2000u);
 

@@ -5,6 +5,10 @@
 
 #include "line_barcode.h"
 
+#define FIRST_INNER_BAR 2u  /* elements 0, 1: the first bar and gap */
+#define BC_PROF_PASSES  5u  /* profile reads tried per code */
+#define HIST_BINS       64u /* darkness histogram: 1024 / 16 */
+
 static void pre_reset (line_barcode_capture_t * p_bc)
 {
     p_bc->pre_n   = 0u;
@@ -63,12 +67,12 @@ static void start_cooldown (line_barcode_capture_t * p_bc)
 void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
                                uint16_t * p_white, uint16_t * p_dark)
 {
-    uint16_t hist[64];
+    uint16_t hist[HIST_BINS];
     uint32_t sum = 0u;
     uint16_t idx;
     bool     b_white = false;
 
-    for (idx = 0u; idx < 64u; idx++)
+    for (idx = 0u; idx < HIST_BINS; idx++)
     {
         hist[idx] = 0u;
     }
@@ -76,11 +80,11 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
     {
         uint16_t const bin = (uint16_t)(p_prof[idx] / 16u);
 
-        hist[(bin < 64u) ? bin : 63u]++;
+        hist[(bin < HIST_BINS) ? bin : (HIST_BINS - 1u)]++;
     }
     *p_white = 0u;
     *p_dark  = 1000u;
-    for (idx = 0u; idx < 64u; idx++)
+    for (idx = 0u; idx < HIST_BINS; idx++)
     {
         sum += hist[idx];
         if (!b_white
@@ -101,7 +105,7 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
    BC_PROF_MIN_BINS merge into their neighbours (a speck inside a bar or a
    glint inside a space), keeping the bar / space alternation. */
 static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
-                                uint32_t * p_widths, uint16_t max)
+                                uint32_t * p_widths, uint16_t max_elems)
 {
     uint16_t kdx = 0u;
     uint16_t idx;
@@ -125,7 +129,7 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
             kdx++;
         }
     }
-    for (kdx = 0u; (kdx < n_runs) && (out < max); kdx++)
+    for (kdx = 0u; (kdx < n_runs) && (out < max_elems); kdx++)
     {
         p_widths[out] = (uint32_t)p_runs[kdx] * BC_PROF_BIN_UM;
         out++;
@@ -135,7 +139,7 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
 
 uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
                                      uint16_t thr, uint16_t hyst,
-                                     uint32_t * p_widths, uint16_t max)
+                                     uint32_t * p_widths, uint16_t max_elems)
 {
     static uint16_t runs[BC_PROF_BINS / 2u];
     uint16_t        n_runs  = 0u;
@@ -171,12 +175,12 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
         runs[n_runs] = run; /* a bar ran to the end: keep it  */
         n_runs++;
     }
-    return runs_to_widths(runs, n_runs, p_widths, max);
+    return runs_to_widths(runs, n_runs, p_widths, max_elems);
 }
 
 uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
                                   uint16_t delta, uint32_t * p_widths,
-                                  uint16_t max)
+                                  uint16_t max_elems)
 {
     static uint16_t runs[BC_PROF_BINS / 2u];
     uint16_t        n_runs = 0u;
@@ -234,7 +238,7 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         runs[n_runs] = run; /* a bar ran to the end: keep it  */
         n_runs++;
     }
-    return runs_to_widths(runs, n_runs, p_widths, max);
+    return runs_to_widths(runs, n_runs, p_widths, max_elems);
 }
 
 /* Elements found again from the darkness profile at threshold k (1 mid,
@@ -309,7 +313,7 @@ static uint16_t trim_specks (uint32_t const * p_w, uint16_t n_elems,
     {
         return n_elems; /* a read starts and ends with a bar */
     }
-    for (idx = 2u; (idx + 2u) < n_elems;
+    for (idx = FIRST_INNER_BAR; (idx + FIRST_INNER_BAR) < n_elems;
          idx += 2u) /* inner bars, insertion sort */
     {
         uint32_t const width = p_w[idx];
@@ -393,9 +397,9 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
                                     &p_out->b_reversed, &b_trim);
     if (b_trim)
     {
-        p_bc->pass = 5u;
+        p_bc->pass = BC_PROF_PASSES;
     }
-    for (kdx = 1u; (kdx <= 5u) && (result != CODE39_OK); kdx++)
+    for (kdx = 1u; (kdx <= BC_PROF_PASSES) && (result != CODE39_OK); kdx++)
     {
         uint16_t const n_read = prof_read(p_bc, kdx, read_widths);
         char           chr;

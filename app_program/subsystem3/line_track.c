@@ -4,6 +4,7 @@
  */
 
 #include "line_track.h"
+#include "../app_math.h"
 #include "../app_pack.h"
 #include "../app_types.h"
 
@@ -305,11 +306,11 @@ void line_track_slip_sample (line_track_slip_t * p_s, int32_t heading_cdeg,
 {
     int32_t delta = heading_cdeg - p_s->prev_cdeg;
 
-    while (delta > 18000)
+    while (delta > APP_CDEG_180)
     {
         delta -= 36000;
     }
-    while (delta < -18000)
+    while (delta < -APP_CDEG_180)
     {
         delta += 36000;
     }

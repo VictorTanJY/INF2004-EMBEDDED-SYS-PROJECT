@@ -21,7 +21,41 @@
 #include "line_barcode.h"
 #include "line_track.h"
 #include "app_types.h"
+#include "app_math.h"
 #include "vectors_slides.h"
+
+#define T_SYMBOLS        3   /* *X*: start, data, stop */
+#define T_CHAR_ELEMS     9   /* bars and spaces in one character */
+#define T_CODE_ELEMS     29  /* elements of *X* */
+#define T_CODE_ELEMS_U   29u /* the same, for unsigned counters */
+#define T_NARROW_WIDTHS  3   /* narrow bar widths tried */
+#define T_RATIOS         3   /* wide:narrow ratios tried */
+#define T_DIRECTIONS     2   /* forwards, reversed */
+#define T_DATA_FIRST     10  /* first element of the data character */
+#define T_DATA_END       19  /* one past its last element */
+#define T_DATA_FIRST_U   10u
+#define T_DATA_END_U     19u
+#define T_AB_CHARS       4     /* "*AB*" */
+#define T_SPEEDS         2     /* 0.15 and 0.30 m/s */
+#define T_NOISY_PASSES   20    /* per character, speed and direction */
+#define T_BLUR_SPOTS     2     /* entries of spots[] in the blur tests */
+#define T_WEAK_SPOTS     3     /* entries of spots[] in the weak-sensor test */
+#define T_WEAK_SPEEDS    3     /* entries of speeds[] */
+#define T_THIN_LEVELS    3     /* entries of thin[] */
+#define T_CODE_ENDS      2     /* first bar, last bar */
+#define T_LETTERS        26u   /* A..Z */
+#define T_BLUR_NOISE     40    /* sensor noise, norm counts */
+#define T_BLEED_NOISE    30    /* sensor noise, norm counts */
+#define T_BLEED_CASES    4     /* 31 or 33 elements, each way round */
+#define T_ALTERNATIONS   40    /* blocks alternating left / right */
+#define T_RAMP_BLOCKS    17    /* blocks of one-sided error */
+#define T_CAL_SAMPLES    100   /* calibration samples */
+#define T_SLIP_STEPS     400   /* spin steps of 0.9 deg */
+#define T_GAINS          4     /* entries of gains[] */
+#define T_DAMAGE_KINDS   4     /* split, merge, both, end lost */
+#define T_RANDOM_CODES   20000 /* random element lists */
+#define T_TRIES_PER_CHAR 40    /* random damage per character */
+#define T_DAMAGES_U      3u    /* random merges or splits */
 
 static int32_t g_pass;
 static int32_t g_fail;
@@ -66,11 +100,11 @@ static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
     int32_t    kdx;
     int32_t    elem;
 
-    for (kdx = 0; kdx < 3; kdx++)
+    for (kdx = 0; kdx < T_SYMBOLS; kdx++)
     {
         uint16_t pat = code39_pattern(seq[kdx]);
 
-        for (elem = 0; elem < 9; elem++)
+        for (elem = 0; elem < T_CHAR_ELEMS; elem++)
         {
             float64_t omega =
                 (float64_t)narrow * (((pat >> (8 - elem)) & 1u) ? ratio : 1.0);
@@ -207,7 +241,7 @@ static void test_table (void)
         int32_t  wide_sp = 0;
         int32_t  val_b;
 
-        for (val_b = 0; val_b < 9; val_b++)
+        for (val_b = 0; val_b < T_CHAR_ELEMS; val_b++)
         {
             if ((pos >> (8 - val_b)) & 1u)
             {
@@ -254,7 +288,7 @@ static void test_slides (void)
         for (scale = 1.0; scale > 0.5;
              scale -= (1.0 - (297.0 / 338.67))) /* screen, A4 */
         {
-            for (kdx = 0; kdx < 29; kdx++)
+            for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
             {
                 widths[kdx] = (uint32_t)(g_slides[step].p_w[kdx] * scale);
             }
@@ -285,14 +319,14 @@ static void test_synthetic (void)
 
     for (idx = 0u; idx < (sizeof(g_data_chars) - 1u); idx++)
     {
-        for (val_a = 0; val_a < 3; val_a++)
+        for (val_a = 0; val_a < T_NARROW_WIDTHS; val_a++)
         {
-            for (ret = 0; ret < 3; ret++)
+            for (ret = 0; ret < T_RATIOS; ret++)
             {
                 float64_t const ratio =
                     (0 == ret) ? 2.2 : ((1 == ret) ? 2.5 : 3.0);
 
-                for (diff = 0; diff < 2; diff++)
+                for (diff = 0; diff < T_DIRECTIONS; diff++)
                 {
                     uint32_t widths[29];
                     uint16_t n_elems = make_code(
@@ -338,7 +372,7 @@ static void test_rejects (void)
     for (idx = 0; idx < (int32_t)(sizeof(g_data_chars) - 1u); idx++)
     {
         int32_t elem;
-        for (elem = 10; elem < 19; elem++)
+        for (elem = T_DATA_FIRST; elem < T_DATA_END; elem++)
         {
             uint16_t pat = code39_pattern(g_data_chars[idx]);
 
@@ -371,10 +405,10 @@ static void test_rejects (void)
         int32_t    kdx;
         int32_t    elem;
         n_elems = 0u;
-        for (kdx = 0; kdx < 4; kdx++)
+        for (kdx = 0; kdx < T_AB_CHARS; kdx++)
         {
             uint16_t pat = code39_pattern(seq[kdx]);
-            for (elem = 0; elem < 9; elem++)
+            for (elem = 0; elem < T_CHAR_ELEMS; elem++)
             {
                 words_out[n_elems++] =
                     ((pat >> (8 - elem)) & 1u) ? 9000u : 3000u;
@@ -404,15 +438,15 @@ static void test_capture (void)
     /* every slide, both speeds, both directions, clean */
     for (step = 0; step < N_SLIDES; step++)
     {
-        for (value = 0; value < 2; value++)
+        for (value = 0; value < T_SPEEDS; value++)
         {
-            for (diff = 0; diff < 2; diff++)
+            for (diff = 0; diff < T_DIRECTIONS; diff++)
             {
                 uint32_t           widths[29];
                 line_barcode_out_t out;
                 int32_t            kdx;
 
-                for (kdx = 0; kdx < 29; kdx++)
+                for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                 {
                     widths[kdx] = (g_slides[step].p_w[kdx] * 297u) / 339u;
                 }
@@ -431,16 +465,16 @@ static void test_capture (void)
     /* NFR3-style: 20 noisy passes per character per speed and direction */
     for (step = 0; step < N_SLIDES; step += 3)
     {
-        for (value = 0; value < 2; value++)
+        for (value = 0; value < T_SPEEDS; value++)
         {
-            for (pass = 0; pass < 20; pass++)
+            for (pass = 0; pass < T_NOISY_PASSES; pass++)
             {
                 uint32_t              widths[29];
                 line_barcode_out_t    out;
                 line_barcode_result_t result;
                 int32_t               kdx;
 
-                for (kdx = 0; kdx < 29; kdx++)
+                for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                 {
                     widths[kdx] =
                         (uint32_t)((((float64_t)g_slides[step].p_w[kdx] * 297.0)
@@ -489,21 +523,21 @@ static void test_capture (void)
         int32_t        weak_total = 0;
         int32_t        weak_wrong = 0;
 
-        for (setpoint = 0; setpoint < 2; setpoint++)
+        for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
         {
             g_spot_um = spots[setpoint];
             for (step = 0; step < N_SLIDES; step++)
             {
-                for (value = 0; value < 2; value++)
+                for (value = 0; value < T_SPEEDS; value++)
                 {
-                    for (diff = 0; diff < 2; diff++)
+                    for (diff = 0; diff < T_DIRECTIONS; diff++)
                     {
                         uint32_t              widths[29];
                         line_barcode_out_t    out;
                         line_barcode_result_t result;
                         int32_t               kdx;
 
-                        for (kdx = 0; kdx < 29; kdx++)
+                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             widths[kdx] =
                                 (g_slides[step].p_w[kdx] * 297u) / 339u;
@@ -542,7 +576,7 @@ static void test_capture (void)
             line_barcode_out_t out;
             int32_t            kdx;
 
-            for (kdx = 0; kdx < 29; kdx++)
+            for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
             {
                 widths[kdx] = (g_slides[step].p_w[kdx] * 297u) / 339u;
             }
@@ -590,17 +624,17 @@ static void test_capture (void)
 
         for (step = 0; step < N_SLIDES; step++)
         {
-            for (diff = 0; diff < 2; diff++)
+            for (diff = 0; diff < T_DIRECTIONS; diff++)
             {
                 int32_t cut;
 
-                for (cut = 0; cut < 2; cut++)
+                for (cut = 0; cut < T_CODE_ENDS; cut++)
                 {
                     uint32_t widths[29];
                     char     chr;
                     bool     b_rev;
 
-                    for (kdx = 0; kdx < 29; kdx++)
+                    for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                     {
                         widths[kdx] = g_slides[step].p_w[kdx];
                     }
@@ -635,7 +669,7 @@ static void test_capture (void)
         {
             size_t idx;
 
-            for (idx = 0u; idx < 26u; idx++)
+            for (idx = 0u; idx < T_LETTERS; idx++)
             {
                 uint32_t widths[29];
                 uint16_t n_elems =
@@ -679,18 +713,18 @@ static void test_capture (void)
             good  = 0;
             total = 0;
             wrong = 0;
-            for (setpoint = 0; setpoint < 2; setpoint++)
+            for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
             {
                 g_spot_um = spots[setpoint];
                 for (step = 0; step < N_SLIDES; step++)
                 {
-                    for (diff = 0; diff < 2; diff++)
+                    for (diff = 0; diff < T_DIRECTIONS; diff++)
                     {
                         uint32_t              widths[29];
                         line_barcode_out_t    out;
                         line_barcode_result_t result;
 
-                        for (kdx = 0; kdx < 29; kdx++)
+                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             widths[kdx] =
                                 (g_slides[step].p_w[kdx] * 297u) / 339u;
@@ -746,13 +780,13 @@ static void test_capture (void)
         g_white      = 20u;
         g_black      = 690u;
         g_thin_black = 240u;
-        for (noise = 0; noise <= 40; noise += 40)
+        for (noise = 0; noise <= T_BLUR_NOISE; noise += T_BLUR_NOISE)
         {
             for (step = 0; step < N_SLIDES; step++)
             {
                 if ('Z' == g_slides[step].chr)
                 {
-                    for (diff = 0; diff < 2; diff++)
+                    for (diff = 0; diff < T_DIRECTIONS; diff++)
                     {
                         uint32_t              widths[29];
                         line_barcode_out_t    out;
@@ -764,13 +798,13 @@ static void test_capture (void)
                         /* printed at the specified size: 3 mm narrow (~141 mm
                          * code)
                          */
-                        for (kdx = 0; kdx < 29; kdx++)
+                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             wmin = (g_slides[step].p_w[kdx] < wmin)
                                        ? g_slides[step].p_w[kdx]
                                        : wmin;
                         }
-                        for (kdx = 0; kdx < 29; kdx++)
+                        for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             widths[kdx] =
                                 (g_slides[step].p_w[kdx] * 3000u) / wmin;
@@ -840,9 +874,9 @@ static void test_capture (void)
         g_spot_um = 1000u;
         g_white   = 25u;
         g_black   = 1000u;
-        for (noise = 0; noise <= 30; noise += 30)
+        for (noise = 0; noise <= T_BLEED_NOISE; noise += T_BLEED_NOISE)
         {
-            for (diff = 0; diff < 4; diff++)
+            for (diff = 0; diff < T_BLEED_CASES; diff++)
             {
                 uint32_t              widths[33];
                 uint16_t const        n_elems = (diff < 2) ? 31u : 33u;
@@ -1003,7 +1037,7 @@ static void test_track (void)
         line_track_init(&track);
         (void)feed(&track, 500u, 500u, 30000u);
         prev = track.omega;
-        for (idx = 0; idx < 40; idx++)
+        for (idx = 0; idx < T_ALTERNATIONS; idx++)
         {
             if (0 == (idx % 2))
             {
@@ -1022,7 +1056,7 @@ static void test_track (void)
 
         line_track_init(&track);
         (void)feed(&track, 500u, 500u, 30000u);
-        for (idx = 0; idx < 17; idx++)
+        for (idx = 0; idx < T_RAMP_BLOCKS; idx++)
         {
             (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u);
         }
@@ -1043,7 +1077,7 @@ static void test_track (void)
 
         memset(&cal, 0, sizeof(cal));
         line_track_cal_start(&cal);
-        for (idx = 0; idx < 100; idx++)
+        for (idx = 0; idx < T_CAL_SAMPLES; idx++)
         {
             raw[0] =
                 (uint16_t)((idx < 50) ? 300 : 3000); /* white 300, black 3000 */
@@ -1058,7 +1092,7 @@ static void test_track (void)
         CHECK("S3-H12", (500u == line_track_cal_norm(&cal, 0, 1650))
                             && (1000u == line_track_cal_norm(&cal, 0, 4095)));
         line_track_cal_start(&cal);
-        for (idx = 0; idx < 100; idx++)
+        for (idx = 0; idx < T_CAL_SAMPLES; idx++)
         {
             raw[0] = (uint16_t)((idx < 50) ? 1000 : 2000); /* 2:1 only */
             raw[1] = 1000;
@@ -1070,7 +1104,7 @@ static void test_track (void)
         /* the barcode sensor does not take part: fixed levels from
            line_cfg.h, even when it saw no contrast during the spin */
         line_track_cal_start(&cal);
-        for (idx = 0; idx < 100; idx++)
+        for (idx = 0; idx < T_CAL_SAMPLES; idx++)
         {
             raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);
             raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
@@ -1114,7 +1148,7 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
     memset(&cal, 0, sizeof(cal));
     line_track_cal_start(&cal);
     line_track_slip_start(&slip, start_cdeg);
-    for (kdx = 1; kdx <= 400; kdx++)
+    for (kdx = 1; kdx <= T_SLIP_STEPS; kdx++)
     {
         float64_t const enc     = (360.0 * kdx) / 400.0;
         float64_t const real    = (((enc * 1000.0) / gain_pm) * M_PI) / 180.0;
@@ -1126,7 +1160,7 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
         uint16_t raw[3];
         int32_t  height = start_cdeg + (int32_t)(enc * 100.0);
 
-        while (height > 18000)
+        while (height > APP_CDEG_180)
         {
             height -= 36000;
         }
@@ -1154,7 +1188,7 @@ static void test_slip (void)
     int32_t const gains[4] = {1000, 1200, 1500, 1800};
     int32_t       idx;
 
-    for (idx = 0; idx < 4; idx++)
+    for (idx = 0; idx < T_GAINS; idx++)
     {
         uint16_t const gap = slip_run(gains[idx], true, 17000);
 
@@ -1165,7 +1199,7 @@ static void test_slip (void)
     CHECK("S3-H16", slip_run(1500, true, -9000) != 0u);
     /* sensors 25 mm either side: they cross the line one after the other */
     g_slip_half = 25.0;
-    for (idx = 0; idx < 4; idx++)
+    for (idx = 0; idx < T_GAINS; idx++)
     {
         uint16_t const gap = slip_run(gains[idx], true, 0);
 
@@ -1248,7 +1282,7 @@ static void test_best (void)
     int32_t wrong = 0;
     int32_t kind;
 
-    for (kind = 0; kind < 4; kind++)
+    for (kind = 0; kind < T_DAMAGE_KINDS; kind++)
     {
         int32_t kgood  = 0;
         int32_t ktotal = 0;
@@ -1257,11 +1291,11 @@ static void test_best (void)
         {
             uint16_t at_idx;
 
-            for (at_idx = 1u; at_idx < 28u; at_idx++)
+            for (at_idx = 1u; at_idx < (T_CODE_ELEMS_U - 1u); at_idx++)
             {
                 int32_t diff;
 
-                for (diff = 0; diff < 2; diff++)
+                for (diff = 0; diff < T_DIRECTIONS; diff++)
                 {
                     uint32_t widths[29];
                     uint32_t accel[40];
@@ -1391,7 +1425,7 @@ static void test_best (void)
         int32_t bad      = 0;
         int32_t tries    = 0;
 
-        for (ret = 0; ret < 20000; ret++)
+        for (ret = 0; ret < T_RANDOM_CODES; ret++)
         {
             uint32_t widths[60];
             uint16_t n_elems = (uint16_t)(25u + (2u * (rnd() % 5u)));
@@ -1412,7 +1446,7 @@ static void test_best (void)
         }
         for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
-            for (ret = 0; ret < 40; ret++)
+            for (ret = 0; ret < T_TRIES_PER_CHAR; ret++)
             {
                 uint32_t widths[29];
                 uint32_t accel[60];
@@ -1427,11 +1461,11 @@ static void test_best (void)
 
                 /* three random merges or splits: more than it may repair */
                 mid = n_elems;
-                for (elem = 0u; elem < 29u; elem++)
+                for (elem = 0u; elem < T_CODE_ELEMS_U; elem++)
                 {
                     accel[elem] = widths[elem];
                 }
-                for (proj = 0u; proj < 3u; proj++)
+                for (proj = 0u; proj < T_DAMAGES_U; proj++)
                 {
                     uint16_t const at_idx =
                         (uint16_t)(1u + (rnd() % (mid - 4u)));
@@ -1474,7 +1508,7 @@ static void test_best (void)
 
         for (step2 = 0; step2 < N_SLIDES; step2++)
         {
-            for (diff2 = 0; diff2 < 2; diff2++)
+            for (diff2 = 0; diff2 < T_DIRECTIONS; diff2++)
             {
                 uint32_t              widths[29];
                 uint32_t              accel[31];
@@ -1484,13 +1518,13 @@ static void test_best (void)
                 line_barcode_out_t    out;
                 line_barcode_result_t result2;
 
-                for (kdx = 0u; kdx < 29u; kdx++)
+                for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
                 {
                     wmin = (g_slides[step2].p_w[kdx] < wmin)
                                ? g_slides[step2].p_w[kdx]
                                : wmin;
                 }
-                for (kdx = 0u; kdx < 29u; kdx++)
+                for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
                 {
                     widths[kdx] = (g_slides[step2].p_w[kdx] * 3000u) / wmin;
                 }
@@ -1498,7 +1532,7 @@ static void test_best (void)
                 {
                     reverse(widths, 29);
                 }
-                for (kdx = 10u; kdx < 19u; kdx += 2u)
+                for (kdx = T_DATA_FIRST_U; kdx < T_DATA_END_U; kdx += 2u)
                 {
                     at_idx = (widths[kdx] > widths[at_idx]) ? kdx : at_idx;
                 } /* widest bar of X */
@@ -1559,17 +1593,17 @@ static void test_light_print (void)
     g_white   = 7u;
     g_black   = 715u;
     g_thin_um = 6000u;
-    for (theta = 0; theta < 3; theta++)
+    for (theta = 0; theta < T_THIN_LEVELS; theta++)
     {
-        for (setpoint = 0; setpoint < 3; setpoint++)
+        for (setpoint = 0; setpoint < T_WEAK_SPOTS; setpoint++)
         {
             g_spot_um    = spots[setpoint];
             g_thin_black = thin[theta];
             for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
             {
-                for (value = 0; value < 3; value++)
+                for (value = 0; value < T_WEAK_SPEEDS; value++)
                 {
-                    for (diff = 0; diff < 2; diff++)
+                    for (diff = 0; diff < T_DIRECTIONS; diff++)
                     {
                         uint32_t widths[29];
                         uint16_t n_elems = make_code(g_data_chars[cnt], 3000u,

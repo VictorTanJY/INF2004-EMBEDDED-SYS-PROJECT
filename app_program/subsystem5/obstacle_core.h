@@ -16,6 +16,8 @@
 #include "mission_types.h"
 #include "mission_cfg.h"
 
+#define OBST_COARSE_PINGS 5u /* coarse sweep: one ping per 45 deg */
+
 #define OBST_SCAN_MAX_POINTS 32u
 
 typedef struct
@@ -119,7 +121,7 @@ typedef uint8_t obstacle_core_scan_phase_t; /* one of the constants below */
 typedef struct
 {
     uint8_t               phase;
-    obstacle_core_point_t coarse[5];
+    obstacle_core_point_t coarse[OBST_COARSE_PINGS];
     uint8_t               n_coarse;
     obstacle_core_point_t fine[OBST_SCAN_MAX_POINTS];
     uint8_t               n_fine;

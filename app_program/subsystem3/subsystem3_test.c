@@ -10,6 +10,9 @@
 #include "line_barcode.h"
 #include "../test_report.h"
 
+#define T_SYMBOLS    3 /* *X*: start, data, stop */
+#define T_CHAR_ELEMS 9 /* bars and spaces in one character */
+
 #if APP_TEST
 
 /* S3-U07: a clean printed *A* (narrow 3 mm, wide 7.5 mm), driven over at
@@ -34,11 +37,11 @@ static uint16_t make_star_code (char chr, uint32_t * p_w)
     int32_t    kdx;
     int32_t    elem;
 
-    for (kdx = 0; kdx < 3; kdx++)
+    for (kdx = 0; kdx < T_SYMBOLS; kdx++)
     {
         uint16_t const pat = code39_pattern(seq[kdx]);
 
-        for (elem = 0; elem < 9; elem++)
+        for (elem = 0; elem < T_CHAR_ELEMS; elem++)
         {
             p_w[n_elems++] =
                 (((pat >> (8 - elem)) & 1u) != 0u) ? T_WIDE_UM : T_NARROW_UM;
@@ -93,11 +96,11 @@ EXPORT void subsystem3_test_run (void)
                "ADC + DMA deliver ~10 blocks per 100 ms (1 kHz per channel)");
 
     /* Decoder on the target CPU (same code as the host tests). */
-    for (kdx = 0; kdx < 3; kdx++)
+    for (kdx = 0; kdx < T_SYMBOLS; kdx++)
     {
         uint16_t pat = code39_pattern(seq[kdx]);
 
-        for (elem = 0; elem < 9; elem++)
+        for (elem = 0; elem < T_CHAR_ELEMS; elem++)
         {
             elem_widths[n_elems++] = ((pat >> (8 - elem)) & 1u) ? 9000u : 3000u;
         }

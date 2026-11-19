@@ -12,6 +12,12 @@
 #include "app_math.h"
 #include "app_pack.h"
 
+#define T_PAST_RANGE     3 /* values tried outside the field range */
+#define T_RANDOM_FIELDS  100u
+#define T_SIN_RANGE_CDEG 72000 /* +-720 deg */
+#define T_ATAN_RANGE     3000  /* +-3000 on each axis */
+#define T_ISQRT_MAX      70000u
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -44,20 +50,20 @@ static void test_pack (void)
         int64_t       value;
 
         /* signed: exact inside the range, saturated outside it */
-        for (value = -half - 3; value <= (half + 3);
+        for (value = -half - T_PAST_RANGE; value <= (half + T_PAST_RANGE);
              value += (width <= 12u) ? 1 : ((half / 7) + 1))
         {
             int32_t const input =
                 (int32_t)((value < INT32_MIN)
                               ? INT32_MIN
                               : ((value > INT32_MAX) ? INT32_MAX : value));
-            int64_t const exp =
+            int64_t const expected =
                 (input < -half) ? -half
                                 : ((input > (half - 1)) ? (half - 1) : input);
             uint32_t const factor = app_pack_off_s(input, width);
 
             if ((factor > app_pack_mask(width))
-                || (app_pack_unoff_s(factor, width) != exp))
+                || (app_pack_unoff_s(factor, width) != expected))
             {
                 b_ok = false;
             }
@@ -114,7 +120,7 @@ static void test_pack (void)
 
         srand(77);
         app_pack_writer_init(&writer, buf, sizeof(buf));
-        while (count < 100u)
+        while (count < T_RANDOM_FIELDS)
         {
             bit_widths[count] = (uint8_t)(1 + (rand() % 32));
             vals[count]       = (((uint32_t)rand() << 16) ^ (uint32_t)rand())
@@ -153,7 +159,7 @@ int main (void)
     test_pack();
 
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
-    for (val_a = -72000; val_a <= 72000; val_a += 7)
+    for (val_a = -T_SIN_RANGE_CDEG; val_a <= T_SIN_RANGE_CDEG; val_a += 7)
     {
         int32_t ref =
             (int32_t)lround(sin(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
@@ -188,9 +194,10 @@ int main (void)
         int32_t x_start;
         int32_t y_start;
 
-        for (x_start = -3000; x_start <= 3000; x_start += 37)
+        for (x_start = -T_ATAN_RANGE; x_start <= T_ATAN_RANGE; x_start += 37)
         {
-            for (y_start = -3000; y_start <= 3000; y_start += 41)
+            for (y_start = -T_ATAN_RANGE; y_start <= T_ATAN_RANGE;
+                 y_start += 41)
             {
                 float64_t ref =
                     (atan2((float64_t)y_start, (float64_t)x_start) * 18000.0)
@@ -219,7 +226,7 @@ int main (void)
     }
 
     /* SH-H03: integer square roots, exhaustive near squares */
-    for (x_val = 0u; x_val < 70000u; x_val++)
+    for (x_val = 0u; x_val < T_ISQRT_MAX; x_val++)
     {
         uint64_t square = (uint64_t)x_val * x_val;
 

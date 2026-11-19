@@ -6,6 +6,12 @@
 #include <stddef.h>
 #include "code39.h"
 
+#define CHAR_ELEMS   9u /* bars and spaces in one character */
+#define REPAIR_TRIES 4u /* narrow or wide added at the front or back */
+#define ELEM_KINDS   2u /* bars, spaces */
+#define WIDTH_KINDS  2u /* narrow, wide */
+#define DIRECTIONS   2u /* forwards, reversed */
+
 typedef struct
 {
     char         chr;
@@ -37,7 +43,7 @@ static uint16_t bits_of (char const * p_bits)
     uint16_t pattern = 0u;
     uint8_t  idx;
 
-    for (idx = 0u; idx < 9u; idx++)
+    for (idx = 0u; idx < CHAR_ELEMS; idx++)
     {
         pattern = (uint16_t)((pattern << 1) | (('1' == p_bits[idx]) ? 1u : 0u));
     }
@@ -94,7 +100,7 @@ static uint32_t kth_widest (uint32_t const * p_w, uint8_t first, uint8_t rank,
     {
         bool b_any = false;
 
-        for (idx = first; idx < 9u; idx += 2u)
+        for (idx = first; idx < CHAR_ELEMS; idx += 2u)
         {
             if ((0u == (used & (1u << idx))) && (!b_any || (p_w[idx] > best)))
             {
@@ -131,7 +137,7 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
     uint32_t space_w2;
     uint8_t  idx;
 
-    for (idx = 0u; idx < 9u; idx++)
+    for (idx = 0u; idx < CHAR_ELEMS; idx++)
     {
         widths[idx] = width_at(p_w, n_elems, (uint16_t)(first + idx), b_rev);
     }
@@ -170,7 +176,7 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
         (void)space_w2;
         wide = (1u << is1) | (1u << is2) | (1u << is3);
     }
-    for (idx = 0u; idx < 9u; idx++)
+    for (idx = 0u; idx < CHAR_ELEMS; idx++)
     {
         pattern = (uint16_t)((pattern << 1)
                              | (((wide & (1u << idx)) != 0u) ? 1u : 0u));
@@ -317,7 +323,7 @@ code39_result_t code39_decode_one_repair (uint32_t const * p_widths,
         narrow = (p_widths[idx] < narrow) ? p_widths[idx] : narrow;
         widest = (p_widths[idx] > widest) ? p_widths[idx] : widest;
     }
-    for (kdx = 0u; kdx < 4u; kdx++)
+    for (kdx = 0u; kdx < REPAIR_TRIES; kdx++)
     {
         bool const     b_front = (kdx < 2u);
         uint32_t const add_first =
@@ -440,9 +446,9 @@ static void best_levels (uint32_t const * p_w, uint16_t n_elems,
         sorted[(n_elems - 1u) - ((n_elems / 3u) / 2u)]; /* median of the widest
                                                          third (sorted) */
     thr = (nar + wid) / 2u;
-    for (kind = 0u; kind < 2u; kind++)
+    for (kind = 0u; kind < ELEM_KINDS; kind++)
     {
-        for (wide = 0u; wide < 2u; wide++)
+        for (wide = 0u; wide < WIDTH_KINDS; wide++)
         {
             mid = 0u;
             for (idx = kind; idx < n_elems; idx += 2u)
@@ -668,7 +674,7 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
                     levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
                 b_wide[kdx] = b_w;
             }
-            for (dir = 0u; dir < 2u; dir++)
+            for (dir = 0u; dir < DIRECTIONS; dir++)
             {
                 uint32_t cost;
 

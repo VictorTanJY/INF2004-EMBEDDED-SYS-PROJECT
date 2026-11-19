@@ -42,6 +42,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../app_config.h"
+#define COMMS_MAP_CHARS \
+    4u /* one per navigation: left, right, straight, U-turn */
 
 /* ---------------------------------------------------------------------
  *  Telemetry record posted by any task to mbf_telem (IF-12).  8 bytes:
@@ -105,7 +107,7 @@ typedef uint8_t comms_proto_frame_type_t; /* one of the constants below */
 /* Code 39 data symbols, index 1..43 (0 = none). */
 #define COMMS_SYMBOL_COUNT 43u
 uint8_t comms_proto_symbol_index(char chr); /* 0 if c is not a data symbol */
-char    comms_proto_symbol_char(uint8_t index); /* NUL for 0 or out of range */
+char comms_proto_symbol_char(uint8_t sym_index); /* NUL for 0 or out of range */
 
 /* ---------------------------------------------------------------------
  *  Telemetry (built by CommsTask from the status snapshots).
@@ -234,7 +236,7 @@ typedef struct
 #define COMMS_PARAM_COUNT 5u
 #endif
 comms_proto_param_t const *
-comms_proto_param_by_index(uint8_t index); /* frame index */
+comms_proto_param_by_index(uint8_t param_index); /* frame index */
 comms_proto_param_t const * comms_proto_param_by_id(uint8_t param_id);
 
 /* ---------------------------------------------------------------------

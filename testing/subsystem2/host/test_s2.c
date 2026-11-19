@@ -22,6 +22,11 @@
 #include "motion_cfg.h"
 #include "motion_api.h"
 
+#define T_WHEELS      2 /* left, right */
+#define T_MOVES       4 /* entries of move[] */
+#define T_DRIVE_MS    1000u
+#define T_STOP_MAX_MS 2000u /* ramp to braked well within */
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -96,7 +101,7 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
     int16_t const duty[2] = {duty_l, duty_r};
     int32_t       width;
 
-    for (width = 0; width < 2; width++)
+    for (width = 0; width < T_WHEELS; width++)
     {
         float64_t diff   = (float64_t)duty[width];
         float64_t sum_sq = 0.0;
@@ -208,7 +213,7 @@ static void test_pack_s2 (void)
         {1000, 200}, {-4095, 511}, {4095, 1}, {0, 90}};
 
     memset(&cmd, 0, sizeof(cmd));
-    for (kdx = 0; kdx < 4; kdx++)
+    for (kdx = 0; kdx < T_MOVES; kdx++)
     {
         cmd.src  = 1u;
         cmd.seq  = (uint8_t)(kdx * 9);
@@ -379,7 +384,7 @@ int main (void)
     {
         uint32_t elapsed;
 
-        for (elapsed = 0; elapsed < 1000u; elapsed += 10u)
+        for (elapsed = 0; elapsed < T_DRIVE_MS; elapsed += 10u)
         {
             (void)cmd(MOTION_SRC_LINE, (uint8_t)elapsed, MOTION_CMD_DRIVE, 250,
                       0);
@@ -395,7 +400,8 @@ int main (void)
         CHECK("S2-H04", MOTION_ST_STOPPING == g_mc.state);
         /* S2-H05: ramp at 1 m/s^2 from 250 mm/s: about 250 ms to braked */
         elapsed = 0u;
-        while ((g_mc.state != MOTION_ST_IDLE_BRAKED) && (elapsed < 2000u))
+        while ((g_mc.state != MOTION_ST_IDLE_BRAKED)
+               && (elapsed < T_STOP_MAX_MS))
         {
             run_ms(10u, false);
             elapsed += 10u;
