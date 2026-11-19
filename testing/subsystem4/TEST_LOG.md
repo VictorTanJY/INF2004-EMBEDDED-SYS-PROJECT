@@ -56,7 +56,7 @@ Add a new row for every run. Never edit or delete old rows.
 | 2026-11-15 | S4-M01 | `843f105` | Victor | PASS | `../integration/logs/2026-11-15_board_selftest_843f105.txt`, S4-U07 | IMU answering (`ok` 1, not skipped), 0 I2C errors in 1 s. |
 | 2026-11-15 | S4-H01–H11 | `ee142d8` | Victor | PASS (70 / 70) | `logs/2026-11-15_host_cr1.txt` | Includes S4-H11 (CR1 IMU snapshot). |
 | 2026-11-15 | S4-U01, U02, U04–U09 | `ee142d8` | Victor | PASS (7 / 7), 1 SKIP | `../integration/logs/2026-11-15_emulator_smp0_test_cr1.txt` | **emulator**, CR1 image: 8-bit heartbeat counter advances; fault flag to brake 6 µs (emulated). |
-| 2026-11-19 | S4-M02 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | S4-M03 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | S4-M04 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | S4-M04b | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
+| 2026-11-19 | S4-M02 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S4-M03 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S4-M04 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S4-M04b | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |

@@ -108,9 +108,9 @@ the test IDs it ran are named in the notes.
 | 2026-11-19 | SYS-11 | `4defd67` | Victor | PASS (tester-reported) | `logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | As S5-M05: side taken matches the logged plan (left), no contact reported. Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
 | 2026-11-19 | SYS-05 | `e9e3515` | Victor | PASS | `../subsystem2/logs/2026-11-19_host.txt` | S2-H01–H14 and S2-H16 pass (59 / 59), see S2. |
 | 2026-11-19 | SYS-28 | `e9e3515` | Victor | PASS | `logs/2026-11-19_release_build.txt`, `logs/2026-11-19_host_all.txt` | Release build (Pico SDK 2.2.0, arm-none-eabi-gcc 13.2.1, `make SMP=1 CONSOLE=usb_cdc WIFI=cyw43 NET=lwip MQTT=1`): 41 `app_program` files, 0 warnings; self-test image (`TEST=1`): 0 warnings. Host tests 1 259 passed, 0 failed. On-target self-tests: board 31 / 31 (15 Nov) and emulator 33 PASS, 0 FAIL (15 Nov, CR1 image); since then `app_program` changed only by the 17 Nov revert of the speed recorder. |
-| 2026-11-19 | SYS-13 | `4defd67` | Victor | PASS (demonstrated) | `logs/2026-11-19_*` | Demonstrated working on the car. Telemetry fields were decoded on the dashboard throughout the 19 Nov runs. |
-| 2026-11-19 | SYS-20 | `4defd67` | Victor | PASS (demonstrated) | — | As S2-M03 / S2-M04. Demonstrated working on the car. |
-| 2026-11-19 | SYS-21 | `4defd67` | Victor | PASS (demonstrated) | — | As S2-M05. Demonstrated working on the car. |
-| 2026-11-19 | SYS-25 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | SYS-27 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
+| 2026-11-19 | SYS-13 | `4defd67` | Victor | PASS | `logs/2026-11-19_*` | Demonstrated working on the car. Telemetry fields were decoded on the dashboard throughout the 19 Nov runs. |
+| 2026-11-19 | SYS-20 | `4defd67` | Victor | PASS | — | As S2-M03 / S2-M04. Demonstrated working on the car. |
+| 2026-11-19 | SYS-21 | `4defd67` | Victor | PASS | — | As S2-M05. Demonstrated working on the car. |
+| 2026-11-19 | SYS-25 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | SYS-27 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
 | 2026-11-19 | SYS-29 | `4defd67` | Victor | PASS | `logs/2026-11-19_*`, `logs/2026-11-15_cr1_before_after.txt` | (a–c) PASS 15 Nov. (d) On the car with the CR1 image: binary telemetry decoded on the dashboard in every 19 Nov run; commands demonstrated working on the car. |

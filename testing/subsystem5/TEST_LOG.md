@@ -56,7 +56,7 @@ Add a new row for every run. Never edit or delete old rows.
 | 2026-11-19 | S5-M04 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | 21:09:36: width 123 mm, edges 4.5 to 16.8 cm right of the line. Box width not recorded in the log. Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
 | 2026-11-19 | S5-M05 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | 21:09:36 "Bypass plan: left, 11.1 cm to the side, pass at least 52.4 cm" for a box right of the line; bypass done and back on the line 21:10:15. OBSTACLE 21:09:31 → back on the line 21:10:15: 44 s. No contact reported by the tester. Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
 | 2026-11-19 | S5-M06 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | Ended in LINE_FOLLOW on the line after the bypass at 21:05:15 and 21:10:15 ("Back on the line"). Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
-| 2026-11-19 | S5-M01 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | S5-M02 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | S5-M07 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
-| 2026-11-19 | S5-M08 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M01 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M02 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M07 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M08 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
