@@ -65,7 +65,13 @@ IMPORT uint32_t subsystem1_telem_drops(void);
 #define COMMS_STATUS_PERIOD_MS 1000u /* 1 Hz heartbeat */
 
 /* Private to subsystem 1 */
-IMPORT void task_hmi_thread(INT stacd, void * p_exinf);
+#include "task_hmi.h"
+
+/* Called by usermain() in this order: every subsystem's _init() first,
+   then every subsystem's _start(), so every kernel object exists before
+   any task can use it. */
+IMPORT ER subsystem1_init(void);  /* create this subsystem's kernel objects */
+IMPORT ER subsystem1_start(void); /* create and start its tasks             */
 
 #endif /* SUBSYSTEM1_H */
 

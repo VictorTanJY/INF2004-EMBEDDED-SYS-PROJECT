@@ -9,32 +9,20 @@
 #define BC_PROF_PASSES  5u  /* profile reads tried per code */
 #define HIST_BINS       64u /* darkness histogram: 1024 / 16 */
 
-static void pre_reset (line_barcode_capture_t * p_bc)
-{
-    p_bc->pre_n   = 0u;
-    p_bc->pre_i   = 0u;
-    p_bc->pre_cur = 0u;
-    p_bc->pre_um  = 0u;
-}
-
-/* While armed: keep the darkness record of the last BC_PRE_BINS bins. */
-static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
-                      uint32_t step_um)
-{
-    p_bc->pre_cur = (norm > p_bc->pre_cur) ? norm : p_bc->pre_cur;
-    p_bc->pre_um += step_um;
-    while (p_bc->pre_um >= BC_PROF_BIN_UM)
-    {
-        p_bc->pre_um -= BC_PROF_BIN_UM;
-        p_bc->pre[p_bc->pre_i] = p_bc->pre_cur;
-        p_bc->pre_i            = (uint16_t)((p_bc->pre_i + 1u) % BC_PRE_BINS);
-        if (p_bc->pre_n < BC_PRE_BINS)
-        {
-            p_bc->pre_n++;
-        }
-        p_bc->pre_cur = norm;
-    }
-}
+static void     pre_reset(line_barcode_capture_t * p_bc);
+static void     pre_feed(line_barcode_capture_t * p_bc, uint16_t norm,
+                         uint32_t step_um);
+static void     start_cooldown(line_barcode_capture_t * p_bc);
+static uint16_t runs_to_widths(uint16_t * p_runs, uint16_t n_runs,
+                               uint32_t * p_widths, uint16_t max_elems);
+static uint16_t prof_read(line_barcode_capture_t const * p_bc, uint8_t kdx,
+                          uint32_t * p_w);
+static uint16_t trim_specks(uint32_t const * p_w, uint16_t n_elems,
+                            uint16_t * p_first);
+static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n_elems,
+                                    char * p_ch, bool * pb_rev, bool * pb_trim);
+static line_barcode_result_t finish(line_barcode_capture_t * p_bc,
+                                    line_barcode_out_t *     p_out);
 
 void line_barcode_init (line_barcode_capture_t * p_bc)
 {
@@ -56,12 +44,6 @@ void line_barcode_init (line_barcode_capture_t * p_bc)
     p_bc->q_wlo       = 0xFFFFu;
     p_bc->q_whi       = 0u;
     pre_reset(p_bc);
-}
-
-static void start_cooldown (line_barcode_capture_t * p_bc)
-{
-    p_bc->state       = LINE_BC_COOLDOWN;
-    p_bc->cooldown_um = 0u;
 }
 
 void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
@@ -99,42 +81,6 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
             break;
         }
     }
-}
-
-/* Runs (in bins, bar first) to widths: runs shorter than
-   BC_PROF_MIN_BINS merge into their neighbours (a speck inside a bar or a
-   glint inside a space), keeping the bar / space alternation. */
-static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
-                                uint32_t * p_widths, uint16_t max_elems)
-{
-    uint16_t kdx = 0u;
-    uint16_t idx;
-    uint16_t out = 0u;
-
-    while (kdx < n_runs)
-    {
-        if ((p_runs[kdx] < BC_PROF_MIN_BINS) && (kdx > 0u)
-            && ((kdx + 1u) < n_runs))
-        {
-            p_runs[kdx - 1u] =
-                (uint16_t)(p_runs[kdx - 1u] + p_runs[kdx] + p_runs[kdx + 1u]);
-            for (idx = kdx; (idx + 2u) < n_runs; idx++)
-            {
-                p_runs[idx] = p_runs[idx + 2u];
-            }
-            n_runs = (uint16_t)(n_runs - 2u);
-        }
-        else
-        {
-            kdx++;
-        }
-    }
-    for (kdx = 0u; (kdx < n_runs) && (out < max_elems); kdx++)
-    {
-        p_widths[out] = (uint32_t)p_runs[kdx] * BC_PROF_BIN_UM;
-        out++;
-    }
-    return out;
 }
 
 uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
@@ -239,6 +185,265 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         n_runs++;
     }
     return runs_to_widths(runs, n_runs, p_widths, max_elems);
+}
+
+uint16_t line_barcode_reading (line_barcode_capture_t const * p_bc,
+                               uint8_t reading, uint32_t * p_widths)
+{
+    uint16_t kdx;
+
+    if (0u == reading)
+    {
+        for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
+        {
+            p_widths[kdx] = p_bc->widths[kdx];
+        }
+        return kdx;
+    }
+    return prof_read(p_bc, reading, p_widths);
+}
+
+line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
+                                           uint16_t norm, uint32_t step_um,
+                                           line_barcode_out_t * p_out)
+{
+    bool const b_was_black = p_bc->b_black;
+
+    /* Bars and gaps by SWING (2 Nov): a level change needs the reading to
+       move BC_DELTA from the extreme of the current element.  Fixed levels
+       (350 / 220 before) missed every 3 mm element on the robot: under a
+       sensor spot wider than 3 mm a narrow bar never got dark enough and a
+       narrow gap between wide bars never got light enough, but both still
+       swing clearly against their neighbours.  BC_DELTA is above the
+       peak-to-peak sample noise, so noise alone cannot toggle the level.
+       Rising and falling edges are both detected one BC_DELTA after the
+       extreme, so for a full swing bar and gap widths stay unbiased. */
+    if (p_bc->b_black)
+    {
+        p_bc->ext = (norm > p_bc->ext) ? norm : p_bc->ext; /* darkest so far */
+        if (((uint32_t)norm + BC_DELTA) < p_bc->ext)
+        {
+            p_bc->b_black = false;
+            p_bc->ext     = norm;
+        }
+    }
+    else
+    {
+        p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext; /* lightest so far */
+        if ((norm >= BC_DELTA_MIN)
+            && ((uint32_t)norm > ((uint32_t)p_bc->ext + BC_DELTA)))
+        {
+            p_bc->b_black = true;
+            p_bc->ext     = norm;
+        }
+    }
+
+    switch (p_bc->state)
+    {
+        case LINE_BC_WAIT_QUIET:
+            p_bc->white_um = p_bc->b_black ? 0u : (p_bc->white_um + step_um);
+            if (p_bc->white_um >= BC_QUIET_UM)
+            {
+                p_bc->state    = LINE_BC_ARMED;
+                p_bc->white_um = 0u;
+                pre_reset(p_bc);
+                p_bc->q_lo  = 0u;
+                p_bc->q_hi  = 0u;
+                p_bc->q_wlo = 0xFFFFu;
+                p_bc->q_whi = 0u;
+            }
+        break;
+
+        case LINE_BC_ARMED:
+            if (!p_bc->b_black)
+            {
+                /* white-paper levels, one BC_QUIET_UM window at a time */
+                p_bc->q_wlo = (norm < p_bc->q_wlo) ? norm : p_bc->q_wlo;
+                p_bc->q_whi = (norm > p_bc->q_whi) ? norm : p_bc->q_whi;
+                p_bc->white_um += step_um;
+                if (p_bc->white_um >= BC_QUIET_UM)
+                {
+                    p_bc->q_lo     = p_bc->q_wlo;
+                    p_bc->q_hi     = p_bc->q_whi;
+                    p_bc->q_wlo    = 0xFFFFu;
+                    p_bc->q_whi    = 0u;
+                    p_bc->white_um = 0u;
+                }
+            }
+            if (p_bc->b_black)
+            {
+                uint16_t kdx;
+
+                p_bc->state       = LINE_BC_CAPTURING;
+                p_bc->n_elems     = 0u;
+                p_bc->run_um      = step_um;
+                p_bc->total_um    = step_um;
+                p_bc->max_elem_um = 0u;
+                p_bc->peak        = norm;
+                /* the darkness record starts with what came just before,
+                   oldest first (faint leading bars) */
+                for (kdx = 0u; kdx < p_bc->pre_n; kdx++)
+                {
+                    p_bc->prof[kdx] = p_bc->pre[(
+                        uint16_t)((((p_bc->pre_i + BC_PRE_BINS) - p_bc->pre_n)
+                                   + kdx)
+                                  % BC_PRE_BINS)];
+                }
+                p_bc->prof[p_bc->pre_n] = norm;
+                p_bc->prof_n            = (uint16_t)(p_bc->pre_n + 1u);
+                p_bc->bin_um            = step_um;
+                pre_reset(p_bc);
+            }
+            else
+            {
+                pre_feed(p_bc, norm, step_um);
+            }
+        break;
+
+        case LINE_BC_CAPTURING:
+            p_bc->total_um += step_um;
+            /* darkness profile, one bin per BC_PROF_BIN_UM of travel */
+            p_bc->bin_um += step_um;
+            while ((p_bc->bin_um >= BC_PROF_BIN_UM)
+                   && (p_bc->prof_n < BC_PROF_BINS))
+            {
+                p_bc->bin_um -= BC_PROF_BIN_UM;
+                p_bc->prof[p_bc->prof_n] = norm;
+                p_bc->prof_n++;
+            }
+            if ((p_bc->prof_n > 0u) && (norm > p_bc->prof[p_bc->prof_n - 1u]))
+            {
+                p_bc->prof[p_bc->prof_n - 1u] = norm;
+            }
+            if (norm > p_bc->peak)
+            {
+                p_bc->peak = norm;
+            }
+            if (p_bc->b_black == b_was_black)
+            {
+                p_bc->run_um += step_um;
+            }
+            else
+            {
+                /* run ended: store it as an element */
+                if (p_bc->n_elems >= BC_MAX_ELEMENTS)
+                {
+                    p_out->reason    = (uint8_t)CODE39_ERR_TOO_MANY;
+                    p_out->elements  = p_bc->n_elems;
+                    p_out->length_um = p_bc->total_um;
+                    start_cooldown(p_bc);
+                    return BC_REJECT;
+                }
+                p_bc->widths[p_bc->n_elems] = p_bc->run_um;
+                p_bc->n_elems++;
+                if (p_bc->run_um > p_bc->max_elem_um)
+                {
+                    p_bc->max_elem_um = p_bc->run_um;
+                }
+                p_bc->run_um = step_um;
+            }
+            if (!p_bc->b_black)
+            {
+                uint32_t end_um = (p_bc->max_elem_um * BC_END_FACTOR_X10) / 10u;
+
+                if (end_um < BC_END_MIN_UM)
+                {
+                    end_um = BC_END_MIN_UM;
+                }
+                if (p_bc->run_um >= end_um)
+                {
+                    return finish(p_bc, p_out);
+                }
+            }
+            if (p_bc->total_um > BC_MAX_LEN_UM)
+            {
+                p_out->reason    = (uint8_t)CODE39_ERR_TOO_LONG;
+                p_out->elements  = p_bc->n_elems;
+                p_out->length_um = p_bc->total_um;
+                start_cooldown(p_bc);
+                return BC_REJECT;
+            }
+        break;
+
+        default: /* LINE_BC_COOLDOWN */
+            p_bc->cooldown_um += step_um;
+            if (p_bc->cooldown_um >= BC_COOLDOWN_UM)
+            {
+                p_bc->state    = LINE_BC_WAIT_QUIET;
+                p_bc->white_um = 0u;
+            }
+        break;
+    }
+    return BC_NONE;
+}
+
+static void pre_reset (line_barcode_capture_t * p_bc)
+{
+    p_bc->pre_n   = 0u;
+    p_bc->pre_i   = 0u;
+    p_bc->pre_cur = 0u;
+    p_bc->pre_um  = 0u;
+}
+
+/* While armed: keep the darkness record of the last BC_PRE_BINS bins. */
+static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
+                      uint32_t step_um)
+{
+    p_bc->pre_cur = (norm > p_bc->pre_cur) ? norm : p_bc->pre_cur;
+    p_bc->pre_um += step_um;
+    while (p_bc->pre_um >= BC_PROF_BIN_UM)
+    {
+        p_bc->pre_um -= BC_PROF_BIN_UM;
+        p_bc->pre[p_bc->pre_i] = p_bc->pre_cur;
+        p_bc->pre_i            = (uint16_t)((p_bc->pre_i + 1u) % BC_PRE_BINS);
+        if (p_bc->pre_n < BC_PRE_BINS)
+        {
+            p_bc->pre_n++;
+        }
+        p_bc->pre_cur = norm;
+    }
+}
+
+static void start_cooldown (line_barcode_capture_t * p_bc)
+{
+    p_bc->state       = LINE_BC_COOLDOWN;
+    p_bc->cooldown_um = 0u;
+}
+
+/* Runs (in bins, bar first) to widths: runs shorter than
+   BC_PROF_MIN_BINS merge into their neighbours (a speck inside a bar or a
+   glint inside a space), keeping the bar / space alternation. */
+static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
+                                uint32_t * p_widths, uint16_t max_elems)
+{
+    uint16_t kdx = 0u;
+    uint16_t idx;
+    uint16_t out = 0u;
+
+    while (kdx < n_runs)
+    {
+        if ((p_runs[kdx] < BC_PROF_MIN_BINS) && (kdx > 0u)
+            && ((kdx + 1u) < n_runs))
+        {
+            p_runs[kdx - 1u] =
+                (uint16_t)(p_runs[kdx - 1u] + p_runs[kdx] + p_runs[kdx + 1u]);
+            for (idx = kdx; (idx + 2u) < n_runs; idx++)
+            {
+                p_runs[idx] = p_runs[idx + 2u];
+            }
+            n_runs = (uint16_t)(n_runs - 2u);
+        }
+        else
+        {
+            kdx++;
+        }
+    }
+    for (kdx = 0u; (kdx < n_runs) && (out < max_elems); kdx++)
+    {
+        p_widths[out] = (uint32_t)p_runs[kdx] * BC_PROF_BIN_UM;
+        out++;
+    }
+    return out;
 }
 
 /* Elements found again from the darkness profile at threshold k (1 mid,
@@ -472,196 +677,6 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
     }
     p_out->reason = (uint8_t)result;
     return BC_REJECT;
-}
-
-uint16_t line_barcode_reading (line_barcode_capture_t const * p_bc,
-                               uint8_t reading, uint32_t * p_widths)
-{
-    uint16_t kdx;
-
-    if (0u == reading)
-    {
-        for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
-        {
-            p_widths[kdx] = p_bc->widths[kdx];
-        }
-        return kdx;
-    }
-    return prof_read(p_bc, reading, p_widths);
-}
-
-line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
-                                           uint16_t norm, uint32_t step_um,
-                                           line_barcode_out_t * p_out)
-{
-    bool const b_was_black = p_bc->b_black;
-
-    /* Bars and gaps by SWING (2 Nov): a level change needs the reading to
-       move BC_DELTA from the extreme of the current element.  Fixed levels
-       (350 / 220 before) missed every 3 mm element on the robot: under a
-       sensor spot wider than 3 mm a narrow bar never got dark enough and a
-       narrow gap between wide bars never got light enough, but both still
-       swing clearly against their neighbours.  BC_DELTA is above the
-       peak-to-peak sample noise, so noise alone cannot toggle the level.
-       Rising and falling edges are both detected one BC_DELTA after the
-       extreme, so for a full swing bar and gap widths stay unbiased. */
-    if (p_bc->b_black)
-    {
-        p_bc->ext = (norm > p_bc->ext) ? norm : p_bc->ext; /* darkest so far */
-        if (((uint32_t)norm + BC_DELTA) < p_bc->ext)
-        {
-            p_bc->b_black = false;
-            p_bc->ext     = norm;
-        }
-    }
-    else
-    {
-        p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext; /* lightest so far */
-        if ((norm >= BC_DELTA_MIN)
-            && ((uint32_t)norm > ((uint32_t)p_bc->ext + BC_DELTA)))
-        {
-            p_bc->b_black = true;
-            p_bc->ext     = norm;
-        }
-    }
-
-    switch (p_bc->state)
-    {
-        case LINE_BC_WAIT_QUIET:
-            p_bc->white_um = p_bc->b_black ? 0u : (p_bc->white_um + step_um);
-            if (p_bc->white_um >= BC_QUIET_UM)
-            {
-                p_bc->state    = LINE_BC_ARMED;
-                p_bc->white_um = 0u;
-                pre_reset(p_bc);
-                p_bc->q_lo  = 0u;
-                p_bc->q_hi  = 0u;
-                p_bc->q_wlo = 0xFFFFu;
-                p_bc->q_whi = 0u;
-            }
-        break;
-
-        case LINE_BC_ARMED:
-            if (!p_bc->b_black)
-            {
-                /* white-paper levels, one BC_QUIET_UM window at a time */
-                p_bc->q_wlo = (norm < p_bc->q_wlo) ? norm : p_bc->q_wlo;
-                p_bc->q_whi = (norm > p_bc->q_whi) ? norm : p_bc->q_whi;
-                p_bc->white_um += step_um;
-                if (p_bc->white_um >= BC_QUIET_UM)
-                {
-                    p_bc->q_lo     = p_bc->q_wlo;
-                    p_bc->q_hi     = p_bc->q_whi;
-                    p_bc->q_wlo    = 0xFFFFu;
-                    p_bc->q_whi    = 0u;
-                    p_bc->white_um = 0u;
-                }
-            }
-            if (p_bc->b_black)
-            {
-                uint16_t kdx;
-
-                p_bc->state       = LINE_BC_CAPTURING;
-                p_bc->n_elems     = 0u;
-                p_bc->run_um      = step_um;
-                p_bc->total_um    = step_um;
-                p_bc->max_elem_um = 0u;
-                p_bc->peak        = norm;
-                /* the darkness record starts with what came just before,
-                   oldest first (faint leading bars) */
-                for (kdx = 0u; kdx < p_bc->pre_n; kdx++)
-                {
-                    p_bc->prof[kdx] = p_bc->pre[(
-                        uint16_t)((((p_bc->pre_i + BC_PRE_BINS) - p_bc->pre_n)
-                                   + kdx)
-                                  % BC_PRE_BINS)];
-                }
-                p_bc->prof[p_bc->pre_n] = norm;
-                p_bc->prof_n            = (uint16_t)(p_bc->pre_n + 1u);
-                p_bc->bin_um            = step_um;
-                pre_reset(p_bc);
-            }
-            else
-            {
-                pre_feed(p_bc, norm, step_um);
-            }
-        break;
-
-        case LINE_BC_CAPTURING:
-            p_bc->total_um += step_um;
-            /* darkness profile, one bin per BC_PROF_BIN_UM of travel */
-            p_bc->bin_um += step_um;
-            while ((p_bc->bin_um >= BC_PROF_BIN_UM)
-                   && (p_bc->prof_n < BC_PROF_BINS))
-            {
-                p_bc->bin_um -= BC_PROF_BIN_UM;
-                p_bc->prof[p_bc->prof_n] = norm;
-                p_bc->prof_n++;
-            }
-            if ((p_bc->prof_n > 0u) && (norm > p_bc->prof[p_bc->prof_n - 1u]))
-            {
-                p_bc->prof[p_bc->prof_n - 1u] = norm;
-            }
-            if (norm > p_bc->peak)
-            {
-                p_bc->peak = norm;
-            }
-            if (p_bc->b_black == b_was_black)
-            {
-                p_bc->run_um += step_um;
-            }
-            else
-            {
-                /* run ended: store it as an element */
-                if (p_bc->n_elems >= BC_MAX_ELEMENTS)
-                {
-                    p_out->reason    = (uint8_t)CODE39_ERR_TOO_MANY;
-                    p_out->elements  = p_bc->n_elems;
-                    p_out->length_um = p_bc->total_um;
-                    start_cooldown(p_bc);
-                    return BC_REJECT;
-                }
-                p_bc->widths[p_bc->n_elems] = p_bc->run_um;
-                p_bc->n_elems++;
-                if (p_bc->run_um > p_bc->max_elem_um)
-                {
-                    p_bc->max_elem_um = p_bc->run_um;
-                }
-                p_bc->run_um = step_um;
-            }
-            if (!p_bc->b_black)
-            {
-                uint32_t end_um = (p_bc->max_elem_um * BC_END_FACTOR_X10) / 10u;
-
-                if (end_um < BC_END_MIN_UM)
-                {
-                    end_um = BC_END_MIN_UM;
-                }
-                if (p_bc->run_um >= end_um)
-                {
-                    return finish(p_bc, p_out);
-                }
-            }
-            if (p_bc->total_um > BC_MAX_LEN_UM)
-            {
-                p_out->reason    = (uint8_t)CODE39_ERR_TOO_LONG;
-                p_out->elements  = p_bc->n_elems;
-                p_out->length_um = p_bc->total_um;
-                start_cooldown(p_bc);
-                return BC_REJECT;
-            }
-        break;
-
-        default: /* LINE_BC_COOLDOWN */
-            p_bc->cooldown_um += step_um;
-            if (p_bc->cooldown_um >= BC_COOLDOWN_UM)
-            {
-                p_bc->state    = LINE_BC_WAIT_QUIET;
-                p_bc->white_um = 0u;
-            }
-        break;
-    }
-    return BC_NONE;
 }
 
 /*** end of file ***/

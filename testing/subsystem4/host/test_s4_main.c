@@ -1,5 +1,5 @@
 /*
- *  test_s4.c
+ *  test_s4_main.c
  *  Host unit tests for subsystem 4: imu_core.c (pitch, humps, tilt,
  *  lift, classification, calibration) and safety_core.c (heartbeats).
  *  Humps are simulated geometrically: the chassis rests on the drive axle
@@ -9,6 +9,7 @@
  *  Build and run:  make -C testing/subsystem4/host
  */
 
+#include "test_s4_main.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,9 +35,6 @@
 #define T_HB_START_MS   1000u /* supervision starts */
 #define T_HB_END_MS     1320u /* past the slowest timeout */
 
-static int32_t g_pass;
-static int32_t g_fail;
-
 #define CHECK(id, cond)                                                      \
     do                                                                       \
     {                                                                        \
@@ -51,174 +49,25 @@ static int32_t g_fail;
         }                                                                    \
     } while (0)
 
+static int32_t g_pass;
+static int32_t g_fail;
+
 static imu_core_t g_ic;
 static uint32_t   g_now;
 static uint8_t    g_ev;
 
-/* Accelerometer reading (mg, raw axes) for chassis pitch theta (deg),
-   roll phi (deg) and a forward linear acceleration a_lin (mm/s^2). */
-static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
-                       int32_t out[3])
-{
-    float64_t const time_s  = (theta * M_PI) / 180.0;
-    float64_t const pos     = (phi * M_PI) / 180.0;
-    float64_t       fwd     = (1000.0 * sin(time_s)) + (a_lin / 9.807);
-    float64_t       left    = 1000.0 * cos(time_s) * sin(pos);
-    float64_t       up_mg   = 1000.0 * cos(time_s) * cos(pos);
-    float64_t       body[3] = {0.0, 0.0, 0.0};
-
-    body[IMU_AXIS_FWD]  = fwd * IMU_SIGN_FWD;
-    body[IMU_AXIS_LEFT] = left * IMU_SIGN_LEFT;
-    body[IMU_AXIS_UP]   = up_mg * IMU_SIGN_UP;
-    out[0]              = (int32_t)lround(body[0]);
-    out[1]              = (int32_t)lround(body[1]);
-    out[2]              = (int32_t)lround(body[2]);
-}
-
-static void step (float64_t theta, float64_t phi, float64_t a_lin,
-                  int32_t value, int32_t ds_um, int32_t yaw)
-{
-    int32_t accel[3];
-
-    accel_for(theta, phi, a_lin, accel);
-    g_now += 10u;
-    g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, yaw, 10u, g_now);
-}
-
-/* Level chassis with an extra up acceleration (mg), e.g. a hand lift. */
-static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
-{
-    int32_t accel[3];
-
-    accel_for(0.0, 0.0, 0.0, accel);
-    accel[IMU_AXIS_UP] += extra_up_mg * IMU_SIGN_UP;
-    g_now += 10u;
-    g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, 0, 10u, g_now);
-}
-
-static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
-                       float64_t height)
-{
-    if ((x_val < start) || (x_val > (start + len)))
-    {
-        return 0.0;
-    }
-    return 0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
-}
-
-/* Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */
-static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
-                         int32_t * p_ends)
-{
-    float64_t const len = IMU_WHEELBASE_MM;
-    float64_t       x_val;
-
-    imu_core_init(&g_ic);
-    g_now     = 0u;
-    *p_starts = 0;
-    *p_ends   = 0;
-    for (x_val = 0.0; x_val < 1500.0; x_val += 3.0)
-    {
-        float64_t theta = (atan((z_of(x_val + len, 300.0, len_mm, h_mm)
-                                 - z_of(x_val, 300.0, len_mm, h_mm))
-                                / len)
-                           * 180.0)
-                          / M_PI;
-
-        g_ev = 0u;
-        step(theta, 0.0, 0.0, 300, 3000, 0);
-        if (g_ev & IMU_EV_HUMP_START)
-        {
-            (*p_starts)++;
-        }
-        if (g_ev & IMU_EV_HUMP_END)
-        {
-            (*p_ends)++;
-        }
-    }
-    return (int32_t)g_ic.last_hump_mm;
-}
-
-/* Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
-   h_mm (side = +1 right wheel, -1 left).  The raised wheel rolls the
-   chassis by asin(z / track) and tips the nose down by atan(z / 2 / L)
-   (drive axle behind the caster).  Returns the reported peak. */
-static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
-                              int32_t * p_starts, int32_t * p_ends)
-{
-    float64_t const period = IMU_SIDE_LEVER_MM;
-    float64_t const len    = IMU_WHEELBASE_MM;
-    float64_t       x_val;
-
-    imu_core_init(&g_ic);
-    g_now     = 0u;
-    *p_starts = 0;
-    *p_ends   = 0;
-    for (x_val = 0.0; x_val < 1200.0; x_val += 1.0)
-    {
-        float64_t z_val = z_of(x_val, 300.0, len_mm, h_mm);
-        float64_t roll  = (side * asin(z_val / period) * 180.0) / M_PI;
-        float64_t theta = (-atan((0.5 * z_val) / len) * 180.0) / M_PI;
-
-        g_ev = 0u;
-        step(theta, roll, 0.0, 100, 1000, 0);
-        if (g_ev & IMU_EV_HUMP_START)
-        {
-            (*p_starts)++;
-        }
-        if (g_ev & IMU_EV_HUMP_END)
-        {
-            (*p_ends)++;
-        }
-    }
-    return (int32_t)g_ic.last_hump_mm;
-}
-
-/* S4-H11: Change Requirement 1, the packed IMU snapshot */
-static void test_pack_s4 (void)
-{
-    imu_types_snap_t snap;
-    imu_types_snap_t ret;
-    uint32_t         words[IMU_SNAP_WORDS];
-
-    CHECK("S4-H11", (IMU_SNAP_BITS == imu_core_snap_layout_bits())
-                        && (IMU_SNAP_WORDS == PK_WORDS(IMU_SNAP_BITS))
-                        && (sizeof(words) < sizeof(snap)));
-    memset(&snap, 0, sizeof(snap));
-    snap.t_ms             = 99u;
-    snap.pitch_cdeg       = -9000;
-    snap.roll_cdeg        = 18000;
-    snap.heading_cdeg     = 35999;
-    snap.turn_rate_cdeg_s = -32768;
-    snap.accel_mg         = -16000;
-    snap.hump_max_mm      = 31u;
-    snap.last_hump_mm     = 1023u;
-    snap.humps            = 3u;
-    snap.i2c_errors       = 65535u;
-    snap.hump_state       = 3u;
-    snap.motion           = 7u;
-    snap.b_ok             = 1u;
-    snap.cal              = 3u;
-    snap.pitch_valid      = 1u;
-    snap.tilt             = 1u;
-    imu_core_snap_pack(&snap, words);
-    memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
-    imu_core_snap_unpack(words, &ret);
-    {
-        uint32_t words_out[IMU_SNAP_WORDS];
-
-        imu_core_snap_pack(&ret, words_out);
-        CHECK("S4-H11", 0 == memcmp(words, words_out, sizeof(words)));
-    }
-    memset(&ret, 0, sizeof(ret)); /* same padding as s */
-    imu_core_snap_unpack(words, &ret);
-    CHECK("S4-H11", 0 == memcmp(&snap, &ret, sizeof(snap)));
-    snap.humps       = 300u;
-    snap.hump_max_mm = 5000u; /* saturate */
-    imu_core_snap_pack(&snap, words);
-    imu_core_snap_unpack(words, &ret);
-    CHECK("S4-H11", (255u == ret.humps) && (1023u == ret.hump_max_mm));
-}
+static void accel_for(float64_t theta, float64_t phi, float64_t a_lin,
+                      int32_t out[3]);
+static void step(float64_t theta, float64_t phi, float64_t a_lin, int32_t value,
+                 int32_t ds_um, int32_t yaw);
+static void step_up(int32_t extra_up_mg, int32_t value, int32_t ds_um);
+static float64_t z_of(float64_t x_val, float64_t start, float64_t len,
+                      float64_t height);
+static int32_t   run_hump(float64_t h_mm, float64_t len_mm, int32_t * p_starts,
+                          int32_t * p_ends);
+static int32_t   run_side_hump(float64_t h_mm, float64_t len_mm, int32_t side,
+                               int32_t * p_starts, int32_t * p_ends);
+static void      test_pack_s4(void);
 
 int main (void)
 {
@@ -808,5 +657,171 @@ int main (void)
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (0 == g_fail) ? 0 : 1;
 }
+
+/* Accelerometer reading (mg, raw axes) for chassis pitch theta (deg),
+   roll phi (deg) and a forward linear acceleration a_lin (mm/s^2). */
+static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
+                       int32_t out[3])
+{
+    float64_t const time_s  = (theta * M_PI) / 180.0;
+    float64_t const pos     = (phi * M_PI) / 180.0;
+    float64_t       fwd     = (1000.0 * sin(time_s)) + (a_lin / 9.807);
+    float64_t       left    = 1000.0 * cos(time_s) * sin(pos);
+    float64_t       up_mg   = 1000.0 * cos(time_s) * cos(pos);
+    float64_t       body[3] = {0.0, 0.0, 0.0};
+
+    body[IMU_AXIS_FWD]  = fwd * IMU_SIGN_FWD;
+    body[IMU_AXIS_LEFT] = left * IMU_SIGN_LEFT;
+    body[IMU_AXIS_UP]   = up_mg * IMU_SIGN_UP;
+    out[0]              = (int32_t)lround(body[0]);
+    out[1]              = (int32_t)lround(body[1]);
+    out[2]              = (int32_t)lround(body[2]);
+}
+
+static void step (float64_t theta, float64_t phi, float64_t a_lin,
+                  int32_t value, int32_t ds_um, int32_t yaw)
+{
+    int32_t accel[3];
+
+    accel_for(theta, phi, a_lin, accel);
+    g_now += 10u;
+    g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, yaw, 10u, g_now);
+}
+
+/* Level chassis with an extra up acceleration (mg), e.g. a hand lift. */
+static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
+{
+    int32_t accel[3];
+
+    accel_for(0.0, 0.0, 0.0, accel);
+    accel[IMU_AXIS_UP] += extra_up_mg * IMU_SIGN_UP;
+    g_now += 10u;
+    g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, 0, 10u, g_now);
+}
+
+static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
+                       float64_t height)
+{
+    if ((x_val < start) || (x_val > (start + len)))
+    {
+        return 0.0;
+    }
+    return 0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
+}
+
+/* Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */
+static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
+                         int32_t * p_ends)
+{
+    float64_t const len = IMU_WHEELBASE_MM;
+    float64_t       x_val;
+
+    imu_core_init(&g_ic);
+    g_now     = 0u;
+    *p_starts = 0;
+    *p_ends   = 0;
+    for (x_val = 0.0; x_val < 1500.0; x_val += 3.0)
+    {
+        float64_t theta = (atan((z_of(x_val + len, 300.0, len_mm, h_mm)
+                                 - z_of(x_val, 300.0, len_mm, h_mm))
+                                / len)
+                           * 180.0)
+                          / M_PI;
+
+        g_ev = 0u;
+        step(theta, 0.0, 0.0, 300, 3000, 0);
+        if (g_ev & IMU_EV_HUMP_START)
+        {
+            (*p_starts)++;
+        }
+        if (g_ev & IMU_EV_HUMP_END)
+        {
+            (*p_ends)++;
+        }
+    }
+    return (int32_t)g_ic.last_hump_mm;
+}
+
+/* Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
+   h_mm (side = +1 right wheel, -1 left).  The raised wheel rolls the
+   chassis by asin(z / track) and tips the nose down by atan(z / 2 / L)
+   (drive axle behind the caster).  Returns the reported peak. */
+static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
+                              int32_t * p_starts, int32_t * p_ends)
+{
+    float64_t const period = IMU_SIDE_LEVER_MM;
+    float64_t const len    = IMU_WHEELBASE_MM;
+    float64_t       x_val;
+
+    imu_core_init(&g_ic);
+    g_now     = 0u;
+    *p_starts = 0;
+    *p_ends   = 0;
+    for (x_val = 0.0; x_val < 1200.0; x_val += 1.0)
+    {
+        float64_t z_val = z_of(x_val, 300.0, len_mm, h_mm);
+        float64_t roll  = (side * asin(z_val / period) * 180.0) / M_PI;
+        float64_t theta = (-atan((0.5 * z_val) / len) * 180.0) / M_PI;
+
+        g_ev = 0u;
+        step(theta, roll, 0.0, 100, 1000, 0);
+        if (g_ev & IMU_EV_HUMP_START)
+        {
+            (*p_starts)++;
+        }
+        if (g_ev & IMU_EV_HUMP_END)
+        {
+            (*p_ends)++;
+        }
+    }
+    return (int32_t)g_ic.last_hump_mm;
+}
+
+/* S4-H11: Change Requirement 1, the packed IMU snapshot */
+static void test_pack_s4 (void)
+{
+    imu_types_snap_t snap;
+    imu_types_snap_t ret;
+    uint32_t         words[IMU_SNAP_WORDS];
+
+    CHECK("S4-H11", (IMU_SNAP_BITS == imu_core_snap_layout_bits())
+                        && (IMU_SNAP_WORDS == PK_WORDS(IMU_SNAP_BITS))
+                        && (sizeof(words) < sizeof(snap)));
+    memset(&snap, 0, sizeof(snap));
+    snap.t_ms             = 99u;
+    snap.pitch_cdeg       = -9000;
+    snap.roll_cdeg        = 18000;
+    snap.heading_cdeg     = 35999;
+    snap.turn_rate_cdeg_s = -32768;
+    snap.accel_mg         = -16000;
+    snap.hump_max_mm      = 31u;
+    snap.last_hump_mm     = 1023u;
+    snap.humps            = 3u;
+    snap.i2c_errors       = 65535u;
+    snap.hump_state       = 3u;
+    snap.motion           = 7u;
+    snap.b_ok             = 1u;
+    snap.cal              = 3u;
+    snap.pitch_valid      = 1u;
+    snap.tilt             = 1u;
+    imu_core_snap_pack(&snap, words);
+    memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
+    imu_core_snap_unpack(words, &ret);
+    {
+        uint32_t words_out[IMU_SNAP_WORDS];
+
+        imu_core_snap_pack(&ret, words_out);
+        CHECK("S4-H11", 0 == memcmp(words, words_out, sizeof(words)));
+    }
+    memset(&ret, 0, sizeof(ret)); /* same padding as s */
+    imu_core_snap_unpack(words, &ret);
+    CHECK("S4-H11", 0 == memcmp(&snap, &ret, sizeof(snap)));
+    snap.humps       = 300u;
+    snap.hump_max_mm = 5000u; /* saturate */
+    imu_core_snap_pack(&snap, words);
+    imu_core_snap_unpack(words, &ret);
+    CHECK("S4-H11", (255u == ret.humps) && (1023u == ret.hump_max_mm));
+}
+/*** end of file ***/
 
 /*** end of file ***/

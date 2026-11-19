@@ -12,10 +12,10 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
 | S3-U01 | *retired 25 Oct:* line snapshot round trip (LineBarcodeTask now writes it continuously) | IF-04 | – | – | – |
-| S3-U02 | LineBarcodeTask publishes its snapshot | IF-04 | auto | `subsystem3_test_run.c` | PASS |
-| S3-U03 | ADC + chained DMA deliver ~10 blocks per 100 ms (1 kHz per channel, 3 channels) | NFR2 | auto | `subsystem3_test_run.c` | PASS |
-| S3-U04 | Code 39 `*F*` decodes on the target CPU | FR3 | auto | `subsystem3_test_run.c` | PASS |
-| S3-U05 | 100 ADC blocks per second, none lost; live IR readings | NFR2 | auto | `subsystem3_test_run.c`; 1 s window. Prints blocks, lost blocks and the three normalised readings | 95–105 blocks, 0 lost, readings 0–1000 |
+| S3-U02 | LineBarcodeTask publishes its snapshot | IF-04 | auto | `subsystem3_test.c` | PASS |
+| S3-U03 | ADC + chained DMA deliver ~10 blocks per 100 ms (1 kHz per channel, 3 channels) | NFR2 | auto | `subsystem3_test.c` | PASS |
+| S3-U04 | Code 39 `*F*` decodes on the target CPU | FR3 | auto | `subsystem3_test.c` | PASS |
+| S3-U05 | 100 ADC blocks per second, none lost; live IR readings | NFR2 | auto | `subsystem3_test.c`; 1 s window. Prints blocks, lost blocks and the three normalised readings | 95–105 blocks, 0 lost, readings 0–1000 |
 | S3-U06 | *not used* | – | – | – | – |
 | S3-U07 | barcode `*A*` through the whole `line_barcode_sample` pipeline on the target, timed | FR3, NFR3 | auto | synthetic clean bars (narrow 3 mm, wide 7.5 mm, levels 80 / 920), 100 mm/s, 1 kHz, 1.2 m. Prints result, pass, slowest and mean call time | one result, `A`; slowest `line_barcode_sample` call < 10 ms (one ADC block) |
 | S3-H01–H07 | Code 39: full 44-character table; the instructor's sample sheets (A, F, Z at all three printed sizes, W, X, Y; `vectors_slides.c` from BARCODE.pptx) at screen and A4 scale, forwards and reversed; all 43 data characters at 3 narrow widths x 3 ratios x 2 directions with 15 % jitter; corrupted wide bar never decodes as another character; 1 kHz sample-stream capture at 0.15 / 0.30 m/s with spot blur and noise (>= 95 %, 0 wrong); crossing line ignored; long patch rejected | FR3, NFR3, A6 | host | `make -C testing/subsystem3/host` | `host tests: N passed, 0 failed` |

@@ -1,5 +1,5 @@
 /*
- *  mission_task_thread.c
+ *  mission_task.c
  *  Subsystem 5 -- MissionTask (priority 8, core 1): the system statechart
  *  (Week 6 Section 5).  Owner: Buddy 5 (Ryan).
  *
@@ -11,6 +11,7 @@
  *  telemetry records.
  */
 
+#include "mission_task.h"
 #include "subsystem5.h"
 #include "mission_core.h"
 #include "../app_types.h"
@@ -25,6 +26,65 @@ typedef uint8_t s5_check_src_imu_t[(4u == APP_SRC_SAFETY_IMU) ? 1 : -1];
 
 static mission_core_t g_mc;
 static uint8_t        g_scan_seq;
+
+static ER   mission_motion(mission_core_act_t const * p_a);
+static void run_actions(mission_core_out_t const * p_out);
+
+EXPORT void mission_task_thread (INT stacd, void * p_exinf)
+{
+    mission_types_evt_t   event;
+    uint32_t              ev_word; /* mbf_mission: one packed word (CR1) */
+    mission_core_out_t    out;
+    mission_core_inputs_t inputs;
+    motion_types_odom_t   odom;
+    line_types_snap_t     line;
+    imu_types_snap_t      imu;
+
+    (void)stacd;
+    (void)p_exinf;
+
+    mission_core_init(&g_mc, (uint32_t)app_time_ms());
+    g_mc.snap.t_ms = (uint32_t)app_time_ms();
+    subsystem5_put_mission_snap(&g_mc.snap);
+
+    for (;;)
+    {
+        INT msg_len = tk_rcv_mbf(g_mbf_mission, &ev_word, S5_MISSION_TICK_MS);
+        uint32_t now_ms;
+
+        subsystem4_heartbeat(SAFETY_HB_MISSION);
+        now_ms = (uint32_t)app_time_ms();
+
+        out.n_acts = 0u;
+        if ((INT)sizeof(ev_word) == msg_len)
+        {
+            mission_core_evt_unpack(ev_word, &event);
+            /* the laptop's event log: every event MissionTask decides on */
+            (void)subsystem1_telem_post(COMMS_KIND_EVENT, event.src,
+                                        (uint16_t)event.type, event.data);
+            mission_core_event(&g_mc, &event, now_ms, &out);
+            run_actions(&out);
+        }
+
+        subsystem2_get_odom(&odom);
+        subsystem3_get_snap(&line);
+        subsystem4_get_imu_snap(&imu);
+        inputs.b_motion_hw_ok  = (odom.hw_ok != 0u);
+        inputs.b_line_hw_ok    = ((line.flags & LINE_FLAG_HW_OK) != 0u);
+        inputs.b_imu_ok        = (imu.b_ok != 0u);
+        inputs.b_timer_checked = true;
+        inputs.b_timer_ok      = safety_task_timer_tick_ok();
+        inputs.b_on_line       = ((line.flags & LINE_FLAG_ON_LINE) != 0u)
+                                 && ((line.flags & LINE_FLAG_CALIBRATED) != 0u);
+        inputs.mbf_drops       = subsystem5_mission_drops();
+        out.n_acts             = 0u;
+        mission_core_tick(&g_mc, &inputs, now_ms, &out);
+        run_actions(&out);
+
+        g_mc.snap.t_ms = now_ms;
+        subsystem5_put_mission_snap(&g_mc.snap);
+    }
+}
 
 /* One motion action through the named API (FR5); SET_AUTH and
    CLEAR_ESTOP have no named form and use subsystem2_post. */
@@ -127,62 +187,6 @@ static void run_actions (mission_core_out_t const * p_out)
             default: /* NEW_RUN: ImuTask follows snap.runs */
             break;
         }
-    }
-}
-
-EXPORT void mission_task_thread (INT stacd, void * p_exinf)
-{
-    mission_types_evt_t   event;
-    uint32_t              ev_word; /* mbf_mission: one packed word (CR1) */
-    mission_core_out_t    out;
-    mission_core_inputs_t inputs;
-    motion_types_odom_t   odom;
-    line_types_snap_t     line;
-    imu_types_snap_t      imu;
-
-    (void)stacd;
-    (void)p_exinf;
-
-    mission_core_init(&g_mc, (uint32_t)app_time_ms());
-    g_mc.snap.t_ms = (uint32_t)app_time_ms();
-    subsystem5_put_mission_snap(&g_mc.snap);
-
-    for (;;)
-    {
-        INT msg_len = tk_rcv_mbf(g_mbf_mission, &ev_word, S5_MISSION_TICK_MS);
-        uint32_t now_ms;
-
-        subsystem4_heartbeat(SAFETY_HB_MISSION);
-        now_ms = (uint32_t)app_time_ms();
-
-        out.n_acts = 0u;
-        if ((INT)sizeof(ev_word) == msg_len)
-        {
-            mission_core_evt_unpack(ev_word, &event);
-            /* the laptop's event log: every event MissionTask decides on */
-            (void)subsystem1_telem_post(COMMS_KIND_EVENT, event.src,
-                                        (uint16_t)event.type, event.data);
-            mission_core_event(&g_mc, &event, now_ms, &out);
-            run_actions(&out);
-        }
-
-        subsystem2_get_odom(&odom);
-        subsystem3_get_snap(&line);
-        subsystem4_get_imu_snap(&imu);
-        inputs.b_motion_hw_ok  = (odom.hw_ok != 0u);
-        inputs.b_line_hw_ok    = ((line.flags & LINE_FLAG_HW_OK) != 0u);
-        inputs.b_imu_ok        = (imu.b_ok != 0u);
-        inputs.b_timer_checked = true;
-        inputs.b_timer_ok      = safety_task_timer_tick_ok();
-        inputs.b_on_line       = ((line.flags & LINE_FLAG_ON_LINE) != 0u)
-                                 && ((line.flags & LINE_FLAG_CALIBRATED) != 0u);
-        inputs.mbf_drops       = subsystem5_mission_drops();
-        out.n_acts             = 0u;
-        mission_core_tick(&g_mc, &inputs, now_ms, &out);
-        run_actions(&out);
-
-        g_mc.snap.t_ms = now_ms;
-        subsystem5_put_mission_snap(&g_mc.snap);
     }
 }
 

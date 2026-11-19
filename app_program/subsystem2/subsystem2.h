@@ -72,26 +72,19 @@ IMPORT void subsystem2_motor_estop(void);
 IMPORT bool subsystem2_estop_latched(void);
 
 #if APP_TEST
-/* make TEST=1 only (S2-U07): MotionTask period and run time, since the
-   last restart.  per_min_us = 0xFFFFFFFF until two cycles have run. */
-typedef struct
-{
-    uint32_t per_min_us;
-    uint32_t per_max_us;
-    uint32_t exec_max_us; /* wake-up to end of the cycle's work */
-    uint32_t cycles;
-} subsystem2_test_timing_t;
-
-IMPORT void motion_task_timing_restart(void);
-IMPORT void motion_task_test_timing(subsystem2_test_timing_t * p_out);
-
 /* Time of the last subsystem2_motor_estop() call, us (app_time_us); S4-U07. */
 IMPORT volatile uint32_t g_estop_test_us;
 #endif
 
 /* Private to subsystem 2 */
-IMPORT void motion_task_thread(INT stacd, void * p_exinf);
+#include "motion_task.h"
 IMPORT bool subsystem2_estop_reconnect(void); /* MotionTask only */
+
+/* Called by usermain() in this order: every subsystem's _init() first,
+   then every subsystem's _start(), so every kernel object exists before
+   any task can use it. */
+IMPORT ER subsystem2_init(void);  /* create this subsystem's kernel objects */
+IMPORT ER subsystem2_start(void); /* create and start its tasks             */
 
 #endif /* SUBSYSTEM2_H */
 

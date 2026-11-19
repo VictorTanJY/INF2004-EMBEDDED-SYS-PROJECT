@@ -34,8 +34,19 @@
  *  Output appears on the USB serial port (115200 8N1 in any terminal).
  */
 
+#include "app_main.h"
 #include "app.h"
 #include "app_gpio_irq.h"
+#include "subsystem1/subsystem1.h"
+#include "subsystem2/subsystem2.h"
+#include "subsystem3/subsystem3.h"
+#include "subsystem4/subsystem4.h"
+#include "subsystem5/subsystem5.h"
+#include "subsystem1/subsystem1_test.h"
+#include "subsystem2/subsystem2_test.h"
+#include "subsystem3/subsystem3_test.h"
+#include "subsystem4/subsystem4_test.h"
+#include "subsystem5/subsystem5_test.h"
 
 /*
  * Create and start one task (declared in app.h for every subsystem).

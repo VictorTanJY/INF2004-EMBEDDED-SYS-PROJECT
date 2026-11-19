@@ -1,5 +1,5 @@
 /*
- *  test_s3.c
+ *  test_s3_main.c
  *  Host unit tests for subsystem 3: Code 39 decoding (code39.c), barcode
  *  capture from a 1 kHz sample stream (line_barcode.c) and line tracking
  *  (line_track.c).  The barcode tests use the element widths of the
@@ -8,14 +8,12 @@
  *  Build and run:  make -C testing/subsystem3/host
  */
 
+#include "test_s3_main.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "app_pack.h"
 #include <math.h>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
 #include <stdbool.h>
 #include "code39.h"
 #include "line_barcode.h"
@@ -23,6 +21,10 @@
 #include "app_types.h"
 #include "app_math.h"
 #include "vectors_slides.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #define T_SYMBOLS        3   /* *X*: start, data, stop */
 #define T_CHAR_ELEMS     9   /* bars and spaces in one character */
@@ -57,9 +59,6 @@
 #define T_TRIES_PER_CHAR 40    /* random damage per character */
 #define T_DAMAGES_U      3u    /* random merges or splits */
 
-static int32_t g_pass;
-static int32_t g_fail;
-
 #define CHECK(id, cond)                                                      \
     do                                                                       \
     {                                                                        \
@@ -76,19 +75,84 @@ static int32_t g_fail;
 
 #define N_SLIDES ((int32_t)SLIDE_VEC_COUNT)
 
+/* ---- sample-stream simulation ---------------------------------------- */
+#define TRACK_LEN_UM 1200000u /* 1.2 m of track per pass */
+
+static int32_t g_pass;
+static int32_t g_fail;
+
 static char const g_data_chars[] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
 static uint32_t g_rng = 12345u;
-static uint32_t rnd (void)
+
+/* Reflectance (0..1000, 1000 = black) at position x along a track with
+   60 mm of white, then the code, then white.  Sensor spot: a box of
+   g_spot_um (1.5 mm; S3-H15 widens it to blur the 3 mm elements). */
+static uint32_t g_spot_um = 1500u;
+static uint32_t g_white   = 80u;
+static uint32_t g_black   = 920u;
+static uint8_t  g_last_pass =
+    0u; /* which reading decoded in the last run_pass */
+static uint32_t g_thin_black =
+    0u; /* S3-H19: level of bars narrower than g_thin_um (0 = g_black) */
+static uint32_t g_thin_um = 0u;
+
+/* ---- line tracking ---------------------------------------------------- */
+static line_track_cfg_t const g_cfg = {20000u, 80000u, 300};
+
+/* S3-H16 (3 Nov): turn slip from the calibration spin.  Model: the car
+   spins about its axle on a straight 18 mm line through the axle; the
+   line sensors are OBST_IR_AHEAD 120 mm ahead, 9 mm either side (both
+   half on the line at the start); the encoders count `gain` x the real
+   rotation; a sensor reads the fraction of its 8 mm spot on black. */
+static float64_t g_slip_half = 9.0; /* sensor offset from the centreline, mm */
+
+static uint16_t  make_code(char chr, uint32_t narrow, float64_t ratio,
+                           float64_t jitter, uint32_t * p_w);
+static void      reverse(uint32_t * p_w, uint16_t n_elems);
+static void      test_synthetic(void);
+static void      test_rejects(void);
+static void      test_capture(void);
+static uint32_t  rnd(void);
+static float64_t rndu(void);
+static uint16_t  profile_at(uint32_t const * p_w, uint16_t n_elems,
+                            uint32_t x_um);
+static line_barcode_result_t run_pass(uint32_t const * p_w, uint16_t n_elems,
+                                      uint32_t v_mm_s, int32_t noise,
+                                      line_barcode_out_t * p_out);
+static void                  test_table(void);
+static void                  test_slides(void);
+static uint8_t  feed(line_track_t * p_t, uint16_t left, uint16_t ret,
+                     uint32_t dist_um);
+static void     test_track(void);
+static uint16_t slip_raw(float64_t x_val, float64_t y_val);
+static uint16_t slip_run(int32_t gain_pm, bool b_line, int32_t start_cdeg);
+static void     test_slip(void);
+static uint16_t split_at(uint32_t const * p_in, uint16_t n_elems,
+                         uint16_t at_idx, uint32_t speck, uint32_t * p_out);
+static uint16_t merge_at(uint32_t const * p_in, uint16_t n_elems,
+                         uint16_t at_idx, uint32_t * p_out);
+static bool     thin_triplet(uint32_t const * p_w, uint16_t at_idx,
+                             uint32_t narrow);
+static void     test_best(void);
+static void     test_light_print(void);
+static void     test_pack_s3(void);
+
+int main (void)
 {
-    g_rng = (g_rng * 1103515245u) + 12345u;
-    return (g_rng >> 8) & 0xFFFFu;
-}
-/* uniform in [-1, 1] */
-static float64_t rndu (void)
-{
-    return ((float64_t)rnd() / 32767.5) - 1.0;
+    test_table();
+    test_slides();
+    test_synthetic();
+    test_rejects();
+    test_capture();
+    test_best();
+    test_light_print();
+    test_track();
+    test_slip();
+    test_pack_s3();
+    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
+    return (0 == g_fail) ? 0 : 1;
 }
 
 /* Widths of *c* with the given narrow width, ratio and +-jitter. */
@@ -128,182 +192,6 @@ static void reverse (uint32_t * p_w, uint16_t n_elems)
         uint32_t elapsed          = p_w[idx];
         p_w[idx]                  = p_w[(n_elems - 1u) - idx];
         p_w[(n_elems - 1u) - idx] = elapsed;
-    }
-}
-
-/* ---- sample-stream simulation ---------------------------------------- */
-#define TRACK_LEN_UM 1200000u /* 1.2 m of track per pass */
-
-/* Reflectance (0..1000, 1000 = black) at position x along a track with
-   60 mm of white, then the code, then white.  Sensor spot: a box of
-   g_spot_um (1.5 mm; S3-H15 widens it to blur the 3 mm elements). */
-static uint32_t g_spot_um = 1500u;
-static uint32_t g_white   = 80u;
-static uint32_t g_black   = 920u;
-static uint8_t  g_last_pass =
-    0u; /* which reading decoded in the last run_pass */
-static uint32_t g_thin_black =
-    0u; /* S3-H19: level of bars narrower than g_thin_um (0 = g_black) */
-static uint32_t g_thin_um = 0u;
-
-static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
-                            uint32_t x_um)
-{
-    uint32_t const lead = 60000u;
-    uint32_t       spot;
-    uint32_t       level = 0u;
-    uint32_t       taps  = 0u;
-
-    for (spot = 0u; spot < g_spot_um; spot += 100u)
-    {
-        taps++;
-        uint32_t x_val = x_um + spot;
-        uint32_t pos   = lead;
-        uint16_t elem;
-        uint32_t here = g_white;
-
-        for (elem = 0u; elem < n_elems; elem++)
-        {
-            if ((x_val >= pos) && (x_val < (pos + p_w[elem])))
-            {
-                if (0u == (elem % 2u))
-                {
-                    here = ((g_thin_black != 0u) && (p_w[elem] < g_thin_um))
-                               ? g_thin_black
-                               : g_black;
-                }
-                break;
-            }
-            pos += p_w[elem];
-        }
-        level += here;
-    }
-    return (uint16_t)(level / taps);
-}
-
-/* Run one pass at v_mm_s; returns the result and fills *p_out. */
-static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
-                                       uint32_t v_mm_s, int32_t noise,
-                                       line_barcode_out_t * p_out)
-{
-    static line_barcode_capture_t capture;
-    uint32_t                      x_val;
-    uint32_t                      step = v_mm_s; /* um per 1 ms sample = mm/s */
-    line_barcode_result_t         found = BC_NONE;
-
-    g_last_pass = 0u;
-    line_barcode_init(&capture);
-    for (x_val = 0u; x_val < TRACK_LEN_UM; x_val += step)
-    {
-        int32_t               sample = (int32_t)profile_at(p_w, n_elems, x_val)
-                                       + (int32_t)(noise * rndu());
-        line_barcode_out_t    out;
-        line_barcode_result_t result;
-
-        if (sample < 0)
-        {
-            sample = 0;
-        }
-        if (sample > 1000)
-        {
-            sample = 1000;
-        }
-        memset(&out, 0, sizeof(out));
-        result = line_barcode_sample(&capture, (uint16_t)sample, step, &out);
-        if ((result != BC_NONE) && (BC_NONE == found))
-        {
-            found       = result;
-            *p_out      = out;
-            g_last_pass = capture.pass;
-        }
-        else if (result != BC_NONE)
-        {
-            return BC_REJECT; /* more than one result per code */
-        }
-        else
-        {
-            /* No action required. */
-        }
-    }
-    return found;
-}
-
-static void test_table (void)
-{
-    size_t idx;
-    size_t jdx;
-    bool   b_ok = true;
-
-    for (idx = 0u; idx < (sizeof(g_data_chars) - 1u); idx++)
-    {
-        uint16_t pos     = code39_pattern(g_data_chars[idx]);
-        int32_t  wide    = 0;
-        int32_t  wide_sp = 0;
-        int32_t  val_b;
-
-        for (val_b = 0; val_b < T_CHAR_ELEMS; val_b++)
-        {
-            if ((pos >> (8 - val_b)) & 1u)
-            {
-                wide++;
-                if (val_b % 2)
-                {
-                    wide_sp++;
-                }
-            }
-        }
-        if ((0u == pos) || (wide != 3) || ((wide_sp != 1) && (wide_sp != 3)))
-        {
-            b_ok = false;
-        }
-        if (code39_char(pos) != g_data_chars[idx])
-        {
-            b_ok = false;
-        }
-        for (jdx = 0u; jdx < idx; jdx++)
-        {
-            if (code39_pattern(g_data_chars[jdx]) == pos)
-            {
-                b_ok = false;
-            }
-        }
-    }
-    CHECK("S3-H01", b_ok);
-    CHECK("S3-H01",
-          (0x094u == code39_pattern('*')) && ('\0' == code39_char(0x1FFu)));
-}
-
-static void test_slides (void)
-{
-    int32_t step;
-
-    for (step = 0; step < N_SLIDES; step++)
-    {
-        uint32_t  widths[29];
-        char      chr;
-        bool      b_rev;
-        int32_t   kdx;
-        float64_t scale;
-
-        for (scale = 1.0; scale > 0.5;
-             scale -= (1.0 - (297.0 / 338.67))) /* screen, A4 */
-        {
-            for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
-            {
-                widths[kdx] = (uint32_t)(g_slides[step].p_w[kdx] * scale);
-            }
-            CHECK("S3-H02",
-                  (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
-                      && (chr == g_slides[step].chr) && !b_rev);
-            reverse(widths, 29);
-            CHECK("S3-H02",
-                  (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
-                      && (chr == g_slides[step].chr) && b_rev);
-            if (scale < 1.0)
-            {
-                break;
-            }
-        }
     }
 }
 
@@ -935,8 +823,178 @@ static void test_capture (void)
     }
 }
 
-/* ---- line tracking ---------------------------------------------------- */
-static line_track_cfg_t const g_cfg = {20000u, 80000u, 300};
+static uint32_t rnd (void)
+{
+    g_rng = (g_rng * 1103515245u) + 12345u;
+    return (g_rng >> 8) & 0xFFFFu;
+}
+
+/* uniform in [-1, 1] */
+static float64_t rndu (void)
+{
+    return ((float64_t)rnd() / 32767.5) - 1.0;
+}
+
+static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
+                            uint32_t x_um)
+{
+    uint32_t const lead = 60000u;
+    uint32_t       spot;
+    uint32_t       level = 0u;
+    uint32_t       taps  = 0u;
+
+    for (spot = 0u; spot < g_spot_um; spot += 100u)
+    {
+        taps++;
+        uint32_t x_val = x_um + spot;
+        uint32_t pos   = lead;
+        uint16_t elem;
+        uint32_t here = g_white;
+
+        for (elem = 0u; elem < n_elems; elem++)
+        {
+            if ((x_val >= pos) && (x_val < (pos + p_w[elem])))
+            {
+                if (0u == (elem % 2u))
+                {
+                    here = ((g_thin_black != 0u) && (p_w[elem] < g_thin_um))
+                               ? g_thin_black
+                               : g_black;
+                }
+                break;
+            }
+            pos += p_w[elem];
+        }
+        level += here;
+    }
+    return (uint16_t)(level / taps);
+}
+
+/* Run one pass at v_mm_s; returns the result and fills *p_out. */
+static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
+                                       uint32_t v_mm_s, int32_t noise,
+                                       line_barcode_out_t * p_out)
+{
+    static line_barcode_capture_t capture;
+    uint32_t                      x_val;
+    uint32_t                      step = v_mm_s; /* um per 1 ms sample = mm/s */
+    line_barcode_result_t         found = BC_NONE;
+
+    g_last_pass = 0u;
+    line_barcode_init(&capture);
+    for (x_val = 0u; x_val < TRACK_LEN_UM; x_val += step)
+    {
+        int32_t               sample = (int32_t)profile_at(p_w, n_elems, x_val)
+                                       + (int32_t)(noise * rndu());
+        line_barcode_out_t    out;
+        line_barcode_result_t result;
+
+        if (sample < 0)
+        {
+            sample = 0;
+        }
+        if (sample > 1000)
+        {
+            sample = 1000;
+        }
+        memset(&out, 0, sizeof(out));
+        result = line_barcode_sample(&capture, (uint16_t)sample, step, &out);
+        if ((result != BC_NONE) && (BC_NONE == found))
+        {
+            found       = result;
+            *p_out      = out;
+            g_last_pass = capture.pass;
+        }
+        else if (result != BC_NONE)
+        {
+            return BC_REJECT; /* more than one result per code */
+        }
+        else
+        {
+            /* No action required. */
+        }
+    }
+    return found;
+}
+
+static void test_table (void)
+{
+    size_t idx;
+    size_t jdx;
+    bool   b_ok = true;
+
+    for (idx = 0u; idx < (sizeof(g_data_chars) - 1u); idx++)
+    {
+        uint16_t pos     = code39_pattern(g_data_chars[idx]);
+        int32_t  wide    = 0;
+        int32_t  wide_sp = 0;
+        int32_t  val_b;
+
+        for (val_b = 0; val_b < T_CHAR_ELEMS; val_b++)
+        {
+            if ((pos >> (8 - val_b)) & 1u)
+            {
+                wide++;
+                if (val_b % 2)
+                {
+                    wide_sp++;
+                }
+            }
+        }
+        if ((0u == pos) || (wide != 3) || ((wide_sp != 1) && (wide_sp != 3)))
+        {
+            b_ok = false;
+        }
+        if (code39_char(pos) != g_data_chars[idx])
+        {
+            b_ok = false;
+        }
+        for (jdx = 0u; jdx < idx; jdx++)
+        {
+            if (code39_pattern(g_data_chars[jdx]) == pos)
+            {
+                b_ok = false;
+            }
+        }
+    }
+    CHECK("S3-H01", b_ok);
+    CHECK("S3-H01",
+          (0x094u == code39_pattern('*')) && ('\0' == code39_char(0x1FFu)));
+}
+
+static void test_slides (void)
+{
+    int32_t step;
+
+    for (step = 0; step < N_SLIDES; step++)
+    {
+        uint32_t  widths[29];
+        char      chr;
+        bool      b_rev;
+        int32_t   kdx;
+        float64_t scale;
+
+        for (scale = 1.0; scale > 0.5;
+             scale -= (1.0 - (297.0 / 338.67))) /* screen, A4 */
+        {
+            for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
+            {
+                widths[kdx] = (uint32_t)(g_slides[step].p_w[kdx] * scale);
+            }
+            CHECK("S3-H02",
+                  (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
+                      && (chr == g_slides[step].chr) && !b_rev);
+            reverse(widths, 29);
+            CHECK("S3-H02",
+                  (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
+                      && (chr == g_slides[step].chr) && b_rev);
+            if (scale < 1.0)
+            {
+                break;
+            }
+        }
+    }
+}
 
 /* Feed blocks of 3 mm (0.3 m/s x 10 ms) for dist_um; returns OR of events. */
 static uint8_t feed (line_track_t * p_t, uint16_t left, uint16_t ret,
@@ -1121,13 +1179,6 @@ static void test_track (void)
     }
 }
 
-/* S3-H16 (3 Nov): turn slip from the calibration spin.  Model: the car
-   spins about its axle on a straight 18 mm line through the axle; the
-   line sensors are OBST_IR_AHEAD 120 mm ahead, 9 mm either side (both
-   half on the line at the start); the encoders count `gain` x the real
-   rotation; a sensor reads the fraction of its 8 mm spot on black. */
-static float64_t g_slip_half = 9.0; /* sensor offset from the centreline, mm */
-
 static uint16_t slip_raw (float64_t x_val, float64_t y_val)
 {
     float64_t const half = 9.0;
@@ -1211,7 +1262,6 @@ static void test_slip (void)
     /* no line under the car: not measured */
     CHECK("S3-H16", 0u == slip_run(1500, false, 0));
 }
-
 
 /* S3-H20 (8 Nov robot run: 27 of 29 elements with a 1.0 mm element):
    best match for a bar split by a speck (29 -> 31), two thin elements
@@ -1707,21 +1757,6 @@ static void test_pack_s3 (void)
     CHECK("S3-H22", ('\0' == ret.last_barcode) && (1023u == ret.contrast_x10)
                         && (-2048 == ret.omega_mrad_s));
 }
-
-int main (void)
-{
-    test_table();
-    test_slides();
-    test_synthetic();
-    test_rejects();
-    test_capture();
-    test_best();
-    test_light_print();
-    test_track();
-    test_slip();
-    test_pack_s3();
-    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (0 == g_fail) ? 0 : 1;
-}
+/*** end of file ***/
 
 /*** end of file ***/

@@ -11,13 +11,13 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S2-U01 | mbf_motion exists | IF-01 | auto | `subsystem2_test_run.c` | PASS |
+| S2-U01 | mbf_motion exists | IF-01 | auto | `subsystem2_test.c` | PASS |
 | S2-U02 | *retired 25 Oct:* odometry snapshot round trip (MotionTask now writes the snapshot continuously, so a round trip would race it) | IF-02 | – | – | – |
-| S2-U03 | MotionTask publishes the odometry snapshot every cycle | IF-02, NFR1 | auto | `subsystem2_test_run.c` | PASS |
-| S2-U04 | PWM slices 4/5 at TOP 6249 (20 kHz), PIO0 SM0/SM1 enabled, `hw_ok` | NFR1, A3 | auto | `subsystem2_test_run.c` | PASS |
-| S2-U05 | boots braked (IDLE_BRAKED, duty 0/0) | FR15, Section 5 BOOT | auto | `subsystem2_test_run.c` | PASS |
-| S2-U06 | DRIVE from a source without authority is rejected and counted | IF-01, Section 6.1 | auto | `subsystem2_test_run.c` | PASS |
-| S2-U07 | MotionTask period and run time over 1 s (test-only timing in `motion_task_thread.c`) | NFR1 | auto | `subsystem2_test_run.c`; prints `[INFO] S2-U07 period min / max, run time max` | ≥ 90 cycles; period 9–11 ms; run time ≤ 5 ms (half the period) |
+| S2-U03 | MotionTask publishes the odometry snapshot every cycle | IF-02, NFR1 | auto | `subsystem2_test.c` | PASS |
+| S2-U04 | PWM slices 4/5 at TOP 6249 (20 kHz), PIO0 SM0/SM1 enabled, `hw_ok` | NFR1, A3 | auto | `subsystem2_test.c` | PASS |
+| S2-U05 | boots braked (IDLE_BRAKED, duty 0/0) | FR15, Section 5 BOOT | auto | `subsystem2_test.c` | PASS |
+| S2-U06 | DRIVE from a source without authority is rejected and counted | IF-01, Section 6.1 | auto | `subsystem2_test.c` | PASS |
+| S2-U07 | MotionTask period and run time over 1 s (test-only timing in `motion_task.c`) | NFR1 | auto | `subsystem2_test.c`; prints `[INFO] S2-U07 period min / max, run time max` | ≥ 90 cycles; period 9–11 ms; run time ≤ 5 ms (half the period) |
 | S2-U08 | speed step 0 → 200 mm/s and MOVE 300 mm end point | NFR5, NFR4 | auto | Robot on a stand, wheels off the floor, motor battery on, MissionTask IDLE. MOVE 300 mm at 200 mm/s; odometry sampled every ~10 ms. Prints settle time, peak, overshoot, distance, encoder counts | settles within ±10 % of 200 mm/s in ≤ 500 ms (includes the 800 mm/s² set-point ramp, ~250 ms); distance 300 ± 9 mm; both encoders count up. SKIP if MissionTask is not IDLE or no encoder counts in 400 ms |
 | S2-U09 | left and right wheels match at 200 mm/s | FR5, NFR4 | auto | as S2-U08, 400–1000 ms after the step (cruise). Prints mean \|vL − vR\| and encoder counts/s | mean \|vL − vR\| ≤ 20 mm/s (10 %) |
 | S2-U10 | MOVE backward 300 mm at 300 mm/s | FR5, NFR4 | auto | as S2-U08 | both encoders count down; distance −300 ± 9 mm |

@@ -8,6 +8,44 @@
 #include "../app_pack.h"
 #include "../app_types.h"
 
+#define LINE_FIELDS \
+    ((uint16_t)(sizeof(g_line_layout) / sizeof(g_line_layout[0])))
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: data representation of IF-04 (line snapshot).
+ * --------------------------------------------------------------------- */
+static app_pack_field_t const g_line_layout[] = {
+    PK_FIELD(line_types_snap_t, t_ms, 32u, PK_W),
+    PK_FIELD(line_types_snap_t, blocks, 32u, PK_W), /* counter since boot */
+    PK_FIELD(line_types_snap_t, missed_blocks, 16u,
+             PK_W), /* counter, readers take differences */
+    PK_FIELD(line_types_snap_t, err, 11u, PK_S), /* -1000..1000 */
+    PK_FIELD(line_types_snap_t, omega_mrad_s, 12u,
+             PK_S), /* +-2047 (LINE_OMEGA_MAX 2000)    */
+    PK_FIELD(line_types_snap_t, raw_l, 10u, PK_U), /* 0..1000 */
+    PK_FIELD(line_types_snap_t, raw_r, 10u, PK_U),
+    PK_FIELD(line_types_snap_t, raw_bc, 10u, PK_U),
+    PK_FIELD(line_types_snap_t, barcode_ok, 16u, PK_W), /* counters */
+    PK_FIELD(line_types_snap_t, barcode_err, 16u, PK_W),
+    PK_FIELD(line_types_snap_t, contrast_x10, 10u,
+             PK_U),                               /* saturates at 102.3 : 1 */
+    PK_FIELD(line_types_snap_t, flags, 7u, PK_U), /* LINE_FLAG_* (7 bits) */
+    PK_FIELD(line_types_snap_t, bc_state, 2u, PK_U), /* 4 states */
+    PK_FIELD(line_types_snap_t, last_barcode, 6u,
+             PK_SYM), /* Code 39 symbol or none          */
+    PK_FIELD(line_types_snap_t, last_reject, 4u,
+             PK_U), /* code39_result_t 0..8 */
+    PK_FIELD(line_types_snap_t, turn_gain_pm, 11u, PK_U), /* 0..2047 permille */
+    PK_FIELD(line_types_snap_t, sens, 3u, PK_U) /* LINE_SENS_* (3 bits) */
+};
+
+static int32_t steer_toward(int32_t now, int32_t target);
+static bool    is_black(bool b_black, uint16_t norm);
+static bool    is_white(bool b_white, uint16_t norm);
+static int32_t slip_centre(line_track_slip_t const * p_s,
+                           line_track_cal_t const * p_cal, uint8_t chan,
+                           uint8_t * p_runs);
+
 /* ------------------------------------------------------------------ */
 void line_track_cal_start (line_track_cal_t * p_cal)
 {
@@ -138,24 +176,6 @@ void line_track_init (line_track_t * p_t)
     p_t->both_white_um     = 0u;
     p_t->straight_um       = 0u;
     p_t->since_junction_um = LINE_JUNCTION_REFRACT_UM;
-}
-
-/* Steering ramp: move the turn command at most LINE_OMEGA_STEP per block
-   (10 ms), so a flip of the line error does not jump the wheel speeds. */
-static int32_t steer_toward (int32_t now, int32_t target)
-{
-    return app_types_clamp_i32(target, now - LINE_OMEGA_STEP,
-                               now + LINE_OMEGA_STEP);
-}
-
-static bool is_black (bool b_black, uint16_t norm)
-{
-    return b_black ? (norm >= LINE_BLACK_OFF) : (norm > LINE_BLACK_ON);
-}
-
-static bool is_white (bool b_white, uint16_t norm)
-{
-    return b_white ? (norm <= LINE_WHITE_OFF) : (norm < LINE_WHITE_ON);
 }
 
 uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
@@ -326,6 +346,77 @@ void line_track_slip_sample (line_track_slip_t * p_s, int32_t heading_cdeg,
     }
 }
 
+/* The two sensors sit either side of the car's centreline, so the mean of
+   their next crossings is where the centreline is on the line again: 180
+   real deg from the start (the car starts centred on it).  The sensors
+   need not see the line at the same time. */
+uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
+                               line_track_cal_t const *  p_cal,
+                               uint32_t *                p_diag)
+{
+    uint8_t       runs_l;
+    uint8_t       runs_r;
+    int32_t const c_l =
+        p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_L, &runs_l) : -1;
+    int32_t const c_r =
+        p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_R, &runs_r) : -1;
+    int32_t const tot =
+        (p_s->n_samples > 0u) ? (int32_t)p_s->h_ddeg[p_s->n_samples - 1u] : 0;
+    int32_t gain;
+
+    if (!p_cal->b_valid)
+    {
+        runs_l = 0u;
+        runs_r = 0u;
+    }
+    /* diagnosis: dark runs L << 24 | R << 16 | encoder deg spun */
+    *p_diag = ((uint32_t)runs_l << 24) | ((uint32_t)runs_r << 16)
+              | (uint32_t)app_types_clamp_i32(tot / 10, 0, 0xFFFF);
+    if ((c_l < 0) || (c_r < 0))
+    {
+        return 0u;
+    }
+    gain = ((((c_l + c_r) / 2) * 1000) + 900) / 1800;
+    return ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM))
+               ? (uint16_t)gain
+               : 0u;
+}
+
+void line_track_snap_pack (line_types_snap_t const * p_snap, uint32_t * p_words)
+{
+    app_pack_pack_rec(g_line_layout, LINE_FIELDS, p_snap, p_words,
+                      LINE_SNAP_WORDS);
+}
+
+void line_track_snap_unpack (uint32_t const *    p_words,
+                             line_types_snap_t * p_snap)
+{
+    app_pack_unpack_rec(g_line_layout, LINE_FIELDS, p_words, p_snap);
+}
+
+uint32_t line_track_snap_layout_bits (void)
+{
+    return app_pack_layout_bits(g_line_layout, LINE_FIELDS);
+}
+
+/* Steering ramp: move the turn command at most LINE_OMEGA_STEP per block
+   (10 ms), so a flip of the line error does not jump the wheel speeds. */
+static int32_t steer_toward (int32_t now, int32_t target)
+{
+    return app_types_clamp_i32(target, now - LINE_OMEGA_STEP,
+                               now + LINE_OMEGA_STEP);
+}
+
+static bool is_black (bool b_black, uint16_t norm)
+{
+    return b_black ? (norm >= LINE_BLACK_OFF) : (norm > LINE_BLACK_ON);
+}
+
+static bool is_white (bool b_white, uint16_t norm)
+{
+    return b_white ? (norm <= LINE_WHITE_OFF) : (norm < LINE_WHITE_ON);
+}
+
 /* One sensor: the norm-weighted centre (0.1 deg) of its first dark run
    after LINE_SLIP_SKIP_DDEG that lasts LINE_SLIP_MIN_BLOCKS; -1 if none.
    *p_runs counts the dark runs seen. */
@@ -378,90 +469,6 @@ static int32_t slip_centre (line_track_slip_t const * p_s,
         }
     }
     return found;
-}
-
-/* The two sensors sit either side of the car's centreline, so the mean of
-   their next crossings is where the centreline is on the line again: 180
-   real deg from the start (the car starts centred on it).  The sensors
-   need not see the line at the same time. */
-uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
-                               line_track_cal_t const *  p_cal,
-                               uint32_t *                p_diag)
-{
-    uint8_t       runs_l;
-    uint8_t       runs_r;
-    int32_t const c_l =
-        p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_L, &runs_l) : -1;
-    int32_t const c_r =
-        p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_R, &runs_r) : -1;
-    int32_t const tot =
-        (p_s->n_samples > 0u) ? (int32_t)p_s->h_ddeg[p_s->n_samples - 1u] : 0;
-    int32_t gain;
-
-    if (!p_cal->b_valid)
-    {
-        runs_l = 0u;
-        runs_r = 0u;
-    }
-    /* diagnosis: dark runs L << 24 | R << 16 | encoder deg spun */
-    *p_diag = ((uint32_t)runs_l << 24) | ((uint32_t)runs_r << 16)
-              | (uint32_t)app_types_clamp_i32(tot / 10, 0, 0xFFFF);
-    if ((c_l < 0) || (c_r < 0))
-    {
-        return 0u;
-    }
-    gain = ((((c_l + c_r) / 2) * 1000) + 900) / 1800;
-    return ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM))
-               ? (uint16_t)gain
-               : 0u;
-}
-
-/* ---------------------------------------------------------------------
- *  Change Requirement 1: data representation of IF-04 (line snapshot).
- * --------------------------------------------------------------------- */
-static app_pack_field_t const g_line_layout[] = {
-    PK_FIELD(line_types_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(line_types_snap_t, blocks, 32u, PK_W), /* counter since boot */
-    PK_FIELD(line_types_snap_t, missed_blocks, 16u,
-             PK_W), /* counter, readers take differences */
-    PK_FIELD(line_types_snap_t, err, 11u, PK_S), /* -1000..1000 */
-    PK_FIELD(line_types_snap_t, omega_mrad_s, 12u,
-             PK_S), /* +-2047 (LINE_OMEGA_MAX 2000)    */
-    PK_FIELD(line_types_snap_t, raw_l, 10u, PK_U), /* 0..1000 */
-    PK_FIELD(line_types_snap_t, raw_r, 10u, PK_U),
-    PK_FIELD(line_types_snap_t, raw_bc, 10u, PK_U),
-    PK_FIELD(line_types_snap_t, barcode_ok, 16u, PK_W), /* counters */
-    PK_FIELD(line_types_snap_t, barcode_err, 16u, PK_W),
-    PK_FIELD(line_types_snap_t, contrast_x10, 10u,
-             PK_U),                               /* saturates at 102.3 : 1 */
-    PK_FIELD(line_types_snap_t, flags, 7u, PK_U), /* LINE_FLAG_* (7 bits) */
-    PK_FIELD(line_types_snap_t, bc_state, 2u, PK_U), /* 4 states */
-    PK_FIELD(line_types_snap_t, last_barcode, 6u,
-             PK_SYM), /* Code 39 symbol or none          */
-    PK_FIELD(line_types_snap_t, last_reject, 4u,
-             PK_U), /* code39_result_t 0..8 */
-    PK_FIELD(line_types_snap_t, turn_gain_pm, 11u, PK_U), /* 0..2047 permille */
-    PK_FIELD(line_types_snap_t, sens, 3u, PK_U) /* LINE_SENS_* (3 bits) */
-};
-
-#define LINE_FIELDS \
-    ((uint16_t)(sizeof(g_line_layout) / sizeof(g_line_layout[0])))
-
-void line_track_snap_pack (line_types_snap_t const * p_snap, uint32_t * p_words)
-{
-    app_pack_pack_rec(g_line_layout, LINE_FIELDS, p_snap, p_words,
-                      LINE_SNAP_WORDS);
-}
-
-void line_track_snap_unpack (uint32_t const *    p_words,
-                             line_types_snap_t * p_snap)
-{
-    app_pack_unpack_rec(g_line_layout, LINE_FIELDS, p_words, p_snap);
-}
-
-uint32_t line_track_snap_layout_bits (void)
-{
-    return app_pack_layout_bits(g_line_layout, LINE_FIELDS);
 }
 
 /*** end of file ***/

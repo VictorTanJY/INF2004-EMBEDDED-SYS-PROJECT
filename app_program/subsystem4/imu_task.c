@@ -1,5 +1,5 @@
 /*
- * imu_task_thread.c
+ * imu_task.c
  * Subsystem 4 -- ImuTask (priority 10, core 0).
  * Woken by imu_cyc every 10 ms. Owner: Buddy 4.
  *
@@ -7,6 +7,7 @@
  * Recovery requires IMU_RECOVER_SAMPLES good samples.
  */
 
+#include "imu_task.h"
 #include "subsystem4.h"
 #include "imu_core.h"
 #include "imu_cfg.h"
@@ -23,75 +24,31 @@
 #define IMU_LOG_MOTION      51u
 #define IMU_LOG_RAMP        52u
 #define IMU_LOG_INIT        53u
+
 /* tilt warning: data = larger of |pitch|, |roll|, 0.01 deg */
 #define IMU_LOG_TILT_ON 55u
+
 /* tilt warning cleared: back below IMU_TILT_OFF_CDEG */
 #define IMU_LOG_TILT_OFF 56u
+
 /* level calibration: samples (needs >= 50) */
 #define IMU_LOG_LVL_N 57u
+
 /* level calibration: largest axis spread, mg (<= 60) */
 #define IMU_LOG_LVL_SPREAD 58u
+
 /* lift seen: data = up-axis rise above level, mg (14 Nov) */
 #define IMU_LOG_LIFT 77u
+
 /* largest up-axis rise while driving this run, mg */
 #define IMU_LOG_RISE_MAX 78u
+
 /* level calibration: up-axis mean, mg (>= 500) */
 #define IMU_LOG_LVL_UP 59u
 
 static imu_core_t g_ic;
 
-static bool imu_hw_init (void)
-{
-    static bool     b_reported = false;
-    static ER       last_bus;
-    static ER       last_read;
-    static ER       last_sensor;
-    static uint8_t  last_id;
-    static uint32_t last_diag;
-
-    uint8_t  chip_id    = 0u;
-    ER       bus_er     = drv_i2c1_init();
-    ER       read_er    = E_IO;
-    ER       sensor_er  = E_IO;
-    uint32_t diagnostic = 0xFF000000u;
-
-    if (E_OK == bus_er)
-    {
-        read_er    = drv_i2c1_read(DRV_LSM303_ADDR, 0x0Fu, &chip_id, 1u);
-        sensor_er  = drv_lsm303_init();
-        diagnostic = drv_lsm303_diag();
-    }
-
-    /* Report once initially, then only when a result changes. */
-    if (!b_reported || (bus_er != last_bus) || (read_er != last_read)
-        || (sensor_er != last_sensor) || (chip_id != last_id)
-        || (diagnostic != last_diag))
-    {
-        b_reported  = true;
-        last_bus    = bus_er;
-        last_read   = read_er;
-        last_sensor = sensor_er;
-        last_id     = chip_id;
-        last_diag   = diagnostic;
-
-        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 90u,
-                                    (int32_t)bus_er);
-
-        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 91u,
-                                    (int32_t)read_er);
-
-        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 92u,
-                                    (int32_t)chip_id);
-
-        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u,
-                                    (int32_t)sensor_er);
-
-        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
-                                    IMU_LOG_INIT, (int32_t)diagnostic);
-    }
-
-    return (E_OK == bus_er) && (E_OK == sensor_er);
-}
+static bool imu_hw_init(void);
 
 EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 {
@@ -483,6 +440,61 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             }
         }
     }
+}
+
+/*** end of file ***/
+
+static bool imu_hw_init (void)
+{
+    static bool     b_reported = false;
+    static ER       last_bus;
+    static ER       last_read;
+    static ER       last_sensor;
+    static uint8_t  last_id;
+    static uint32_t last_diag;
+
+    uint8_t  chip_id    = 0u;
+    ER       bus_er     = drv_i2c1_init();
+    ER       read_er    = E_IO;
+    ER       sensor_er  = E_IO;
+    uint32_t diagnostic = 0xFF000000u;
+
+    if (E_OK == bus_er)
+    {
+        read_er    = drv_i2c1_read(DRV_LSM303_ADDR, 0x0Fu, &chip_id, 1u);
+        sensor_er  = drv_lsm303_init();
+        diagnostic = drv_lsm303_diag();
+    }
+
+    /* Report once initially, then only when a result changes. */
+    if (!b_reported || (bus_er != last_bus) || (read_er != last_read)
+        || (sensor_er != last_sensor) || (chip_id != last_id)
+        || (diagnostic != last_diag))
+    {
+        b_reported  = true;
+        last_bus    = bus_er;
+        last_read   = read_er;
+        last_sensor = sensor_er;
+        last_id     = chip_id;
+        last_diag   = diagnostic;
+
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 90u,
+                                    (int32_t)bus_er);
+
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 91u,
+                                    (int32_t)read_er);
+
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 92u,
+                                    (int32_t)chip_id);
+
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u,
+                                    (int32_t)sensor_er);
+
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                    IMU_LOG_INIT, (int32_t)diagnostic);
+    }
+
+    return (E_OK == bus_er) && (E_OK == sensor_er);
 }
 
 /*** end of file ***/

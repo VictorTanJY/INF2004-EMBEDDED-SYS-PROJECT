@@ -1,8 +1,8 @@
 /*
  *  subsystem5.c
  *  Subsystem 5 -- Obstacle and mission: kernel objects and snapshots.
- *  Owner: Buddy 5 (Ryan).  Tasks: mission_task_thread.c,
- * obstacle_task_thread.c. Logic: mission_core.c, obstacle_core.c.
+ *  Owner: Buddy 5 (Ryan).  Tasks: mission_task.c,
+ * obstacle_task.c. Logic: mission_core.c, obstacle_core.c.
  */
 
 #include "subsystem5.h"
@@ -23,12 +23,7 @@ static uint32_t   g_obst_snap[OBST_SNAP_WORDS];
 static UW         g_drops;
 static ID         g_cyc_range;
 
-/* range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
-static void range_cyc_handler (void * p_exinf)
-{
-    (void)p_exinf;
-    (void)tk_set_flg(g_flg_obst, OBST_FLG_RANGE);
-}
+static void range_cyc_handler(void * p_exinf);
 
 EXPORT ER subsystem5_init (void)
 {
@@ -200,6 +195,15 @@ EXPORT void subsystem5_put_obst_snap (mission_types_obst_snap_t const * p_in)
         g_obst_snap[idx] = words[idx];
     }
     app_unlock(&g_obst_lock, sts);
+}
+
+/*** end of file ***/
+
+/* range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
+static void range_cyc_handler (void * p_exinf)
+{
+    (void)p_exinf;
+    (void)tk_set_flg(g_flg_obst, OBST_FLG_RANGE);
 }
 
 /*** end of file ***/

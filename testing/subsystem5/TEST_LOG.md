@@ -11,13 +11,13 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S5-U01 | mbf_mission exists | IF-06 | auto | `subsystem5_test_run.c` | PASS |
-| S5-U02 | mbf_scan exists | IF-09 | auto | `subsystem5_test_run.c` | PASS |
-| S5-U03 | flg_obst exists | IF-09 | auto | `subsystem5_test_run.c` | PASS |
+| S5-U01 | mbf_mission exists | IF-06 | auto | `subsystem5_test.c` | PASS |
+| S5-U02 | mbf_scan exists | IF-09 | auto | `subsystem5_test.c` | PASS |
+| S5-U03 | flg_obst exists | IF-09 | auto | `subsystem5_test.c` | PASS |
 | S5-U04 | *retired 25 Oct:* mission snapshot starts in BOOT (MissionTask now runs and may already be past BOOT) | IF-10 | – | – | – |
-| S5-U05 | mission snapshot valid; no barcode map until MQTT sends one (not hard-coded) | IF-10, FR4 (instructor 24 Oct) | auto | `subsystem5_test_run.c` | PASS |
-| S5-U06 | ObstacleTask runs (range_cyc / 100 ms wait) | IF-09 | auto | `subsystem5_test_run.c` | PASS |
-| S5-U07 | echo conversion and median on the target | FR9 | auto | `subsystem5_test_run.c` | PASS |
+| S5-U05 | mission snapshot valid; no barcode map until MQTT sends one (not hard-coded) | IF-10, FR4 (instructor 24 Oct) | auto | `subsystem5_test.c` | PASS |
+| S5-U06 | ObstacleTask runs (range_cyc / 100 ms wait) | IF-09 | auto | `subsystem5_test.c` | PASS |
+| S5-U07 | echo conversion and median on the target | FR9 | auto | `subsystem5_test.c` | PASS |
 | S5-U08 | ultrasonic pings every 60 ms | FR9, NFR6, IF-09 | auto | the test puts ObstacleTask in MONITOR (`subsystem5_scan_request(MONITOR)`), waits 600 ms, counts pings over 1.2 s, then sends STOP | 19–21 pings |
 | S5-U09 | one ultrasonic range against an object in front | FR9 | auto + manual | flat object 30–100 cm in front of the sensor. Prints the median range; write the tape-measured distance next to it | echo received, 20–4 000 mm, `no_echo` 0. Manual: printed range within ±1 cm of the tape. SKIP if no echo |
 | S5-H01–H08 | statechart: BOOT self-test / FAULT; start refused uncalibrated; CALIBRATING phases; MQTT map (refused while running, duplicates, '*'); barcode latched until the next junction, LEFT/RIGHT/U-turn/STRAIGHT manoeuvres, a barcode read during a manoeuvre latched for the next junction; obstacle -> profile -> bypass -> recovery; CONTINUE; BLOCKED_TIMEOUT; FAULT reset via SafetyTask; bounded line search; set only in IDLE; hump / slow-down speed caps; mbf_mission drop while running = FAULT | Section 5, FR4, FR9–FR12, FR14, FR15 | host | `make -C testing/subsystem5/host` | `host tests: N passed, 0 failed` |

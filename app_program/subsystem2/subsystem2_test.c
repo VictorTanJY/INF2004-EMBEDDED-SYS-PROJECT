@@ -1,5 +1,5 @@
 /*
- *  subsystem2_test_run.c
+ *  subsystem2_test.c
  *  On-target tests for subsystem 2.  Built only with: make TEST=1
  *  Record results in testing/subsystem2/TEST_LOG.md.
  *  The controller maths is tested on a PC (testing/subsystem2/host).
@@ -9,6 +9,8 @@
  *  turns 90 deg left).  The motor battery switch must be on.
  */
 
+#include "subsystem2_test.h"
+#include "motion_task.h"
 #include "subsystem2.h"
 #include "motion_cfg.h"
 #include "../subsystem5/subsystem5.h" /* subsystem5_get_mission_snap: wait for IDLE */
@@ -41,55 +43,23 @@
 #define T_NO_TURN_MS      400 /* no counts by then: wheels idle  */
 #define T_SEQ 20u /* 5-bit seq, not one MissionTask is waiting for */
 
-static int32_t iabs (int32_t value)
-{
-    return (value < 0) ? -value : value;
-}
+#endif
 
-/* MissionTask idle and no brake latched, so MotionTask accepts MISSION
-   moves and nothing else commands the wheels. */
-static bool wait_idle (uint32_t max_ms)
-{
-    mission_types_snap_t mission;
-    uint32_t             elapsed;
+#if APP_TEST
+static int32_t iabs(int32_t value);
+static bool    wait_idle(uint32_t max_ms);
+static bool    wait_done(motion_types_odom_t const * p_start, uint32_t max_ms,
+                         motion_types_odom_t * p_end);
+#endif
 
-    for (elapsed = 0u; elapsed < max_ms; elapsed += 50u)
-    {
-        subsystem5_get_mission_snap(&mission);
-        if ((MISSION_ST_IDLE == mission.state) && !subsystem2_estop_latched())
-        {
-            return true;
-        }
-        (void)tk_dly_tsk(50);
-    }
-    return false;
-}
-
-/* Wait until the MOVE/TURN posted after p_start completes; false on timeout. */
-static bool wait_done (motion_types_odom_t const * p_start, uint32_t max_ms,
-                       motion_types_odom_t * p_end)
-{
-    uint32_t elapsed;
-
-    for (elapsed = 0u; elapsed < max_ms; elapsed += 20u)
-    {
-        (void)tk_dly_tsk(20);
-        subsystem2_get_odom(p_end);
-        if ((p_end->done_count != p_start->done_count)
-            && (MOTION_ST_IDLE_BRAKED == p_end->state))
-        {
-            return true;
-        }
-    }
-    return false;
-}
+#if APP_TEST
 
 EXPORT void subsystem2_test_run (void)
 {
-    T_RMBF                   rmbf;
-    motion_types_odom_t      snap_a;
-    motion_types_odom_t      snap_b;
-    subsystem2_test_timing_t timing;
+    T_RMBF               rmbf;
+    motion_types_odom_t  snap_a;
+    motion_types_odom_t  snap_b;
+    motion_task_timing_t timing;
 
     TEST_INIT();
 
@@ -324,6 +294,53 @@ EXPORT void subsystem2_test_run (void)
     TEST_SUMMARY("subsystem2");
 }
 
-#endif /* APP_TEST */
+#endif
+
+#if APP_TEST
+
+static int32_t iabs (int32_t value)
+{
+    return (value < 0) ? -value : value;
+}
+
+/* MissionTask idle and no brake latched, so MotionTask accepts MISSION
+   moves and nothing else commands the wheels. */
+static bool wait_idle (uint32_t max_ms)
+{
+    mission_types_snap_t mission;
+    uint32_t             elapsed;
+
+    for (elapsed = 0u; elapsed < max_ms; elapsed += 50u)
+    {
+        subsystem5_get_mission_snap(&mission);
+        if ((MISSION_ST_IDLE == mission.state) && !subsystem2_estop_latched())
+        {
+            return true;
+        }
+        (void)tk_dly_tsk(50);
+    }
+    return false;
+}
+
+/* Wait until the MOVE/TURN posted after p_start completes; false on timeout. */
+static bool wait_done (motion_types_odom_t const * p_start, uint32_t max_ms,
+                       motion_types_odom_t * p_end)
+{
+    uint32_t elapsed;
+
+    for (elapsed = 0u; elapsed < max_ms; elapsed += 20u)
+    {
+        (void)tk_dly_tsk(20);
+        subsystem2_get_odom(p_end);
+        if ((p_end->done_count != p_start->done_count)
+            && (MOTION_ST_IDLE_BRAKED == p_end->state))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+#endif
 
 /*** end of file ***/

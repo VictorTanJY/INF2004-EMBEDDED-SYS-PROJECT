@@ -15,6 +15,100 @@
 #define PIO_CTRL       (PIO0_BASE_ADDR + 0x000u)
 #define PIO_FSTAT      (PIO0_BASE_ADDR + 0x004u)
 #define PIO_FLEVEL     (PIO0_BASE_ADDR + 0x00Cu)
+
+#define QUAD_WRAP_BOTTOM 15u
+#define QUAD_WRAP_TOP    23u
+#define QUAD_PROG_LEN    24u
+
+/* ~ 16 us at 125 MHz; the SM pushes every ~10 cycles */
+#define READ_SPIN_MAX 2000u
+
+/* pico-examples pio/quadrature_encoder/quadrature_encoder.pio, assembled. */
+static uint16_t const g_quad_prog[QUAD_PROG_LEN] = {
+    0x000f, 0x000e, 0x0015, 0x000f, /*  0- 3: jump table, old state 00 */
+    0x0015, 0x000f, 0x000f, 0x000e, /*  4- 7: old state 01             */
+    0x000e, 0x000f, 0x000f, 0x0015, /*  8-11: old state 10             */
+    0x000f, 0x0015,                 /* 12-13: old state 11 (part)      */
+    0x008f,                         /* 14: decrement: jmp y--, 15      */
+    0xa0c2,                         /* 15: update: mov isr, y (wrap target) */
+    0x8000,                         /* 16: push noblock                */
+    0x60c2,                         /* 17: out isr, 2                  */
+    0x4002,                         /* 18: in pins, 2                  */
+    0xa0e6,                         /* 19: mov osr, isr                */
+    0xa0a6,                         /* 20: mov pc, isr                 */
+    0xa04a,                         /* 21: increment: mov y, ~y        */
+    0x0097,                         /* 22: jmp y--, 23                 */
+    0xa04a                          /* 23: mov y, ~y (wrap)            */
+};
+
+static uint32_t g_last[2]; /* returned if no fresh value arrives */
+
+static inline uint32_t pio_rxf(uint32_t sm_no);
+static inline uint32_t pio_instr_mem(uint32_t slot);
+static inline uint32_t pio_sm_clkdiv(uint32_t sm_no);
+static inline uint32_t pio_sm_execctrl(uint32_t sm_no);
+static inline uint32_t pio_sm_shiftctrl(uint32_t sm_no);
+static inline uint32_t pio_sm_instr(uint32_t sm_no);
+static inline uint32_t pio_sm_pinctrl(uint32_t sm_no);
+static inline uint32_t pio_fstat_rxempty(uint32_t sm_no);
+static inline uint32_t pio_ctrl_sm_enable(uint32_t sm_no);
+static inline uint32_t pio_ctrl_sm_restart(uint32_t sm_no);
+static inline uint32_t pio_ctrl_clk_restart(uint32_t sm_no);
+static void            pin_setup(uint32_t pin);
+static void            sm_setup(uint32_t sm_idx, uint32_t pin_a);
+
+EXPORT ER drv_encoder_init (void)
+{
+    uint32_t idx;
+
+    /* With WIFI=cyw43 the kernel releases PIO0 at boot; otherwise do it. */
+    app_reset_release(APP_REGS_RESET_PIO0);
+
+    if ((in_w(PIO_CTRL) & (pio_ctrl_sm_enable(0u) | pio_ctrl_sm_enable(1u)))
+        != 0u)
+    {
+        return E_OBJ; /* someone else is using SM0/SM1 */
+    }
+    for (idx = 0u; idx < QUAD_PROG_LEN; idx++)
+    {
+        out_w(pio_instr_mem(idx), g_quad_prog[idx]);
+    }
+    pin_setup(S2_PIN_ENC_L_A);
+    pin_setup(S2_PIN_ENC_L_A + 1u);
+    pin_setup(S2_PIN_ENC_R_A);
+    pin_setup(S2_PIN_ENC_R_A + 1u);
+    sm_setup(DRV_ENC_LEFT, S2_PIN_ENC_L_A);
+    sm_setup(DRV_ENC_RIGHT, S2_PIN_ENC_R_A);
+    set_w(PIO_CTRL,
+          pio_ctrl_sm_enable(DRV_ENC_LEFT) | pio_ctrl_sm_enable(DRV_ENC_RIGHT));
+    return E_OK;
+}
+
+EXPORT int32_t drv_encoder_read (uint32_t which)
+{
+    uint32_t const sm_idx  = (DRV_ENC_RIGHT == which) ? 1u : 0u;
+    uint32_t       n_words = (in_w(PIO_FLEVEL) >> ((sm_idx * 8u) + 4u)) & 0xFu;
+    uint32_t       value   = g_last[sm_idx];
+    uint32_t       spin;
+
+    /* Drain what is queued (possibly stale), then wait for one fresh push. */
+    while (n_words > 0u)
+    {
+        value = in_w(pio_rxf(sm_idx));
+        n_words--;
+    }
+    for (spin = 0u; spin < READ_SPIN_MAX; spin++)
+    {
+        if (0u == (pio_fstat_rxempty(sm_idx) & in_w(PIO_FSTAT)))
+        {
+            value = in_w(pio_rxf(sm_idx));
+            break;
+        }
+    }
+    g_last[sm_idx] = value;
+    return (int32_t)value;
+}
+
 static inline uint32_t pio_rxf (uint32_t sm_no)
 {
     return PIO0_BASE_ADDR + 0x020u + (4u * sm_no);
@@ -70,32 +164,6 @@ static inline uint32_t pio_ctrl_clk_restart (uint32_t sm_no)
     return 1uL << (8u + sm_no);
 }
 
-#define QUAD_WRAP_BOTTOM 15u
-#define QUAD_WRAP_TOP    23u
-#define QUAD_PROG_LEN    24u
-/* ~ 16 us at 125 MHz; the SM pushes every ~10 cycles */
-#define READ_SPIN_MAX 2000u
-
-/* pico-examples pio/quadrature_encoder/quadrature_encoder.pio, assembled. */
-static uint16_t const g_quad_prog[QUAD_PROG_LEN] = {
-    0x000f, 0x000e, 0x0015, 0x000f, /*  0- 3: jump table, old state 00 */
-    0x0015, 0x000f, 0x000f, 0x000e, /*  4- 7: old state 01             */
-    0x000e, 0x000f, 0x000f, 0x0015, /*  8-11: old state 10             */
-    0x000f, 0x0015,                 /* 12-13: old state 11 (part)      */
-    0x008f,                         /* 14: decrement: jmp y--, 15      */
-    0xa0c2,                         /* 15: update: mov isr, y (wrap target) */
-    0x8000,                         /* 16: push noblock                */
-    0x60c2,                         /* 17: out isr, 2                  */
-    0x4002,                         /* 18: in pins, 2                  */
-    0xa0e6,                         /* 19: mov osr, isr                */
-    0xa0a6,                         /* 20: mov pc, isr                 */
-    0xa04a,                         /* 21: increment: mov y, ~y        */
-    0x0097,                         /* 22: jmp y--, 23                 */
-    0xa04a                          /* 23: mov y, ~y (wrap)            */
-};
-
-static uint32_t g_last[2]; /* returned if no fresh value arrives */
-
 static void pin_setup (uint32_t pin)
 {
     out_w(app_regs_pad(pin), APP_REGS_PAD_IE | APP_REGS_PAD_PUE
@@ -113,58 +181,6 @@ static void sm_setup (uint32_t sm_idx, uint32_t pin_a)
     out_w(pio_sm_pinctrl(sm_idx), pin_a << 15); /* IN_BASE = A, B = A + 1 */
     set_w(PIO_CTRL, pio_ctrl_sm_restart(sm_idx) | pio_ctrl_clk_restart(sm_idx));
     out_w(pio_sm_instr(sm_idx), 0x0000u); /* jmp 0 */
-}
-
-EXPORT ER drv_encoder_init (void)
-{
-    uint32_t idx;
-
-    /* With WIFI=cyw43 the kernel releases PIO0 at boot; otherwise do it. */
-    app_reset_release(APP_REGS_RESET_PIO0);
-
-    if ((in_w(PIO_CTRL) & (pio_ctrl_sm_enable(0u) | pio_ctrl_sm_enable(1u)))
-        != 0u)
-    {
-        return E_OBJ; /* someone else is using SM0/SM1 */
-    }
-    for (idx = 0u; idx < QUAD_PROG_LEN; idx++)
-    {
-        out_w(pio_instr_mem(idx), g_quad_prog[idx]);
-    }
-    pin_setup(S2_PIN_ENC_L_A);
-    pin_setup(S2_PIN_ENC_L_A + 1u);
-    pin_setup(S2_PIN_ENC_R_A);
-    pin_setup(S2_PIN_ENC_R_A + 1u);
-    sm_setup(DRV_ENC_LEFT, S2_PIN_ENC_L_A);
-    sm_setup(DRV_ENC_RIGHT, S2_PIN_ENC_R_A);
-    set_w(PIO_CTRL,
-          pio_ctrl_sm_enable(DRV_ENC_LEFT) | pio_ctrl_sm_enable(DRV_ENC_RIGHT));
-    return E_OK;
-}
-
-EXPORT int32_t drv_encoder_read (uint32_t which)
-{
-    uint32_t const sm_idx  = (DRV_ENC_RIGHT == which) ? 1u : 0u;
-    uint32_t       n_words = (in_w(PIO_FLEVEL) >> ((sm_idx * 8u) + 4u)) & 0xFu;
-    uint32_t       value   = g_last[sm_idx];
-    uint32_t       spin;
-
-    /* Drain what is queued (possibly stale), then wait for one fresh push. */
-    while (n_words > 0u)
-    {
-        value = in_w(pio_rxf(sm_idx));
-        n_words--;
-    }
-    for (spin = 0u; spin < READ_SPIN_MAX; spin++)
-    {
-        if (0u == (pio_fstat_rxempty(sm_idx) & in_w(PIO_FSTAT)))
-        {
-            value = in_w(pio_rxf(sm_idx));
-            break;
-        }
-    }
-    g_last[sm_idx] = value;
-    return (int32_t)value;
 }
 
 /*** end of file ***/

@@ -32,28 +32,7 @@ static uint32_t volatile g_rise_us; /* ISR only, between the two edges */
 static bool volatile gb_rise;
 
 #if US_PINS_FREE
-/* echo_isr: bank-0 callback on core 1. */
-static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
-{
-    (void)pin;
-    if ((events & APP_GPIO_EDGE_RISE) != 0u)
-    {
-        g_rise_us = t_us;
-        gb_rise   = true;
-    }
-    if (((events & APP_GPIO_EDGE_FALL) != 0u) && gb_rise)
-    {
-        uint32_t width = t_us - g_rise_us;
-
-        if (width > ((1uL << ECHO_WIDTH_BITS) - 1uL))
-        {
-            width = (1uL << ECHO_WIDTH_BITS) - 1uL;
-        }
-        g_echo  = ECHO_DONE | width;
-        gb_rise = false;
-        (void)tk_set_flg(g_flg_obst, OBST_FLG_ECHO);
-    }
-}
+static void echo_isr(uint32_t pin, uint32_t events, uint32_t t_us);
 #endif
 
 EXPORT ER drv_ultrasonic_init (void)
@@ -116,5 +95,32 @@ EXPORT bool drv_ultrasonic_take (uint32_t * p_width_us)
     *p_width_us = echo & ((1uL << ECHO_WIDTH_BITS) - 1uL);
     return ((echo & ECHO_DONE) != 0u);
 }
+
+#if US_PINS_FREE
+
+/* echo_isr: bank-0 callback on core 1. */
+static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
+{
+    (void)pin;
+    if ((events & APP_GPIO_EDGE_RISE) != 0u)
+    {
+        g_rise_us = t_us;
+        gb_rise   = true;
+    }
+    if (((events & APP_GPIO_EDGE_FALL) != 0u) && gb_rise)
+    {
+        uint32_t width = t_us - g_rise_us;
+
+        if (width > ((1uL << ECHO_WIDTH_BITS) - 1uL))
+        {
+            width = (1uL << ECHO_WIDTH_BITS) - 1uL;
+        }
+        g_echo  = ECHO_DONE | width;
+        gb_rise = false;
+        (void)tk_set_flg(g_flg_obst, OBST_FLG_ECHO);
+    }
+}
+
+#endif
 
 /*** end of file ***/

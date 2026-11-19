@@ -9,25 +9,11 @@
 #include "subsystem5.h"
 
 #define SERVO_SLICE 7u
-static inline uint32_t pwm_ch_csr (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
-}
 
-static inline uint32_t pwm_ch_div (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
-}
-
-static inline uint32_t pwm_ch_cc (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
-}
-
-static inline uint32_t pwm_ch_top (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
-}
+static inline uint32_t pwm_ch_csr(uint32_t slice);
+static inline uint32_t pwm_ch_div(uint32_t slice);
+static inline uint32_t pwm_ch_cc(uint32_t slice);
+static inline uint32_t pwm_ch_top(uint32_t slice);
 
 EXPORT ER drv_servo_init (void)
 {
@@ -62,6 +48,26 @@ EXPORT void drv_servo_set_deg (int32_t angle_deg)
                + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
     out_w(pwm_ch_cc(SERVO_SLICE),
           (uint32_t)pulse_us << 16); /* channel B; A (GP14) = 0 */
+}
+
+static inline uint32_t pwm_ch_csr (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
+}
+
+static inline uint32_t pwm_ch_div (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
+}
+
+static inline uint32_t pwm_ch_cc (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
+}
+
+static inline uint32_t pwm_ch_top (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
 }
 
 /*** end of file ***/

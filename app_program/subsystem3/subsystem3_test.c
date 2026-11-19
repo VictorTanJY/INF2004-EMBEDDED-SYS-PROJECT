@@ -1,10 +1,11 @@
 /*
- *  subsystem3_test_run.c
+ *  subsystem3_test.c
  *  On-target tests for subsystem 3.  Built only with: make TEST=1
  *  Record results in testing/subsystem3/TEST_LOG.md.
  *  Decoding and tracking are tested on a PC (testing/subsystem3/host).
  */
 
+#include "subsystem3_test.h"
 #include "subsystem3.h"
 #include "code39.h"
 #include "line_barcode.h"
@@ -28,47 +29,20 @@
 #define T_BLACK     920u
 #define T_BLOCK_US  10000u /* one 10 ms ADC block (NFR2)     */
 
+#endif
+
+#if APP_TEST
+
 static line_barcode_capture_t g_t_bc; /* ~3 KB: kept off the task stack */
 
-static uint16_t make_star_code (char chr, uint32_t * p_w)
-{
-    char const seq[3]  = {'*', chr, '*'};
-    uint16_t   n_elems = 0u;
-    int32_t    kdx;
-    int32_t    elem;
+#endif
 
-    for (kdx = 0; kdx < T_SYMBOLS; kdx++)
-    {
-        uint16_t const pat = code39_pattern(seq[kdx]);
+#if APP_TEST
+static uint16_t make_star_code(char chr, uint32_t * p_w);
+static uint16_t level_at(uint32_t const * p_w, uint16_t n_elems, uint32_t x_um);
+#endif
 
-        for (elem = 0; elem < T_CHAR_ELEMS; elem++)
-        {
-            p_w[n_elems++] =
-                (((pat >> (8 - elem)) & 1u) != 0u) ? T_WIDE_UM : T_NARROW_UM;
-        }
-        if (kdx < 2)
-        {
-            p_w[n_elems++] = T_NARROW_UM; /* gap between characters */
-        }
-    }
-    return n_elems;
-}
-
-static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
-{
-    uint32_t pos = T_LEAD_UM;
-    uint16_t elem;
-
-    for (elem = 0u; elem < n_elems; elem++)
-    {
-        if ((x_um >= pos) && (x_um < (pos + p_w[elem])))
-        {
-            return (0u == (elem % 2u)) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
-        }
-        pos += p_w[elem];
-    }
-    return (uint16_t)T_WHITE;
-}
+#if APP_TEST
 
 EXPORT void subsystem3_test_run (void)
 {
@@ -185,6 +159,50 @@ EXPORT void subsystem3_test_run (void)
     TEST_SUMMARY("subsystem3");
 }
 
-#endif /* APP_TEST */
+#endif
+
+#if APP_TEST
+
+static uint16_t make_star_code (char chr, uint32_t * p_w)
+{
+    char const seq[3]  = {'*', chr, '*'};
+    uint16_t   n_elems = 0u;
+    int32_t    kdx;
+    int32_t    elem;
+
+    for (kdx = 0; kdx < T_SYMBOLS; kdx++)
+    {
+        uint16_t const pat = code39_pattern(seq[kdx]);
+
+        for (elem = 0; elem < T_CHAR_ELEMS; elem++)
+        {
+            p_w[n_elems++] =
+                (((pat >> (8 - elem)) & 1u) != 0u) ? T_WIDE_UM : T_NARROW_UM;
+        }
+        if (kdx < 2)
+        {
+            p_w[n_elems++] = T_NARROW_UM; /* gap between characters */
+        }
+    }
+    return n_elems;
+}
+
+static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
+{
+    uint32_t pos = T_LEAD_UM;
+    uint16_t elem;
+
+    for (elem = 0u; elem < n_elems; elem++)
+    {
+        if ((x_um >= pos) && (x_um < (pos + p_w[elem])))
+        {
+            return (0u == (elem % 2u)) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
+        }
+        pos += p_w[elem];
+    }
+    return (uint16_t)T_WHITE;
+}
+
+#endif
 
 /*** end of file ***/

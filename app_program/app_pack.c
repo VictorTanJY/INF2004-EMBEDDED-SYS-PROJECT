@@ -14,6 +14,15 @@ static char const g_symbols[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 typedef uint8_t
     pk_check_sym_t[(PK_SYM_COUNT == (sizeof(g_symbols) - 1u)) ? 1 : -1];
 
+static void     pk_word_put(uint32_t * p_w, uint32_t * p_pos, uint32_t value,
+                            uint8_t width);
+static uint32_t pk_word_take(uint32_t const * p_w, uint32_t * p_pos,
+                             uint8_t width);
+static uint32_t pk_member_u(void const * p_rec, app_pack_field_t const * p_f);
+static int32_t  pk_member_s(void const * p_rec, app_pack_field_t const * p_f);
+static void     pk_member_set(void * p_rec, app_pack_field_t const * p_f,
+                              uint32_t value);
+
 /* ---- Byte streams, LSB first ---------------------------------------- */
 void app_pack_writer_init (app_pack_writer_t * p_w, uint8_t * p_buf,
                            uint16_t cap)
@@ -125,6 +134,90 @@ uint32_t app_pack_layout_bits (app_pack_field_t const * p_f, uint16_t n_fields)
     return bits;
 }
 
+/* Pack every field of p_rec into p_words (nwords, cleared first). */
+void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
+                        void const * p_rec, uint32_t * p_words, uint16_t nwords)
+{
+    uint32_t pos = 0u;
+    uint16_t idx;
+
+    for (idx = 0u; idx < nwords; idx++)
+    {
+        p_words[idx] = 0u;
+    }
+    for (idx = 0u; idx < n_fields; idx++)
+    {
+        uint8_t const  width = p_f[idx].width;
+        uint32_t const raw   = pk_member_u(p_rec, &p_f[idx]);
+        uint32_t       value;
+
+        switch (p_f[idx].kind)
+        {
+            case PK_S:
+                value = app_pack_off_s(pk_member_s(p_rec, &p_f[idx]), width);
+            break;
+            case PK_W:
+                value = raw;
+            break;
+            case PK_UN:
+            {
+                uint32_t const none =
+                    (p_f[idx].size >= 4u)
+                        ? 0xFFFFFFFFuL
+                        : ((1uL << (8u * p_f[idx].size)) - 1uL);
+
+                value = (raw == none) ? app_pack_mask(width)
+                                      : app_pack_sat_u(raw, width);
+                if ((raw != none) && (value == app_pack_mask(width)))
+                {
+                    value = app_pack_mask(width) - 1u;
+                }
+            }
+            break;
+            case PK_SYM:
+                value = app_pack_sym_index((char)(uint8_t)raw);
+            break;
+            default: /* PK_U */
+                value = app_pack_sat_u(raw, width);
+            break;
+        }
+        pk_word_put(p_words, &pos, value, width);
+    }
+}
+
+/* Unpack p_words into the fields of p_rec (other bytes are left as they are).
+ */
+void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
+                          uint32_t const * p_words, void * p_rec)
+{
+    uint32_t pos = 0u;
+    uint16_t idx;
+
+    for (idx = 0u; idx < n_fields; idx++)
+    {
+        uint8_t const  width = p_f[idx].width;
+        uint32_t const value = pk_word_take(p_words, &pos, width);
+        uint32_t       raw;
+
+        switch (p_f[idx].kind)
+        {
+            case PK_S:
+                raw = (uint32_t)app_pack_unoff_s(value, width);
+            break;
+            case PK_UN:
+                raw = (value == app_pack_mask(width)) ? 0xFFFFFFFFuL : value;
+            break;
+            case PK_SYM:
+                raw = (uint8_t)app_pack_sym_char((uint8_t)value);
+            break;
+            default: /* PK_U, PK_W */
+                raw = value;
+            break;
+        }
+        pk_member_set(p_rec, &p_f[idx], raw);
+    }
+}
+
 static void pk_word_put (uint32_t * p_w, uint32_t * p_pos, uint32_t value,
                          uint8_t width)
 {
@@ -217,90 +310,6 @@ static void pk_member_set (void * p_rec, app_pack_field_t const * p_f,
     else
     {
         (void)memcpy(p_byte, &value, 4u);
-    }
-}
-
-/* Pack every field of p_rec into p_words (nwords, cleared first). */
-void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
-                        void const * p_rec, uint32_t * p_words, uint16_t nwords)
-{
-    uint32_t pos = 0u;
-    uint16_t idx;
-
-    for (idx = 0u; idx < nwords; idx++)
-    {
-        p_words[idx] = 0u;
-    }
-    for (idx = 0u; idx < n_fields; idx++)
-    {
-        uint8_t const  width = p_f[idx].width;
-        uint32_t const raw   = pk_member_u(p_rec, &p_f[idx]);
-        uint32_t       value;
-
-        switch (p_f[idx].kind)
-        {
-            case PK_S:
-                value = app_pack_off_s(pk_member_s(p_rec, &p_f[idx]), width);
-            break;
-            case PK_W:
-                value = raw;
-            break;
-            case PK_UN:
-            {
-                uint32_t const none =
-                    (p_f[idx].size >= 4u)
-                        ? 0xFFFFFFFFuL
-                        : ((1uL << (8u * p_f[idx].size)) - 1uL);
-
-                value = (raw == none) ? app_pack_mask(width)
-                                      : app_pack_sat_u(raw, width);
-                if ((raw != none) && (value == app_pack_mask(width)))
-                {
-                    value = app_pack_mask(width) - 1u;
-                }
-            }
-            break;
-            case PK_SYM:
-                value = app_pack_sym_index((char)(uint8_t)raw);
-            break;
-            default: /* PK_U */
-                value = app_pack_sat_u(raw, width);
-            break;
-        }
-        pk_word_put(p_words, &pos, value, width);
-    }
-}
-
-/* Unpack p_words into the fields of p_rec (other bytes are left as they are).
- */
-void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
-                          uint32_t const * p_words, void * p_rec)
-{
-    uint32_t pos = 0u;
-    uint16_t idx;
-
-    for (idx = 0u; idx < n_fields; idx++)
-    {
-        uint8_t const  width = p_f[idx].width;
-        uint32_t const value = pk_word_take(p_words, &pos, width);
-        uint32_t       raw;
-
-        switch (p_f[idx].kind)
-        {
-            case PK_S:
-                raw = (uint32_t)app_pack_unoff_s(value, width);
-            break;
-            case PK_UN:
-                raw = (value == app_pack_mask(width)) ? 0xFFFFFFFFuL : value;
-            break;
-            case PK_SYM:
-                raw = (uint8_t)app_pack_sym_char((uint8_t)value);
-            break;
-            default: /* PK_U, PK_W */
-                raw = value;
-            break;
-        }
-        pk_member_set(p_rec, &p_f[idx], raw);
     }
 }
 

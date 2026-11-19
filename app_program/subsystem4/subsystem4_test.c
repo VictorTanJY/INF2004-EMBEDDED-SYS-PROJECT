@@ -1,5 +1,5 @@
 /*
- *  subsystem4_test_run.c
+ *  subsystem4_test.c
  *  On-target tests for subsystem 4.  Built only with: make TEST=1
  *  Record results in testing/subsystem4/TEST_LOG.md.
  *  IMU and heartbeat logic are tested on a PC (testing/subsystem4/host).
@@ -10,6 +10,8 @@
  *  surface (on the stand is fine if the stand is level).
  */
 
+#include "subsystem4_test.h"
+#include "safety_task.h"
 #include "subsystem4.h"
 #include "../subsystem2/subsystem2.h" /* subsystem2_motor_estop timestamp, odometry */
 #include "../subsystem5/subsystem5.h" /* subsystem5_mission_post / subsystem5_get_mission_snap */
@@ -24,31 +26,24 @@
 
 #define T_NFR8_US    20000u /* NFR8: brake within 20 ms of a fault       */
 #define T_LEVEL_CDEG 500    /* level bench: |pitch|, |roll| <= 5.0 deg   */
+
 /* not re-checked on reset (live_causes) */
 #define T_FAULT_BIT SAFETY_FLT_STALL
 
-static bool brake_pins_low (void)
-{
-    UW const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
-                    | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
+#endif
 
-    return (0u == (in_w(SIO_GPIO_OUT) & mask))
-           && (APP_REGS_FUNCSEL_SIO
-               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu))
-           && (APP_REGS_FUNCSEL_SIO
-               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_B)) & 0x1Fu))
-           && (APP_REGS_FUNCSEL_SIO
-               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_A)) & 0x1Fu))
-           && (APP_REGS_FUNCSEL_SIO
-               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_B)) & 0x1Fu));
-}
+#if APP_TEST
 
-static int32_t iabs (int32_t value)
-{
-    return (value < 0) ? -value : value;
-}
+IMPORT volatile UW g_safety_tick_us; /* safety_task.c */
 
-IMPORT volatile UW g_safety_tick_us; /* safety_task_thread.c */
+#endif
+
+#if APP_TEST
+static bool    brake_pins_low(void);
+static int32_t iabs(int32_t value);
+#endif
+
+#if APP_TEST
 
 EXPORT void subsystem4_test_run (void)
 {
@@ -167,6 +162,31 @@ EXPORT void subsystem4_test_run (void)
     TEST_SUMMARY("subsystem4");
 }
 
-#endif /* APP_TEST */
+#endif
+
+#if APP_TEST
+
+static bool brake_pins_low (void)
+{
+    UW const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
+                    | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
+
+    return (0u == (in_w(SIO_GPIO_OUT) & mask))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_A)) & 0x1Fu))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_L_B)) & 0x1Fu))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_A)) & 0x1Fu))
+           && (APP_REGS_FUNCSEL_SIO
+               == (in_w(app_regs_gpio_ctrl(S2_PIN_MOT_R_B)) & 0x1Fu));
+}
+
+static int32_t iabs (int32_t value)
+{
+    return (value < 0) ? -value : value;
+}
+
+#endif
 
 /*** end of file ***/

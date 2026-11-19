@@ -70,6 +70,18 @@ static bool     gb_rx_too_long;
 static uint32_t g_pub_failures;
 static uint32_t g_rx_dropped;
 
+static void poll_timeout(void * p_arg);
+static void retry_timeout(void * p_arg);
+static void schedule_retry(void);
+static void incoming_publish_cb(void * p_arg, char const * p_topic,
+                                uint32_t tot_len);
+static void incoming_data_cb(void * p_arg, uint8_t const * p_data, uint16_t len,
+                             uint8_t flags);
+static void subscribe_done_cb(void * p_arg, err_t result);
+static void publish_done_cb(void * p_arg, err_t result);
+static void connection_cb(mqtt_client_t * p_client, void * p_arg,
+                          mqtt_connection_status_t status);
+
 /* ------------------------------------------------------------------------ */
 /* Weak application hooks: a build without the PicoCar application links. */
 
@@ -97,6 +109,95 @@ mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data, uint16_t len)
     (void)p_data;
     (void)len;
 }
+
+void mqtt_utk_init (void)
+{
+    sys_untimeout(poll_timeout, NULL);
+    sys_timeout(MQTT_UTK_POLL_MS, poll_timeout, NULL);
+}
+
+void mqtt_utk_start (void)
+{
+    struct mqtt_connect_client_info_t client_info = {0};
+    mqtt_utk_cfg_t const *            p_cfg;
+    err_t                             err;
+
+    if (gb_busy || ((gp_client != NULL) && mqtt_client_is_connected(gp_client)))
+    {
+        return;
+    }
+
+    if (NULL == gp_client)
+    {
+        gp_client = mqtt_client_new();
+        if (NULL == gp_client)
+        {
+            tm_printf((UB *)"mqtt: mqtt_client_new() failed\n");
+            schedule_retry();
+            return;
+        }
+    }
+
+    if (!ip4addr_aton(MQTT_BROKER_IP, ip_2_ip4(&g_broker_addr)))
+    {
+        tm_printf((UB *)"mqtt: bad MQTT_BROKER_IP\n");
+        schedule_retry();
+        return;
+    }
+    IP_SET_TYPE(&g_broker_addr, IPADDR_TYPE_V4);
+
+    client_info.client_id  = MQTT_CLIENT_ID;
+    client_info.keep_alive = MQTT_UTK_KEEPALIVE_S;
+
+    p_cfg = mqtt_utk_app_config();
+    if ((p_cfg != NULL) && (p_cfg->p_will_topic != NULL)
+        && (p_cfg->p_will_msg != NULL))
+    {
+        client_info.will_topic  = p_cfg->p_will_topic;
+        client_info.will_msg    = p_cfg->p_will_msg;
+        client_info.will_qos    = p_cfg->will_qos;
+        client_info.will_retain = p_cfg->will_retain;
+    }
+
+    gb_busy = true;
+    err     = mqtt_client_connect(gp_client, &g_broker_addr, MQTT_BROKER_PORT,
+                                  connection_cb, NULL, &client_info);
+    if (err != ERR_OK)
+    {
+        tm_printf((UB *)"mqtt: mqtt_client_connect() failed, err=%d\n",
+                  (INT)err);
+        schedule_retry();
+    }
+}
+
+uint8_t mqtt_utk_is_connected (void)
+{
+    return ((gp_client != NULL) && mqtt_client_is_connected(gp_client)) ? 1u
+                                                                        : 0u;
+}
+
+int32_t mqtt_utk_publish (char const * p_topic, uint8_t const * p_data,
+                          uint16_t len, uint8_t qos, uint8_t retain)
+{
+    if ((NULL == gp_client) || !mqtt_client_is_connected(gp_client))
+    {
+        return MQTT_UTK_E_OFFLINE;
+    }
+    return (int32_t)mqtt_publish(gp_client, p_topic, p_data, len, qos, retain,
+                                 publish_done_cb, NULL);
+}
+
+uint32_t mqtt_utk_pub_failures (void)
+{
+    return g_pub_failures;
+}
+
+uint32_t mqtt_utk_rx_dropped (void)
+{
+    return g_rx_dropped;
+}
+
+/*** end of file ***/
 
 /* ------------------------------------------------------------------------ */
 
@@ -232,93 +333,6 @@ static void connection_cb (mqtt_client_t * p_client, void * p_arg,
         mqtt_utk_app_disconnected();
         schedule_retry();
     }
-}
-
-void mqtt_utk_init (void)
-{
-    sys_untimeout(poll_timeout, NULL);
-    sys_timeout(MQTT_UTK_POLL_MS, poll_timeout, NULL);
-}
-
-void mqtt_utk_start (void)
-{
-    struct mqtt_connect_client_info_t client_info = {0};
-    mqtt_utk_cfg_t const *            p_cfg;
-    err_t                             err;
-
-    if (gb_busy || ((gp_client != NULL) && mqtt_client_is_connected(gp_client)))
-    {
-        return;
-    }
-
-    if (NULL == gp_client)
-    {
-        gp_client = mqtt_client_new();
-        if (NULL == gp_client)
-        {
-            tm_printf((UB *)"mqtt: mqtt_client_new() failed\n");
-            schedule_retry();
-            return;
-        }
-    }
-
-    if (!ip4addr_aton(MQTT_BROKER_IP, ip_2_ip4(&g_broker_addr)))
-    {
-        tm_printf((UB *)"mqtt: bad MQTT_BROKER_IP\n");
-        schedule_retry();
-        return;
-    }
-    IP_SET_TYPE(&g_broker_addr, IPADDR_TYPE_V4);
-
-    client_info.client_id  = MQTT_CLIENT_ID;
-    client_info.keep_alive = MQTT_UTK_KEEPALIVE_S;
-
-    p_cfg = mqtt_utk_app_config();
-    if ((p_cfg != NULL) && (p_cfg->p_will_topic != NULL)
-        && (p_cfg->p_will_msg != NULL))
-    {
-        client_info.will_topic  = p_cfg->p_will_topic;
-        client_info.will_msg    = p_cfg->p_will_msg;
-        client_info.will_qos    = p_cfg->will_qos;
-        client_info.will_retain = p_cfg->will_retain;
-    }
-
-    gb_busy = true;
-    err     = mqtt_client_connect(gp_client, &g_broker_addr, MQTT_BROKER_PORT,
-                                  connection_cb, NULL, &client_info);
-    if (err != ERR_OK)
-    {
-        tm_printf((UB *)"mqtt: mqtt_client_connect() failed, err=%d\n",
-                  (INT)err);
-        schedule_retry();
-    }
-}
-
-uint8_t mqtt_utk_is_connected (void)
-{
-    return ((gp_client != NULL) && mqtt_client_is_connected(gp_client)) ? 1u
-                                                                        : 0u;
-}
-
-int32_t mqtt_utk_publish (char const * p_topic, uint8_t const * p_data,
-                          uint16_t len, uint8_t qos, uint8_t retain)
-{
-    if ((NULL == gp_client) || !mqtt_client_is_connected(gp_client))
-    {
-        return MQTT_UTK_E_OFFLINE;
-    }
-    return (int32_t)mqtt_publish(gp_client, p_topic, p_data, len, qos, retain,
-                                 publish_done_cb, NULL);
-}
-
-uint32_t mqtt_utk_pub_failures (void)
-{
-    return g_pub_failures;
-}
-
-uint32_t mqtt_utk_rx_dropped (void)
-{
-    return g_rx_dropped;
 }
 
 /*** end of file ***/

@@ -18,6 +18,38 @@ typedef struct
     char const * p_bits; /* 9 elements, bar first: 1 = wide */
 } code39_entry_t;
 
+#define TABLE_LEN (sizeof(g_code39_table) / sizeof(g_code39_table[0]))
+
+/* ---- best match for one data character (8 Nov) --------------------- */
+/* On the robot 3 mm elements are at the limit of the sensor's spot: a
+   speck splits one bar in three (a ~1 mm "gap"), or a thin bar and the
+   thin space beside it are lost in a neighbour.  Either way the count is
+   no longer 29 and the exact decoders reject.  Here the read is lined up
+   (dynamic programming) against the 29 printed elements of *X*.  Each
+   step pairs:
+     1 measured with 1 printed,
+     3 measured with 1 printed (split; the 3 add up),
+     1 measured with 3 printed (merge; the 3 add up),
+   so bars stay bars and spaces stay spaces.  The first or last two
+   printed elements (end bar + its space) may also be lost.  Each step
+   costs its width error squared, in hundredths of a narrow element; a
+   split, merge or lost end adds BEST_EDIT.  Only the defects the sensor
+   makes are allowed: a split's middle is a speck (thinner than
+   BEST_SPECK_PCT % of a narrow element of its kind), and a speck may
+   not stand for a printed element; a merge loses a narrow element. */
+
+#define BEST_T          29u /* elements of *X*                  */
+#define BEST_N_MIN      (BEST_T - (2u * BEST_MAX_EDITS)) /* 25 */
+#define BEST_N_MAX      (BEST_T + (2u * BEST_MAX_EDITS)) /* 33 */
+#define BEST_BAND       (2u * BEST_MAX_EDITS) /* |measured - printed| index */
+#define BEST_EDIT       2500u /* = a 0.5 narrow width error        */
+#define BEST_MAX_EDITS  2u    /* more defects than this: no read   */
+#define BEST_ELEM_MAX   1600u /* mean error <= 0.4 narrow per step */
+#define BEST_MARGIN_X10 20u   /* runner-up must cost >= 2 x best   */
+#define BEST_SPECK_PCT  50u   /* speck: under half a narrow       */
+#define BEST_INF        0x3FFFFFFFu
+#define BEST_BOUND_MAX  (((BEST_ELEM_MAX * BEST_T) * BEST_MARGIN_X10) / 10u)
+
 /* Code 39 character set (ISO/IEC 16388), element order b s b s b s b s b. */
 static code39_entry_t const g_code39_table[] = {
     {'0', "000110100"}, {'1', "100100001"}, {'2', "001100001"},
@@ -36,19 +68,26 @@ static code39_entry_t const g_code39_table[] = {
     {'*', "010010100"}, {'$', "010101000"}, {'/', "010100010"},
     {'+', "010001010"}, {'%', "000101010"}};
 
-#define TABLE_LEN (sizeof(g_code39_table) / sizeof(g_code39_table[0]))
-
-static uint16_t bits_of (char const * p_bits)
-{
-    uint16_t pattern = 0u;
-    uint8_t  idx;
-
-    for (idx = 0u; idx < CHAR_ELEMS; idx++)
-    {
-        pattern = (uint16_t)((pattern << 1) | (('1' == p_bits[idx]) ? 1u : 0u));
-    }
-    return pattern;
-}
+static uint16_t bits_of(char const * p_bits);
+static uint32_t width_at(uint32_t const * p_w, uint16_t n_elems, uint16_t pos,
+                         bool b_rev);
+static uint32_t kth_widest(uint32_t const * p_w, uint8_t first, uint8_t rank,
+                           uint8_t * p_idx);
+static code39_result_t classify(uint32_t const * p_w, uint16_t n_elems,
+                                uint16_t first, bool b_rev,
+                                uint16_t ratio_min_x10, uint16_t * p_pattern);
+static code39_result_t decode_dir(uint32_t const * p_w, uint16_t n_elems,
+                                  uint16_t ratio_min_x10, bool b_rev,
+                                  char * p_text);
+static uint32_t        median_of(uint32_t * p_v, uint16_t n_elems);
+static void            best_levels(uint32_t const * p_w, uint16_t n_elems,
+                                   uint32_t * p_lv);
+static uint32_t        sq_err(uint32_t meas, uint32_t expect, uint32_t inv);
+static bool            in_band(uint16_t idx, uint16_t jdx);
+static bool     is_speck(uint32_t width, uint16_t idx, uint32_t const * p_lv);
+static uint32_t best_fit(uint32_t const * p_w, uint16_t n_elems,
+                         uint32_t const * p_e, bool const * p_wide,
+                         bool const * p_speck, uint32_t inv, uint32_t bound);
 
 uint16_t code39_pattern (char chr)
 {
@@ -76,6 +115,277 @@ char code39_char (uint16_t pattern)
         }
     }
     return '\0';
+}
+
+code39_result_t code39_decode (uint32_t const * p_widths, uint16_t n_elems,
+                               uint16_t ratio_min_x10, char * p_text,
+                               bool * pb_reversed)
+{
+    code39_result_t fwd;
+    code39_result_t rev;
+
+    p_text[0]    = '\0';
+    *pb_reversed = false;
+    if (n_elems < 9u)
+    {
+        return CODE39_NOT_BARCODE;
+    }
+    if (((n_elems + 1u) / 10u) > CODE39_MAX_CHARS)
+    {
+        return CODE39_ERR_TOO_MANY;
+    }
+    if ((((n_elems + 1u) % 10u) != 0u) || (n_elems < 29u))
+    {
+        return CODE39_ERR_COUNT; /* also "**" with no data */
+    }
+
+    fwd = decode_dir(p_widths, n_elems, ratio_min_x10, false, p_text);
+    if (CODE39_OK == fwd)
+    {
+        return CODE39_OK;
+    }
+    rev = decode_dir(p_widths, n_elems, ratio_min_x10, true, p_text);
+    if (CODE39_OK == rev)
+    {
+        *pb_reversed = true;
+        return CODE39_OK;
+    }
+    p_text[0] = '\0';
+    /* Report the forward reason unless only the framing was wrong. */
+    return (CODE39_ERR_START_STOP == fwd) ? rev : fwd;
+}
+
+code39_result_t code39_decode_one (uint32_t const * p_widths, uint16_t n_elems,
+                                   uint16_t ratio_min_x10, char * p_char,
+                                   bool * pb_reversed)
+{
+    char            text[CODE39_MAX_CHARS];
+    code39_result_t result =
+        code39_decode(p_widths, n_elems, ratio_min_x10, text, pb_reversed);
+
+    *p_char = '\0';
+    if (result != CODE39_OK)
+    {
+        return result;
+    }
+    if (('\0' == text[0]) || (text[1] != '\0'))
+    {
+        return CODE39_ERR_LENGTH;
+    }
+    *p_char = text[0];
+    return CODE39_OK;
+}
+
+/* ---- one element pair lost at an end (7 Nov) ----------------------- */
+/* A read one bar short at either end still decodes: the start '*' begins
+   (narrow bar, wide space) and the stop '*' ends (narrow space, narrow
+   bar); a missed end bar takes its neighbouring space into the quiet
+   zone, so 2 elements are gone.  Each of the four ways of putting them
+   back is tried (front / back, either reading direction); the read is
+   kept only if every way that decodes gives the same character. */
+code39_result_t code39_decode_one_repair (uint32_t const * p_widths,
+                                          uint16_t         n_elems,
+                                          uint16_t ratio_min_x10, char * p_char,
+                                          bool * pb_reversed)
+{
+    static uint32_t widths[CODE39_MAX_CHARS * 10u];
+    code39_result_t result = code39_decode_one(p_widths, n_elems, ratio_min_x10,
+                                               p_char, pb_reversed);
+    uint32_t        narrow = 0xFFFFFFFFu;
+    uint32_t        widest = 0u;
+    char            got    = '\0';
+    bool            b_got_rev = false;
+    uint16_t        idx;
+    uint8_t         kdx;
+
+    if ((CODE39_OK == result) || (CODE39_NOT_BARCODE == result)
+        || ((n_elems + 2u) > (CODE39_MAX_CHARS * 10u))
+        || (((n_elems + 3u) % 10u) != 0u))
+    {
+        return result;
+    }
+    for (idx = 0u; idx < n_elems; idx++)
+    {
+        narrow = (p_widths[idx] < narrow) ? p_widths[idx] : narrow;
+        widest = (p_widths[idx] > widest) ? p_widths[idx] : widest;
+    }
+    for (kdx = 0u; kdx < REPAIR_TRIES; kdx++)
+    {
+        bool const     b_front = (kdx < 2u);
+        uint32_t const add_first =
+            (0u == kdx) ? narrow
+                        : ((3u == kdx) ? widest : narrow); /* first added */
+        uint32_t const add_second =
+            (0u == kdx) ? widest : narrow; /* second added */
+        char     chr;
+        bool     b_rev;
+        uint16_t out_n = 0u;
+
+        if (b_front)
+        {
+            widths[out_n++] = add_first;
+            widths[out_n++] = add_second;
+        }
+        for (idx = 0u; idx < n_elems; idx++)
+        {
+            widths[out_n++] = p_widths[idx];
+        }
+        if (!b_front)
+        {
+            widths[out_n++] =
+                (2u == kdx)
+                    ? narrow
+                    : widest; /* k 2: space n, bar n; k 3: space W, bar n */
+            widths[out_n++] = narrow;
+        }
+        if (CODE39_OK
+            == code39_decode_one(widths, out_n, ratio_min_x10, &chr, &b_rev))
+        {
+            if ((got != '\0') && (chr != got))
+            {
+                *p_char = '\0';
+                return CODE39_ERR_PATTERN; /* repairs disagree */
+            }
+            got       = chr;
+            b_got_rev = b_rev;
+        }
+    }
+    if ('\0' == got)
+    {
+        *p_char = '\0';
+        return result;
+    }
+    *p_char      = got;
+    *pb_reversed = b_got_rev;
+    return CODE39_OK;
+}
+
+code39_result_t code39_decode_one_best (uint32_t const * p_widths,
+                                        uint16_t n_elems, char * p_char,
+                                        bool * pb_reversed)
+{
+    uint32_t       levels[4]; /* bar n, bar W, space n, space W */
+    uint32_t       expect[BEST_T];
+    bool           b_wide[BEST_T];
+    bool           b_speck[BEST_N_MAX]; /* measured element is a speck */
+    uint16_t const star = code39_pattern('*');
+    uint32_t       nar;
+    uint32_t       inv;
+    uint32_t       best_cost = BEST_INF; /* best cost and its character */
+    uint32_t       next_cost = BEST_INF; /* best cost of any other character */
+    char           ch1       = '\0';
+    bool           b_rev1    = false;
+    size_t         entry;
+    uint8_t        dir;
+
+    *p_char      = '\0';
+    *pb_reversed = false;
+    if (n_elems < 9u)
+    {
+        return CODE39_NOT_BARCODE;
+    }
+    if ((n_elems < BEST_N_MIN) || (n_elems > BEST_N_MAX)
+        || (0u == (n_elems % 2u)))
+    {
+        return CODE39_ERR_COUNT; /* a read starts and ends with a bar */
+    }
+    best_levels(p_widths, n_elems, levels);
+    nar = (levels[0] + levels[2]) / 2u;
+    if ((0u == nar) || (levels[1] <= levels[0]) || (levels[3] <= levels[2]))
+    {
+        return CODE39_ERR_RATIO;
+    }
+    inv = (100u << 16) / nar;
+    for (entry = 0u; entry < n_elems; entry++)
+    {
+        b_speck[entry] = is_speck(p_widths[entry], (uint16_t)entry, levels);
+    }
+    for (entry = 0u; entry < TABLE_LEN; entry++)
+    {
+        uint16_t const pat = bits_of(g_code39_table[entry].p_bits);
+        uint8_t        kdx;
+
+        if ('*' != g_code39_table[entry].chr)
+        {
+            /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
+            for (kdx = 0u; kdx < BEST_T; kdx++)
+            {
+                uint8_t const  char_idx = (uint8_t)(kdx / 10u);
+                uint8_t const  pos      = (uint8_t)(kdx % 10u);
+                uint16_t const pattern  = (1u == char_idx) ? pat : star;
+                bool const     b_w =
+                    (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
+
+                expect[kdx] =
+                    levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
+                b_wide[kdx] = b_w;
+            }
+            for (dir = 0u; dir < DIRECTIONS; dir++)
+            {
+                uint32_t cost;
+
+                if (1u == dir)
+                {
+                    for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
+                    {
+                        uint32_t const exp_width     = expect[kdx];
+                        bool const     b_expect_wide = b_wide[kdx];
+
+                        expect[kdx] = expect[(BEST_T - 1u) - kdx];
+                        b_wide[kdx] = b_wide[(BEST_T - 1u) - kdx];
+                        expect[(BEST_T - 1u) - kdx] = exp_width;
+                        b_wide[(BEST_T - 1u) - kdx] = b_expect_wide;
+                    }
+                }
+                /* A fit costing c2 or more changes neither result, and the
+                   runner-up only matters below the margin times the largest
+                   best that is accepted. */
+                cost = best_fit(p_widths, n_elems, expect, b_wide, b_speck, inv,
+                                (next_cost < BEST_BOUND_MAX) ? next_cost
+                                                             : BEST_BOUND_MAX);
+                if (cost < best_cost)
+                {
+                    if (g_code39_table[entry].chr != ch1)
+                    {
+                        next_cost = best_cost;
+                    }
+                    best_cost = cost;
+                    ch1       = g_code39_table[entry].chr;
+                    b_rev1    = (1u == dir);
+                }
+                else if ((cost < next_cost)
+                         && (g_code39_table[entry].chr != ch1))
+                {
+                    next_cost = cost;
+                }
+                else
+                {
+                    /* No action required. */
+                }
+            }
+        }
+    }
+    if (('\0' == ch1) || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T))
+        || (((uint64_t)next_cost * 10u)
+            < ((uint64_t)best_cost * BEST_MARGIN_X10)))
+    {
+        return CODE39_ERR_PATTERN;
+    }
+    *p_char      = ch1;
+    *pb_reversed = b_rev1;
+    return CODE39_OK;
+}
+
+static uint16_t bits_of (char const * p_bits)
+{
+    uint16_t pattern = 0u;
+    uint8_t  idx;
+
+    for (idx = 0u; idx < CHAR_ELEMS; idx++)
+    {
+        pattern = (uint16_t)((pattern << 1) | (('1' == p_bits[idx]) ? 1u : 0u));
+    }
+    return pattern;
 }
 
 /* Width of element k, read forwards or backwards. */
@@ -230,179 +540,6 @@ static code39_result_t decode_dir (uint32_t const * p_w, uint16_t n_elems,
     p_text[out] = '\0';
     return CODE39_OK;
 }
-
-code39_result_t code39_decode (uint32_t const * p_widths, uint16_t n_elems,
-                               uint16_t ratio_min_x10, char * p_text,
-                               bool * pb_reversed)
-{
-    code39_result_t fwd;
-    code39_result_t rev;
-
-    p_text[0]    = '\0';
-    *pb_reversed = false;
-    if (n_elems < 9u)
-    {
-        return CODE39_NOT_BARCODE;
-    }
-    if (((n_elems + 1u) / 10u) > CODE39_MAX_CHARS)
-    {
-        return CODE39_ERR_TOO_MANY;
-    }
-    if ((((n_elems + 1u) % 10u) != 0u) || (n_elems < 29u))
-    {
-        return CODE39_ERR_COUNT; /* also "**" with no data */
-    }
-
-    fwd = decode_dir(p_widths, n_elems, ratio_min_x10, false, p_text);
-    if (CODE39_OK == fwd)
-    {
-        return CODE39_OK;
-    }
-    rev = decode_dir(p_widths, n_elems, ratio_min_x10, true, p_text);
-    if (CODE39_OK == rev)
-    {
-        *pb_reversed = true;
-        return CODE39_OK;
-    }
-    p_text[0] = '\0';
-    /* Report the forward reason unless only the framing was wrong. */
-    return (CODE39_ERR_START_STOP == fwd) ? rev : fwd;
-}
-
-code39_result_t code39_decode_one (uint32_t const * p_widths, uint16_t n_elems,
-                                   uint16_t ratio_min_x10, char * p_char,
-                                   bool * pb_reversed)
-{
-    char            text[CODE39_MAX_CHARS];
-    code39_result_t result =
-        code39_decode(p_widths, n_elems, ratio_min_x10, text, pb_reversed);
-
-    *p_char = '\0';
-    if (result != CODE39_OK)
-    {
-        return result;
-    }
-    if (('\0' == text[0]) || (text[1] != '\0'))
-    {
-        return CODE39_ERR_LENGTH;
-    }
-    *p_char = text[0];
-    return CODE39_OK;
-}
-
-/* ---- one element pair lost at an end (7 Nov) ----------------------- */
-/* A read one bar short at either end still decodes: the start '*' begins
-   (narrow bar, wide space) and the stop '*' ends (narrow space, narrow
-   bar); a missed end bar takes its neighbouring space into the quiet
-   zone, so 2 elements are gone.  Each of the four ways of putting them
-   back is tried (front / back, either reading direction); the read is
-   kept only if every way that decodes gives the same character. */
-code39_result_t code39_decode_one_repair (uint32_t const * p_widths,
-                                          uint16_t         n_elems,
-                                          uint16_t ratio_min_x10, char * p_char,
-                                          bool * pb_reversed)
-{
-    static uint32_t widths[CODE39_MAX_CHARS * 10u];
-    code39_result_t result = code39_decode_one(p_widths, n_elems, ratio_min_x10,
-                                               p_char, pb_reversed);
-    uint32_t        narrow = 0xFFFFFFFFu;
-    uint32_t        widest = 0u;
-    char            got    = '\0';
-    bool            b_got_rev = false;
-    uint16_t        idx;
-    uint8_t         kdx;
-
-    if ((CODE39_OK == result) || (CODE39_NOT_BARCODE == result)
-        || ((n_elems + 2u) > (CODE39_MAX_CHARS * 10u))
-        || (((n_elems + 3u) % 10u) != 0u))
-    {
-        return result;
-    }
-    for (idx = 0u; idx < n_elems; idx++)
-    {
-        narrow = (p_widths[idx] < narrow) ? p_widths[idx] : narrow;
-        widest = (p_widths[idx] > widest) ? p_widths[idx] : widest;
-    }
-    for (kdx = 0u; kdx < REPAIR_TRIES; kdx++)
-    {
-        bool const     b_front = (kdx < 2u);
-        uint32_t const add_first =
-            (0u == kdx) ? narrow
-                        : ((3u == kdx) ? widest : narrow); /* first added */
-        uint32_t const add_second =
-            (0u == kdx) ? widest : narrow; /* second added */
-        char     chr;
-        bool     b_rev;
-        uint16_t out_n = 0u;
-
-        if (b_front)
-        {
-            widths[out_n++] = add_first;
-            widths[out_n++] = add_second;
-        }
-        for (idx = 0u; idx < n_elems; idx++)
-        {
-            widths[out_n++] = p_widths[idx];
-        }
-        if (!b_front)
-        {
-            widths[out_n++] =
-                (2u == kdx)
-                    ? narrow
-                    : widest; /* k 2: space n, bar n; k 3: space W, bar n */
-            widths[out_n++] = narrow;
-        }
-        if (CODE39_OK
-            == code39_decode_one(widths, out_n, ratio_min_x10, &chr, &b_rev))
-        {
-            if ((got != '\0') && (chr != got))
-            {
-                *p_char = '\0';
-                return CODE39_ERR_PATTERN; /* repairs disagree */
-            }
-            got       = chr;
-            b_got_rev = b_rev;
-        }
-    }
-    if ('\0' == got)
-    {
-        *p_char = '\0';
-        return result;
-    }
-    *p_char      = got;
-    *pb_reversed = b_got_rev;
-    return CODE39_OK;
-}
-
-/* ---- best match for one data character (8 Nov) --------------------- */
-/* On the robot 3 mm elements are at the limit of the sensor's spot: a
-   speck splits one bar in three (a ~1 mm "gap"), or a thin bar and the
-   thin space beside it are lost in a neighbour.  Either way the count is
-   no longer 29 and the exact decoders reject.  Here the read is lined up
-   (dynamic programming) against the 29 printed elements of *X*.  Each
-   step pairs:
-     1 measured with 1 printed,
-     3 measured with 1 printed (split; the 3 add up),
-     1 measured with 3 printed (merge; the 3 add up),
-   so bars stay bars and spaces stay spaces.  The first or last two
-   printed elements (end bar + its space) may also be lost.  Each step
-   costs its width error squared, in hundredths of a narrow element; a
-   split, merge or lost end adds BEST_EDIT.  Only the defects the sensor
-   makes are allowed: a split's middle is a speck (thinner than
-   BEST_SPECK_PCT % of a narrow element of its kind), and a speck may
-   not stand for a printed element; a merge loses a narrow element. */
-
-#define BEST_T          29u /* elements of *X*                  */
-#define BEST_N_MIN      (BEST_T - (2u * BEST_MAX_EDITS)) /* 25 */
-#define BEST_N_MAX      (BEST_T + (2u * BEST_MAX_EDITS)) /* 33 */
-#define BEST_BAND       (2u * BEST_MAX_EDITS) /* |measured - printed| index */
-#define BEST_EDIT       2500u /* = a 0.5 narrow width error        */
-#define BEST_MAX_EDITS  2u    /* more defects than this: no read   */
-#define BEST_ELEM_MAX   1600u /* mean error <= 0.4 narrow per step */
-#define BEST_MARGIN_X10 20u   /* runner-up must cost >= 2 x best   */
-#define BEST_SPECK_PCT  50u   /* speck: under half a narrow       */
-#define BEST_INF        0x3FFFFFFFu
-#define BEST_BOUND_MAX  (((BEST_ELEM_MAX * BEST_T) * BEST_MARGIN_X10) / 10u)
 
 static uint32_t median_of (uint32_t * p_v, uint16_t n_elems)
 {
@@ -612,122 +749,6 @@ static uint32_t best_fit (uint32_t const * p_w, uint16_t n_elems,
                + BEST_EDIT; /* last space and bar lost */
     }
     return best;
-}
-
-code39_result_t code39_decode_one_best (uint32_t const * p_widths,
-                                        uint16_t n_elems, char * p_char,
-                                        bool * pb_reversed)
-{
-    uint32_t       levels[4]; /* bar n, bar W, space n, space W */
-    uint32_t       expect[BEST_T];
-    bool           b_wide[BEST_T];
-    bool           b_speck[BEST_N_MAX]; /* measured element is a speck */
-    uint16_t const star = code39_pattern('*');
-    uint32_t       nar;
-    uint32_t       inv;
-    uint32_t       best_cost = BEST_INF; /* best cost and its character */
-    uint32_t       next_cost = BEST_INF; /* best cost of any other character */
-    char           ch1       = '\0';
-    bool           b_rev1    = false;
-    size_t         entry;
-    uint8_t        dir;
-
-    *p_char      = '\0';
-    *pb_reversed = false;
-    if (n_elems < 9u)
-    {
-        return CODE39_NOT_BARCODE;
-    }
-    if ((n_elems < BEST_N_MIN) || (n_elems > BEST_N_MAX)
-        || (0u == (n_elems % 2u)))
-    {
-        return CODE39_ERR_COUNT; /* a read starts and ends with a bar */
-    }
-    best_levels(p_widths, n_elems, levels);
-    nar = (levels[0] + levels[2]) / 2u;
-    if ((0u == nar) || (levels[1] <= levels[0]) || (levels[3] <= levels[2]))
-    {
-        return CODE39_ERR_RATIO;
-    }
-    inv = (100u << 16) / nar;
-    for (entry = 0u; entry < n_elems; entry++)
-    {
-        b_speck[entry] = is_speck(p_widths[entry], (uint16_t)entry, levels);
-    }
-    for (entry = 0u; entry < TABLE_LEN; entry++)
-    {
-        uint16_t const pat = bits_of(g_code39_table[entry].p_bits);
-        uint8_t        kdx;
-
-        if ('*' != g_code39_table[entry].chr)
-        {
-            /* *X*: start, gap, X, gap, stop -- the gaps are narrow spaces */
-            for (kdx = 0u; kdx < BEST_T; kdx++)
-            {
-                uint8_t const  char_idx = (uint8_t)(kdx / 10u);
-                uint8_t const  pos      = (uint8_t)(kdx % 10u);
-                uint16_t const pattern  = (1u == char_idx) ? pat : star;
-                bool const     b_w =
-                    (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
-
-                expect[kdx] =
-                    levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
-                b_wide[kdx] = b_w;
-            }
-            for (dir = 0u; dir < DIRECTIONS; dir++)
-            {
-                uint32_t cost;
-
-                if (1u == dir)
-                {
-                    for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
-                    {
-                        uint32_t const exp_width     = expect[kdx];
-                        bool const     b_expect_wide = b_wide[kdx];
-
-                        expect[kdx] = expect[(BEST_T - 1u) - kdx];
-                        b_wide[kdx] = b_wide[(BEST_T - 1u) - kdx];
-                        expect[(BEST_T - 1u) - kdx] = exp_width;
-                        b_wide[(BEST_T - 1u) - kdx] = b_expect_wide;
-                    }
-                }
-                /* A fit costing c2 or more changes neither result, and the
-                   runner-up only matters below the margin times the largest
-                   best that is accepted. */
-                cost = best_fit(p_widths, n_elems, expect, b_wide, b_speck, inv,
-                                (next_cost < BEST_BOUND_MAX) ? next_cost
-                                                             : BEST_BOUND_MAX);
-                if (cost < best_cost)
-                {
-                    if (g_code39_table[entry].chr != ch1)
-                    {
-                        next_cost = best_cost;
-                    }
-                    best_cost = cost;
-                    ch1       = g_code39_table[entry].chr;
-                    b_rev1    = (1u == dir);
-                }
-                else if ((cost < next_cost)
-                         && (g_code39_table[entry].chr != ch1))
-                {
-                    next_cost = cost;
-                }
-                else
-                {
-                    /* No action required. */
-                }
-            }
-        }
-    }
-    if (('\0' == ch1) || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T))
-        || (((uint64_t)next_cost * 10u)
-            < ((uint64_t)best_cost * BEST_MARGIN_X10)))
-    {
-        return CODE39_ERR_PATTERN;
-    }
-    *p_char      = ch1;
-    *pb_reversed = b_rev1;
-    return CODE39_OK;
 }
 
 /*** end of file ***/

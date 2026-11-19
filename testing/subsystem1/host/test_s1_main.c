@@ -1,5 +1,5 @@
 /*
- *  test_s1.c
+ *  test_s1_main.c
  *  Host unit tests for subsystem 1's pure modules: comms_proto.c (binary
  *  frame builders, command parser, packed telemetry record, offline ring)
  *  and hmi_button.c.
@@ -11,6 +11,7 @@
  *  the C encoder and the Python decoder are checked against each other.
  */
 
+#include "test_s1_main.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,9 +28,6 @@
 #define T_RING_OLDEST  5u     /* the first push still held */
 #define T_OTHER_CMDS   5u     /* commands between the two copies */
 
-static int32_t g_pass;
-static int32_t g_fail;
-
 #define CHECK(id, cond)                                                      \
     do                                                                       \
     {                                                                        \
@@ -43,6 +41,44 @@ static int32_t g_fail;
             printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); \
         }                                                                    \
     } while (0)
+
+static int32_t g_pass;
+static int32_t g_fail;
+
+static uint16_t          cmd_frame(uint8_t * p_buf, uint8_t ident, uint8_t cmd,
+                                   int32_t param_index, int32_t value,
+                                   char const * p_map);
+static comms_proto_err_t parse(uint8_t ident, uint8_t cmd, int32_t param_index,
+                               int32_t value, char const * p_map,
+                               comms_proto_cmd_t * p_cmd);
+static int32_t           param_index(char const * p_name);
+static void              skip(app_pack_reader_t * p_r, uint32_t count);
+static int32_t           hex_eq(uint8_t const * p_buf, uint16_t count,
+                                char const * p_hex);
+static void              test_writer(void);
+static void              test_telemetry(void);
+static void              test_event_status_ack(void);
+static void              test_parser(void);
+static void              test_ring(void);
+static int32_t           run_button(char const * p_pattern, uint16_t long_ms,
+                                    char * p_events);
+static void              test_button(void);
+static void              test_dedup(void);
+static void              test_map(void);
+
+int main (void)
+{
+    test_writer();
+    test_telemetry();
+    test_event_status_ack();
+    test_parser();
+    test_ring();
+    test_button();
+    test_dedup();
+    test_map();
+    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
+    return (0 == g_fail) ? 0 : 1;
+}
 
 /* Build a command frame the way the laptop does (picocar_codec.py). */
 static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
@@ -751,19 +787,6 @@ static void test_map (void)
     CHECK("S1-H20", COMMS_ERR_NOT_CAL == comms_proto_check_ready(&cmd, false));
     CHECK("S1-H20", COMMS_ERR_NONE == comms_proto_check_ready(&cmd, true));
 }
-
-int main (void)
-{
-    test_writer();
-    test_telemetry();
-    test_event_status_ack();
-    test_parser();
-    test_ring();
-    test_button();
-    test_dedup();
-    test_map();
-    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (0 == g_fail) ? 0 : 1;
-}
+/*** end of file ***/
 
 /*** end of file ***/

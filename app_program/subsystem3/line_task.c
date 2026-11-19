@@ -1,5 +1,5 @@
 /*
- *  line_task_thread.c
+ *  line_task.c
  *  Subsystem 3 -- LineBarcodeTask (priority 7, core 1), woken by
  *  adc_dma_isr every 10 ms (Week 6 Sections 3 and 6.2).  Owner: Buddy 3.
  *
@@ -15,6 +15,7 @@
  *    6. publish the line snapshot.
  */
 
+#include "line_task.h"
 #include "subsystem3.h"
 #include "line_cfg.h"
 #include "line_track.h"
@@ -33,22 +34,27 @@
 #define LINE_LOG_BC_REJECT                            \
     31u /* comms_proto_rec_t code for a rejected read \
          */
+
 /* 32/33/34 = L/R/barcode: max << 16 | min raw */
 #define LINE_LOG_CAL_LEVELS 32u
+
 /* Diagnosis of a rejected barcode (2 Nov), right after LOG 31:
    35 = elements << 24 | length mm << 8 | darkest reading / 4 (0..250),
    36 = narrowest element << 16 | widest element, both in 0.1 mm.        */
 #define LINE_LOG_BC_SHAPE  35u
 #define LINE_LOG_BC_WIDTHS 36u
+
 /* 37 = a dark pattern of 2..8 elements, dropped as "not a barcode" (a
    crossing line is 1): data = elements; LOG 35 / 36 follow.            */
 #define LINE_LOG_BC_SHORT 37u
+
 /* 73 (7 Nov) = barcode sensor levels after every capture, 0..1000 each:
    decoded by pass << 29 (0 swing, 1 mid, 2 low, 3 adaptive swing, 4 best
    match, 5 exact without an end speck, 6 best match without one) | white noise
    (darkest - lightest white, max 511) << 20 | lightest white << 10 | darkest
    bar.  For choosing BC_DELTA. */
 #define LINE_LOG_BC_LEVELS 73u
+
 /* 9 Nov, after a rejected read: 76 = elements found by each reading,
    swing << 24 | low threshold << 16 | adaptive 20 % << 8 | adaptive 10 %;
    then 75 = every width of the swing and the adaptive 10 % readings,
@@ -58,13 +64,16 @@
 #define LINE_LOG_BC_ELEM   75u
 #define LINE_LOG_BC_COUNTS 76u
 #define LINE_LOG_ELEM_MAX  45u /* widths logged per reading (15 records) */
+
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
 /* 14 Nov, lifted: raw_l << 20 | raw_r << 10 | raw_bc */
 #define LINE_LOG_NO_FLOOR 79u
+
 /* 14 Nov: 80 = how long the decode at the end of a capture took, us
    (the line task's heartbeat allows 50 ms; best match took longer). */
 #define LINE_LOG_BC_DECODE_US 80u
 #define LINE_LOG_TURN_GAIN    38u
+
 /* 45 = its diagnosis: line crossings seen by L << 24 | by R << 16 | deg spun */
 #define LINE_LOG_SLIP_DIAG 45u
 
@@ -73,130 +82,12 @@ static line_track_t           g_trk;
 static line_barcode_capture_t g_bc;
 static line_track_slip_t      g_slip;
 
-/* LOG 35 / 36 for the capture that was just rejected (still in g_bc). */
-static void bc_reject_detail (line_barcode_capture_t const * p_bc)
-{
-    uint32_t const len_mm =
-        app_types_min_i32((int32_t)(p_bc->total_um / 1000u), 0xFFFF);
-    uint32_t w_min = 0xFFFFu;
-    uint32_t w_max = 0u;
-    uint16_t kdx;
-
-    for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
-    {
-        uint32_t const width =
-            app_types_min_i32((int32_t)(p_bc->widths[kdx] / 100u), 0xFFFF);
-
-        w_min = (width < w_min) ? width : w_min;
-        w_max = (width > w_max) ? width : w_max;
-    }
-    if (0u == p_bc->n_elems)
-    {
-        w_min = 0u;
-    }
-    (void)subsystem1_telem_post(
-        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHAPE,
-        (int32_t)(((uint32_t)app_types_min_i32(p_bc->n_elems, 255) << 24)
-                  | (len_mm << 8) | ((uint32_t)p_bc->peak / 4u)));
-    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                                LINE_LOG_BC_WIDTHS,
-                                (int32_t)((w_min << 16) | w_max));
-}
-
-/* LOG 76 and 75 for the capture that was just rejected (still in g_bc). */
-static void bc_widths_log (line_barcode_capture_t const * p_bc)
-{
-    static uint32_t widths[BC_MAX_ELEMENTS + 1u];
-    uint32_t        counts = 0u;
-    uint8_t         reading;
-
-    {
-        static uint8_t const k_count_rd[LOG_READ_SETS] = {0u, 2u, 3u, 5u};
-        uint8_t              jdx;
-
-        for (jdx = 0u; jdx < LOG_READ_SETS; jdx++)
-        {
-            uint16_t const n_elems =
-                line_barcode_reading(p_bc, k_count_rd[jdx], widths);
-
-            counts |= (uint32_t)app_types_min_i32(n_elems, 255)
-                      << (8u * (3u - jdx));
-        }
-    }
-    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                                LINE_LOG_BC_COUNTS, (int32_t)counts);
-    for (reading = 0u; reading < BC_READINGS;
-         reading += 5u) /* swing (0), adaptive 10 % (5) */
-    {
-        uint16_t const n_elems = line_barcode_reading(p_bc, reading, widths);
-        uint16_t       kdx;
-
-        for (kdx = 0u; (kdx < n_elems) && (kdx < LINE_LOG_ELEM_MAX);
-             kdx += LOG_ELEMS_PER_WORD)
-        {
-            uint32_t data = ((uint32_t)((0u == reading) ? 0u : 3u) << 30)
-                            | ((uint32_t)kdx << 24);
-            uint8_t  jdx;
-
-            for (jdx = 0u; jdx < LOG_ELEMS_PER_WORD; jdx++)
-            {
-                uint32_t const elem = ((kdx + jdx) < n_elems)
-                                          ? ((widths[kdx + jdx] + 100u) / 200u)
-                                          : 0u; /* 0.2 mm */
-
-                data |=
-                    ((elem > 255u)
-                         ? 255u
-                         : (((0u == elem) && ((kdx + jdx) < n_elems)) ? 1u
-                                                                      : elem))
-                    << (8u * (2u - jdx));
-            }
-            (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
-                                        LINE_LOG_BC_ELEM, (int32_t)data);
-        }
-    }
-}
-
-/* LOG 73 for the capture that just ended (still in g_bc). */
-static void bc_levels_log (line_barcode_capture_t const * p_bc)
-{
-    uint32_t const noise =
-        (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
-
-    (void)subsystem1_telem_post(
-        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_LEVELS,
-        (int32_t)(((uint32_t)(p_bc->pass & 7u) << 29)
-                  | ((uint32_t)app_types_min_i32((int32_t)noise, 511) << 20)
-                  | ((uint32_t)app_types_min_i32(p_bc->q_lo, 1023) << 10)
-                  | (uint32_t)app_types_min_i32(p_bc->peak, 1023)));
-}
-
-static void timing_pin_init (void)
-{
-#if APP_TIMING_PINS
-    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S3_PIN_TIMING);
-    out_w(APP_REGS_GPIO_OE_SET, 1uL << S3_PIN_TIMING);
-    out_w(app_regs_gpio_ctrl(S3_PIN_TIMING), APP_REGS_FUNCSEL_SIO);
-#endif
-}
-
-static void timing_pin_toggle (void)
-{
-#if APP_TIMING_PINS
-    out_w(APP_REGS_GPIO_OUT_XOR, 1uL << S3_PIN_TIMING);
-#endif
-}
-
-/* Barcode sensor ground speed in um per 1 ms sample (= mm/s). */
-static uint32_t bc_step_um (motion_types_odom_t const * p_odom)
-{
-    /* yaw [cdeg/s] x pi / 18000 x offset [mm] = mm/s; offset + right, so a left
-       turn (yaw > 0) speeds up a right-hand sensor and slows a left-hand one */
-    int32_t const side = (int32_t)(((int64_t)p_odom->yaw_rate_cdeg_s * 3141593
-                                    * LINE_BC_OFFSET_MM)
-                                   / ((int64_t)18000 * 1000000));
-    return (uint32_t)app_types_abs_i32((int32_t)p_odom->v_mm_s + side);
-}
+static void     bc_reject_detail(line_barcode_capture_t const * p_bc);
+static void     bc_widths_log(line_barcode_capture_t const * p_bc);
+static void     bc_levels_log(line_barcode_capture_t const * p_bc);
+static void     timing_pin_init(void);
+static void     timing_pin_toggle(void);
+static uint32_t bc_step_um(motion_types_odom_t const * p_odom);
 
 EXPORT void line_task_thread (INT stacd, void * p_exinf)
 {
@@ -505,5 +396,131 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
         }
     }
 }
+
+/* LOG 35 / 36 for the capture that was just rejected (still in g_bc). */
+static void bc_reject_detail (line_barcode_capture_t const * p_bc)
+{
+    uint32_t const len_mm =
+        app_types_min_i32((int32_t)(p_bc->total_um / 1000u), 0xFFFF);
+    uint32_t w_min = 0xFFFFu;
+    uint32_t w_max = 0u;
+    uint16_t kdx;
+
+    for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
+    {
+        uint32_t const width =
+            app_types_min_i32((int32_t)(p_bc->widths[kdx] / 100u), 0xFFFF);
+
+        w_min = (width < w_min) ? width : w_min;
+        w_max = (width > w_max) ? width : w_max;
+    }
+    if (0u == p_bc->n_elems)
+    {
+        w_min = 0u;
+    }
+    (void)subsystem1_telem_post(
+        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_SHAPE,
+        (int32_t)(((uint32_t)app_types_min_i32(p_bc->n_elems, 255) << 24)
+                  | (len_mm << 8) | ((uint32_t)p_bc->peak / 4u)));
+    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                                LINE_LOG_BC_WIDTHS,
+                                (int32_t)((w_min << 16) | w_max));
+}
+
+/* LOG 76 and 75 for the capture that was just rejected (still in g_bc). */
+static void bc_widths_log (line_barcode_capture_t const * p_bc)
+{
+    static uint32_t widths[BC_MAX_ELEMENTS + 1u];
+    uint32_t        counts = 0u;
+    uint8_t         reading;
+
+    {
+        static uint8_t const k_count_rd[LOG_READ_SETS] = {0u, 2u, 3u, 5u};
+        uint8_t              jdx;
+
+        for (jdx = 0u; jdx < LOG_READ_SETS; jdx++)
+        {
+            uint16_t const n_elems =
+                line_barcode_reading(p_bc, k_count_rd[jdx], widths);
+
+            counts |= (uint32_t)app_types_min_i32(n_elems, 255)
+                      << (8u * (3u - jdx));
+        }
+    }
+    (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                                LINE_LOG_BC_COUNTS, (int32_t)counts);
+    for (reading = 0u; reading < BC_READINGS;
+         reading += 5u) /* swing (0), adaptive 10 % (5) */
+    {
+        uint16_t const n_elems = line_barcode_reading(p_bc, reading, widths);
+        uint16_t       kdx;
+
+        for (kdx = 0u; (kdx < n_elems) && (kdx < LINE_LOG_ELEM_MAX);
+             kdx += LOG_ELEMS_PER_WORD)
+        {
+            uint32_t data = ((uint32_t)((0u == reading) ? 0u : 3u) << 30)
+                            | ((uint32_t)kdx << 24);
+            uint8_t  jdx;
+
+            for (jdx = 0u; jdx < LOG_ELEMS_PER_WORD; jdx++)
+            {
+                uint32_t const elem = ((kdx + jdx) < n_elems)
+                                          ? ((widths[kdx + jdx] + 100u) / 200u)
+                                          : 0u; /* 0.2 mm */
+
+                data |=
+                    ((elem > 255u)
+                         ? 255u
+                         : (((0u == elem) && ((kdx + jdx) < n_elems)) ? 1u
+                                                                      : elem))
+                    << (8u * (2u - jdx));
+            }
+            (void)subsystem1_telem_post(COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
+                                        LINE_LOG_BC_ELEM, (int32_t)data);
+        }
+    }
+}
+
+/* LOG 73 for the capture that just ended (still in g_bc). */
+static void bc_levels_log (line_barcode_capture_t const * p_bc)
+{
+    uint32_t const noise =
+        (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
+
+    (void)subsystem1_telem_post(
+        COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_LEVELS,
+        (int32_t)(((uint32_t)(p_bc->pass & 7u) << 29)
+                  | ((uint32_t)app_types_min_i32((int32_t)noise, 511) << 20)
+                  | ((uint32_t)app_types_min_i32(p_bc->q_lo, 1023) << 10)
+                  | (uint32_t)app_types_min_i32(p_bc->peak, 1023)));
+}
+
+static void timing_pin_init (void)
+{
+#if APP_TIMING_PINS
+    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S3_PIN_TIMING);
+    out_w(APP_REGS_GPIO_OE_SET, 1uL << S3_PIN_TIMING);
+    out_w(app_regs_gpio_ctrl(S3_PIN_TIMING), APP_REGS_FUNCSEL_SIO);
+#endif
+}
+
+static void timing_pin_toggle (void)
+{
+#if APP_TIMING_PINS
+    out_w(APP_REGS_GPIO_OUT_XOR, 1uL << S3_PIN_TIMING);
+#endif
+}
+
+/* Barcode sensor ground speed in um per 1 ms sample (= mm/s). */
+static uint32_t bc_step_um (motion_types_odom_t const * p_odom)
+{
+    /* yaw [cdeg/s] x pi / 18000 x offset [mm] = mm/s; offset + right, so a left
+       turn (yaw > 0) speeds up a right-hand sensor and slows a left-hand one */
+    int32_t const side = (int32_t)(((int64_t)p_odom->yaw_rate_cdeg_s * 3141593
+                                    * LINE_BC_OFFSET_MM)
+                                   / ((int64_t)18000 * 1000000));
+    return (uint32_t)app_types_abs_i32((int32_t)p_odom->v_mm_s + side);
+}
+/*** end of file ***/
 
 /*** end of file ***/

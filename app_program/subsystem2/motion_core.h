@@ -3,7 +3,7 @@
  *  Subsystem 2 -- the MotionTask controller as a pure state machine
  *  (Week 6 Section 6.1).  Owner: Buddy 2 (Jedrek).
  *
- *  No kernel, register or SDK access: MotionTask (motion_task_thread.c) feeds
+ *  No kernel, register or SDK access: MotionTask (motion_task.c) feeds
  * it encoder counts and commands every 10 ms and writes the duty it returns,
  *  and testing/subsystem2/host runs the same code against a motor model.
  *

@@ -3,7 +3,7 @@
  *  Subsystem 2 -- Motion control: kernel objects, odometry snapshot and
  *  the E-stop latch.  Owner: Buddy 2 (Jedrek).
  *
- *  The task is in motion_task_thread.c, the controller in motion_core.c, the
+ *  The task is in motion_task.c, the controller in motion_core.c, the
  *  drivers in drv_motor.c / drv_encoder.c.
  */
 
@@ -25,15 +25,12 @@ static ID       g_cyc_motion;
 static uint8_t volatile g_estop_latch;
 
 #if APP_TEST
+
 EXPORT volatile uint32_t g_estop_test_us; /* written here only (core 1) */
+
 #endif
 
-/* motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
-static void motion_cyc_handler (void * p_exinf)
-{
-    (void)p_exinf;
-    (void)tk_wup_tsk(g_tid_motion);
-}
+static void motion_cyc_handler(void * p_exinf);
 
 EXPORT ER subsystem2_init (void)
 {
@@ -175,6 +172,15 @@ EXPORT bool subsystem2_estop_reconnect (void)
     }
     EI(intsts);
     return b_ok;
+}
+
+/*** end of file ***/
+
+/* motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
+static void motion_cyc_handler (void * p_exinf)
+{
+    (void)p_exinf;
+    (void)tk_wup_tsk(g_tid_motion);
 }
 
 /*** end of file ***/

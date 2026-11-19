@@ -58,13 +58,17 @@ IMPORT void subsystem4_get_imu_snap(imu_types_snap_t * p_out); /* any task */
 IMPORT void
 subsystem4_put_imu_snap(imu_types_snap_t const * p_in); /* ImuTask only   */
 
-/* Boot self-test: the 1 us timer really ticks at 1 MHz (NFR8). */
-IMPORT bool safety_task_timer_tick_ok(void);
 
 /* Private to subsystem 4 */
-IMPORT void safety_task_thread(INT stacd, void * p_exinf);
-IMPORT void imu_task_thread(INT stacd, void * p_exinf);
-IMPORT ID   g_tid_imu;
+#include "safety_task.h"
+#include "imu_task.h"
+IMPORT ID g_tid_imu;
+
+/* Called by usermain() in this order: every subsystem's _init() first,
+   then every subsystem's _start(), so every kernel object exists before
+   any task can use it. */
+IMPORT ER subsystem4_init(void);  /* create this subsystem's kernel objects */
+IMPORT ER subsystem4_start(void); /* create and start its tasks             */
 
 #endif /* SUBSYSTEM4_H */
 

@@ -5,34 +5,6 @@
 
 #include "app_gpio_irq.h"
 
-/* IO_BANK0 interrupt registers (RP2040 datasheet 2.19.6.1).  Each register
-   covers 8 GPIOs, 4 bits per GPIO: LEVEL_LOW, LEVEL_HIGH, EDGE_LOW, EDGE_HIGH.
- */
-static inline uint32_t io_intr (uint32_t gpio_bank)
-{
-    return APP_REGS_IO_BANK0_BASE + 0x0F0u + (4u * gpio_bank);
-}
-
-static inline uint32_t io_proc0_inte (uint32_t gpio_bank)
-{
-    return APP_REGS_IO_BANK0_BASE + 0x100u + (4u * gpio_bank);
-}
-
-static inline uint32_t io_proc0_ints (uint32_t gpio_bank)
-{
-    return APP_REGS_IO_BANK0_BASE + 0x120u + (4u * gpio_bank);
-}
-
-static inline uint32_t io_proc1_inte (uint32_t gpio_bank)
-{
-    return APP_REGS_IO_BANK0_BASE + 0x130u + (4u * gpio_bank);
-}
-
-static inline uint32_t io_proc1_ints (uint32_t gpio_bank)
-{
-    return APP_REGS_IO_BANK0_BASE + 0x150u + (4u * gpio_bank);
-}
-
 #define IO_INT_REGS  4u
 #define IO_EDGE_BITS (APP_GPIO_EDGE_FALL | APP_GPIO_EDGE_RISE)
 
@@ -40,43 +12,13 @@ static app_gpio_irq_cb_t g_cb[APP_REGS_GPIO_NUM];
 static uint32_t volatile g_count;
 static bool gb_defined;
 
-static uint32_t this_core (void)
-{
-    return in_w(SIO_CPUID_ADDR); /* 0 = core 0, 1 = core 1 */
-}
-
-static void gpio_bank0_isr (UINT intno)
-{
-    uint32_t const t_us = (uint32_t)app_time_us();
-    uint32_t const core = this_core();
-    uint32_t       reg;
-
-    (void)intno;
-    g_count++;
-    for (reg = 0u; reg < IO_INT_REGS; reg++)
-    {
-        uint32_t ints =
-            in_w((0u == core) ? io_proc0_ints(reg) : io_proc1_ints(reg));
-
-        while (ints != 0u)
-        {
-            uint32_t const bit    = (uint32_t)__builtin_ctz(ints);
-            uint32_t const pin    = (reg * 8u) + (bit / 4u);
-            uint32_t const shift  = (bit / 4u) * 4u;
-            uint32_t const events = (ints >> shift) & 0xFu;
-
-            /* Edge events are latched: write 1 to clear before the callback,
-               so an edge during the callback is not lost. */
-            out_w(io_intr(reg), (events & IO_EDGE_BITS) << shift);
-            ints &= ~(0xFuL << shift);
-
-            if ((pin < APP_REGS_GPIO_NUM) && (g_cb[pin] != NULL))
-            {
-                g_cb[pin](pin, events, t_us);
-            }
-        }
-    }
-}
+static inline uint32_t io_intr(uint32_t gpio_bank);
+static inline uint32_t io_proc0_inte(uint32_t gpio_bank);
+static inline uint32_t io_proc0_ints(uint32_t gpio_bank);
+static inline uint32_t io_proc1_inte(uint32_t gpio_bank);
+static inline uint32_t io_proc1_ints(uint32_t gpio_bank);
+static uint32_t        this_core(void);
+static void            gpio_bank0_isr(UINT intno);
 
 EXPORT ER app_gpio_irq_init (void)
 {
@@ -143,6 +85,72 @@ EXPORT void app_gpio_irq_detach (uint32_t pin)
 EXPORT uint32_t app_gpio_irq_count (void)
 {
     return g_count;
+}
+
+/* IO_BANK0 interrupt registers (RP2040 datasheet 2.19.6.1).  Each register
+   covers 8 GPIOs, 4 bits per GPIO: LEVEL_LOW, LEVEL_HIGH, EDGE_LOW, EDGE_HIGH.
+ */
+static inline uint32_t io_intr (uint32_t gpio_bank)
+{
+    return APP_REGS_IO_BANK0_BASE + 0x0F0u + (4u * gpio_bank);
+}
+
+static inline uint32_t io_proc0_inte (uint32_t gpio_bank)
+{
+    return APP_REGS_IO_BANK0_BASE + 0x100u + (4u * gpio_bank);
+}
+
+static inline uint32_t io_proc0_ints (uint32_t gpio_bank)
+{
+    return APP_REGS_IO_BANK0_BASE + 0x120u + (4u * gpio_bank);
+}
+
+static inline uint32_t io_proc1_inte (uint32_t gpio_bank)
+{
+    return APP_REGS_IO_BANK0_BASE + 0x130u + (4u * gpio_bank);
+}
+
+static inline uint32_t io_proc1_ints (uint32_t gpio_bank)
+{
+    return APP_REGS_IO_BANK0_BASE + 0x150u + (4u * gpio_bank);
+}
+
+static uint32_t this_core (void)
+{
+    return in_w(SIO_CPUID_ADDR); /* 0 = core 0, 1 = core 1 */
+}
+
+static void gpio_bank0_isr (UINT intno)
+{
+    uint32_t const t_us = (uint32_t)app_time_us();
+    uint32_t const core = this_core();
+    uint32_t       reg;
+
+    (void)intno;
+    g_count++;
+    for (reg = 0u; reg < IO_INT_REGS; reg++)
+    {
+        uint32_t ints =
+            in_w((0u == core) ? io_proc0_ints(reg) : io_proc1_ints(reg));
+
+        while (ints != 0u)
+        {
+            uint32_t const bit    = (uint32_t)__builtin_ctz(ints);
+            uint32_t const pin    = (reg * 8u) + (bit / 4u);
+            uint32_t const shift  = (bit / 4u) * 4u;
+            uint32_t const events = (ints >> shift) & 0xFu;
+
+            /* Edge events are latched: write 1 to clear before the callback,
+               so an edge during the callback is not lost. */
+            out_w(io_intr(reg), (events & IO_EDGE_BITS) << shift);
+            ints &= ~(0xFuL << shift);
+
+            if ((pin < APP_REGS_GPIO_NUM) && (g_cb[pin] != NULL))
+            {
+                g_cb[pin](pin, events, t_us);
+            }
+        }
+    }
 }
 
 /*** end of file ***/

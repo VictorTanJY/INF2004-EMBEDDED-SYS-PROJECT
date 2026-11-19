@@ -2,7 +2,7 @@
 
 The golden frames in golden.h were produced by comms_proto.c; here they are
 decoded by the independent Python implementation and must give back the
-inputs used in test_s1.c, and the Python command encoder must produce the
+inputs used in test_s1_main.c, and the Python command encoder must produce the
 same bytes as the C test's encoder.  Run: python3 test_codec.py
 """
 import pathlib, re, sys

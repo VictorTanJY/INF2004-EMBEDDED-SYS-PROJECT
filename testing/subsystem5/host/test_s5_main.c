@@ -1,5 +1,5 @@
 /*
- *  test_s5.c
+ *  test_s5_main.c
  *  Host unit tests for subsystem 5: the system statechart (mission_core.c)
  *  and the obstacle geometry (obstacle_core.c).
  *  Obstacles are simulated as flat-faced boxes seen by a 15 deg cone: a
@@ -9,6 +9,7 @@
  *  Build and run:  make -C testing/subsystem5/host
  */
 
+#include "test_s5_main.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,9 +34,6 @@
 #define T_CORNER_PTS     5u  /* entries of pts[] */
 #define T_WALL_PTS       13u /* entries of pts[] */
 
-static int32_t g_pass;
-static int32_t g_fail;
-
 #define CHECK(id, cond)                                                      \
     do                                                                       \
     {                                                                        \
@@ -50,10 +48,65 @@ static int32_t g_fail;
         }                                                                    \
     } while (0)
 
+typedef struct
+{
+    float64_t diff, omega, coef;
+} box_t; /* face distance, width, centre lateral (+ left) */
+
+static int32_t g_pass;
+static int32_t g_fail;
+
 static mission_core_t        g_mc;
 static mission_core_out_t    g_out;
 static mission_core_inputs_t g_in;
 static uint32_t              g_now;
+
+/* ---- obstacle geometry --------------------------------------------- */
+/* 4 Nov edge scan model: car heading phi (deg, + left) about the axle, the
+   sensor OBST_US_AHEAD_MM ahead looking along phi; the beam hears the box
+   up to g_edge_beam deg off its axis (7 Nov: the black box ~36, the blue
+   box's left side ~20: it depends on the box, so the firmware assumes
+   none); a box face d mm ahead of the sensor, w wide, centred c (+ left). */
+static float64_t g_edge_beam = 36.0;
+
+static uint16_t g_edge_clutter =
+    0u; /* range of clutter seen beyond 25 deg right, 0 = none */
+
+static int32_t  g_edge_phi[2]; /* last echo per side (left, right), 0.01 deg */
+static uint16_t g_edge_r[2];
+
+static int32_t g_pings;
+
+static void     ev(uint8_t type, uint16_t val_a, int32_t data);
+static void     tick(uint32_t delay_ms);
+static int32_t  find(uint8_t kind, uint8_t cmd);
+static uint8_t  last_seq(void);
+static void     boot_to_idle(void);
+static void     calibrate(void);
+static void     test_mission(void);
+static void     edge_sim(float64_t diff, float64_t omega, float64_t coef,
+                         obstacle_core_profile_t * p_prof);
+static int32_t  out_sim(float64_t diff, float64_t omega, float64_t coef,
+                        int32_t sign, int32_t min_lat, float64_t beam_deg,
+                        float64_t * p_edge);
+static uint16_t edge_ping(float64_t diff, float64_t omega, float64_t coef,
+                          float64_t phi_deg);
+static uint16_t ping(box_t const * p_b, int32_t n_b, int32_t angle_deg);
+static void     scan_box(box_t const * p_b, int32_t n_b,
+                         obstacle_core_profile_t * p_prof);
+static void     test_obstacle(void);
+static void     test_bench(void);
+static void     test_pack_s5(void);
+
+int main (void)
+{
+    test_mission();
+    test_bench();
+    test_obstacle();
+    test_pack_s5();
+    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
+    return (0 == g_fail) ? 0 : 1;
+}
 
 static void ev (uint8_t type, uint16_t val_a, int32_t data)
 {
@@ -362,45 +415,6 @@ static void test_mission (void)
                         && (MISSION_CAUSE_MBF_OVERFLOW == g_mc.snap.cause));
 }
 
-/* ---- obstacle geometry --------------------------------------------- */
-/* 4 Nov edge scan model: car heading phi (deg, + left) about the axle, the
-   sensor OBST_US_AHEAD_MM ahead looking along phi; the beam hears the box
-   up to g_edge_beam deg off its axis (7 Nov: the black box ~36, the blue
-   box's left side ~20: it depends on the box, so the firmware assumes
-   none); a box face d mm ahead of the sensor, w wide, centred c (+ left). */
-static float64_t g_edge_beam = 36.0;
-static uint16_t  edge_ping (float64_t diff, float64_t omega, float64_t coef,
-                            float64_t phi_deg)
-{
-    float64_t const phase = (phi_deg * M_PI) / 180.0;
-    float64_t const sum_x = OBST_US_AHEAD_MM * sin(phase);
-    float64_t const sum_y = OBST_US_AHEAD_MM * cos(phase);
-    float64_t       best  = 1e9;
-    float64_t       x_val;
-
-    for (x_val = coef - (omega / 2.0); x_val <= (coef + (omega / 2.0));
-         x_val += 1.0)
-    {
-        float64_t const delta_x = x_val - sum_x;
-        float64_t const delta_y = (OBST_US_AHEAD_MM + diff) - sum_y;
-        float64_t const ang     = atan2(delta_x, delta_y) - phase;
-        float64_t const radius =
-            sqrt((delta_x * delta_x) + (delta_y * delta_y));
-
-        if ((fabs(ang) <= ((g_edge_beam * M_PI) / 180.0)) && (radius < best))
-        {
-            best = radius;
-        }
-    }
-    return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
-}
-
-static uint16_t g_edge_clutter =
-    0u; /* range of clutter seen beyond 25 deg right, 0 = none */
-
-static int32_t  g_edge_phi[2]; /* last echo per side (left, right), 0.01 deg */
-static uint16_t g_edge_r[2];
-
 static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
                       obstacle_core_profile_t * p_prof)
 {
@@ -551,10 +565,31 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
     return -1;
 }
 
-typedef struct
+static uint16_t edge_ping (float64_t diff, float64_t omega, float64_t coef,
+                           float64_t phi_deg)
 {
-    float64_t diff, omega, coef;
-} box_t; /* face distance, width, centre lateral (+ left) */
+    float64_t const phase = (phi_deg * M_PI) / 180.0;
+    float64_t const sum_x = OBST_US_AHEAD_MM * sin(phase);
+    float64_t const sum_y = OBST_US_AHEAD_MM * cos(phase);
+    float64_t       best  = 1e9;
+    float64_t       x_val;
+
+    for (x_val = coef - (omega / 2.0); x_val <= (coef + (omega / 2.0));
+         x_val += 1.0)
+    {
+        float64_t const delta_x = x_val - sum_x;
+        float64_t const delta_y = (OBST_US_AHEAD_MM + diff) - sum_y;
+        float64_t const ang     = atan2(delta_x, delta_y) - phase;
+        float64_t const radius =
+            sqrt((delta_x * delta_x) + (delta_y * delta_y));
+
+        if ((fabs(ang) <= ((g_edge_beam * M_PI) / 180.0)) && (radius < best))
+        {
+            best = radius;
+        }
+    }
+    return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
+}
 
 static uint16_t ping (box_t const * p_b, int32_t n_b, int32_t angle_deg)
 {
@@ -588,8 +623,6 @@ static uint16_t ping (box_t const * p_b, int32_t n_b, int32_t angle_deg)
     }
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)lround(best);
 }
-
-static int32_t g_pings;
 
 static void scan_box (box_t const * p_b, int32_t n_b,
                       obstacle_core_profile_t * p_prof)
@@ -1470,15 +1503,6 @@ static void test_pack_s5 (void)
     obstacle_core_snap_unpack(words_out, &orr);
     CHECK("S5-H26", (4094u == orr.d_mm) && (255u == orr.no_echo));
 }
-
-int main (void)
-{
-    test_mission();
-    test_bench();
-    test_obstacle();
-    test_pack_s5();
-    printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (0 == g_fail) ? 0 : 1;
-}
+/*** end of file ***/
 
 /*** end of file ***/

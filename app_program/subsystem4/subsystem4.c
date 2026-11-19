@@ -2,7 +2,7 @@
  *  subsystem4.c
  *  Subsystem 4 -- IMU and safety: kernel objects, heartbeat words, the
  *  latched-fault word and the IMU snapshot.  Owner: Buddy 4 (Purvez).
- *  Tasks: safety_task_thread.c, imu_task_thread.c.  Logic: imu_core.c,
+ *  Tasks: safety_task.c, imu_task.c.  Logic: imu_core.c,
  * safety_core.c.
  */
 
@@ -22,16 +22,13 @@ EXPORT volatile uint32_t g_safety_latched;
    and compares for a change (an 8-bit counter cannot come back to the
    same value within the 20 ms check: MotionTask beats twice in it). */
 static uint8_t volatile g_hb[SAFETY_HB_COUNT];
+
 /* IMU snapshot stored packed; whole records copied under the lock. */
 static app_lock_t g_imu_lock;
 static uint32_t   g_imu_snap[IMU_SNAP_WORDS];
 static ID         g_cyc_imu;
 
-static void imu_cyc_handler (void * p_exinf)
-{
-    (void)p_exinf;
-    (void)tk_wup_tsk(g_tid_imu);
-}
+static void imu_cyc_handler(void * p_exinf);
 
 EXPORT ER subsystem4_init (void)
 {
@@ -135,6 +132,14 @@ EXPORT void subsystem4_put_imu_snap (imu_types_snap_t const * p_in)
         g_imu_snap[idx] = words[idx];
     }
     app_unlock(&g_imu_lock, sts);
+}
+
+/*** end of file ***/
+
+static void imu_cyc_handler (void * p_exinf)
+{
+    (void)p_exinf;
+    (void)tk_wup_tsk(g_tid_imu);
 }
 
 /*** end of file ***/

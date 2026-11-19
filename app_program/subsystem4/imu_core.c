@@ -14,10 +14,216 @@
 
 #define MG_PER_G_MM_S2 9807 /* 1 g = 9807 mm/s^2 */
 
-/* body-frame value of one raw axis triple */
-static int32_t axis (int32_t const vec[3], int32_t axis_no, int32_t sign)
+#define IMU_FIELDS ((uint16_t)(sizeof(g_imu_layout) / sizeof(g_imu_layout[0])))
+
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: data representation of IF-08 (IMU snapshot).
+ * --------------------------------------------------------------------- */
+static app_pack_field_t const g_imu_layout[] = {
+    PK_FIELD(imu_types_snap_t, t_ms, 32u, PK_W),
+    PK_FIELD(imu_types_snap_t, pitch_cdeg, 15u,
+             PK_S), /* +-163.83 deg (pitch is +-90)  */
+    PK_FIELD(imu_types_snap_t, roll_cdeg, 16u,
+             PK_S), /* +-327.67 deg (roll is +-180)  */
+    PK_FIELD(imu_types_snap_t, heading_cdeg, 16u, PK_U), /* 0..35999 */
+    PK_FIELD(imu_types_snap_t, turn_rate_cdeg_s, 16u,
+             PK_S), /* the int16_t range, +-327 deg/s */
+    PK_FIELD(imu_types_snap_t, accel_mg, 15u, PK_S), /* +-16 g (sensor range) */
+    PK_FIELD(imu_types_snap_t, hump_max_mm, 10u, PK_U), /* 0..1023 mm */
+    PK_FIELD(imu_types_snap_t, last_hump_mm, 10u, PK_U),
+    PK_FIELD(imu_types_snap_t, humps, 8u, PK_U), /* per run, saturates at 255 */
+    PK_FIELD(imu_types_snap_t, i2c_errors, 16u, PK_W), /* counter */
+    PK_FIELD(imu_types_snap_t, hump_state, 2u, PK_U),  /* 4 states */
+    PK_FIELD(imu_types_snap_t, motion, 3u, PK_U),      /* 8 classes */
+    PK_FIELD(imu_types_snap_t, b_ok, 1u, PK_U),
+    PK_FIELD(imu_types_snap_t, cal, 2u, PK_U), /* IMU_CAL_LEVEL | IMU_CAL_MAG */
+    PK_FIELD(imu_types_snap_t, pitch_valid, 1u, PK_U),
+    PK_FIELD(imu_types_snap_t, tilt, 1u, PK_U)};
+
+/* ---- hump results while the floor may have gone (14 Nov) ----------------- */
+static void    hump_reset(imu_core_t * p_ic);
+static void    side_reset(imu_core_t * p_ic);
+static int32_t axis(int32_t const vec[3], int32_t axis_no, int32_t sign);
+static void    integrate(imu_core_t * p_ic, int32_t theta, uint32_t ds_um);
+static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um);
+static void    side_record(imu_core_t * p_ic, uint16_t height_mm);
+static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um);
+static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
+                         uint32_t now_ms);
+static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s,
+                        int32_t yaw_cdeg_s);
+
+bool imu_core_cal_mag_finish (imu_core_t * p_ic)
 {
-    return sign * vec[axis_no];
+    int32_t const axes[IMU_HORIZ_AXES] = {IMU_AXIS_FWD,
+                                          IMU_AXIS_LEFT}; /* horizontal plane */
+    uint8_t       kdx;
+
+    for (kdx = 0u; kdx < IMU_HORIZ_AXES; kdx++)
+    {
+        if (((int32_t)p_ic->mag_max[axes[kdx]] - p_ic->mag_min[axes[kdx]])
+            < IMU_MAG_MIN_SPAN)
+        {
+            return false;
+        }
+    }
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
+    {
+        p_ic->mag_off[kdx] =
+            (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx]) / 2);
+    }
+    p_ic->cal |= IMU_CAL_MAG;
+    return true;
+}
+
+uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
+                       int16_t const * p_mag, int32_t ds_um, int32_t v_mm_s,
+                       int32_t yaw_cdeg_s, uint32_t dt_ms, uint32_t now_ms)
+{
+    uint8_t events = 0u;
+    int32_t accel[3];
+    int32_t fwd;
+    int32_t left;
+    int32_t up_mg;
+    int32_t mag_mg;
+    uint8_t kdx;
+    uint8_t cls;
+
+    if (0u == dt_ms)
+    {
+        dt_ms = 10u;
+    }
+
+    /* Low-pass filter (alpha 1/4), mg x 16. */
+    for (kdx = 0u; kdx < IMU_AXES; kdx++)
+    {
+        if (!p_ic->b_have_acc)
+        {
+            p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
+        }
+        p_ic->acc_f[kdx] +=
+            ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / IMU_ACC_LPF_DIV;
+        accel[kdx] = p_ic->acc_f[kdx] / 16;
+    }
+
+    /* |a| for the snapshot (14 Nov: no longer an impact check). */
+    mag_mg = (int32_t)app_math_isqrt64(
+        (uint64_t)(((int64_t)acc_mg[0] * acc_mg[0])
+                   + ((int64_t)acc_mg[1] * acc_mg[1])
+                   + ((int64_t)acc_mg[2] * acc_mg[2])));
+    p_ic->prev_mag_mg = mag_mg;
+    p_ic->b_have_acc  = true;
+
+    /* Longitudinal acceleration from the encoders, filtered. */
+    if (p_ic->b_have_v)
+    {
+        int32_t const raw = ((v_mm_s - p_ic->prev_v) * 1000) / (int32_t)dt_ms;
+
+        p_ic->accel_mm_s2 += (raw - p_ic->accel_mm_s2) / 4;
+    }
+    p_ic->prev_v   = v_mm_s;
+    p_ic->b_have_v = true;
+
+    /* Attitude.  The forward axis also sees the robot's own acceleration,
+       so subtract the encoder estimate before taking the angle. */
+    fwd   = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD)
+            - ((app_types_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
+                                    IMU_ACC_COMP_MAX_MM_S2)
+                * 1000)
+               / MG_PER_G_MM_S2);
+    left  = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
+    up_mg = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
+    p_ic->pitch_cdeg = app_math_wrap_cdeg(
+        app_math_atan2_cdeg(fwd, (int32_t)app_math_isqrt64(
+                                     (uint64_t)(((int64_t)left * left)
+                                                + ((int64_t)up_mg * up_mg))))
+        - p_ic->pitch0_cdeg);
+    p_ic->roll_cdeg =
+        app_math_wrap_cdeg(app_math_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
+
+    if ((p_mag != NULL) && ((p_ic->cal & IMU_CAL_MAG) != 0u))
+    {
+        int32_t const mag[3] = {(int32_t)p_mag[0] - p_ic->mag_off[0],
+                                (int32_t)p_mag[1] - p_ic->mag_off[1],
+                                (int32_t)p_mag[2] - p_ic->mag_off[2]};
+        int32_t       heading =
+            app_math_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT),
+                                axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
+
+        p_ic->heading_cdeg = (heading < 0) ? (heading + 36000)
+                                           : heading; /* clockwise from north */
+    }
+
+    /* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off
+       again below 25 deg on both axes. */
+    {
+        bool const b_over =
+            (app_types_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG)
+            || (app_types_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
+
+        if (!b_over)
+        {
+            p_ic->b_tilt_over = false;
+        }
+        else if (!p_ic->b_tilt_over)
+        {
+            p_ic->b_tilt_over   = true;
+            p_ic->tilt_since_ms = now_ms;
+        }
+        else
+        {
+            /* still beyond the limit */
+        }
+
+        if (!p_ic->b_tilt && p_ic->b_tilt_over
+            && (app_types_elapsed_ms(now_ms, p_ic->tilt_since_ms)
+                >= IMU_TILT_HOLD_MS))
+        {
+            p_ic->b_tilt = true;
+            events |= IMU_EV_TILT_ON;
+        }
+        else if (p_ic->b_tilt
+                 && (app_types_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG)
+                 && (app_types_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
+        {
+            p_ic->b_tilt = false;
+            events |= IMU_EV_TILT_OFF;
+        }
+        else
+        {
+            /* no change */
+        }
+    }
+
+    /* Hump detection runs on forward travel only (lifting the robot by
+       hand with the wheels still is never a hump).  A pitch hump (both
+       wheels) takes precedence; otherwise the roll detector looks for a
+       hump under one wheel. */
+    if (ds_um > 0)
+    {
+        events |= hump_step(p_ic, (uint32_t)ds_um);
+        if ((IMU_HUMP_FLAT == p_ic->hump_state)
+            && (0u == (events & IMU_EV_HUMP_START)))
+        {
+            events |= side_step(p_ic, (uint32_t)ds_um);
+        }
+        else
+        {
+            side_reset(p_ic);
+        }
+    }
+
+    events |= lift_step(p_ic, up_mg, v_mm_s, now_ms);
+
+    cls = classify(p_ic, v_mm_s, yaw_cdeg_s);
+    if ((cls != p_ic->motion)
+        && (app_types_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
+    {
+        p_ic->motion    = cls;
+        p_ic->motion_ms = now_ms;
+        events |= IMU_EV_MOTION;
+    }
+    return events;
 }
 
 void imu_core_init (imu_core_t * p_ic)
@@ -45,10 +251,6 @@ void imu_core_new_run (imu_core_t * p_ic)
     p_ic->rise_max_mg    = 0;
     p_ic->b_hump_saved   = false;
 }
-
-/* ---- hump results while the floor may have gone (14 Nov) ----------------- */
-static void hump_reset(imu_core_t * p_ic);
-static void side_reset(imu_core_t * p_ic);
 
 void imu_core_hump_save (imu_core_t * p_ic)
 {
@@ -180,27 +382,22 @@ void imu_core_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
     }
 }
 
-bool imu_core_cal_mag_finish (imu_core_t * p_ic)
+void imu_core_snap_pack (imu_types_snap_t const * p_snap, uint32_t * p_words)
 {
-    int32_t const axes[IMU_HORIZ_AXES] = {IMU_AXIS_FWD,
-                                          IMU_AXIS_LEFT}; /* horizontal plane */
-    uint8_t       kdx;
+    app_pack_pack_rec(g_imu_layout, IMU_FIELDS, p_snap, p_words,
+                      IMU_SNAP_WORDS);
+}
 
-    for (kdx = 0u; kdx < IMU_HORIZ_AXES; kdx++)
-    {
-        if (((int32_t)p_ic->mag_max[axes[kdx]] - p_ic->mag_min[axes[kdx]])
-            < IMU_MAG_MIN_SPAN)
-        {
-            return false;
-        }
-    }
-    for (kdx = 0u; kdx < IMU_AXES; kdx++)
-    {
-        p_ic->mag_off[kdx] =
-            (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx]) / 2);
-    }
-    p_ic->cal |= IMU_CAL_MAG;
-    return true;
+void imu_core_snap_unpack (uint32_t const * p_words, imu_types_snap_t * p_snap)
+{
+    p_snap->reserved[0] = 0u;
+    p_snap->reserved[1] = 0u;
+    app_pack_unpack_rec(g_imu_layout, IMU_FIELDS, p_words, p_snap);
+}
+
+uint32_t imu_core_snap_layout_bits (void)
+{
+    return app_pack_layout_bits(g_imu_layout, IMU_FIELDS);
 }
 
 /* ---- hump sequence ------------------------------------------------------ */
@@ -507,198 +704,10 @@ static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
     return IMU_MOTION_CRUISING;
 }
 
-uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
-                       int16_t const * p_mag, int32_t ds_um, int32_t v_mm_s,
-                       int32_t yaw_cdeg_s, uint32_t dt_ms, uint32_t now_ms)
+/* body-frame value of one raw axis triple */
+static int32_t axis (int32_t const vec[3], int32_t axis_no, int32_t sign)
 {
-    uint8_t events = 0u;
-    int32_t accel[3];
-    int32_t fwd;
-    int32_t left;
-    int32_t up_mg;
-    int32_t mag_mg;
-    uint8_t kdx;
-    uint8_t cls;
-
-    if (0u == dt_ms)
-    {
-        dt_ms = 10u;
-    }
-
-    /* Low-pass filter (alpha 1/4), mg x 16. */
-    for (kdx = 0u; kdx < IMU_AXES; kdx++)
-    {
-        if (!p_ic->b_have_acc)
-        {
-            p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
-        }
-        p_ic->acc_f[kdx] +=
-            ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / IMU_ACC_LPF_DIV;
-        accel[kdx] = p_ic->acc_f[kdx] / 16;
-    }
-
-    /* |a| for the snapshot (14 Nov: no longer an impact check). */
-    mag_mg = (int32_t)app_math_isqrt64(
-        (uint64_t)(((int64_t)acc_mg[0] * acc_mg[0])
-                   + ((int64_t)acc_mg[1] * acc_mg[1])
-                   + ((int64_t)acc_mg[2] * acc_mg[2])));
-    p_ic->prev_mag_mg = mag_mg;
-    p_ic->b_have_acc  = true;
-
-    /* Longitudinal acceleration from the encoders, filtered. */
-    if (p_ic->b_have_v)
-    {
-        int32_t const raw = ((v_mm_s - p_ic->prev_v) * 1000) / (int32_t)dt_ms;
-
-        p_ic->accel_mm_s2 += (raw - p_ic->accel_mm_s2) / 4;
-    }
-    p_ic->prev_v   = v_mm_s;
-    p_ic->b_have_v = true;
-
-    /* Attitude.  The forward axis also sees the robot's own acceleration,
-       so subtract the encoder estimate before taking the angle. */
-    fwd   = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD)
-            - ((app_types_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
-                                    IMU_ACC_COMP_MAX_MM_S2)
-                * 1000)
-               / MG_PER_G_MM_S2);
-    left  = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
-    up_mg = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
-    p_ic->pitch_cdeg = app_math_wrap_cdeg(
-        app_math_atan2_cdeg(fwd, (int32_t)app_math_isqrt64(
-                                     (uint64_t)(((int64_t)left * left)
-                                                + ((int64_t)up_mg * up_mg))))
-        - p_ic->pitch0_cdeg);
-    p_ic->roll_cdeg =
-        app_math_wrap_cdeg(app_math_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
-
-    if ((p_mag != NULL) && ((p_ic->cal & IMU_CAL_MAG) != 0u))
-    {
-        int32_t const mag[3] = {(int32_t)p_mag[0] - p_ic->mag_off[0],
-                                (int32_t)p_mag[1] - p_ic->mag_off[1],
-                                (int32_t)p_mag[2] - p_ic->mag_off[2]};
-        int32_t       heading =
-            app_math_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT),
-                                axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
-
-        p_ic->heading_cdeg = (heading < 0) ? (heading + 36000)
-                                           : heading; /* clockwise from north */
-    }
-
-    /* Tilt (FR15): either axis beyond 30 deg for IMU_TILT_HOLD_MS; off
-       again below 25 deg on both axes. */
-    {
-        bool const b_over =
-            (app_types_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG)
-            || (app_types_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
-
-        if (!b_over)
-        {
-            p_ic->b_tilt_over = false;
-        }
-        else if (!p_ic->b_tilt_over)
-        {
-            p_ic->b_tilt_over   = true;
-            p_ic->tilt_since_ms = now_ms;
-        }
-        else
-        {
-            /* still beyond the limit */
-        }
-
-        if (!p_ic->b_tilt && p_ic->b_tilt_over
-            && (app_types_elapsed_ms(now_ms, p_ic->tilt_since_ms)
-                >= IMU_TILT_HOLD_MS))
-        {
-            p_ic->b_tilt = true;
-            events |= IMU_EV_TILT_ON;
-        }
-        else if (p_ic->b_tilt
-                 && (app_types_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG)
-                 && (app_types_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
-        {
-            p_ic->b_tilt = false;
-            events |= IMU_EV_TILT_OFF;
-        }
-        else
-        {
-            /* no change */
-        }
-    }
-
-    /* Hump detection runs on forward travel only (lifting the robot by
-       hand with the wheels still is never a hump).  A pitch hump (both
-       wheels) takes precedence; otherwise the roll detector looks for a
-       hump under one wheel. */
-    if (ds_um > 0)
-    {
-        events |= hump_step(p_ic, (uint32_t)ds_um);
-        if ((IMU_HUMP_FLAT == p_ic->hump_state)
-            && (0u == (events & IMU_EV_HUMP_START)))
-        {
-            events |= side_step(p_ic, (uint32_t)ds_um);
-        }
-        else
-        {
-            side_reset(p_ic);
-        }
-    }
-
-    events |= lift_step(p_ic, up_mg, v_mm_s, now_ms);
-
-    cls = classify(p_ic, v_mm_s, yaw_cdeg_s);
-    if ((cls != p_ic->motion)
-        && (app_types_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
-    {
-        p_ic->motion    = cls;
-        p_ic->motion_ms = now_ms;
-        events |= IMU_EV_MOTION;
-    }
-    return events;
-}
-
-/* ---------------------------------------------------------------------
- *  Change Requirement 1: data representation of IF-08 (IMU snapshot).
- * --------------------------------------------------------------------- */
-static app_pack_field_t const g_imu_layout[] = {
-    PK_FIELD(imu_types_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(imu_types_snap_t, pitch_cdeg, 15u,
-             PK_S), /* +-163.83 deg (pitch is +-90)  */
-    PK_FIELD(imu_types_snap_t, roll_cdeg, 16u,
-             PK_S), /* +-327.67 deg (roll is +-180)  */
-    PK_FIELD(imu_types_snap_t, heading_cdeg, 16u, PK_U), /* 0..35999 */
-    PK_FIELD(imu_types_snap_t, turn_rate_cdeg_s, 16u,
-             PK_S), /* the int16_t range, +-327 deg/s */
-    PK_FIELD(imu_types_snap_t, accel_mg, 15u, PK_S), /* +-16 g (sensor range) */
-    PK_FIELD(imu_types_snap_t, hump_max_mm, 10u, PK_U), /* 0..1023 mm */
-    PK_FIELD(imu_types_snap_t, last_hump_mm, 10u, PK_U),
-    PK_FIELD(imu_types_snap_t, humps, 8u, PK_U), /* per run, saturates at 255 */
-    PK_FIELD(imu_types_snap_t, i2c_errors, 16u, PK_W), /* counter */
-    PK_FIELD(imu_types_snap_t, hump_state, 2u, PK_U),  /* 4 states */
-    PK_FIELD(imu_types_snap_t, motion, 3u, PK_U),      /* 8 classes */
-    PK_FIELD(imu_types_snap_t, b_ok, 1u, PK_U),
-    PK_FIELD(imu_types_snap_t, cal, 2u, PK_U), /* IMU_CAL_LEVEL | IMU_CAL_MAG */
-    PK_FIELD(imu_types_snap_t, pitch_valid, 1u, PK_U),
-    PK_FIELD(imu_types_snap_t, tilt, 1u, PK_U)};
-
-#define IMU_FIELDS ((uint16_t)(sizeof(g_imu_layout) / sizeof(g_imu_layout[0])))
-
-void imu_core_snap_pack (imu_types_snap_t const * p_snap, uint32_t * p_words)
-{
-    app_pack_pack_rec(g_imu_layout, IMU_FIELDS, p_snap, p_words,
-                      IMU_SNAP_WORDS);
-}
-
-void imu_core_snap_unpack (uint32_t const * p_words, imu_types_snap_t * p_snap)
-{
-    p_snap->reserved[0] = 0u;
-    p_snap->reserved[1] = 0u;
-    app_pack_unpack_rec(g_imu_layout, IMU_FIELDS, p_words, p_snap);
-}
-
-uint32_t imu_core_snap_layout_bits (void)
-{
-    return app_pack_layout_bits(g_imu_layout, IMU_FIELDS);
+    return sign * vec[axis_no];
 }
 
 /*** end of file ***/

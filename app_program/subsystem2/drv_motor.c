@@ -16,31 +16,6 @@
 
 #define MOTOR_PIN_COUNT 4u /* GP8..GP11 */
 
-static inline uint32_t pwm_ch_csr (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
-}
-
-static inline uint32_t pwm_ch_div (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
-}
-
-static inline uint32_t pwm_ch_ctr (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x08u;
-}
-
-static inline uint32_t pwm_ch_cc (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
-}
-
-static inline uint32_t pwm_ch_top (uint32_t slice)
-{
-    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
-}
-
 #define PWM_DIV_INT_1 (1u << 4)
 
 #define SLICE_L 4u /* GP8 = 4A, GP9 = 4B   */
@@ -50,25 +25,12 @@ static inline uint32_t pwm_ch_top (uint32_t slice)
     ((1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B) \
      | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B))
 
-static uint32_t cc_for (int32_t duty, int32_t sign)
-{
-    int32_t  drive = duty * sign;
-    uint32_t mag;
-
-    if (drive > MOTION_DUTY_MAX)
-    {
-        drive = MOTION_DUTY_MAX;
-    }
-    if (drive < -MOTION_DUTY_MAX)
-    {
-        drive = -MOTION_DUTY_MAX;
-    }
-    mag = (uint32_t)((drive < 0) ? -drive : drive);
-    mag = (mag * (MOTION_PWM_TOP + 1u)) / (uint32_t)MOTION_DUTY_MAX;
-
-    /* channel A in bits 15:0, channel B in bits 31:16 */
-    return (drive >= 0) ? mag : (mag << 16);
-}
+static inline uint32_t pwm_ch_csr(uint32_t slice);
+static inline uint32_t pwm_ch_div(uint32_t slice);
+static inline uint32_t pwm_ch_ctr(uint32_t slice);
+static inline uint32_t pwm_ch_cc(uint32_t slice);
+static inline uint32_t pwm_ch_top(uint32_t slice);
+static uint32_t        cc_for(int32_t duty, int32_t sign);
 
 EXPORT ER drv_motor_init (void)
 {
@@ -117,6 +79,53 @@ EXPORT void drv_motor_write (int16_t duty_l, int16_t duty_r)
 {
     out_w(pwm_ch_cc(SLICE_L), cc_for(duty_l, MOTION_MOT_SIGN_L));
     out_w(pwm_ch_cc(SLICE_R), cc_for(duty_r, MOTION_MOT_SIGN_R));
+}
+
+/*** end of file ***/
+
+static inline uint32_t pwm_ch_csr (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x00u;
+}
+
+static inline uint32_t pwm_ch_div (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x04u;
+}
+
+static inline uint32_t pwm_ch_ctr (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x08u;
+}
+
+static inline uint32_t pwm_ch_cc (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x0Cu;
+}
+
+static inline uint32_t pwm_ch_top (uint32_t slice)
+{
+    return APP_REGS_PWM_BASE + (0x14u * slice) + 0x10u;
+}
+
+static uint32_t cc_for (int32_t duty, int32_t sign)
+{
+    int32_t  drive = duty * sign;
+    uint32_t mag;
+
+    if (drive > MOTION_DUTY_MAX)
+    {
+        drive = MOTION_DUTY_MAX;
+    }
+    if (drive < -MOTION_DUTY_MAX)
+    {
+        drive = -MOTION_DUTY_MAX;
+    }
+    mag = (uint32_t)((drive < 0) ? -drive : drive);
+    mag = (mag * (MOTION_PWM_TOP + 1u)) / (uint32_t)MOTION_DUTY_MAX;
+
+    /* channel A in bits 15:0, channel B in bits 31:16 */
+    return (drive >= 0) ? mag : (mag << 16);
 }
 
 /*** end of file ***/

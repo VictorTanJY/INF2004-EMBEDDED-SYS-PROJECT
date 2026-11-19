@@ -23,6 +23,7 @@
  *  simply accumulate and further posts are counted as drops.
  */
 
+#include "comms_service.h"
 #include "subsystem1.h"
 
 #if TM_MQTT

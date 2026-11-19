@@ -1,7 +1,7 @@
 /*
  *  subsystem3.c
  *  Subsystem 3 -- Line following and barcode: objects and the line
- *  snapshot.  Owner: Buddy 3.  The task is in line_task_thread.c; the pure
+ *  snapshot.  Owner: Buddy 3.  The task is in line_task.c; the pure
  * logic in line_track.c, line_barcode.c and code39.c; the driver in drv_adc.c.
  */
 

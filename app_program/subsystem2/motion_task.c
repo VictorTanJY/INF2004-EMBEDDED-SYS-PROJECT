@@ -1,5 +1,5 @@
 /*
- *  motion_task_thread.c
+ *  motion_task.c
  *  Subsystem 2 -- MotionTask (priority 6, core 1), woken by motion_cyc
  *  every 10 ms (Week 6 Sections 3 and 6.1).  Owner: Buddy 2 (Jedrek).
  *
@@ -13,6 +13,7 @@
  *       MOTION_DONE / MOTION_FAILED -> mbf_mission, STALL -> flg_safety.
  */
 
+#include "motion_task.h"
 #include "subsystem2.h"
 #include "motion_core.h"
 #include "drv_motor.h"
@@ -27,6 +28,7 @@
 static motion_core_t g_core;
 
 #if APP_TEST
+
 /* make TEST=1 only: loop timing for S2-U07.  Written by MotionTask
    (core 1) only; the test task reads each 32-bit word, which is one
    indivisible load on the M0+.  The test asks for a restart through
@@ -39,126 +41,33 @@ static uint32_t volatile g_tt_cycles;
 static uint8_t volatile g_tt_restart = 1u;
 static uint32_t g_tt_prev_us;
 
-static void tt_wake (uint32_t now_us)
-{
-    if (g_tt_restart != 0u)
-    {
-        g_tt_per_min_us  = 0xFFFFFFFFu;
-        g_tt_per_max_us  = 0u;
-        g_tt_exec_max_us = 0u;
-        g_tt_cycles      = 0u;
-        g_tt_restart     = 0u;
-    }
-    else
-    {
-        uint32_t const per = now_us - g_tt_prev_us;
+#endif
 
-        if (per < g_tt_per_min_us)
-        {
-            g_tt_per_min_us = per;
-        }
-        if (per > g_tt_per_max_us)
-        {
-            g_tt_per_max_us = per;
-        }
-        g_tt_cycles = g_tt_cycles + 1u;
-    }
-    g_tt_prev_us = now_us;
-}
+#if APP_TEST
+static void tt_wake(uint32_t now_us);
+static void tt_done(uint32_t wake_us);
+#endif
+static void timing_pin_init(void);
+static void timing_pin_toggle(void);
+static void write_pwm(int16_t duty_l, int16_t duty_r);
+static void report_events(void);
 
-static void tt_done (uint32_t wake_us)
-{
-    uint32_t const exec = (uint32_t)app_time_us() - wake_us;
-
-    if (exec > g_tt_exec_max_us)
-    {
-        g_tt_exec_max_us = exec;
-    }
-}
+#if APP_TEST
 
 EXPORT void motion_task_timing_restart (void)
 {
     g_tt_restart = 1u;
 }
 
-EXPORT void motion_task_test_timing (subsystem2_test_timing_t * p_out)
+EXPORT void motion_task_test_timing (motion_task_timing_t * p_out)
 {
     p_out->per_min_us  = g_tt_per_min_us;
     p_out->per_max_us  = g_tt_per_max_us;
     p_out->exec_max_us = g_tt_exec_max_us;
     p_out->cycles      = g_tt_cycles;
 }
-#endif /* APP_TEST */
 
-static void timing_pin_init (void)
-{
-#if APP_TIMING_PINS
-    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S2_PIN_TIMING);
-    out_w(APP_REGS_GPIO_OE_SET, 1uL << S2_PIN_TIMING);
-    out_w(app_regs_gpio_ctrl(S2_PIN_TIMING), APP_REGS_FUNCSEL_SIO);
 #endif
-}
-
-static void timing_pin_toggle (void)
-{
-#if APP_TIMING_PINS
-    out_w(APP_REGS_GPIO_OUT_XOR, 1uL << S2_PIN_TIMING);
-#endif
-}
-
-/* Step 4: check the latch and write, as one indivisible step on core 1. */
-static void write_pwm (int16_t duty_l, int16_t duty_r)
-{
-    UINT intsts;
-
-    DI(intsts);
-    if (!subsystem2_estop_latched())
-    {
-        drv_motor_write(duty_l, duty_r);
-    }
-    EI(intsts);
-}
-
-static void report_events (void)
-{
-    motion_core_event_t event;
-
-    while (motion_core_pop_event(&g_core, &event))
-    {
-        switch (event.code)
-        {
-            case MOTION_EV_DONE:
-                (void)subsystem5_mission_post(
-                    MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
-                    (uint16_t)event.seq, (int32_t)event.src);
-            break;
-
-            case MOTION_EV_FAILED:
-                (void)subsystem5_mission_post(
-                    MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
-                    (uint16_t)event.seq, (int32_t)event.src);
-            break;
-
-            case MOTION_EV_STALL:
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_STALL);
-            break;
-
-            case MOTION_EV_ENC_FAULT:
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
-                (void)subsystem1_telem_post(COMMS_KIND_FAULT,
-                                            (uint8_t)APP_SRC_MOTION, 0u,
-                                            (int32_t)SAFETY_FLT_ENC_FAULT);
-            break;
-
-            case MOTION_EV_ENC_OK:
-                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_ENC_FAULT);
-            break;
-
-            default:
-            break;
-        }
-    }
-}
 
 EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 {
@@ -235,6 +144,119 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 #if APP_TEST
         tt_done(wake_us);
 #endif
+    }
+}
+
+#if APP_TEST
+
+/*** end of file ***/
+
+static void tt_wake (uint32_t now_us)
+{
+    if (g_tt_restart != 0u)
+    {
+        g_tt_per_min_us  = 0xFFFFFFFFu;
+        g_tt_per_max_us  = 0u;
+        g_tt_exec_max_us = 0u;
+        g_tt_cycles      = 0u;
+        g_tt_restart     = 0u;
+    }
+    else
+    {
+        uint32_t const per = now_us - g_tt_prev_us;
+
+        if (per < g_tt_per_min_us)
+        {
+            g_tt_per_min_us = per;
+        }
+        if (per > g_tt_per_max_us)
+        {
+            g_tt_per_max_us = per;
+        }
+        g_tt_cycles = g_tt_cycles + 1u;
+    }
+    g_tt_prev_us = now_us;
+}
+
+static void tt_done (uint32_t wake_us)
+{
+    uint32_t const exec = (uint32_t)app_time_us() - wake_us;
+
+    if (exec > g_tt_exec_max_us)
+    {
+        g_tt_exec_max_us = exec;
+    }
+}
+
+#endif
+
+static void timing_pin_init (void)
+{
+#if APP_TIMING_PINS
+    out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S2_PIN_TIMING);
+    out_w(APP_REGS_GPIO_OE_SET, 1uL << S2_PIN_TIMING);
+    out_w(app_regs_gpio_ctrl(S2_PIN_TIMING), APP_REGS_FUNCSEL_SIO);
+#endif
+}
+
+static void timing_pin_toggle (void)
+{
+#if APP_TIMING_PINS
+    out_w(APP_REGS_GPIO_OUT_XOR, 1uL << S2_PIN_TIMING);
+#endif
+}
+
+/* Step 4: check the latch and write, as one indivisible step on core 1. */
+static void write_pwm (int16_t duty_l, int16_t duty_r)
+{
+    UINT intsts;
+
+    DI(intsts);
+    if (!subsystem2_estop_latched())
+    {
+        drv_motor_write(duty_l, duty_r);
+    }
+    EI(intsts);
+}
+
+static void report_events (void)
+{
+    motion_core_event_t event;
+
+    while (motion_core_pop_event(&g_core, &event))
+    {
+        switch (event.code)
+        {
+            case MOTION_EV_DONE:
+                (void)subsystem5_mission_post(
+                    MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
+                    (uint16_t)event.seq, (int32_t)event.src);
+            break;
+
+            case MOTION_EV_FAILED:
+                (void)subsystem5_mission_post(
+                    MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
+                    (uint16_t)event.seq, (int32_t)event.src);
+            break;
+
+            case MOTION_EV_STALL:
+                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_STALL);
+            break;
+
+            case MOTION_EV_ENC_FAULT:
+                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
+                (void)subsystem1_telem_post(COMMS_KIND_FAULT,
+                                            (uint8_t)APP_SRC_MOTION, 0u,
+                                            (int32_t)SAFETY_FLT_ENC_FAULT);
+            break;
+
+            case MOTION_EV_ENC_OK:
+                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_ENC_FAULT);
+            break;
+
+            default:
+            break;
+        }
     }
 }
 

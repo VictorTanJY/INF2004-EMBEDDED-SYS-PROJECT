@@ -1,5 +1,5 @@
 /*
- *  subsystem5_test_run.c
+ *  subsystem5_test.c
  *  On-target tests for subsystem 5.  Built only with: make TEST=1
  *  Record results in testing/subsystem5/TEST_LOG.md.
  *  The statechart and geometry are tested on a PC (testing/subsystem5/host).
@@ -11,6 +11,7 @@
  *  printed one in the test log.
  */
 
+#include "subsystem5_test.h"
 #include "subsystem5.h"
 #include "obstacle_core.h"
 #include "../test_report.h"

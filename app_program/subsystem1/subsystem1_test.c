@@ -1,5 +1,5 @@
 /*
- *  subsystem1_test_run.c
+ *  subsystem1_test.c
  *  On-target tests for subsystem 1.  Built only with: make TEST=1
  *  Record results in testing/subsystem1/TEST_LOG.md.
  *
@@ -7,34 +7,14 @@
  *  many more cases: testing/subsystem1/host/ (make -C testing/subsystem1/host).
  */
 
+#include "subsystem1_test.h"
 #include "subsystem1.h"
 #include "hmi_button.h"
 #include "../test_report.h"
+
 #define T_HOLD_SAMPLES 120u /* x 20 ms = 2.4 s, past the 2 s long press */
 
 #if APP_TEST
-
-static bool s1_bytes_eq (uint8_t const * p_a, uint8_t const * p_b,
-                         uint16_t n_bytes)
-{
-    uint16_t idx;
-
-    for (idx = 0u; idx < n_bytes; idx++)
-    {
-        if (p_a[idx] != p_b[idx])
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-static bool s1_parse (uint8_t const * p_frame, uint16_t n_bytes,
-                      comms_proto_cmd_t * p_cmd, comms_proto_err_t * p_err)
-{
-    *p_err = comms_proto_parse_cmd(p_frame, n_bytes, p_cmd);
-    return (COMMS_ERR_NONE == *p_err);
-}
 
 /* Command frames (comms_proto.h): header 0x25 = type 5, version 1. */
 static uint8_t const g_start_7[3]  = {0x25u, 0x07u, 0x01u}; /* START, id 7  */
@@ -45,6 +25,17 @@ static uint8_t const g_set_99[5]   = {0x25u, 0x08u, 0x95u, 0x31u,
                                       0x40u}; /* SET stop_cm 99, id 8 */
 static uint8_t const g_no_id[1]    = {0x25u}; /* header only  */
 static uint8_t const g_ack_busy[3] = {0x24u, 0x13u, 0x0Cu}; /* id 9, err busy */
+
+#endif
+
+#if APP_TEST
+static bool s1_bytes_eq(uint8_t const * p_a, uint8_t const * p_b,
+                        uint16_t n_bytes);
+static bool s1_parse(uint8_t const * p_frame, uint16_t n_bytes,
+                     comms_proto_cmd_t * p_cmd, comms_proto_err_t * p_err);
+#endif
+
+#if APP_TEST
 
 EXPORT void subsystem1_test_run (void)
 {
@@ -153,6 +144,32 @@ EXPORT void subsystem1_test_run (void)
     TEST_SUMMARY("subsystem1");
 }
 
-#endif /* APP_TEST */
+#endif
+
+#if APP_TEST
+
+static bool s1_bytes_eq (uint8_t const * p_a, uint8_t const * p_b,
+                         uint16_t n_bytes)
+{
+    uint16_t idx;
+
+    for (idx = 0u; idx < n_bytes; idx++)
+    {
+        if (p_a[idx] != p_b[idx])
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool s1_parse (uint8_t const * p_frame, uint16_t n_bytes,
+                      comms_proto_cmd_t * p_cmd, comms_proto_err_t * p_err)
+{
+    *p_err = comms_proto_parse_cmd(p_frame, n_bytes, p_cmd);
+    return (COMMS_ERR_NONE == *p_err);
+}
+
+#endif
 
 /*** end of file ***/

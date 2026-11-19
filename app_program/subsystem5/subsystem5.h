@@ -64,8 +64,14 @@ IMPORT void subsystem5_put_obst_snap(
     mission_types_obst_snap_t const * p_in); /* ObstacleTask only */
 
 /* Private to subsystem 5 */
-IMPORT void mission_task_thread(INT stacd, void * p_exinf);
-IMPORT void obstacle_task_thread(INT stacd, void * p_exinf);
+#include "mission_task.h"
+#include "obstacle_task.h"
+
+/* Called by usermain() in this order: every subsystem's _init() first,
+   then every subsystem's _start(), so every kernel object exists before
+   any task can use it. */
+IMPORT ER subsystem5_init(void);  /* create this subsystem's kernel objects */
+IMPORT ER subsystem5_start(void); /* create and start its tasks             */
 
 #endif /* SUBSYSTEM5_H */
 

@@ -15,6 +15,11 @@
 typedef uint8_t
     comms_check_symbols_t[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
 
+#define NONE_D_CM   511u  /* telemetry d: nothing in range      */
+#define NONE_W_MM   1023u /* telemetry w: no profile            */
+#define NONE_CLR_CM 127u  /* telemetry clr_l / clr_r: no profile */
+#define T10_BITS    24u   /* frame time, 10 ms units (46.6 h)   */
+
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
 static comms_proto_param_t const g_params[COMMS_PARAM_COUNT] = {
     {"speed_mm_s", 1u, 150, 350}, /* cruise speed, NFR11 (Buddy 2/3)       */
@@ -30,11 +35,10 @@ static comms_proto_param_t const g_params[COMMS_PARAM_COUNT] = {
 #endif
 };
 
-
-#define NONE_D_CM   511u  /* telemetry d: nothing in range      */
-#define NONE_W_MM   1023u /* telemetry w: no profile            */
-#define NONE_CLR_CM 127u  /* telemetry clr_l / clr_r: no profile */
-#define T10_BITS    24u   /* frame time, 10 ms units (46.6 h)   */
+static void put_header(app_pack_writer_t * p_w, comms_proto_frame_type_t type);
+static int32_t  cdeg_to_tenths(int16_t cdeg);
+static uint32_t mm_to_cm_field(uint16_t value_mm, bool b_valid,
+                               uint32_t none_code);
 
 /* ---------------------------------------------------------------------
  *  Helpers
@@ -47,34 +51,6 @@ uint8_t comms_proto_symbol_index (char chr)
 char comms_proto_symbol_char (uint8_t sym_index)
 {
     return app_pack_sym_char(sym_index);
-}
-
-static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)
-{
-    app_pack_put(p_w, (uint32_t)type, 5u);
-    app_pack_put(p_w, COMMS_FRAME_VERSION, 3u);
-}
-
-/* centi-degrees -> tenths of a degree, rounded half away from zero. */
-static int32_t cdeg_to_tenths (int16_t cdeg)
-{
-    int32_t value = (int32_t)cdeg;
-
-    return (value >= 0) ? ((value + 5) / 10) : -((5 - value) / 10);
-}
-
-/* mm -> cm, rounded; none_code if absent or too large for the field. */
-static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
-                                uint32_t none_code)
-{
-    uint32_t value_cm;
-
-    if (!b_valid || (COMMS_D_NONE == value_mm))
-    {
-        return none_code;
-    }
-    value_cm = ((uint32_t)value_mm + 5u) / 10u;
-    return (value_cm >= none_code) ? (none_code - 1u) : value_cm;
 }
 
 /* ---------------------------------------------------------------------
@@ -513,6 +489,34 @@ void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
         p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);
         p_ring->count--;
     }
+}
+
+static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)
+{
+    app_pack_put(p_w, (uint32_t)type, 5u);
+    app_pack_put(p_w, COMMS_FRAME_VERSION, 3u);
+}
+
+/* centi-degrees -> tenths of a degree, rounded half away from zero. */
+static int32_t cdeg_to_tenths (int16_t cdeg)
+{
+    int32_t value = (int32_t)cdeg;
+
+    return (value >= 0) ? ((value + 5) / 10) : -((5 - value) / 10);
+}
+
+/* mm -> cm, rounded; none_code if absent or too large for the field. */
+static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
+                                uint32_t none_code)
+{
+    uint32_t value_cm;
+
+    if (!b_valid || (COMMS_D_NONE == value_mm))
+    {
+        return none_code;
+    }
+    value_cm = ((uint32_t)value_mm + 5u) / 10u;
+    return (value_cm >= none_code) ? (none_code - 1u) : value_cm;
 }
 
 /*** end of file ***/

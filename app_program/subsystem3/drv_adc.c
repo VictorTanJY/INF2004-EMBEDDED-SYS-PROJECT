@@ -30,38 +30,10 @@
 #define ADC_FCS_OVER      (1uL << 11)
 #define ADC_FCS_UNDER     (1uL << 10)
 #define ADC_FCS_THRESH_1  (1uL << 24)
-static inline uint32_t adc_fcs_level (uint32_t fcs)
-{
-    return (fcs >> 16) & 0xFu;
-}
 
 #define ADC_DIV_3KHZ (15999uL << 8)
 
 #define DMA_BASE_ADDR 0x50000000u
-static inline uint32_t dma_read_addr (uint32_t chan)
-{
-    return DMA_BASE_ADDR + (0x40u * chan) + 0x00u;
-}
-
-static inline uint32_t dma_write_addr (uint32_t chan)
-{
-    return DMA_BASE_ADDR + (0x40u * chan) + 0x04u;
-}
-
-static inline uint32_t dma_trans_count (uint32_t chan)
-{
-    return DMA_BASE_ADDR + (0x40u * chan) + 0x08u;
-}
-
-static inline uint32_t dma_ctrl_trig (uint32_t chan)
-{
-    return DMA_BASE_ADDR + (0x40u * chan) + 0x0Cu;
-}
-
-static inline uint32_t dma_al1_ctrl (uint32_t chan)
-{
-    return DMA_BASE_ADDR + (0x40u * chan) + 0x10u;
-}
 
 #define DMA_INTE1      (DMA_BASE_ADDR + 0x414u)
 #define DMA_INTS1      (DMA_BASE_ADDR + 0x41Cu)
@@ -70,10 +42,6 @@ static inline uint32_t dma_al1_ctrl (uint32_t chan)
 #define DMA_CTRL_EN         (1uL << 0)
 #define DMA_CTRL_SIZE_HALF  (1uL << 2)
 #define DMA_CTRL_INCR_WRITE (1uL << 5)
-static inline uint32_t dma_ctrl_chain (uint32_t chan)
-{
-    return (uint32_t)chan << 11;
-}
 
 #define DMA_CTRL_TREQ_ADC (36uL << 15) /* DREQ_ADC */
 
@@ -88,43 +56,15 @@ static uint32_t volatile g_seq;  /* blocks completed      */
 static uint32_t volatile g_errors;
 static ID g_task;
 
-static uint32_t ctrl_for (uint32_t chain_to)
-{
-    return DMA_CTRL_EN | DMA_CTRL_SIZE_HALF | DMA_CTRL_INCR_WRITE
-           | dma_ctrl_chain(chain_to) | DMA_CTRL_TREQ_ADC;
-}
-
-/* adc_dma_isr: one 10 ms block is complete. */
-static void adc_dma_isr (UINT intno)
-{
-    uint32_t const ints =
-        in_w(DMA_INTS1) & ((1uL << DMA_CH_A) | (1uL << DMA_CH_B));
-
-    (void)intno;
-    out_w(DMA_INTS1, ints); /* write 1 to clear */
-    if ((ints & (1uL << DMA_CH_A)) != 0u)
-    {
-        out_w(dma_write_addr(DMA_CH_A),
-              (uint32_t)&g_buf[0][0]); /* re-arm, no trigger */
-        g_ready = 0u;
-        g_seq++;
-    }
-    if ((ints & (1uL << DMA_CH_B)) != 0u)
-    {
-        out_w(dma_write_addr(DMA_CH_B), (uint32_t)&g_buf[1][0]);
-        g_ready = 1u;
-        g_seq++;
-    }
-    if ((in_w(ADC_FCS) & (ADC_FCS_OVER | ADC_FCS_UNDER)) != 0u)
-    {
-        out_w(ADC_FCS, in_w(ADC_FCS) | ADC_FCS_OVER | ADC_FCS_UNDER); /* W1C */
-        g_errors++;
-    }
-    if (g_task > 0)
-    {
-        (void)tk_wup_tsk(g_task);
-    }
-}
+static inline uint32_t adc_fcs_level(uint32_t fcs);
+static inline uint32_t dma_read_addr(uint32_t chan);
+static inline uint32_t dma_write_addr(uint32_t chan);
+static inline uint32_t dma_trans_count(uint32_t chan);
+static inline uint32_t dma_ctrl_trig(uint32_t chan);
+static inline uint32_t dma_al1_ctrl(uint32_t chan);
+static inline uint32_t dma_ctrl_chain(uint32_t chan);
+static uint32_t        ctrl_for(uint32_t chain_to);
+static void            adc_dma_isr(UINT intno);
 
 EXPORT ER drv_adc_init (void)
 {
@@ -220,6 +160,81 @@ EXPORT bool drv_adc_get_block (uint16_t   p_out[DRV_ADC_BLOCK_LEN],
 EXPORT uint32_t drv_adc_errors (void)
 {
     return g_errors + (((in_w(ADC_CS) & ADC_CS_ERR_STICKY) != 0u) ? 1u : 0u);
+}
+
+/*** end of file ***/
+
+static inline uint32_t adc_fcs_level (uint32_t fcs)
+{
+    return (fcs >> 16) & 0xFu;
+}
+
+static inline uint32_t dma_read_addr (uint32_t chan)
+{
+    return DMA_BASE_ADDR + (0x40u * chan) + 0x00u;
+}
+
+static inline uint32_t dma_write_addr (uint32_t chan)
+{
+    return DMA_BASE_ADDR + (0x40u * chan) + 0x04u;
+}
+
+static inline uint32_t dma_trans_count (uint32_t chan)
+{
+    return DMA_BASE_ADDR + (0x40u * chan) + 0x08u;
+}
+
+static inline uint32_t dma_ctrl_trig (uint32_t chan)
+{
+    return DMA_BASE_ADDR + (0x40u * chan) + 0x0Cu;
+}
+
+static inline uint32_t dma_al1_ctrl (uint32_t chan)
+{
+    return DMA_BASE_ADDR + (0x40u * chan) + 0x10u;
+}
+
+static inline uint32_t dma_ctrl_chain (uint32_t chan)
+{
+    return (uint32_t)chan << 11;
+}
+
+static uint32_t ctrl_for (uint32_t chain_to)
+{
+    return DMA_CTRL_EN | DMA_CTRL_SIZE_HALF | DMA_CTRL_INCR_WRITE
+           | dma_ctrl_chain(chain_to) | DMA_CTRL_TREQ_ADC;
+}
+
+/* adc_dma_isr: one 10 ms block is complete. */
+static void adc_dma_isr (UINT intno)
+{
+    uint32_t const ints =
+        in_w(DMA_INTS1) & ((1uL << DMA_CH_A) | (1uL << DMA_CH_B));
+
+    (void)intno;
+    out_w(DMA_INTS1, ints); /* write 1 to clear */
+    if ((ints & (1uL << DMA_CH_A)) != 0u)
+    {
+        out_w(dma_write_addr(DMA_CH_A),
+              (uint32_t)&g_buf[0][0]); /* re-arm, no trigger */
+        g_ready = 0u;
+        g_seq++;
+    }
+    if ((ints & (1uL << DMA_CH_B)) != 0u)
+    {
+        out_w(dma_write_addr(DMA_CH_B), (uint32_t)&g_buf[1][0]);
+        g_ready = 1u;
+        g_seq++;
+    }
+    if ((in_w(ADC_FCS) & (ADC_FCS_OVER | ADC_FCS_UNDER)) != 0u)
+    {
+        out_w(ADC_FCS, in_w(ADC_FCS) | ADC_FCS_OVER | ADC_FCS_UNDER); /* W1C */
+        g_errors++;
+    }
+    if (g_task > 0)
+    {
+        (void)tk_wup_tsk(g_task);
+    }
 }
 
 /*** end of file ***/

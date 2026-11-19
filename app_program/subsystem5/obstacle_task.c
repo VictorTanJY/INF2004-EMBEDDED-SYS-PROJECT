@@ -1,5 +1,5 @@
 /*
- *  obstacle_task_thread.c
+ *  obstacle_task.c
  *  Subsystem 5 -- ObstacleTask (priority 9, core 1), Week 6 Section 6.4.
  *  Owner: Buddy 5 (Ryan).
  *
@@ -34,6 +34,7 @@
  *  mission_cfg.h) backs off OBST_SECOND_LOOK_MM and scans once more.
  */
 
+#include "obstacle_task.h"
 #include "subsystem5.h"
 #include "mission_cfg.h"
 #include "obstacle_core.h"
@@ -54,29 +55,38 @@
 #define OBST_HOLD_K          2  /* heading hold: mrad/s per cdeg of error */
 #define OBST_HOLD_MAX        1500
 #define OBST_ALIGN_TOL_CDEG  300
+
 /* after CONTINUE: no new OBSTACLE for this far */
 #define OBST_CONTINUE_IGNORE_MM 300
 #define OBST_TOO_CLOSE_RESET_MM 120u
+
 /* Event-history diagnostics (3 Nov) */
 /* bypass plan: offset mm (+ left) << 16 | pass mm */
 #define OBST_LOG_PLAN 39u
 #define OBST_LOG_PASS 40u /* pass leg: driven mm | side ping saw it << 16 */
 #define OBST_LOG_JOIN 44u /* back in: line touched after mm, 0 = not found */
+
 /* turned onto the line after 0.1 deg (< 0: one sensor only), 0 = not found */
 #define OBST_LOG_LINESCAN 46u
+
 /* scan edges, mm (+ left): left << 16 | right (int16 each) */
 #define OBST_LOG_EDGES     47u
 #define OBST_LOG_EDGES_CAR 48u /* the same from the edge scan (car turns) */
+
 /* edge scan: hits L << 24 | last deg L << 16 | hits R << 8 | last deg R */
 #define OBST_LOG_EDGE_SIDES 49u
+
 /* edge scan: face mm straight ahead << 16 | first left ping mm */
 #define OBST_LOG_EDGE_FACE 50u
+
 /* edge scan, last left echo: heading 0.01 deg << 16 | range mm */
 #define OBST_LOG_EDGE_RAW_L 71u
 #define OBST_LOG_EDGE_RAW_R 72u /* the same on the right (heading < 0) */
+
 /* width probe: left edge mm << 16 | right edge (int16 each, + left);
    0x7FFF7FFF none */
 #define OBST_LOG_PROBE 74u
+
 /* step-out: face edge seen at mm (0xFFFF none) << 16 | stepped out mm */
 #define OBST_LOG_OUT 60u
 
@@ -89,6 +99,7 @@
 #define EDGE_PH_SETTLE 1u
 #define EDGE_PH_PING   2u
 #define EDGE_PH_RETURN 3u
+
 /* width probe (7 Nov) */
 #define PB_FACE        0u /* servo straight, median ping of the face */
 #define PB_MOVE        1u /* to OBST_PROBE_FACE_MM from it            */
@@ -99,10 +110,6 @@
 #define PB_BACK        6u /* forward to where it turned               */
 #define PB_UNTURN      7u /* turn back to the line's heading          */
 #define OBST_GAIN_UNIT 1000
-
-static obstacle_core_scan_t    g_scan;
-static obstacle_core_profile_t g_prof;
-static obstacle_core_step_t    g_steps[OBST_BYPASS_MAX_STEPS];
 
 typedef struct
 {
@@ -207,7 +214,128 @@ typedef struct
     int32_t out_h;       /* heading held while stepping out            */
 } obst_ctx_t;
 
+static obstacle_core_scan_t    g_scan;
+static obstacle_core_profile_t g_prof;
+static obstacle_core_step_t    g_steps[OBST_BYPASS_MAX_STEPS];
+
 static obst_ctx_t g_o;
+
+static void     servo_to(int32_t deg, uint32_t now_ms);
+static bool     servo_settled(uint32_t now_ms);
+static void     ping(void);
+static void     post(uint8_t type, uint16_t arg, int32_t data);
+static void     log_ev(uint16_t code, int32_t data);
+static int32_t  turn_gain(void);
+static int32_t  out_theta(motion_types_odom_t const * p_odom, int32_t sign);
+static int16_t  slip_ddeg(int16_t ddeg);
+static void     goto_state(uint8_t state);
+static void     drive(int32_t speed, int32_t target_h,
+                      motion_types_odom_t const * p_odom);
+static void     stop_motion(void);
+static void     send_step(uint8_t kind, int16_t value,
+                          motion_types_odom_t const * p_odom);
+static uint16_t scan_median(void);
+static bool     scan_sample(uint16_t range, uint16_t * p_r);
+static void     send_turn(int16_t ddeg, uint16_t rate_deg_s,
+                          motion_types_odom_t const * p_odom);
+static int32_t  motion_result(motion_types_odom_t const * p_odom);
+static void     store_pose(motion_types_odom_t const * p_odom);
+static void     start_scan(uint32_t now_ms);
+static void     publish_profile(void);
+static void     plan(uint32_t now_ms, motion_types_odom_t const * p_odom);
+static void     edge_finish(void);
+static void     probe_finish(uint32_t now_ms);
+static int32_t  probe_theta(motion_types_odom_t const * p_odom);
+static void     probe_slot(uint32_t now_ms, motion_types_odom_t const * p_odom);
+static void     probe_range(uint16_t range, uint32_t now_ms,
+                            motion_types_odom_t const * p_odom);
+static void handle_request(mission_types_scan_req_t const * p_req,
+                           uint32_t now_ms, motion_types_odom_t const * p_odom);
+static void handle_range(uint16_t range, uint32_t now_ms,
+                         motion_types_odom_t const * p_odom);
+static void slot(uint32_t now_ms, motion_types_odom_t const * p_odom);
+
+EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
+{
+    mission_types_scan_req_t req;
+    uint16_t            req_word; /* mbf_scan: one packed half-word (CR1) */
+    motion_types_odom_t odom;
+    mission_types_obst_snap_t snap;
+
+    (void)stacd;
+    (void)p_exinf;
+
+    (void)drv_ultrasonic_init();
+    (void)drv_servo_init();
+    (void)drv_ultrasonic_attach(); /* echo_isr on this core (core 1) */
+    g_o.servo_deg = OBST_SERVO_CENTRE_DEG;
+    g_o.state     = OBST_ST_IDLE;
+    g_o.d_mm      = OBST_RANGE_NONE;
+
+    for (;;)
+    {
+        UINT     ptn = 0u;
+        uint32_t now_ms;
+        uint32_t width;
+
+        (void)tk_wai_flg(g_flg_obst,
+                         OBST_FLG_RANGE | OBST_FLG_ECHO | OBST_FLG_REQ,
+                         TWF_ORW | TWF_BITCLR, &ptn, OBST_WAIT_TIMEOUT_MS);
+        subsystem4_heartbeat(SAFETY_HB_OBSTACLE);
+        now_ms = (uint32_t)app_time_ms();
+        subsystem2_get_odom(&odom);
+
+        if ((ptn & OBST_FLG_REQ) != 0u)
+        {
+            while ((INT)sizeof(req_word)
+                   == tk_rcv_mbf(g_mbf_scan, &req_word, TMO_POL))
+            {
+                mission_core_scan_req_unpack(req_word, &req);
+                handle_request(&req, now_ms, &odom);
+            }
+        }
+        if (drv_ultrasonic_take(&width))
+        {
+            g_o.b_ping_out = false;
+            g_o.no_echo    = 0u;
+            if (g_o.b_no_echo_set)
+            {
+                g_o.b_no_echo_set = false;
+                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_NO_ECHO);
+            }
+            handle_range(obstacle_core_echo_to_mm(width), now_ms, &odom);
+        }
+        if ((ptn & OBST_FLG_RANGE) != 0u)
+        {
+            if (g_o.b_ping_out)
+            {
+                /* no echo at all in a whole slot: sensor silent (report only)
+                 */
+                g_o.b_ping_out = false;
+                if (g_o.no_echo < 0xFFFFu)
+                {
+                    g_o.no_echo++;
+                }
+                if ((g_o.no_echo >= OBST_NO_ECHO_PINGS) && !g_o.b_no_echo_set)
+                {
+                    g_o.b_no_echo_set = true;
+                    (void)tk_set_flg(g_flg_safety, SAFETY_FLT_NO_ECHO);
+                }
+                handle_range(OBST_RANGE_NONE, now_ms, &odom);
+            }
+            slot(now_ms, &odom);
+        }
+
+        subsystem5_get_obst_snap(&snap);
+        snap.t_ms    = now_ms;
+        snap.d_mm    = g_o.d_mm;
+        snap.state   = g_o.state;
+        snap.retries = g_o.retries;
+        snap.no_echo = g_o.no_echo;
+        snap.pings   = g_o.pings;
+        subsystem5_put_obst_snap(&snap);
+    }
+}
 
 /* ------------------------------------------------------------------ */
 static void servo_to (int32_t deg, uint32_t now_ms)
@@ -1815,87 +1943,6 @@ static void slot (uint32_t now_ms, motion_types_odom_t const * p_odom)
         break;
     }
 }
-
-EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
-{
-    mission_types_scan_req_t req;
-    uint16_t            req_word; /* mbf_scan: one packed half-word (CR1) */
-    motion_types_odom_t odom;
-    mission_types_obst_snap_t snap;
-
-    (void)stacd;
-    (void)p_exinf;
-
-    (void)drv_ultrasonic_init();
-    (void)drv_servo_init();
-    (void)drv_ultrasonic_attach(); /* echo_isr on this core (core 1) */
-    g_o.servo_deg = OBST_SERVO_CENTRE_DEG;
-    g_o.state     = OBST_ST_IDLE;
-    g_o.d_mm      = OBST_RANGE_NONE;
-
-    for (;;)
-    {
-        UINT     ptn = 0u;
-        uint32_t now_ms;
-        uint32_t width;
-
-        (void)tk_wai_flg(g_flg_obst,
-                         OBST_FLG_RANGE | OBST_FLG_ECHO | OBST_FLG_REQ,
-                         TWF_ORW | TWF_BITCLR, &ptn, OBST_WAIT_TIMEOUT_MS);
-        subsystem4_heartbeat(SAFETY_HB_OBSTACLE);
-        now_ms = (uint32_t)app_time_ms();
-        subsystem2_get_odom(&odom);
-
-        if ((ptn & OBST_FLG_REQ) != 0u)
-        {
-            while ((INT)sizeof(req_word)
-                   == tk_rcv_mbf(g_mbf_scan, &req_word, TMO_POL))
-            {
-                mission_core_scan_req_unpack(req_word, &req);
-                handle_request(&req, now_ms, &odom);
-            }
-        }
-        if (drv_ultrasonic_take(&width))
-        {
-            g_o.b_ping_out = false;
-            g_o.no_echo    = 0u;
-            if (g_o.b_no_echo_set)
-            {
-                g_o.b_no_echo_set = false;
-                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_NO_ECHO);
-            }
-            handle_range(obstacle_core_echo_to_mm(width), now_ms, &odom);
-        }
-        if ((ptn & OBST_FLG_RANGE) != 0u)
-        {
-            if (g_o.b_ping_out)
-            {
-                /* no echo at all in a whole slot: sensor silent (report only)
-                 */
-                g_o.b_ping_out = false;
-                if (g_o.no_echo < 0xFFFFu)
-                {
-                    g_o.no_echo++;
-                }
-                if ((g_o.no_echo >= OBST_NO_ECHO_PINGS) && !g_o.b_no_echo_set)
-                {
-                    g_o.b_no_echo_set = true;
-                    (void)tk_set_flg(g_flg_safety, SAFETY_FLT_NO_ECHO);
-                }
-                handle_range(OBST_RANGE_NONE, now_ms, &odom);
-            }
-            slot(now_ms, &odom);
-        }
-
-        subsystem5_get_obst_snap(&snap);
-        snap.t_ms    = now_ms;
-        snap.d_mm    = g_o.d_mm;
-        snap.state   = g_o.state;
-        snap.retries = g_o.retries;
-        snap.no_echo = g_o.no_echo;
-        snap.pings   = g_o.pings;
-        subsystem5_put_obst_snap(&snap);
-    }
-}
+/*** end of file ***/
 
 /*** end of file ***/

@@ -11,12 +11,12 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S4-U01 | flg_safety exists | IF-05 | auto | `subsystem4_test_run.c` | PASS |
-| S4-U02 | heartbeat counter advances (MotionTask's; one byte per task since CR1, compared modulo 256) | IF-07 | auto | `subsystem4_test_run.c` | PASS |
+| S4-U01 | flg_safety exists | IF-05 | auto | `subsystem4_test.c` | PASS |
+| S4-U02 | heartbeat counter advances (MotionTask's; one byte per task since CR1, compared modulo 256) | IF-07 | auto | `subsystem4_test.c` | PASS |
 | S4-U03 | *retired 25 Oct:* IMU snapshot round trip (ImuTask now writes it continuously) | IF-08 | – | – | – |
-| S4-U04 | ImuTask publishes its snapshot | IF-08 | auto | `subsystem4_test_run.c` | PASS |
-| S4-U05 | 1 us timer runs at 1 MHz against clk_sys (watchdog tick fix) | NFR8 | auto | `subsystem4_test_run.c` | PASS, `[INFO] timer: 100000 us per 100 ms` |
-| S4-U06 | watchdog enabled and fed | NFR8 | auto | `subsystem4_test_run.c` | PASS |
+| S4-U04 | ImuTask publishes its snapshot | IF-08 | auto | `subsystem4_test.c` | PASS |
+| S4-U05 | 1 us timer runs at 1 MHz against clk_sys (watchdog tick fix) | NFR8 | auto | `subsystem4_test.c` | PASS, `[INFO] timer: 100000 us per 100 ms` |
+| S4-U06 | watchdog enabled and fed | NFR8 | auto | `subsystem4_test.c` | PASS |
 | S4-U07 | IMU reads level; no I2C errors in 1 s | FR6, FR15 | auto | robot on a level surface. Prints pitch, roll, \|a\| − 1 g, I2C errors, calibration bits | \|pitch\|, \|roll\| ≤ 5.0°; 0 I2C errors; not tilted. SKIP if the IMU does not answer |
 | S4-U08 | fault flag → both motors braked (STALL bit set by the test) | NFR8, IF-03, IF-05 | auto | `tk_set_flg(flg_safety, STALL)`; `subsystem2_motor_estop()` records the time (test build only). Prints the latency | latency ≤ 20 000 µs; brake latched; GP8–GP11 SIO outputs, LOW; fault latched in SafetyTask |
 | S4-U09 | Reset clears the fault, as the dashboard Reset does | FR14, FR15, IF-06 | auto | `subsystem5_mission_post(REMOTE_RESET)`; wait up to 8 s | latch cleared, PWM reconnected (GP8 back on PWM), MotionTask IDLE_BRAKED, mission back to IDLE if it was IDLE |

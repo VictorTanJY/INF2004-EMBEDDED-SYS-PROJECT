@@ -26,79 +26,6 @@
 #define SRC_LINE       3u
 #define SRC_SAFETY_IMU 4u
 
-
-static char const g_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
-
-/* ------------------------------------------------------------------ */
-static void push (mission_core_out_t * p_out, uint8_t kind, uint8_t cmd,
-                  uint8_t seq, int16_t arg0, int16_t arg1)
-{
-    if (p_out->n_acts < MISSION_ACT_MAX)
-    {
-        p_out->act[p_out->n_acts].kind = kind;
-        p_out->act[p_out->n_acts].cmd  = cmd;
-        p_out->act[p_out->n_acts].seq  = seq;
-        p_out->act[p_out->n_acts].arg0 = arg0;
-        p_out->act[p_out->n_acts].arg1 = arg1;
-        p_out->n_acts++;
-    }
-}
-
-static void motion (mission_core_t * p_mc, mission_core_out_t * p_out,
-                    uint8_t cmd, int16_t arg0, int16_t arg1)
-{
-    uint8_t seq = 0u;
-
-    if ((MOTION_CMD_MOVE == cmd) || (MOTION_CMD_TURN == cmd))
-    {
-        p_mc->motion_seq =
-            motion_types_seq_next(p_mc->motion_seq); /* 5 bits (CR1) */
-        seq             = p_mc->motion_seq;
-        p_mc->wait_seq  = seq;
-        p_mc->b_waiting = true;
-    }
-    push(p_out, MISSION_ACT_MOTION, cmd, seq, arg0, arg1);
-}
-
-static void set_auth (mission_core_t * p_mc, mission_core_out_t * p_out,
-                      uint8_t src)
-{
-    motion(p_mc, p_out, MOTION_CMD_SET_AUTH, (int16_t)src, 0);
-    p_mc->snap.auth = src;
-}
-
-static void scan (mission_core_out_t * p_out, uint8_t type, int16_t param)
-{
-    push(p_out, MISSION_ACT_SCAN, type, 0u, param, 0);
-}
-
-static void log_act (mission_core_out_t * p_out, uint8_t code, int16_t arg0,
-                     int16_t arg1)
-{
-    push(p_out, MISSION_ACT_LOG, code, 0u, arg0, arg1);
-}
-
-static bool is_active (uint8_t state)
-{
-    return (state >= MISSION_ST_LINE_FOLLOW)
-           && (state <= MISSION_ST_LINE_SEARCH);
-}
-
-static void update_speed_cap (mission_core_t * p_mc)
-{
-    uint16_t cap = p_mc->snap.cruise_mm_s;
-
-    if (p_mc->b_slow && (cap > MISSION_SLOW_SPEED_MM_S))
-    {
-        cap = MISSION_SLOW_SPEED_MM_S;
-    }
-    if (p_mc->b_hump && (cap > MISSION_HUMP_SPEED_MM_S))
-    {
-        cap = MISSION_HUMP_SPEED_MM_S;
-    }
-    p_mc->snap.speed_cap_mm_s = cap;
-}
-
 /* ---- navigation and search steps --------------------------------------- */
 typedef struct
 {
@@ -107,175 +34,82 @@ typedef struct
     int16_t arg1;
 } step_t;
 
-static uint8_t nav_steps (uint8_t nav, step_t steps[2])
-{
-    steps[0].cmd  = MOTION_CMD_MOVE;
-    steps[0].arg0 = MISSION_NAV_CENTRE_MM;
-    steps[0].arg1 = MISSION_NAV_SPEED_MM_S;
-    steps[1].cmd  = MOTION_CMD_TURN;
-    steps[1].arg1 = MISSION_TURN_RATE_DEG_S;
-    switch (nav)
-    {
-        case MISSION_NAV_LEFT:
-            steps[1].arg0 = 900;
-            return 2u;
-        case MISSION_NAV_RIGHT:
-            steps[1].arg0 = -900;
-            return 2u;
-        case MISSION_NAV_UTURN:
-            steps[1].arg0 = 1800;
-            return 2u;
-        default: /* STRAIGHT: just clear the crossing */
-            steps[0].arg0 = MISSION_NAV_STRAIGHT_MM;
-            return 1u;
-    }
-}
+#define MISSION_FIELDS \
+    ((uint16_t)(sizeof(g_mission_layout) / sizeof(g_mission_layout[0])))
 
-static void enter(mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
-                  mission_core_out_t * p_out);
+/* ---------------------------------------------------------------------
+ *  Change Requirement 1: packed messages and snapshot (see mission_core.h)
+ * --------------------------------------------------------------------- */
+#define EVT_TYPE_SHIFT 0u
+#define EVT_TYPE_BITS  5u
+#define EVT_SRC_SHIFT  5u
+#define EVT_SRC_BITS   3u
+#define EVT_A_SHIFT    8u
+#define EVT_DATA_SHIFT 15u
+#define EVT_SYM_BITS   6u
 
-static void nav_next (mission_core_t * p_mc, uint32_t now_ms,
-                      mission_core_out_t * p_out)
-{
-    step_t        steps[2];
-    uint8_t const count = nav_steps(p_mc->nav_exec, steps);
+#define REQ_TYPE_BITS  3u
+#define REQ_SEQ_BITS   5u
+#define REQ_PARAM_BITS 8u
 
-    if (p_mc->step < count)
-    {
-        motion(p_mc, p_out, steps[p_mc->step].cmd, steps[p_mc->step].arg0,
-               steps[p_mc->step].arg1);
-        p_mc->step++;
-        p_mc->phase_ms = now_ms;
-    }
-    else
-    {
-        p_mc->nav_exec = MISSION_NAV_NONE;
-        enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
-    }
-}
+static char const g_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
-static void search_next (mission_core_t * p_mc, uint32_t now_ms,
-                         mission_core_out_t * p_out)
-{
-    static int16_t const k_sweep[3] = {MISSION_SEARCH_ANGLE_DDEG,
-                                       -2 * MISSION_SEARCH_ANGLE_DDEG,
-                                       MISSION_SEARCH_ANGLE_DDEG};
+/* Data representation of IF-10 (mission part). */
+static app_pack_field_t const g_mission_layout[] = {
+    PK_FIELD(mission_types_snap_t, t_ms, 32u, PK_W),
+    PK_FIELD(mission_types_snap_t, fault_bits, 20u,
+             PK_U), /* SAFETY_FLT_* (16) + self-test mask << 16 */
+    PK_FIELD(mission_types_snap_t, cruise_mm_s, 9u, PK_U), /* <= 450 */
+    PK_FIELD(mission_types_snap_t, speed_cap_mm_s, 9u, PK_U),
+    PK_FIELD(mission_types_snap_t, slow_mm, 10u,
+             PK_U), /* <= 600 (slow_cm 25..60) */
+    PK_FIELD(mission_types_snap_t, stop_mm, 9u,
+             PK_U), /* <= 400 (stop_cm 15..40)   */
+    PK_FIELD(mission_types_snap_t, lost_mm, 8u, PK_U),     /* <= 150 */
+    PK_FIELD(mission_types_snap_t, junction_mm, 6u, PK_U), /* <= 40 */
+    PK_FIELD(mission_types_snap_t, runs, 16u, PK_W),       /* counter */
+    PK_FIELD(mission_types_snap_t, state, 4u, PK_U),       /* 11 states */
+    PK_FIELD(mission_types_snap_t, auth, 2u, PK_U),        /* 3 sources */
+    PK_FIELD(mission_types_snap_t, pending_nav, 3u,
+             PK_UN), /* 0..3, NONE (0xFF) */
+    PK_FIELD(mission_types_snap_t, pending_char, 6u,
+             PK_SYM), /* Code 39 symbol or none    */
+    PK_FIELD(mission_types_snap_t, nav_map[0], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, nav_map[1], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, nav_map[2], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, nav_map[3], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, calibrated, 2u,
+             PK_U), /* MISSION_CAL_IR | _IMU */
+    PK_FIELD(mission_types_snap_t, cal_phase, 2u, PK_U), /* 4 phases */
+    PK_FIELD(mission_types_snap_t, cause, 3u, PK_U)      /* 7 causes */
+};
 
-    if (p_mc->step < 3u)
-    {
-        motion(p_mc, p_out, MOTION_CMD_TURN, k_sweep[p_mc->step],
-               MISSION_SEARCH_RATE_DEG_S);
-        p_mc->step++;
-        p_mc->phase_ms = now_ms;
-    }
-    else
-    {
-        p_mc->snap.cause = MISSION_CAUSE_LINE_LOST;
-        enter(p_mc, MISSION_ST_FAULT, now_ms, p_out);
-    }
-}
-
-/* ---- state entry -------------------------------------------------------- */
-static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
-                   mission_core_out_t * p_out)
-{
-    p_mc->snap.state = state;
-    p_mc->entry_ms   = now_ms;
-    p_mc->phase_ms   = now_ms;
-    p_mc->step       = 0u;
-    p_mc->b_waiting  = false;
-    push(p_out, MISSION_ACT_STATE, 0u, 0u, (int16_t)state, 0);
-
-    switch (state)
-    {
-        case MISSION_ST_IDLE:
-        case MISSION_ST_BOOT:
-        case MISSION_ST_FAULT:
-        case MISSION_ST_MISSION_COMPLETE:
-            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
-            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
-            scan(p_out, SCAN_REQ_STOP, 0);
-            p_mc->snap.cal_phase = MISSION_CAL_PH_NONE;
-            p_mc->b_slow         = false;
-            p_mc->b_hump         = false;
-            update_speed_cap(p_mc);
-            if (MISSION_ST_MISSION_COMPLETE == state)
-            {
-                log_act(p_out, MISSION_LOG_SUMMARY, (int16_t)p_mc->snap.runs,
-                        0);
-            }
-        break;
-
-        case MISSION_ST_CALIBRATING:
-            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
-            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
-            p_mc->snap.cal_phase = MISSION_CAL_PH_STILL;
-            p_mc->cal_done       = 0u;
-            p_mc->cal_ok         = 0u;
-        break;
-
-        case MISSION_ST_LINE_FOLLOW:
-            update_speed_cap(p_mc);
-            set_auth(p_mc, p_out, MOTION_SRC_LINE);
-            scan(p_out, SCAN_REQ_MONITOR, 0);
-        break;
-
-        case MISSION_ST_EXECUTE_NAV:
-            p_mc->nav_exec = p_mc->snap.pending_nav; /* consume the latch */
-            p_mc->snap.pending_nav  = MISSION_NAV_NONE;
-            p_mc->snap.pending_char = '\0';
-            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
-            nav_next(p_mc, now_ms, p_out);
-        break;
-
-        case MISSION_ST_OBSTACLE_HANDLING:
-            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
-            set_auth(p_mc, p_out, MOTION_SRC_AVOID);
-            scan(p_out, SCAN_REQ_PROFILE, 0);
-        break;
-
-        case MISSION_ST_LINE_RECOVERY:
-            scan(p_out, SCAN_REQ_RECOVER, 0);
-        break;
-
-        case MISSION_ST_LINE_SEARCH:
-            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
-            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
-            scan(p_out, SCAN_REQ_STOP, 0);
-            search_next(p_mc, now_ms, p_out);
-        break;
-
-        default: /* AVOIDING: the request is sent by the caller */
-        break;
-    }
-}
-
-static void enter_fault (mission_core_t * p_mc, uint8_t cause, uint32_t bits,
-                         uint32_t now_ms, mission_core_out_t * p_out)
-{
-    p_mc->snap.cause      = cause;
-    p_mc->snap.fault_bits = bits;
-    if (p_mc->snap.state != MISSION_ST_FAULT)
-    {
-        enter(p_mc, MISSION_ST_FAULT, now_ms, p_out);
-    }
-}
-
-static void start_run (mission_core_t * p_mc, uint32_t now_ms,
-                       mission_core_out_t * p_out)
-{
-    if ((p_mc->snap.calibrated & MISSION_CAL_ALL) != MISSION_CAL_ALL)
-    {
-        log_act(p_out, MISSION_LOG_NOT_CALIBRATED,
-                (int16_t)p_mc->snap.calibrated, 0);
-        return;
-    }
-    p_mc->snap.runs++;
-    p_mc->snap.pending_nav  = MISSION_NAV_NONE;
-    p_mc->snap.pending_char = '\0';
-    push(p_out, MISSION_ACT_NEW_RUN, 0u, 0u, (int16_t)p_mc->snap.runs, 0);
-    enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
-}
+static void    enter(mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
+                     mission_core_out_t * p_out);
+static void    push(mission_core_out_t * p_out, uint8_t kind, uint8_t cmd,
+                    uint8_t seq, int16_t arg0, int16_t arg1);
+static void    motion(mission_core_t * p_mc, mission_core_out_t * p_out,
+                      uint8_t cmd, int16_t arg0, int16_t arg1);
+static void    set_auth(mission_core_t * p_mc, mission_core_out_t * p_out,
+                        uint8_t src);
+static void    scan(mission_core_out_t * p_out, uint8_t type, int16_t param);
+static void    log_act(mission_core_out_t * p_out, uint8_t code, int16_t arg0,
+                       int16_t arg1);
+static bool    is_active(uint8_t state);
+static void    update_speed_cap(mission_core_t * p_mc);
+static uint8_t nav_steps(uint8_t nav, step_t steps[2]);
+static void    nav_next(mission_core_t * p_mc, uint32_t now_ms,
+                        mission_core_out_t * p_out);
+static void    search_next(mission_core_t * p_mc, uint32_t now_ms,
+                           mission_core_out_t * p_out);
+static void    enter_fault(mission_core_t * p_mc, uint8_t cause, uint32_t bits,
+                           uint32_t now_ms, mission_core_out_t * p_out);
+static void    start_run(mission_core_t * p_mc, uint32_t now_ms,
+                         mission_core_out_t * p_out);
+static void apply_param(mission_core_t * p_mc, uint16_t param_id, int32_t value,
+                        mission_core_out_t * p_out);
+static bool seq_matches(mission_core_t *            p_mc,
+                        mission_types_evt_t const * p_ev);
 
 /* ---- map helpers --------------------------------------------------------- */
 bool mission_core_map_char_ok (char chr)
@@ -364,57 +198,6 @@ void mission_core_init (mission_core_t * p_mc, uint32_t now_ms)
     p_mc->nav_exec            = MISSION_NAV_NONE;
     p_mc->entry_ms            = now_ms;
     p_mc->phase_ms            = now_ms;
-}
-
-static void apply_param (mission_core_t * p_mc, uint16_t param_id,
-                         int32_t value, mission_core_out_t * p_out)
-{
-    switch (param_id)
-    {
-        case 1u:
-            p_mc->snap.cruise_mm_s = (uint16_t)value;
-        break;
-        case 2u:
-            p_mc->snap.slow_mm = (uint16_t)(value * 10);
-        break;
-        case 3u:
-            p_mc->snap.stop_mm = (uint16_t)(value * 10);
-        break;
-        case 4u:
-            p_mc->snap.lost_mm = (uint16_t)value;
-        break;
-        case 5u:
-            p_mc->snap.junction_mm = (uint16_t)value;
-        break;
-#if APP_BENCH
-        /* bring-up only (app_config.h): drive the hardware from the laptop */
-        case 101u:
-            motion(p_mc, p_out, MOTION_CMD_MOVE, (int16_t)value, 200);
-            return;
-        case 102u:
-            motion(p_mc, p_out, MOTION_CMD_TURN, (int16_t)value, 90);
-            return;
-        case 103u:
-            motion(p_mc, p_out, MOTION_CMD_MOVE, 1000, (int16_t)value);
-            return;
-#endif
-        default:
-            return;
-    }
-    update_speed_cap(p_mc);
-    log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id, (int16_t)value);
-}
-
-static bool seq_matches (mission_core_t *            p_mc,
-                         mission_types_evt_t const * p_ev)
-{
-    if (p_mc->b_waiting && ((uint8_t)p_ev->arg == p_mc->wait_seq)
-        && ((int32_t)MOTION_SRC_MISSION == p_ev->data))
-    {
-        p_mc->b_waiting = false;
-        return true;
-    }
-    return false;
 }
 
 void mission_core_event (mission_core_t *            p_mc,
@@ -849,17 +632,6 @@ void mission_core_tick (mission_core_t *              p_mc,
     }
 }
 
-/* ---------------------------------------------------------------------
- *  Change Requirement 1: packed messages and snapshot (see mission_core.h)
- * --------------------------------------------------------------------- */
-#define EVT_TYPE_SHIFT 0u
-#define EVT_TYPE_BITS  5u
-#define EVT_SRC_SHIFT  5u
-#define EVT_SRC_BITS   3u
-#define EVT_A_SHIFT    8u
-#define EVT_DATA_SHIFT 15u
-#define EVT_SYM_BITS   6u
-
 uint32_t mission_core_evt_pack (mission_types_evt_t const * p_ev)
 {
     uint32_t word = 0u;
@@ -921,10 +693,6 @@ void mission_core_evt_unpack (uint32_t word, mission_types_evt_t * p_ev)
     }
 }
 
-#define REQ_TYPE_BITS  3u
-#define REQ_SEQ_BITS   5u
-#define REQ_PARAM_BITS 8u
-
 uint16_t mission_core_scan_req_pack (mission_types_scan_req_t const * p_req)
 {
     uint32_t word = 0u;
@@ -949,39 +717,6 @@ void mission_core_scan_req_unpack (uint16_t                   word,
                                          REQ_PARAM_BITS);
 }
 
-/* Data representation of IF-10 (mission part). */
-static app_pack_field_t const g_mission_layout[] = {
-    PK_FIELD(mission_types_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(mission_types_snap_t, fault_bits, 20u,
-             PK_U), /* SAFETY_FLT_* (16) + self-test mask << 16 */
-    PK_FIELD(mission_types_snap_t, cruise_mm_s, 9u, PK_U), /* <= 450 */
-    PK_FIELD(mission_types_snap_t, speed_cap_mm_s, 9u, PK_U),
-    PK_FIELD(mission_types_snap_t, slow_mm, 10u,
-             PK_U), /* <= 600 (slow_cm 25..60) */
-    PK_FIELD(mission_types_snap_t, stop_mm, 9u,
-             PK_U), /* <= 400 (stop_cm 15..40)   */
-    PK_FIELD(mission_types_snap_t, lost_mm, 8u, PK_U),     /* <= 150 */
-    PK_FIELD(mission_types_snap_t, junction_mm, 6u, PK_U), /* <= 40 */
-    PK_FIELD(mission_types_snap_t, runs, 16u, PK_W),       /* counter */
-    PK_FIELD(mission_types_snap_t, state, 4u, PK_U),       /* 11 states */
-    PK_FIELD(mission_types_snap_t, auth, 2u, PK_U),        /* 3 sources */
-    PK_FIELD(mission_types_snap_t, pending_nav, 3u,
-             PK_UN), /* 0..3, NONE (0xFF) */
-    PK_FIELD(mission_types_snap_t, pending_char, 6u,
-             PK_SYM), /* Code 39 symbol or none    */
-    PK_FIELD(mission_types_snap_t, nav_map[0], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, nav_map[1], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, nav_map[2], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, nav_map[3], 6u, PK_SYM),
-    PK_FIELD(mission_types_snap_t, calibrated, 2u,
-             PK_U), /* MISSION_CAL_IR | _IMU */
-    PK_FIELD(mission_types_snap_t, cal_phase, 2u, PK_U), /* 4 phases */
-    PK_FIELD(mission_types_snap_t, cause, 3u, PK_U)      /* 7 causes */
-};
-
-#define MISSION_FIELDS \
-    ((uint16_t)(sizeof(g_mission_layout) / sizeof(g_mission_layout[0])))
-
 void mission_core_snap_pack (mission_types_snap_t const * p_snap,
                              uint32_t *                   p_words)
 {
@@ -999,6 +734,294 @@ void mission_core_snap_unpack (uint32_t const *       p_words,
 uint32_t mission_core_snap_layout_bits (void)
 {
     return app_pack_layout_bits(g_mission_layout, MISSION_FIELDS);
+}
+
+static void search_next (mission_core_t * p_mc, uint32_t now_ms,
+                         mission_core_out_t * p_out)
+{
+    static int16_t const k_sweep[3] = {MISSION_SEARCH_ANGLE_DDEG,
+                                       -2 * MISSION_SEARCH_ANGLE_DDEG,
+                                       MISSION_SEARCH_ANGLE_DDEG};
+
+    if (p_mc->step < 3u)
+    {
+        motion(p_mc, p_out, MOTION_CMD_TURN, k_sweep[p_mc->step],
+               MISSION_SEARCH_RATE_DEG_S);
+        p_mc->step++;
+        p_mc->phase_ms = now_ms;
+    }
+    else
+    {
+        p_mc->snap.cause = MISSION_CAUSE_LINE_LOST;
+        enter(p_mc, MISSION_ST_FAULT, now_ms, p_out);
+    }
+}
+
+/* ---- state entry -------------------------------------------------------- */
+static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
+                   mission_core_out_t * p_out)
+{
+    p_mc->snap.state = state;
+    p_mc->entry_ms   = now_ms;
+    p_mc->phase_ms   = now_ms;
+    p_mc->step       = 0u;
+    p_mc->b_waiting  = false;
+    push(p_out, MISSION_ACT_STATE, 0u, 0u, (int16_t)state, 0);
+
+    switch (state)
+    {
+        case MISSION_ST_IDLE:
+        case MISSION_ST_BOOT:
+        case MISSION_ST_FAULT:
+        case MISSION_ST_MISSION_COMPLETE:
+            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
+            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
+            scan(p_out, SCAN_REQ_STOP, 0);
+            p_mc->snap.cal_phase = MISSION_CAL_PH_NONE;
+            p_mc->b_slow         = false;
+            p_mc->b_hump         = false;
+            update_speed_cap(p_mc);
+            if (MISSION_ST_MISSION_COMPLETE == state)
+            {
+                log_act(p_out, MISSION_LOG_SUMMARY, (int16_t)p_mc->snap.runs,
+                        0);
+            }
+        break;
+
+        case MISSION_ST_CALIBRATING:
+            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
+            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
+            p_mc->snap.cal_phase = MISSION_CAL_PH_STILL;
+            p_mc->cal_done       = 0u;
+            p_mc->cal_ok         = 0u;
+        break;
+
+        case MISSION_ST_LINE_FOLLOW:
+            update_speed_cap(p_mc);
+            set_auth(p_mc, p_out, MOTION_SRC_LINE);
+            scan(p_out, SCAN_REQ_MONITOR, 0);
+        break;
+
+        case MISSION_ST_EXECUTE_NAV:
+            p_mc->nav_exec = p_mc->snap.pending_nav; /* consume the latch */
+            p_mc->snap.pending_nav  = MISSION_NAV_NONE;
+            p_mc->snap.pending_char = '\0';
+            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
+            nav_next(p_mc, now_ms, p_out);
+        break;
+
+        case MISSION_ST_OBSTACLE_HANDLING:
+            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
+            set_auth(p_mc, p_out, MOTION_SRC_AVOID);
+            scan(p_out, SCAN_REQ_PROFILE, 0);
+        break;
+
+        case MISSION_ST_LINE_RECOVERY:
+            scan(p_out, SCAN_REQ_RECOVER, 0);
+        break;
+
+        case MISSION_ST_LINE_SEARCH:
+            motion(p_mc, p_out, MOTION_CMD_STOP, 0, 0);
+            set_auth(p_mc, p_out, MOTION_SRC_MISSION);
+            scan(p_out, SCAN_REQ_STOP, 0);
+            search_next(p_mc, now_ms, p_out);
+        break;
+
+        default: /* AVOIDING: the request is sent by the caller */
+        break;
+    }
+}
+
+static void enter_fault (mission_core_t * p_mc, uint8_t cause, uint32_t bits,
+                         uint32_t now_ms, mission_core_out_t * p_out)
+{
+    p_mc->snap.cause      = cause;
+    p_mc->snap.fault_bits = bits;
+    if (p_mc->snap.state != MISSION_ST_FAULT)
+    {
+        enter(p_mc, MISSION_ST_FAULT, now_ms, p_out);
+    }
+}
+
+static void start_run (mission_core_t * p_mc, uint32_t now_ms,
+                       mission_core_out_t * p_out)
+{
+    if ((p_mc->snap.calibrated & MISSION_CAL_ALL) != MISSION_CAL_ALL)
+    {
+        log_act(p_out, MISSION_LOG_NOT_CALIBRATED,
+                (int16_t)p_mc->snap.calibrated, 0);
+        return;
+    }
+    p_mc->snap.runs++;
+    p_mc->snap.pending_nav  = MISSION_NAV_NONE;
+    p_mc->snap.pending_char = '\0';
+    push(p_out, MISSION_ACT_NEW_RUN, 0u, 0u, (int16_t)p_mc->snap.runs, 0);
+    enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+}
+
+static void apply_param (mission_core_t * p_mc, uint16_t param_id,
+                         int32_t value, mission_core_out_t * p_out)
+{
+    switch (param_id)
+    {
+        case 1u:
+            p_mc->snap.cruise_mm_s = (uint16_t)value;
+        break;
+        case 2u:
+            p_mc->snap.slow_mm = (uint16_t)(value * 10);
+        break;
+        case 3u:
+            p_mc->snap.stop_mm = (uint16_t)(value * 10);
+        break;
+        case 4u:
+            p_mc->snap.lost_mm = (uint16_t)value;
+        break;
+        case 5u:
+            p_mc->snap.junction_mm = (uint16_t)value;
+        break;
+#if APP_BENCH
+        /* bring-up only (app_config.h): drive the hardware from the laptop */
+        case 101u:
+            motion(p_mc, p_out, MOTION_CMD_MOVE, (int16_t)value, 200);
+            return;
+        case 102u:
+            motion(p_mc, p_out, MOTION_CMD_TURN, (int16_t)value, 90);
+            return;
+        case 103u:
+            motion(p_mc, p_out, MOTION_CMD_MOVE, 1000, (int16_t)value);
+            return;
+#endif
+        default:
+            return;
+    }
+    update_speed_cap(p_mc);
+    log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id, (int16_t)value);
+}
+
+static bool seq_matches (mission_core_t *            p_mc,
+                         mission_types_evt_t const * p_ev)
+{
+    if (p_mc->b_waiting && ((uint8_t)p_ev->arg == p_mc->wait_seq)
+        && ((int32_t)MOTION_SRC_MISSION == p_ev->data))
+    {
+        p_mc->b_waiting = false;
+        return true;
+    }
+    return false;
+}
+
+/* ------------------------------------------------------------------ */
+static void push (mission_core_out_t * p_out, uint8_t kind, uint8_t cmd,
+                  uint8_t seq, int16_t arg0, int16_t arg1)
+{
+    if (p_out->n_acts < MISSION_ACT_MAX)
+    {
+        p_out->act[p_out->n_acts].kind = kind;
+        p_out->act[p_out->n_acts].cmd  = cmd;
+        p_out->act[p_out->n_acts].seq  = seq;
+        p_out->act[p_out->n_acts].arg0 = arg0;
+        p_out->act[p_out->n_acts].arg1 = arg1;
+        p_out->n_acts++;
+    }
+}
+
+static void motion (mission_core_t * p_mc, mission_core_out_t * p_out,
+                    uint8_t cmd, int16_t arg0, int16_t arg1)
+{
+    uint8_t seq = 0u;
+
+    if ((MOTION_CMD_MOVE == cmd) || (MOTION_CMD_TURN == cmd))
+    {
+        p_mc->motion_seq =
+            motion_types_seq_next(p_mc->motion_seq); /* 5 bits (CR1) */
+        seq             = p_mc->motion_seq;
+        p_mc->wait_seq  = seq;
+        p_mc->b_waiting = true;
+    }
+    push(p_out, MISSION_ACT_MOTION, cmd, seq, arg0, arg1);
+}
+
+static void set_auth (mission_core_t * p_mc, mission_core_out_t * p_out,
+                      uint8_t src)
+{
+    motion(p_mc, p_out, MOTION_CMD_SET_AUTH, (int16_t)src, 0);
+    p_mc->snap.auth = src;
+}
+
+static void scan (mission_core_out_t * p_out, uint8_t type, int16_t param)
+{
+    push(p_out, MISSION_ACT_SCAN, type, 0u, param, 0);
+}
+
+static void log_act (mission_core_out_t * p_out, uint8_t code, int16_t arg0,
+                     int16_t arg1)
+{
+    push(p_out, MISSION_ACT_LOG, code, 0u, arg0, arg1);
+}
+
+static bool is_active (uint8_t state)
+{
+    return (state >= MISSION_ST_LINE_FOLLOW)
+           && (state <= MISSION_ST_LINE_SEARCH);
+}
+
+static void update_speed_cap (mission_core_t * p_mc)
+{
+    uint16_t cap = p_mc->snap.cruise_mm_s;
+
+    if (p_mc->b_slow && (cap > MISSION_SLOW_SPEED_MM_S))
+    {
+        cap = MISSION_SLOW_SPEED_MM_S;
+    }
+    if (p_mc->b_hump && (cap > MISSION_HUMP_SPEED_MM_S))
+    {
+        cap = MISSION_HUMP_SPEED_MM_S;
+    }
+    p_mc->snap.speed_cap_mm_s = cap;
+}
+
+static uint8_t nav_steps (uint8_t nav, step_t steps[2])
+{
+    steps[0].cmd  = MOTION_CMD_MOVE;
+    steps[0].arg0 = MISSION_NAV_CENTRE_MM;
+    steps[0].arg1 = MISSION_NAV_SPEED_MM_S;
+    steps[1].cmd  = MOTION_CMD_TURN;
+    steps[1].arg1 = MISSION_TURN_RATE_DEG_S;
+    switch (nav)
+    {
+        case MISSION_NAV_LEFT:
+            steps[1].arg0 = 900;
+            return 2u;
+        case MISSION_NAV_RIGHT:
+            steps[1].arg0 = -900;
+            return 2u;
+        case MISSION_NAV_UTURN:
+            steps[1].arg0 = 1800;
+            return 2u;
+        default: /* STRAIGHT: just clear the crossing */
+            steps[0].arg0 = MISSION_NAV_STRAIGHT_MM;
+            return 1u;
+    }
+}
+
+static void nav_next (mission_core_t * p_mc, uint32_t now_ms,
+                      mission_core_out_t * p_out)
+{
+    step_t        steps[2];
+    uint8_t const count = nav_steps(p_mc->nav_exec, steps);
+
+    if (p_mc->step < count)
+    {
+        motion(p_mc, p_out, steps[p_mc->step].cmd, steps[p_mc->step].arg0,
+               steps[p_mc->step].arg1);
+        p_mc->step++;
+        p_mc->phase_ms = now_ms;
+    }
+    else
+    {
+        p_mc->nav_exec = MISSION_NAV_NONE;
+        enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+    }
 }
 
 /*** end of file ***/

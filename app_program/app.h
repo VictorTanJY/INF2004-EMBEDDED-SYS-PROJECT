@@ -178,37 +178,7 @@ Inline void app_reset_release (UW mask)
     }
 }
 
-/* Create and start a task.  prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or
-   0 for "any core".  Defined in app_main.c. */
-IMPORT ID app_main_start_task(FP entry, PRI pri, UW prc, char const * p_name);
-
-/* ---------------------------------------------------------------------
- *  Every subsystem provides these.  usermain() calls ALL the _init()
- *  functions first and only then ALL the _start() functions, so every
- *  kernel object exists before any task can use it.
- *    subsystemN_init()   create this subsystem's kernel objects
- *    subsystemN_start()  create and start this subsystem's tasks
- *    subsystemN_test()   on-target tests, only in test builds (make TEST=1)
- * --------------------------------------------------------------------- */
-IMPORT ER subsystem1_init(void);
-IMPORT ER subsystem2_init(void);
-IMPORT ER subsystem3_init(void);
-IMPORT ER subsystem4_init(void);
-IMPORT ER subsystem5_init(void);
-
-IMPORT ER subsystem1_start(void);
-IMPORT ER subsystem2_start(void);
-IMPORT ER subsystem3_start(void);
-IMPORT ER subsystem4_start(void);
-IMPORT ER subsystem5_start(void);
-
-#if APP_TEST
-IMPORT void subsystem1_test_run(void);
-IMPORT void subsystem2_test_run(void);
-IMPORT void subsystem3_test_run(void);
-IMPORT void subsystem4_test_run(void);
-IMPORT void subsystem5_test_run(void);
-#endif
+#include "app_main.h" /* app_main_start_task() */
 
 /* Print a readable message if a kernel call failed (negative error code) */
 #define CHECK(er, what)                                           \

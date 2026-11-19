@@ -31,6 +31,7 @@
 
 #define CON_MASTER \
     ((1uL << 0) | (2uL << 1) | (1uL << 5) | (1uL << 6) | (1uL << 8))
+
 /* master, fast mode, restart, slave off, TX_EMPTY_CTRL */
 #define CMD_READ        (1uL << 8)
 #define CMD_STOP        (1uL << 9)
@@ -41,6 +42,119 @@
 #define STATUS_TFE      (1uL << 2)
 
 #define I2C_TIMEOUT_US 2000u
+
+static bool timed_out(uint32_t t_start);
+static ER   set_target(uint8_t addr7);
+static ER   finish(uint32_t t_start);
+static void recovery_delay(void);
+static ER   scl_release(void);
+static ER   clear_bus(void);
+
+EXPORT ER drv_i2c1_init (void)
+{
+    /* I2C1 is not released at boot and has one owner: a full reset pulse
+       also recovers a wedged controller. */
+    ER bus_er;
+    set_w(RESETS_RESET, APP_REGS_RESET_I2C1);
+    bus_er = clear_bus();
+    app_reset_release(APP_REGS_RESET_I2C1);
+
+    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SDA), APP_REGS_FUNCSEL_I2C);
+    out_w(app_regs_pad(S4_PIN_IMU_SDA), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
+                                            | APP_REGS_PAD_PUE
+                                            | APP_REGS_PAD_SHEMITT);
+    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SCL), APP_REGS_FUNCSEL_I2C);
+    out_w(app_regs_pad(S4_PIN_IMU_SCL), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
+                                            | APP_REGS_PAD_PUE
+                                            | APP_REGS_PAD_SHEMITT);
+
+    out_w(IC_ENABLE, 0u);
+    out_w(IC_CON, CON_MASTER);
+    out_w(IC_RX_TL, 0u);
+    out_w(IC_TX_TL, 0u);
+    out_w(IC_FS_SCL_HCNT, 500u);
+    out_w(IC_FS_SCL_LCNT, 750u);
+    out_w(IC_FS_SPKLEN, 11u);
+    out_w(IC_SDA_HOLD, 38u);
+    if (bus_er != E_OK)
+    {
+        return bus_er;
+    }
+    return (750u == in_w(IC_FS_SCL_LCNT)) ? E_OK : E_IO;
+}
+
+EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
+{
+    uint32_t t_start;
+    ER       err = set_target(addr7);
+
+    if (err != E_OK)
+    {
+        return err;
+    }
+    t_start = (uint32_t)app_time_us();
+    out_w(IC_DATA_CMD, reg);
+    out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
+    return finish(t_start);
+}
+
+EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
+                         uint8_t n_bytes)
+{
+    uint32_t t_start;
+    ER       err;
+    uint8_t  idx;
+
+    if ((0 == p_buf) || (addr7 > 0x7Fu) || (0u == n_bytes) || (n_bytes > 16u))
+    {
+        return E_PAR;
+    }
+    err = set_target(addr7);
+    if (err != E_OK)
+    {
+        return err;
+    }
+    t_start = (uint32_t)app_time_us();
+    out_w(IC_DATA_CMD, reg); /* register address */
+    for (idx = 0u; idx < n_bytes; idx++)
+    {
+        uint32_t cmd = CMD_READ;
+
+        if (0u == idx)
+        {
+            cmd |= CMD_RESTART;
+        }
+        if (idx == (n_bytes - 1u))
+        {
+            cmd |= CMD_STOP;
+        }
+        out_w(IC_DATA_CMD, cmd);
+    }
+    err = finish(t_start);
+    if (err != E_OK)
+    {
+        return err;
+    }
+    for (idx = 0u; idx < n_bytes; idx++)
+    {
+        while (0u == in_w(IC_RXFLR))
+        {
+            if (timed_out(t_start))
+            {
+                return E_TMOUT;
+            }
+        }
+        p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
+    }
+    return E_OK;
+}
+
+EXPORT ER drv_i2c1_probe (uint8_t addr7)
+{
+    uint8_t byte;
+
+    return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
+}
 
 static bool timed_out (uint32_t t_start)
 {
@@ -161,112 +275,6 @@ static ER clear_bus (void)
         err = E_IO;
     }
     return err;
-}
-
-EXPORT ER drv_i2c1_init (void)
-{
-    /* I2C1 is not released at boot and has one owner: a full reset pulse
-       also recovers a wedged controller. */
-    ER bus_er;
-    set_w(RESETS_RESET, APP_REGS_RESET_I2C1);
-    bus_er = clear_bus();
-    app_reset_release(APP_REGS_RESET_I2C1);
-
-    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SDA), APP_REGS_FUNCSEL_I2C);
-    out_w(app_regs_pad(S4_PIN_IMU_SDA), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
-                                            | APP_REGS_PAD_PUE
-                                            | APP_REGS_PAD_SHEMITT);
-    out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SCL), APP_REGS_FUNCSEL_I2C);
-    out_w(app_regs_pad(S4_PIN_IMU_SCL), APP_REGS_PAD_IE | APP_REGS_PAD_DRIVE_4MA
-                                            | APP_REGS_PAD_PUE
-                                            | APP_REGS_PAD_SHEMITT);
-
-    out_w(IC_ENABLE, 0u);
-    out_w(IC_CON, CON_MASTER);
-    out_w(IC_RX_TL, 0u);
-    out_w(IC_TX_TL, 0u);
-    out_w(IC_FS_SCL_HCNT, 500u);
-    out_w(IC_FS_SCL_LCNT, 750u);
-    out_w(IC_FS_SPKLEN, 11u);
-    out_w(IC_SDA_HOLD, 38u);
-    if (bus_er != E_OK)
-    {
-        return bus_er;
-    }
-    return (750u == in_w(IC_FS_SCL_LCNT)) ? E_OK : E_IO;
-}
-
-EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
-{
-    uint32_t t_start;
-    ER       err = set_target(addr7);
-
-    if (err != E_OK)
-    {
-        return err;
-    }
-    t_start = (uint32_t)app_time_us();
-    out_w(IC_DATA_CMD, reg);
-    out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
-    return finish(t_start);
-}
-
-EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
-                         uint8_t n_bytes)
-{
-    uint32_t t_start;
-    ER       err;
-    uint8_t  idx;
-
-    if ((0 == p_buf) || (addr7 > 0x7Fu) || (0u == n_bytes) || (n_bytes > 16u))
-    {
-        return E_PAR;
-    }
-    err = set_target(addr7);
-    if (err != E_OK)
-    {
-        return err;
-    }
-    t_start = (uint32_t)app_time_us();
-    out_w(IC_DATA_CMD, reg); /* register address */
-    for (idx = 0u; idx < n_bytes; idx++)
-    {
-        uint32_t cmd = CMD_READ;
-
-        if (0u == idx)
-        {
-            cmd |= CMD_RESTART;
-        }
-        if (idx == (n_bytes - 1u))
-        {
-            cmd |= CMD_STOP;
-        }
-        out_w(IC_DATA_CMD, cmd);
-    }
-    err = finish(t_start);
-    if (err != E_OK)
-    {
-        return err;
-    }
-    for (idx = 0u; idx < n_bytes; idx++)
-    {
-        while (0u == in_w(IC_RXFLR))
-        {
-            if (timed_out(t_start))
-            {
-                return E_TMOUT;
-            }
-        }
-        p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
-    }
-    return E_OK;
-}
-
-EXPORT ER drv_i2c1_probe (uint8_t addr7)
-{
-    uint8_t byte;
-
-    return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
 }
 
 /*** end of file ***/
