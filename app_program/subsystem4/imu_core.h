@@ -21,8 +21,8 @@
 #define IMU_EV_LIFT       0x10u /* imu_core_t.lift_rise_mg valid */
 #define IMU_EV_MOTION     0x20u /* imu_core_t.motion changed     */
 #define IMU_EV_RAMP       0x40u /* a climb > 600 mm was a ramp   */
-#define IMU_EV_RISE_MAX   0x80u /* imu_core_t.rise_max_mg is a new run maximum \
-                                 */
+/* imu_core_t.rise_max_mg is a new run maximum */
+#define IMU_EV_RISE_MAX 0x80u
 
 typedef struct
 {
@@ -132,3 +132,5 @@ void     imu_snap_unpack(uint32_t const * p_words, imu_snap_t * p_snap);
 uint32_t imu_snap_layout_bits(void);
 
 #endif /* IMU_CORE_H */
+
+/*** end of file ***/

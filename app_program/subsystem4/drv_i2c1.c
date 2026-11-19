@@ -124,9 +124,9 @@ static ER clear_bus (void)
     out_w(GPIO(S4_PIN_IMU_SCL),
           GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
     err = scl_release();
-    if (E_OK == err && (0u == (in_w(GPIO_IN) & sda)))
+    if ((E_OK == err) && (0u == (in_w(GPIO_IN) & sda)))
     {
-        for (idx = 0u; idx < 9u && (0u == (in_w(GPIO_IN) & sda)); idx++)
+        for (idx = 0u; (idx < 9u) && (0u == (in_w(GPIO_IN) & sda)); idx++)
         {
             out_w(GPIO_OE_SET, scl);
             recovery_delay();
@@ -148,7 +148,7 @@ static ER clear_bus (void)
         }
     }
     out_w(GPIO_OE_CLR, sda | scl);
-    if (E_OK == err && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
+    if ((E_OK == err) && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
     {
         err = E_IO;
     }
@@ -258,3 +258,5 @@ EXPORT ER drv_i2c1_probe (uint8_t addr7)
 
     return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
 }
+
+/*** end of file ***/

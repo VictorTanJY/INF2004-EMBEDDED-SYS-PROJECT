@@ -199,3 +199,5 @@ EXPORT void obst_put_snap (obst_snap_t const * p_in)
     }
     app_unlock(&g_obst_lock, sts);
 }
+
+/*** end of file ***/

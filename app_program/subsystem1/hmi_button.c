@@ -58,3 +58,5 @@ hmi_btn_ev_t hmi_btn_update (hmi_btn_t * p_btn, bool b_pressed_raw,
     }
     return event;
 }
+
+/*** end of file ***/

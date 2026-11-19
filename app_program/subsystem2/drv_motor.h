@@ -27,3 +27,5 @@ IMPORT void drv_motor_connect(void);
 IMPORT void drv_motor_write(int16_t duty_l, int16_t duty_r);
 
 #endif /* DRV_MOTOR_H */
+
+/*** end of file ***/

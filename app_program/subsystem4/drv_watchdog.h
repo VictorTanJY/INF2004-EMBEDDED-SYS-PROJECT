@@ -26,3 +26,5 @@ IMPORT void drv_watchdog_feed(void);
 IMPORT bool drv_watchdog_caused_reboot(void);
 
 #endif /* DRV_WATCHDOG_H */
+
+/*** end of file ***/

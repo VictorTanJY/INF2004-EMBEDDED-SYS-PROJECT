@@ -47,3 +47,5 @@ IMPORT void app_gpio_irq_detach(uint32_t pin);
 IMPORT uint32_t app_gpio_irq_count(void);
 
 #endif /* APP_GPIO_IRQ_H */
+
+/*** end of file ***/

@@ -37,3 +37,5 @@ IMPORT ER drv_lsm303_read_mag(int16_t mag[3]);
 IMPORT uint32_t drv_lsm303_diag(void);
 
 #endif /* DRV_LSM303_H */
+
+/*** end of file ***/

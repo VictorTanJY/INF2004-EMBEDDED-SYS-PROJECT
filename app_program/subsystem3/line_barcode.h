@@ -100,3 +100,5 @@ bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
                       bc_out_t * p_out);
 
 #endif /* LINE_BARCODE_H */
+
+/*** end of file ***/

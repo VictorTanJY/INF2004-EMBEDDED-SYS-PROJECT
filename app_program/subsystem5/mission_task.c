@@ -20,8 +20,8 @@
 #include "../subsystem4/subsystem4.h"
 
 /* mission_core.c hard-codes these two APP_SRC values (pure module). */
-typedef char s5_check_src_line_t[(APP_SRC_LINE == 3u) ? 1 : -1];
-typedef char s5_check_src_imu_t[(APP_SRC_SAFETY_IMU == 4u) ? 1 : -1];
+typedef uint8_t s5_check_src_line_t[(3u == APP_SRC_LINE) ? 1 : -1];
+typedef uint8_t s5_check_src_imu_t[(4u == APP_SRC_SAFETY_IMU) ? 1 : -1];
 
 static mission_core_t g_mc;
 static uint8_t        g_scan_seq;
@@ -41,26 +41,26 @@ static ER mission_motion (mission_act_t const * p_a)
                                                          (uint16_t)p_a->arg1)
                                    : motion_move_backward(src, p_a->seq, amount,
                                                           (uint16_t)p_a->arg1);
-            break;
+        break;
 
         case MOTION_CMD_TURN:
             err = (p_a->arg0 >= 0) ? motion_turn_left(src, p_a->seq, amount,
                                                       (uint16_t)p_a->arg1)
                                    : motion_turn_right(src, p_a->seq, amount,
                                                        (uint16_t)p_a->arg1);
-            break;
+        break;
 
         case MOTION_CMD_STOP:
             err = motion_stop(src, p_a->seq);
-            break;
+        break;
 
         case MOTION_CMD_DRIVE:
             err = motion_drive(src, p_a->seq, p_a->arg0, p_a->arg1);
-            break;
+        break;
 
         default:
             err = motion_post(src, p_a->seq, p_a->cmd, p_a->arg0, p_a->arg1);
-            break;
+        break;
     }
     return err;
 }
@@ -84,22 +84,22 @@ static void run_actions (mission_out_t const * p_out)
                                            (uint8_t)APP_SRC_OBST_MISSION, 70u,
                                            (int32_t)p_a->cmd);
                 }
-                break;
+            break;
 
             case MISSION_ACT_SCAN:
                 g_scan_seq++;
                 (void)scan_request(p_a->cmd, g_scan_seq, p_a->arg0);
-                break;
+            break;
 
             case MISSION_ACT_SAFETY_RESET:
                 safety_request_reset();
-                break;
+            break;
 
             case MISSION_ACT_STATE:
                 (void)comms_telem_post((uint8_t)COMMS_KIND_STATE,
                                        (uint8_t)APP_SRC_OBST_MISSION,
                                        (uint16_t)p_a->arg0, 0);
-                break;
+            break;
 
             case MISSION_ACT_LOG:
                 if (MISSION_LOG_SUMMARY == p_a->cmd)
@@ -120,10 +120,10 @@ static void run_actions (mission_out_t const * p_out)
                         (int32_t)(((uint32_t)(uint16_t)p_a->arg0 << 16)
                                   | (uint16_t)p_a->arg1));
                 }
-                break;
+            break;
 
             default: /* NEW_RUN: ImuTask follows snap.runs */
-                break;
+            break;
         }
     }
 }
@@ -183,3 +183,5 @@ EXPORT void mission_task (INT stacd, void * p_exinf)
         mission_put_snap(&g_mc.snap);
     }
 }
+
+/*** end of file ***/

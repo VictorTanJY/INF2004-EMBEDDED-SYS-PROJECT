@@ -183,3 +183,5 @@ int32_t app_mul_q15 (int32_t value, int32_t q15)
 {
     return (int32_t)(((int64_t)value * (int64_t)q15) / 32768);
 }
+
+/*** end of file ***/

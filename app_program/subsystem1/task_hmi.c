@@ -87,3 +87,5 @@ EXPORT void hmi_task (INT stacd, void * p_exinf)
         }
     }
 }
+
+/*** end of file ***/

@@ -305,3 +305,5 @@ bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec,
 void comms_ring_pop(comms_ring_t * p_ring);
 
 #endif /* COMMS_PROTO_H */
+
+/*** end of file ***/

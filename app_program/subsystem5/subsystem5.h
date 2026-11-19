@@ -66,3 +66,5 @@ IMPORT void mission_task(INT stacd, void * p_exinf);
 IMPORT void obstacle_task(INT stacd, void * p_exinf);
 
 #endif /* SUBSYSTEM5_H */
+
+/*** end of file ***/

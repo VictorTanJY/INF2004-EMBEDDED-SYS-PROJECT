@@ -203,3 +203,5 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
 
     return E_OK;
 }
+
+/*** end of file ***/

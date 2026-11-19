@@ -33,8 +33,8 @@
 
 #define SAFETY_WD_TIMEOUT_MS 200u
 #define SAFETY_TOO_CLOSE_MM  80u
-#define SAFETY_LOG_HB_MISSED 41u /* comms_rec_t code: data = missed-task mask \
-                                  */
+/* comms_rec_t code: data = missed-task mask */
+#define SAFETY_LOG_HB_MISSED 41u
 
 IMPORT volatile uint32_t g_safety_latched; /* subsystem4.c */
 
@@ -243,3 +243,5 @@ EXPORT void safety_task (INT stacd, void * p_exinf)
         }
     }
 }
+
+/*** end of file ***/

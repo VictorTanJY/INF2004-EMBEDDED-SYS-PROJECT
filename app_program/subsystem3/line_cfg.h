@@ -102,8 +102,8 @@
 /* Steering ramp (2 Nov): the turn command changes by at most this much per
    10 ms block, so straight -> full steering (850) takes ~0.09 s instead of
    one step.  Lower = smoother but slower to react; 2000 = off (instant). */
-#define LINE_OMEGA_STEP \
-    2000 /* mrad/s per 10 ms: ramp off (50 and 100 lost the line on curves) */
+/* mrad/s per 10 ms: ramp off (50 and 100 lost the line on curves) */
+#define LINE_OMEGA_STEP 2000
 
 /* ---- Junction / line loss (FR2) -------------------------------------- */
 #define LINE_STRAIGHT_OMEGA      500    /* |omega| < 0.5 rad/s ...   */
@@ -186,3 +186,5 @@
 #define LINE_NOFLOOR_UM   40000u /* 40 mm */
 
 #endif /* LINE_CFG_H */
+
+/*** end of file ***/

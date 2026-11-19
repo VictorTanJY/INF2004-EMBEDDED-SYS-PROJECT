@@ -12,11 +12,11 @@
 #define WD_TICK            (WATCHDOG_BASE_ADDR + 0x2Cu)
 
 #define WD_CTRL_ENABLE (1uL << 30)
-#define WD_CTRL_PAUSE_ALL \
-    ((1uL << 24) | (1uL << 25) | (1uL << 26)) /* JTAG, DBG0, DBG1 */
-#define WD_TICK_ENABLE (1uL << 9)
-#define WD_TICK_CYCLES 12u /* clk_ref 12 MHz -> 1 MHz */
-#define WD_LOAD_MAX    0x00FFFFFFu
+/* JTAG, DBG0, DBG1 */
+#define WD_CTRL_PAUSE_ALL ((1uL << 24) | (1uL << 25) | (1uL << 26))
+#define WD_TICK_ENABLE    (1uL << 9)
+#define WD_TICK_CYCLES    12u /* clk_ref 12 MHz -> 1 MHz */
+#define WD_LOAD_MAX       0x00FFFFFFu
 
 #define PSM_WDSEL     (0x40010000u + 0x08u)
 #define PSM_WDSEL_ALL 0x0001FFFCu /* everything except ROSC / XOSC */
@@ -56,3 +56,5 @@ EXPORT bool drv_watchdog_caused_reboot (void)
 {
     return ((in_w(WD_REASON) & 0x3u) != 0u);
 }
+
+/*** end of file ***/

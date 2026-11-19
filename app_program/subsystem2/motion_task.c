@@ -21,8 +21,8 @@
 #include "../subsystem4/subsystem4.h"
 #include "../subsystem5/subsystem5.h"
 
-#define MOTION_WAKE_TIMEOUT_MS \
-    30 /* still runs (and heartbeats) if motion_cyc stops */
+/* still runs (and heartbeats) if motion_cyc stops */
+#define MOTION_WAKE_TIMEOUT_MS 30
 
 static motion_core_t g_core;
 
@@ -131,31 +131,31 @@ static void report_events (void)
                 (void)mission_post((uint8_t)MISSION_EV_MOTION_DONE,
                                    (uint8_t)APP_SRC_MOTION, (uint16_t)event.seq,
                                    (int32_t)event.src);
-                break;
+            break;
 
             case MOTION_EV_FAILED:
                 (void)mission_post((uint8_t)MISSION_EV_MOTION_FAILED,
                                    (uint8_t)APP_SRC_MOTION, (uint16_t)event.seq,
                                    (int32_t)event.src);
-                break;
+            break;
 
             case MOTION_EV_STALL:
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_STALL);
-                break;
+            break;
 
             case MOTION_EV_ENC_FAULT:
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
                 (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT,
                                        (uint8_t)APP_SRC_MOTION, 0u,
                                        (int32_t)SAFETY_FLT_ENC_FAULT);
-                break;
+            break;
 
             case MOTION_EV_ENC_OK:
                 (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_ENC_FAULT);
-                break;
+            break;
 
             default:
-                break;
+            break;
         }
     }
 }
@@ -236,3 +236,5 @@ EXPORT void motion_task (INT stacd, void * p_exinf)
 #endif
     }
 }
+
+/*** end of file ***/

@@ -68,3 +68,5 @@ IMPORT uint32_t comms_telem_drops(void);
 IMPORT void hmi_task(INT stacd, void * p_exinf);
 
 #endif /* SUBSYSTEM1_H */
+
+/*** end of file ***/

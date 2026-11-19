@@ -1,8 +1,8 @@
 /*
- *	app_pack.c
- *	Minimum-bit data representation (Change Requirement 1): byte streams
- *	for MQTT frames, Code 39 symbols and table-driven record packing.
- *	Pure C; see app_pack.h for the rules.
+ *  app_pack.c
+ *  Minimum-bit data representation (Change Requirement 1): byte streams
+ *  for MQTT frames, Code 39 symbols and table-driven record packing.
+ *  Pure C; see app_pack.h for the rules.
  */
 
 #include <string.h>
@@ -11,8 +11,8 @@
 /* Code 39 data characters; a symbol index is the position here + 1. */
 static char const g_symbols[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
-typedef char
-    pk_check_sym_t[((sizeof(g_symbols) - 1u) == PK_SYM_COUNT) ? 1 : -1];
+typedef uint8_t
+    pk_check_sym_t[(PK_SYM_COUNT == (sizeof(g_symbols) - 1u)) ? 1 : -1];
 
 /* ---- Byte streams, LSB first ---------------------------------------- */
 void pk_writer_init (pk_writer_t * p_w, uint8_t * p_buf, uint16_t cap)
@@ -237,10 +237,10 @@ void pk_pack_rec (pk_field_t const * p_f, uint16_t n_fields, void const * p_rec,
         {
             case PK_S:
                 value = pk_off_s(pk_member_s(p_rec, &p_f[idx]), width);
-                break;
+            break;
             case PK_W:
                 value = raw;
-                break;
+            break;
             case PK_UN:
             {
                 uint32_t const none =
@@ -253,14 +253,14 @@ void pk_pack_rec (pk_field_t const * p_f, uint16_t n_fields, void const * p_rec,
                 {
                     value = pk_mask(width) - 1u;
                 }
-                break;
             }
+            break;
             case PK_SYM:
                 value = pk_sym_index((char)(uint8_t)raw);
-                break;
+            break;
             default: /* PK_U */
                 value = pk_sat_u(raw, width);
-                break;
+            break;
         }
         pk_word_put(p_words, &pos, value, width);
     }
@@ -284,17 +284,19 @@ void pk_unpack_rec (pk_field_t const * p_f, uint16_t n_fields,
         {
             case PK_S:
                 raw = (uint32_t)pk_unoff_s(value, width);
-                break;
+            break;
             case PK_UN:
                 raw = (value == pk_mask(width)) ? 0xFFFFFFFFuL : value;
-                break;
+            break;
             case PK_SYM:
                 raw = (uint8_t)pk_sym_char((uint8_t)value);
-                break;
+            break;
             default: /* PK_U, PK_W */
                 raw = value;
-                break;
+            break;
         }
         pk_member_set(p_rec, &p_f[idx], raw);
     }
 }
+
+/*** end of file ***/

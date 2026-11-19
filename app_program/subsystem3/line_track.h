@@ -111,3 +111,5 @@ void     line_snap_unpack(uint32_t const * p_words, line_snap_t * p_snap);
 uint32_t line_snap_layout_bits(void);
 
 #endif /* LINE_TRACK_H */
+
+/*** end of file ***/

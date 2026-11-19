@@ -13,13 +13,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "app_types.h"
 #include "app_pack.h"
 #include "imu_core.h"
 #include "imu_cfg.h"
 #include "safety_core.h"
 
-static int g_pass;
-static int g_fail;
+static int32_t g_pass;
+static int32_t g_fail;
 
 #define CHECK(id, cond)                                                      \
     do                                                                       \
@@ -41,14 +42,15 @@ static uint8_t    g_ev;
 
 /* Accelerometer reading (mg, raw axes) for chassis pitch theta (deg),
    roll phi (deg) and a forward linear acceleration a_lin (mm/s^2). */
-static void accel_for (double theta, double phi, double a_lin, int32_t out[3])
+static void accel_for (float64_t theta, float64_t phi, float64_t a_lin,
+                       int32_t out[3])
 {
-    double const time_s  = theta * M_PI / 180.0;
-    double const pos     = phi * M_PI / 180.0;
-    double       fwd     = 1000.0 * sin(time_s) + a_lin / 9.807;
-    double       left    = 1000.0 * cos(time_s) * sin(pos);
-    double       up_mg   = 1000.0 * cos(time_s) * cos(pos);
-    double       body[3] = {0.0, 0.0, 0.0};
+    float64_t const time_s  = theta * M_PI / 180.0;
+    float64_t const pos     = phi * M_PI / 180.0;
+    float64_t       fwd     = 1000.0 * sin(time_s) + a_lin / 9.807;
+    float64_t       left    = 1000.0 * cos(time_s) * sin(pos);
+    float64_t       up_mg   = 1000.0 * cos(time_s) * cos(pos);
+    float64_t       body[3] = {0.0, 0.0, 0.0};
 
     body[IMU_AXIS_FWD]  = fwd * IMU_SIGN_FWD;
     body[IMU_AXIS_LEFT] = left * IMU_SIGN_LEFT;
@@ -58,8 +60,8 @@ static void accel_for (double theta, double phi, double a_lin, int32_t out[3])
     out[2]              = (int32_t)lround(body[2]);
 }
 
-static void step (double theta, double phi, double a_lin, int32_t value,
-                  int32_t ds_um, int32_t yaw)
+static void step (float64_t theta, float64_t phi, float64_t a_lin,
+                  int32_t value, int32_t ds_um, int32_t yaw)
 {
     int32_t accel[3];
 
@@ -79,7 +81,8 @@ static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
     g_ev |= imu_core_step(&g_ic, accel, NULL, ds_um, value, 0, 10u, g_now);
 }
 
-static double z_of (double x_val, double start, double len, double height)
+static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
+                       float64_t height)
 {
     if ((x_val < start) || (x_val > start + len))
     {
@@ -89,10 +92,11 @@ static double z_of (double x_val, double start, double len, double height)
 }
 
 /* Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */
-static int run_hump (double h_mm, double len_mm, int * p_starts, int * p_ends)
+static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
+                         int32_t * p_ends)
 {
-    double const len = IMU_WHEELBASE_MM;
-    double       x_val;
+    float64_t const len = IMU_WHEELBASE_MM;
+    float64_t       x_val;
 
     imu_core_init(&g_ic);
     g_now     = 0u;
@@ -100,10 +104,10 @@ static int run_hump (double h_mm, double len_mm, int * p_starts, int * p_ends)
     *p_ends   = 0;
     for (x_val = 0.0; x_val < 1500.0; x_val += 3.0)
     {
-        double theta = atan((z_of(x_val + len, 300.0, len_mm, h_mm)
-                             - z_of(x_val, 300.0, len_mm, h_mm))
-                            / len)
-                       * 180.0 / M_PI;
+        float64_t theta = atan((z_of(x_val + len, 300.0, len_mm, h_mm)
+                                - z_of(x_val, 300.0, len_mm, h_mm))
+                               / len)
+                          * 180.0 / M_PI;
 
         g_ev = 0u;
         step(theta, 0.0, 0.0, 300, 3000, 0);
@@ -116,19 +120,19 @@ static int run_hump (double h_mm, double len_mm, int * p_starts, int * p_ends)
             (*p_ends)++;
         }
     }
-    return (int)g_ic.last_hump_mm;
+    return (int32_t)g_ic.last_hump_mm;
 }
 
 /* Drive 1.2 m at 100 mm/s with one wheel over a cosine hump of height
    h_mm (side = +1 right wheel, -1 left).  The raised wheel rolls the
    chassis by asin(z / track) and tips the nose down by atan(z / 2 / L)
    (drive axle behind the caster).  Returns the reported peak. */
-static int run_side_hump (double h_mm, double len_mm, int side, int * p_starts,
-                          int * p_ends)
+static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
+                              int32_t * p_starts, int32_t * p_ends)
 {
-    double const period = IMU_SIDE_LEVER_MM;
-    double const len    = IMU_WHEELBASE_MM;
-    double       x_val;
+    float64_t const period = IMU_SIDE_LEVER_MM;
+    float64_t const len    = IMU_WHEELBASE_MM;
+    float64_t       x_val;
 
     imu_core_init(&g_ic);
     g_now     = 0u;
@@ -136,9 +140,9 @@ static int run_side_hump (double h_mm, double len_mm, int side, int * p_starts,
     *p_ends   = 0;
     for (x_val = 0.0; x_val < 1200.0; x_val += 1.0)
     {
-        double z_val = z_of(x_val, 300.0, len_mm, h_mm);
-        double roll  = side * asin(z_val / period) * 180.0 / M_PI;
-        double theta = -atan((0.5 * z_val) / len) * 180.0 / M_PI;
+        float64_t z_val = z_of(x_val, 300.0, len_mm, h_mm);
+        float64_t roll  = side * asin(z_val / period) * 180.0 / M_PI;
+        float64_t theta = -atan((0.5 * z_val) / len) * 180.0 / M_PI;
 
         g_ev = 0u;
         step(theta, roll, 0.0, 100, 1000, 0);
@@ -151,7 +155,7 @@ static int run_side_hump (double h_mm, double len_mm, int side, int * p_starts,
             (*p_ends)++;
         }
     }
-    return (int)g_ic.last_hump_mm;
+    return (int32_t)g_ic.last_hump_mm;
 }
 
 /* S4-H11: Change Requirement 1, the packed IMU snapshot */
@@ -161,9 +165,9 @@ static void test_pack_s4 (void)
     imu_snap_t ret;
     uint32_t   words[IMU_SNAP_WORDS];
 
-    CHECK("S4-H11", IMU_SNAP_BITS == imu_snap_layout_bits()
-                        && IMU_SNAP_WORDS == PK_WORDS(IMU_SNAP_BITS)
-                        && sizeof(words) < sizeof(snap));
+    CHECK("S4-H11", (IMU_SNAP_BITS == imu_snap_layout_bits())
+                        && (IMU_SNAP_WORDS == PK_WORDS(IMU_SNAP_BITS))
+                        && (sizeof(words) < sizeof(snap)));
     memset(&snap, 0, sizeof(snap));
     snap.t_ms             = 99u;
     snap.pitch_cdeg       = -9000;
@@ -197,40 +201,40 @@ static void test_pack_s4 (void)
     snap.hump_max_mm = 5000u; /* saturate */
     imu_snap_pack(&snap, words);
     imu_snap_unpack(words, &ret);
-    CHECK("S4-H11", 255u == ret.humps && 1023u == ret.hump_max_mm);
+    CHECK("S4-H11", (255u == ret.humps) && (1023u == ret.hump_max_mm));
 }
 
 int main (void)
 {
     /* S4-H01: humps of known height, 300 mm long: NFR7 (+-20 % or +-5 mm) */
     {
-        double const heights[3] = {15.0, 20.0, 30.0};
-        int          idx;
+        float64_t const heights[3] = {15.0, 20.0, 30.0};
+        int32_t         idx;
 
         for (idx = 0; idx < 3; idx++)
         {
-            int    start_idx;
-            int    end_idx;
-            int    peak = run_hump(heights[idx], 300.0, &start_idx, &end_idx);
-            double tol  = fmax(5.0, 0.2 * heights[idx]);
+            int32_t start_idx;
+            int32_t end_idx;
+            int32_t peak  = run_hump(heights[idx], 300.0, &start_idx, &end_idx);
+            float64_t tol = fmax(5.0, 0.2 * heights[idx]);
 
             printf("hump %.0f mm x 300 mm: reported %d mm\n", heights[idx],
                    peak);
-            CHECK("S4-H01", 1 == start_idx && 1 == end_idx);
+            CHECK("S4-H01", (1 == start_idx) && (1 == end_idx));
             CHECK("S4-H01", fabs(peak - heights[idx]) <= tol);
         }
         CHECK("S4-H01",
-              g_ic.hump_max_mm == g_ic.last_hump_mm && 1u == g_ic.humps);
+              (g_ic.hump_max_mm == g_ic.last_hump_mm) && (1u == g_ic.humps));
     }
     /* S4-H01b: known limit of the Week 6 threshold.  A 10 mm x 300 mm hump
        tilts this chassis (L = IMU_WHEELBASE_MM) to only ~4.8 deg, below the
        +5 deg climb threshold, so it is NOT detected.  If the course has humps
        this low, lower IMU_HUMP_ON_CDEG once A8 has measured the pitch noise. */
     {
-        int start_idx;
-        int end_idx;
+        int32_t start_idx;
+        int32_t end_idx;
         (void)run_hump(10.0, 300.0, &start_idx, &end_idx);
-        CHECK("S4-H01b", 0 == start_idx && 0 == end_idx);
+        CHECK("S4-H01b", (0 == start_idx) && (0 == end_idx));
         printf("hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - "
                "known limit\n");
     }
@@ -238,19 +242,19 @@ int main (void)
     /* S4-H10: humps under ONE wheel (roll): 10 / 20 / 30 mm x 300 mm, both
        sides, reported within NFR7 (+-20 % or +-5 mm) */
     {
-        double const heights[3] = {10.0, 20.0, 30.0};
-        int          idx;
-        int          side;
+        float64_t const heights[3] = {10.0, 20.0, 30.0};
+        int32_t         idx;
+        int32_t         side;
 
         for (side = -1; side <= 1; side += 2)
         {
             for (idx = 0; idx < 3; idx++)
             {
-                int start_idx;
-                int end_idx;
-                int peak = run_side_hump(heights[idx], 300.0, side, &start_idx,
-                                         &end_idx);
-                double tol = fmax(5.0, 0.2 * heights[idx]);
+                int32_t   start_idx;
+                int32_t   end_idx;
+                int32_t   peak = run_side_hump(heights[idx], 300.0, side,
+                                               &start_idx, &end_idx);
+                float64_t tol  = fmax(5.0, 0.2 * heights[idx]);
 
                 if (side > 0)
                 {
@@ -258,14 +262,14 @@ int main (void)
                            heights[idx], peak);
                 }
                 CHECK("S4-H10",
-                      1 == start_idx && 1 == end_idx && 1u == g_ic.humps);
+                      (1 == start_idx) && (1 == end_idx) && (1u == g_ic.humps));
                 CHECK("S4-H10", fabs(peak - heights[idx]) <= tol);
             }
         }
     }
     /* S4-H10b: robot lifted on one side by hand, wheels still: no hump */
     {
-        int kdx;
+        int32_t kdx;
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
@@ -273,13 +277,13 @@ int main (void)
         {
             step(0.0, 10.0, 0.0, 0, 0, 0);
         }
-        CHECK("S4-H10b", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END))
-                             && 0u == g_ic.humps);
+        CHECK("S4-H10b", (0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)))
+                             && (0u == g_ic.humps));
     }
     /* S4-H10c: a short sideways jolt while driving (6 deg for 10 mm): no hump
      */
     {
-        int kdx;
+        int32_t kdx;
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
@@ -295,13 +299,13 @@ int main (void)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 0);
         }
-        CHECK("S4-H10c", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END))
-                             && 0u == g_ic.humps);
+        CHECK("S4-H10c", (0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)))
+                             && (0u == g_ic.humps));
     }
 
     /* S4-H02: hard acceleration and braking on flat ground: no hump */
     {
-        int     kdx;
+        int32_t kdx;
         int32_t value = 0;
 
         imu_core_init(&g_ic);
@@ -309,7 +313,7 @@ int main (void)
         g_ev  = 0u;
         for (kdx = 0; kdx < 400; kdx++)
         {
-            double val_a =
+            float64_t val_a =
                 (0 == (kdx / 50) % 2) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
             value += (int32_t)(val_a / 100.0);
             if (value < 0)
@@ -325,7 +329,7 @@ int main (void)
 
     /* S4-H03: a long 8 deg ramp is a ramp, not a hump */
     {
-        int kdx;
+        int32_t kdx;
 
         imu_core_init(&g_ic);
         g_now = 0u;
@@ -335,7 +339,7 @@ int main (void)
             step(8.0, 0.0, 0.0, 300, 3000, 0);
         }
         CHECK("S4-H03",
-              (g_ev & IMU_EV_RAMP) != 0u && 0u == (g_ev & IMU_EV_HUMP_END));
+              ((g_ev & IMU_EV_RAMP) != 0u) && (0u == (g_ev & IMU_EV_HUMP_END)));
     }
 
     /* S4-H04: tilt on above 30 deg held for IMU_TILT_HOLD_MS, off below
@@ -344,40 +348,41 @@ int main (void)
     g_now = 0u;
     g_ev  = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 10; kdx++)
         {
             step(35.0, 0.0, 0.0, 0, 0, 0);
         }
     }
-    CHECK("S4-H04",
-          0u == (g_ev & IMU_EV_TILT_ON) && !g_ic.b_tilt); /* 100 ms: not yet */
+    CHECK("S4-H04", (0u == (g_ev & IMU_EV_TILT_ON))
+                        && !g_ic.b_tilt); /* 100 ms: not yet */
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step(35.0, 0.0, 0.0, 0, 0, 0);
         }
     }
-    CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) != 0u && g_ic.b_tilt);
+    CHECK("S4-H04", ((g_ev & IMU_EV_TILT_ON) != 0u) && g_ic.b_tilt);
     g_ev = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 10; kdx++)
         {
             step(20.0, 0.0, 0.0, 0, 0, 0);
         }
     }
-    CHECK("S4-H04", (g_ev & IMU_EV_TILT_OFF) != 0u && !g_ic.b_tilt);
+    CHECK("S4-H04", ((g_ev & IMU_EV_TILT_OFF) != 0u) && !g_ic.b_tilt);
     g_ev = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, -40.0, 0.0, 0, 0, 0);
         }
     }
-    CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) != 0u && g_ic.roll_cdeg < -3000);
+    CHECK("S4-H04",
+          ((g_ev & IMU_EV_TILT_ON) != 0u) && (g_ic.roll_cdeg < -3000));
 
     /* S4-H04b: a wheel start on the bench (encoders report 0 -> 400 mm/s
        in 20 ms while the chassis stays level) and a 150 ms 40-deg spike
@@ -386,34 +391,34 @@ int main (void)
     g_now = 0u;
     g_ev  = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step(0.0, 0.0, 0.0, 0, 0, 0);
         }
     }
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, 0.0, 0.0, (kdx < 2) ? 200 * (kdx + 1) : 400, 4000, 0);
         }
     }
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 15; kdx++)
         {
             step(40.0, 0.0, 0.0, 400, 4000, 0);
         }
     }
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, 0.0, 0.0, 400, 4000, 0);
         }
     }
-    CHECK("S4-H04b", 0u == (g_ev & IMU_EV_TILT_ON) && !g_ic.b_tilt);
+    CHECK("S4-H04b", (0u == (g_ev & IMU_EV_TILT_ON)) && !g_ic.b_tilt);
 
     /* S4-H05 (14 Nov): lift.  IMU collision detection is removed; a lift
        is the up axis IMU_LIFT_RISE_MG above level (filtered) for
@@ -422,7 +427,7 @@ int main (void)
     g_now = 0u;
     g_ev  = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step_up(0, 200, 2000);
@@ -430,28 +435,28 @@ int main (void)
     }
     CHECK("S4-H05", 0u == (g_ev & IMU_EV_LIFT));
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 15; kdx++)
         {
             step_up(400, 0, 0);
         }
     } /* hand lifts it: +0.4 g, 150 ms */
-    CHECK("S4-H05",
-          (g_ev & IMU_EV_LIFT) != 0u && g_ic.lift_rise_mg > IMU_LIFT_RISE_MG);
-    printf("lift: rise %d mg\n", (int)g_ic.lift_rise_mg);
+    CHECK("S4-H05", ((g_ev & IMU_EV_LIFT) != 0u)
+                        && (g_ic.lift_rise_mg > IMU_LIFT_RISE_MG));
+    printf("lift: rise %d mg\n", (int32_t)g_ic.lift_rise_mg);
     /* held still in the air: no second event; set down and lifted again: a new
      * one */
     g_ev = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step_up(0, 0, 0);
         }
     }
-    CHECK("S4-H05", 0u == (g_ev & IMU_EV_LIFT) && !g_ic.b_lift);
+    CHECK("S4-H05", (0u == (g_ev & IMU_EV_LIFT)) && !g_ic.b_lift);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 15; kdx++)
         {
             step_up(400, 0, 0);
@@ -465,7 +470,7 @@ int main (void)
     g_now = 0u;
     g_ev  = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step_up(0, 200, 2000);
@@ -473,7 +478,7 @@ int main (void)
     }
     step_up(1500, 200, 2000);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 10; kdx++)
         {
             step_up(0, 200, 2000);
@@ -482,21 +487,21 @@ int main (void)
     step_up(1000, 200, 2000);
     step_up(1000, 200, 2000);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 10; kdx++)
         {
             step_up(0, 200, 2000);
         }
     }
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step_up(200, 200, 2000);
         }
     }
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 10; kdx++)
         {
             step_up(0, 200, 2000);
@@ -505,16 +510,17 @@ int main (void)
     CHECK("S4-H05b", 0u == (g_ev & IMU_EV_LIFT));
     /* ...and the largest rise while driving (filtered) is reported for tuning
      * (LOG 78) */
-    CHECK("S4-H05b", (g_ev & IMU_EV_RISE_MAX) != 0u
-                         && g_ic.rise_max_mg >= 400); /* the two +1 g samples */
-    printf("largest rise while driving: %d mg\n", (int)g_ic.rise_max_mg);
+    CHECK("S4-H05b",
+          ((g_ev & IMU_EV_RISE_MAX) != 0u)
+              && (g_ic.rise_max_mg >= 400)); /* the two +1 g samples */
+    printf("largest rise while driving: %d mg\n", (int32_t)g_ic.rise_max_mg);
 
     /* S4-H05c: on a hump the up push is not a lift */
     imu_core_init(&g_ic);
     g_now = 0u;
     g_ev  = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 10; kdx++)
         {
             step_up(0, 200, 2000);
@@ -522,7 +528,7 @@ int main (void)
     }
     g_ic.hump_state = (uint8_t)IMU_HUMP_CLIMBING;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 15; kdx++)
         {
             step_up(400, 200, 2000);
@@ -537,7 +543,7 @@ int main (void)
     g_ev           = 0u;
     g_ic.lvl_up_mg = 890;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 15; kdx++)
         {
             step_up(-110 + 300, 0, 0);
@@ -551,44 +557,44 @@ int main (void)
        run keeps its real humps only; a real hump while all black briefly
        (a crossing line) is kept. */
     {
-        int      step0;
-        int      elem0;
+        int32_t  step0;
+        int32_t  elem0;
         uint16_t real_max;
 
         (void)run_hump(20.0, 150.0, &step0, &elem0); /* one real hump */
         real_max = g_ic.hump_max_mm;
-        CHECK("S4-H05e", real_max >= 10u && 1u == g_ic.humps);
+        CHECK("S4-H05e", (real_max >= 10u) && (1u == g_ic.humps));
         imu_core_hump_save(&g_ic); /* all IR black */
         g_ev = 0u;
         {
-            int kdx;
+            int32_t kdx;
             for (kdx = 0; kdx < 60; kdx++)
             {
                 step(10.0, 0.0, 0.0, 300, 3000, 0);
             }
         } /* nose up in the air */
         {
-            int kdx;
+            int32_t kdx;
             for (kdx = 0; kdx < 60; kdx++)
             {
                 step(-10.0, 0.0, 0.0, 300, 3000, 0);
             }
         }
         {
-            int kdx;
+            int32_t kdx;
             for (kdx = 0; kdx < 30; kdx++)
             {
                 step(0.0, 0.0, 0.0, 300, 3000, 0);
             }
         }
         printf("in the air: %u fake hump(s), max %u mm (real %u)\n",
-               (unsigned)(g_ic.humps - 1u), (unsigned)g_ic.hump_max_mm,
-               (unsigned)real_max);
-        CHECK("S4-H05e", (g_ev & IMU_EV_HUMP_END) != 0u
-                             && g_ic.hump_max_mm > real_max); /* the bug */
+               (uint32_t)(g_ic.humps - 1u), (uint32_t)g_ic.hump_max_mm,
+               (uint32_t)real_max);
+        CHECK("S4-H05e", ((g_ev & IMU_EV_HUMP_END) != 0u)
+                             && (g_ic.hump_max_mm > real_max)); /* the bug */
         imu_core_hump_restore(&g_ic); /* lift confirmed */
-        CHECK("S4-H05e", g_ic.hump_max_mm == real_max && 1u == g_ic.humps
-                             && (uint8_t)IMU_HUMP_FLAT == g_ic.hump_state);
+        CHECK("S4-H05e", (g_ic.hump_max_mm == real_max) && (1u == g_ic.humps)
+                             && ((uint8_t)IMU_HUMP_FLAT == g_ic.hump_state));
 
         imu_core_hump_save(&g_ic); /* crossing line */
         g_ic.hump_max_mm =
@@ -603,7 +609,7 @@ int main (void)
     g_now = 0u;
     imu_cal_level_start(&g_ic);
     {
-        int     kdx;
+        int32_t kdx;
         int32_t accel[3];
 
         accel_for(3.0, -2.0, 0.0, accel);
@@ -617,7 +623,7 @@ int main (void)
             step(3.0, -2.0, 0.0, 0, 0, 0);
         }
         CHECK("S4-H06",
-              abs(g_ic.pitch_cdeg) <= 10 && abs(g_ic.roll_cdeg) <= 10);
+              (abs(g_ic.pitch_cdeg) <= 10) && (abs(g_ic.roll_cdeg) <= 10));
         /* moving robot: calibration refused */
         imu_cal_level_start(&g_ic);
         for (kdx = 0; kdx < 100; kdx++)
@@ -626,9 +632,9 @@ int main (void)
             imu_cal_level_sample(&g_ic, accel);
         }
         CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
-        CHECK("S4-H06", 100u == g_ic.lvl_n
-                            && g_ic.lvl_spread_mg
-                                   > IMU_LEVEL_MAX_SPREAD_MG); /* LOG 57/58 */
+        CHECK("S4-H06", (100u == g_ic.lvl_n)
+                            && (g_ic.lvl_spread_mg
+                                > IMU_LEVEL_MAX_SPREAD_MG)); /* LOG 57/58 */
         /* stuck accelerometer (2 Nov: full scale, no noise): refused */
         imu_cal_level_start(&g_ic);
         accel[0] = -3997;
@@ -640,19 +646,19 @@ int main (void)
         }
         CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
         CHECK("S4-H06",
-              0 == g_ic.lvl_spread_mg
-                  && g_ic.lvl_up_mg > IMU_LEVEL_UP_MAX_MG); /* LOG 58/59 */
+              (0 == g_ic.lvl_spread_mg)
+                  && (g_ic.lvl_up_mg > IMU_LEVEL_UP_MAX_MG)); /* LOG 58/59 */
     }
 
     /* S4-H07: hard-iron offsets and heading after a 360 deg spin */
     imu_core_init(&g_ic);
     imu_cal_mag_start(&g_ic);
     {
-        int diff;
+        int32_t diff;
         for (diff = 0; diff < 360; diff += 5)
         {
-            double  radius = diff * M_PI / 180.0;
-            int16_t mag[3] = {0, 0, 0};
+            float64_t radius = diff * M_PI / 180.0;
+            int16_t   mag[3] = {0, 0, 0};
             /* field of 400 counts; hard-iron offset (+120, -80, +30) */
             mag[IMU_AXIS_FWD] =
                 (int16_t)((400.0 * cos(radius)) * IMU_SIGN_FWD + 120);
@@ -679,7 +685,7 @@ int main (void)
     imu_core_init(&g_ic);
     g_now = 0u;
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, 0.0, 0.0, 0, 0, 0);
@@ -687,7 +693,7 @@ int main (void)
     }
     CHECK("S4-H08", IMU_MOTION_STATIONARY == g_ic.motion);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 6000);
@@ -695,7 +701,7 @@ int main (void)
     }
     CHECK("S4-H08", IMU_MOTION_TURNING == g_ic.motion);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, 0.0, 0.0, 250, 2500, 0);
@@ -704,7 +710,7 @@ int main (void)
     CHECK("S4-H08", IMU_MOTION_CRUISING == g_ic.motion);
     /* speed up then slow down, forward: 1000 mm/s^2 each way */
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step(0.0, 0.0, 0.0, 250 + (10 * kdx), 2600, 0);
@@ -712,7 +718,7 @@ int main (void)
     }
     CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 20; kdx++)
         {
             step(0.0, 0.0, 0.0, 440 - (10 * kdx), 2600, 0);
@@ -723,7 +729,7 @@ int main (void)
        class may change at most every IMU_CLASS_HOLD_MS, so run > 200 ms) */
     imu_core_init(&g_ic);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 40; kdx++)
         {
             step(0.0, 0.0, 0.0, -20 - (10 * kdx), -1000, 0);
@@ -731,7 +737,7 @@ int main (void)
     }
     CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     {
-        int kdx;
+        int32_t kdx;
         for (kdx = 0; kdx < 30; kdx++)
         {
             step(0.0, 0.0, 0.0, -410 + (10 * kdx), -1000, 0);
@@ -784,3 +790,5 @@ int main (void)
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (0 == g_fail) ? 0 : 1;
 }
+
+/*** end of file ***/

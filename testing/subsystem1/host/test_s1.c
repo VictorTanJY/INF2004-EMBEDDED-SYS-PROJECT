@@ -19,8 +19,8 @@
 #include "app_pack.h"
 #include "golden.h"
 
-static int g_pass;
-static int g_fail;
+static int32_t g_pass;
+static int32_t g_fail;
 
 #define CHECK(id, cond)                                                      \
     do                                                                       \
@@ -38,10 +38,10 @@ static int g_fail;
 
 /* Build a command frame the way the laptop does (picocar_codec.py). */
 static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
-                           int index, int32_t value, char const * p_map)
+                           int32_t index, int32_t value, char const * p_map)
 {
     pk_writer_t writer;
-    int         kdx;
+    int32_t     kdx;
 
     pk_writer_init(&writer, p_buf, 8u);
     pk_put(&writer, COMMS_FT_CMD, 5u);
@@ -63,8 +63,9 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
     return pk_writer_len(&writer);
 }
 
-static comms_err_t parse (uint8_t ident, uint8_t cmd, int index, int32_t value,
-                          char const * p_map, comms_cmd_t * p_cmd)
+static comms_err_t parse (uint8_t ident, uint8_t cmd, int32_t index,
+                          int32_t value, char const * p_map,
+                          comms_cmd_t * p_cmd)
 {
     uint8_t  buf[8];
     uint16_t count = cmd_frame(buf, ident, cmd, index, value, p_map);
@@ -72,12 +73,12 @@ static comms_err_t parse (uint8_t ident, uint8_t cmd, int index, int32_t value,
     return comms_parse_cmd(buf, count, p_cmd);
 }
 
-static int param_index (char const * p_name)
+static int32_t param_index (char const * p_name)
 {
     static char const * const p_names[] = {
         "speed_mm_s",  "slow_cm",    "stop_cm",    "lost_mm",
         "junction_mm", "bench_move", "bench_turn", "bench_speed"};
-    int idx;
+    int32_t idx;
 
     for (idx = 0; idx < 9; idx++)
     {
@@ -90,18 +91,19 @@ static int param_index (char const * p_name)
 }
 
 /* Skip n bits (any number). */
-static void skip (pk_reader_t * p_r, unsigned count)
+static void skip (pk_reader_t * p_r, uint32_t count)
 {
     while (count > 0u)
     {
-        unsigned const kdx = (count > 32u) ? 32u : count;
+        uint32_t const kdx = (count > 32u) ? 32u : count;
 
         (void)pk_take(p_r, (uint8_t)kdx);
         count -= kdx;
     }
 }
 
-static int hex_eq (uint8_t const * p_buf, uint16_t count, char const * p_hex)
+static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
+                       char const * p_hex)
 {
     char     text[2 * COMMS_FRAME_MAX + 1];
     uint16_t idx;
@@ -132,12 +134,13 @@ static void test_writer (void)
     pk_put(&writer, 0x7Fu, 7u);
     pk_put(&writer, 0u, 1u);
     pk_put(&writer, 0x13u, 5u);
-    CHECK("S1-H01", 2u == pk_writer_len(&writer) && hex_eq(buf, 2u, "fd9b"));
+    CHECK("S1-H01", (2u == pk_writer_len(&writer)) && hex_eq(buf, 2u, "fd9b"));
     pk_reader_init(&reader, buf, 2u);
-    CHECK("S1-H01", 5u == pk_take(&reader, 3u) && 0x7Fu == pk_take(&reader, 7u)
-                        && 0u == pk_take(&reader, 1u)
-                        && 0x13u == pk_take(&reader, 5u) && !reader.b_short);
-    CHECK("S1-H01", 0u == pk_take(&reader, 1u) && reader.b_short);
+    CHECK("S1-H01", (5u == pk_take(&reader, 3u))
+                        && (0x7Fu == pk_take(&reader, 7u))
+                        && (0u == pk_take(&reader, 1u))
+                        && (0x13u == pk_take(&reader, 5u)) && !reader.b_short);
+    CHECK("S1-H01", (0u == pk_take(&reader, 1u)) && reader.b_short);
 
     /* Never writes past cap, for every cap; overflow returns 0. */
     {
@@ -154,7 +157,7 @@ static void test_writer (void)
             uint8_t  area[80];
             uint16_t len;
             uint16_t idx;
-            int      b_ok = 1;
+            bool     b_ok = true;
 
             memset(area, 0x5A, sizeof(area));
             len = comms_build_telemetry(&telem, area, cap);
@@ -162,7 +165,7 @@ static void test_writer (void)
             {
                 if (area[idx] != 0x5Au)
                 {
-                    b_ok = 0;
+                    b_ok = false;
                 }
             }
             CHECK("S1-H02", b_ok);
@@ -200,26 +203,29 @@ static void test_telemetry (void)
     CHECK("S1-H03", 27u == len);
     CHECK("S1-H03", hex_eq(buf, len, GOLD_TELEMETRY));
     pk_reader_init(&reader, buf, len);
-    CHECK("S1-H03", COMMS_FT_TELEMETRY == pk_take(&reader, 5u)
-                        && COMMS_FRAME_VERSION == pk_take(&reader, 3u));
-    CHECK("S1-H03", 12u == pk_take(&reader, 8u) && 340u == pk_take(&reader, 24u)
-                        && 3u == pk_take(&reader, 4u));
-    CHECK("S1-H03", 250 == pk_unoff_s(pk_take(&reader, 10u), 10u)
-                        && -10 == pk_unoff_s(pk_take(&reader, 10u), 10u));
-    CHECK("S1-H03", 1000u == pk_take(&reader, 16u)
-                        && 990u == pk_take(&reader, 16u)
-                        && 555u == pk_take(&reader, 16u));
-    CHECK("S1-H03", -120 == pk_unoff_s(pk_take(&reader, 11u), 11u)
-                        && 0u == pk_take(&reader, 1u)
-                        && 0u == pk_take(&reader, 10u));
-    CHECK("S1-H03", 'A' == comms_symbol_char((uint8_t)pk_take(&reader, 6u))
-                        && 0u == pk_take(&reader, 6u));
-    CHECK("S1-H03", -123 == pk_unoff_s(pk_take(&reader, 11u), 11u)
-                        && 88 == pk_unoff_s(pk_take(&reader, 12u), 12u));
-    CHECK("S1-H03", 25u == pk_take(&reader, 8u) && 38u == pk_take(&reader, 9u)
-                        && 1023u == pk_take(&reader, 10u));
-    CHECK("S1-H03", 127u == pk_take(&reader, 7u) && 127u == pk_take(&reader, 7u)
-                        && !reader.b_short && 210u == reader.bits);
+    CHECK("S1-H03", (COMMS_FT_TELEMETRY == pk_take(&reader, 5u))
+                        && (COMMS_FRAME_VERSION == pk_take(&reader, 3u)));
+    CHECK("S1-H03", (12u == pk_take(&reader, 8u))
+                        && (340u == pk_take(&reader, 24u))
+                        && (3u == pk_take(&reader, 4u)));
+    CHECK("S1-H03", (250 == pk_unoff_s(pk_take(&reader, 10u), 10u))
+                        && (-10 == pk_unoff_s(pk_take(&reader, 10u), 10u)));
+    CHECK("S1-H03", (1000u == pk_take(&reader, 16u))
+                        && (990u == pk_take(&reader, 16u))
+                        && (555u == pk_take(&reader, 16u)));
+    CHECK("S1-H03", (-120 == pk_unoff_s(pk_take(&reader, 11u), 11u))
+                        && (0u == pk_take(&reader, 1u))
+                        && (0u == pk_take(&reader, 10u)));
+    CHECK("S1-H03", ('A' == comms_symbol_char((uint8_t)pk_take(&reader, 6u)))
+                        && (0u == pk_take(&reader, 6u)));
+    CHECK("S1-H03", (-123 == pk_unoff_s(pk_take(&reader, 11u), 11u))
+                        && (88 == pk_unoff_s(pk_take(&reader, 12u), 12u)));
+    CHECK("S1-H03", (25u == pk_take(&reader, 8u))
+                        && (38u == pk_take(&reader, 9u))
+                        && (1023u == pk_take(&reader, 10u)));
+    CHECK("S1-H03", (127u == pk_take(&reader, 7u))
+                        && (127u == pk_take(&reader, 7u)) && !reader.b_short
+                        && (210u == reader.bits));
 
     /* S1-H04: none codes, rounding, a valid profile */
     telem.obst_d_mm    = COMMS_D_NONE;
@@ -236,16 +242,16 @@ static void test_telemetry (void)
     skip(&reader,
          8u + 8u + 24u + 4u + 10u + 10u + 16u + 16u + 16u + 11u + 1u + 10u);
     CHECK("S1-H04",
-          0u == pk_take(&reader, 6u)
-              && 'F' == comms_symbol_char((uint8_t)pk_take(&reader, 6u)));
-    CHECK("S1-H04", 1 == pk_unoff_s(pk_take(&reader, 11u), 11u)
-                        && -105 == pk_unoff_s(pk_take(&reader, 12u), 12u));
+          (0u == pk_take(&reader, 6u))
+              && ('F' == comms_symbol_char((uint8_t)pk_take(&reader, 6u))));
+    CHECK("S1-H04", (1 == pk_unoff_s(pk_take(&reader, 11u), 11u))
+                        && (-105 == pk_unoff_s(pk_take(&reader, 12u), 12u)));
     (void)pk_take(&reader, 8u);
     CHECK("S1-H04",
-          511u == pk_take(&reader, 9u) && 147u == pk_take(&reader, 10u));
+          (511u == pk_take(&reader, 9u)) && (147u == pk_take(&reader, 10u)));
     CHECK("S1-H04",
-          20u == pk_take(&reader, 7u)
-              && 126u == pk_take(&reader, 7u)); /* 500 cm caps at 126 */
+          (20u == pk_take(&reader, 7u))
+              && (126u == pk_take(&reader, 7u))); /* 500 cm caps at 126 */
 
     /* S1-H05: worst case: every field saturates, still 27 bytes */
     telem.seq          = 4294967295u;
@@ -273,20 +279,21 @@ static void test_telemetry (void)
     pk_reader_init(&reader, buf, len);
     skip(&reader, 8u + 8u + 24u + 4u);
     CHECK("S1-H05", 27u == len);
-    CHECK("S1-H05", -512 == pk_unoff_s(pk_take(&reader, 10u), 10u)
-                        && 511 == pk_unoff_s(pk_take(&reader, 10u), 10u));
+    CHECK("S1-H05", (-512 == pk_unoff_s(pk_take(&reader, 10u), 10u))
+                        && (511 == pk_unoff_s(pk_take(&reader, 10u), 10u)));
     skip(&reader, 48u);
-    CHECK("S1-H05", -1024 == pk_unoff_s(pk_take(&reader, 11u), 11u)
-                        && 1u == pk_take(&reader, 1u)
-                        && 1023u == pk_take(&reader, 10u));
+    CHECK("S1-H05", (-1024 == pk_unoff_s(pk_take(&reader, 11u), 11u))
+                        && (1u == pk_take(&reader, 1u))
+                        && (1023u == pk_take(&reader, 10u)));
     (void)pk_take(&reader, 12u);
-    CHECK("S1-H05", -1024 == pk_unoff_s(pk_take(&reader, 11u), 11u)
-                        && 2047 == pk_unoff_s(pk_take(&reader, 12u), 12u));
-    CHECK("S1-H05", 255u == pk_take(&reader, 8u) && 510u == pk_take(&reader, 9u)
-                        && 1022u == pk_take(&reader, 10u));
+    CHECK("S1-H05", (-1024 == pk_unoff_s(pk_take(&reader, 11u), 11u))
+                        && (2047 == pk_unoff_s(pk_take(&reader, 12u), 12u)));
+    CHECK("S1-H05", (255u == pk_take(&reader, 8u))
+                        && (510u == pk_take(&reader, 9u))
+                        && (1022u == pk_take(&reader, 10u)));
     printf("info: telemetry frame = %u B (+%u B topic); the JSON it replaces "
            "was 297 B typical, 340 B worst case\n",
-           (unsigned)len, (unsigned)strlen("picocar/is23/telemetry"));
+           (uint32_t)len, (uint32_t)strlen("picocar/is23/telemetry"));
 }
 
 static void test_event_status_ack (void)
@@ -304,7 +311,7 @@ static void test_event_status_ack (void)
     event.data = 'B';
     event.t_ms = 770u;
     len        = comms_build_event(&event, 5u, buf, sizeof(buf));
-    CHECK("S1-H06", 8u == len && hex_eq(buf, len, GOLD_EVENT_BARCODE));
+    CHECK("S1-H06", (8u == len) && hex_eq(buf, len, GOLD_EVENT_BARCODE));
     event.kind = COMMS_KIND_STATE;
     event.code = 10u;
     event.data = 0;
@@ -317,7 +324,7 @@ static void test_event_status_ack (void)
     event.code = 81u;
     event.data = 0x12345678;
     len        = comms_build_event(&event, 8u, buf, sizeof(buf));
-    CHECK("S1-H06", 11u == len && hex_eq(buf, len, GOLD_EVENT_LOG));
+    CHECK("S1-H06", (11u == len) && hex_eq(buf, len, GOLD_EVENT_LOG));
     event.data = -1;
     CHECK("S1-H06", 8u == comms_build_event(&event, 9u, buf, sizeof(buf)));
     event.code = 999u; /* saturates at 127 */
@@ -331,27 +338,27 @@ static void test_event_status_ack (void)
     }
 
     /* S1-H06: the packed mbf_telem record (8 B) and its time */
-    CHECK("S1-H06", sizeof(comms_rec_t) == 8u);
+    CHECK("S1-H06", 8u == sizeof(comms_rec_t));
     comms_rec_pack(&rec, COMMS_KIND_LOG, 4u, 79u, -123456, 123456u);
     comms_rec_unpack(&rec, 125000u, &event);
-    CHECK("S1-H06", COMMS_KIND_LOG == event.kind && 4u == event.src
-                        && 79u == event.code && -123456 == event.data
-                        && 123450u == event.t_ms);
+    CHECK("S1-H06", (COMMS_KIND_LOG == event.kind) && (4u == event.src)
+                        && (79u == event.code) && (-123456 == event.data)
+                        && (123450u == event.t_ms));
     comms_rec_pack(&rec, COMMS_KIND_EVENT, 9u, 300u, 7,
                    10485755u); /* src, code saturate */
     comms_rec_unpack(&rec, 10485755u + 2000u,
                      &event); /* across the 20-bit (2.9 h) wrap */
-    CHECK("S1-H06", COMMS_KIND_EVENT == event.kind && 7u == event.src
-                        && 127u == event.code && 10485750u == event.t_ms);
+    CHECK("S1-H06", (COMMS_KIND_EVENT == event.kind) && (7u == event.src)
+                        && (127u == event.code) && (10485750u == event.t_ms));
 
     /* S1-H07: status, with and without the map; the Last Will */
     len = comms_build_status(61u, -58, 3u, NULL, buf, sizeof(buf));
-    CHECK("S1-H07", 6u == len && hex_eq(buf, len, GOLD_STATUS));
+    CHECK("S1-H07", (6u == len) && hex_eq(buf, len, GOLD_STATUS));
     {
         char const map[4] = {'Q', 'F', 'Z', 'W'};
 
         len = comms_build_status(1u, -60, 0u, map, buf, sizeof(buf));
-        CHECK("S1-H07", 9u == len && hex_eq(buf, len, GOLD_STATUS_MAP));
+        CHECK("S1-H07", (9u == len) && hex_eq(buf, len, GOLD_STATUS_MAP));
     }
     len = comms_build_status(200000u, -300, 9999u, NULL, buf,
                              sizeof(buf)); /* saturates */
@@ -360,20 +367,20 @@ static void test_event_status_ack (void)
 
         pk_reader_init(&reader, buf, len);
         (void)pk_take(&reader, 8u);
-        CHECK("S1-H07", 131071u == pk_take(&reader, 17u)
-                            && 127u == pk_take(&reader, 7u)
-                            && 255u == pk_take(&reader, 8u));
+        CHECK("S1-H07", (131071u == pk_take(&reader, 17u))
+                            && (127u == pk_take(&reader, 7u))
+                            && (255u == pk_take(&reader, 8u)));
     }
-    CHECK("S1-H07",
-          1u == strlen(COMMS_WILL_MSG) && 0x23u == (uint8_t)COMMS_WILL_MSG[0]);
+    CHECK("S1-H07", (1u == strlen(COMMS_WILL_MSG))
+                        && (0x23u == (uint8_t)COMMS_WILL_MSG[0]));
 
     /* S1-H08: acks */
     (void)parse(42u, COMMS_CMD_STOP, 0, 0, NULL, &cmd);
     len = comms_build_ack(&cmd, COMMS_ERR_NONE, buf, sizeof(buf));
-    CHECK("S1-H08", 3u == len && hex_eq(buf, len, GOLD_ACK_OK));
+    CHECK("S1-H08", (3u == len) && hex_eq(buf, len, GOLD_ACK_OK));
     cmd.b_has_id = false;
     len          = comms_build_ack(&cmd, COMMS_ERR_NO_ID, buf, sizeof(buf));
-    CHECK("S1-H08", 3u == len && hex_eq(buf, len, GOLD_ACK_NO_ID));
+    CHECK("S1-H08", (3u == len) && hex_eq(buf, len, GOLD_ACK_NO_ID));
 }
 
 static void test_parser (void)
@@ -383,60 +390,61 @@ static void test_parser (void)
     uint16_t    count;
 
     CHECK("S1-H09",
-          COMMS_ERR_NONE == parse(1u, COMMS_CMD_START, 0, 0, NULL, &cmd)
-              && COMMS_CMD_START == cmd.cmd && 1u == cmd.cmd_id);
+          (COMMS_ERR_NONE == parse(1u, COMMS_CMD_START, 0, 0, NULL, &cmd))
+              && (COMMS_CMD_START == cmd.cmd) && (1u == cmd.cmd_id));
     CHECK("S1-H09",
-          COMMS_ERR_NONE == parse(255u, COMMS_CMD_STOP, 0, 0, NULL, &cmd)
-              && COMMS_CMD_STOP == cmd.cmd && 255u == cmd.cmd_id);
+          (COMMS_ERR_NONE == parse(255u, COMMS_CMD_STOP, 0, 0, NULL, &cmd))
+              && (COMMS_CMD_STOP == cmd.cmd) && (255u == cmd.cmd_id));
     CHECK("S1-H09",
-          COMMS_ERR_NONE == parse(4u, COMMS_CMD_RESET, 0, 0, NULL, &cmd)
-              && COMMS_CMD_RESET == cmd.cmd);
+          (COMMS_ERR_NONE == parse(4u, COMMS_CMD_RESET, 0, 0, NULL, &cmd))
+              && (COMMS_CMD_RESET == cmd.cmd));
     CHECK("S1-H09", COMMS_ERR_BAD_CMD
                         == parse(3u, 3u, 0, 0, NULL,
                                  &cmd)); /* 3: E-stop, removed 14 Nov */
     CHECK("S1-H09", COMMS_ERR_BAD_CMD == parse(3u, 7u, 0, 0, NULL, &cmd));
-    CHECK("S1-H09", COMMS_ERR_NONE
-                            == parse(5u, COMMS_CMD_SET, param_index("stop_cm"),
-                                     25, NULL, &cmd)
-                        && COMMS_CMD_SET == cmd.cmd && 3u == cmd.param_id
-                        && 25 == cmd.value);
+    CHECK("S1-H09",
+          (COMMS_ERR_NONE
+           == parse(5u, COMMS_CMD_SET, param_index("stop_cm"), 25, NULL, &cmd))
+              && (COMMS_CMD_SET == cmd.cmd) && (3u == cmd.param_id)
+              && (25 == cmd.value));
     count = cmd_frame(frame, 9u, COMMS_CMD_SET, param_index("speed_mm_s"), 250,
                       NULL);
-    CHECK("S1-H09", 5u == count && hex_eq(frame, count, GOLD_CMD_SET));
+    CHECK("S1-H09", (5u == count) && hex_eq(frame, count, GOLD_CMD_SET));
     count = cmd_frame(frame, 7u, COMMS_CMD_START, 0, 0, NULL);
-    CHECK("S1-H09", 3u == count && hex_eq(frame, count, GOLD_CMD_START));
+    CHECK("S1-H09", (3u == count) && hex_eq(frame, count, GOLD_CMD_START));
 
     /* S1-H10: boundaries of every whitelisted parameter */
     {
         static char const * const p_names[] = {
             "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm"};
-        unsigned idx;
+        uint32_t idx;
 
         for (idx = 0u; idx < 5u; idx++)
         {
             comms_param_t const * p_param = comms_param_by_index((uint8_t)idx);
 
             CHECK("S1-H10",
-                  p_param != NULL && 0 == strcmp(p_param->p_name, p_names[idx])
-                      && comms_param_by_id(p_param->param_id) == p_param);
-            CHECK("S1-H10", COMMS_ERR_NONE
-                                    == parse(9u, COMMS_CMD_SET, (int)idx,
-                                             p_param->min, NULL, &cmd)
-                                && cmd.value == p_param->min);
-            CHECK("S1-H10", COMMS_ERR_NONE
-                                    == parse(9u, COMMS_CMD_SET, (int)idx,
-                                             p_param->max, NULL, &cmd)
-                                && cmd.value == p_param->max);
+                  (p_param != NULL)
+                      && (0 == strcmp(p_param->p_name, p_names[idx]))
+                      && (comms_param_by_id(p_param->param_id) == p_param));
+            CHECK("S1-H10", (COMMS_ERR_NONE
+                             == parse(9u, COMMS_CMD_SET, (int32_t)idx,
+                                      p_param->min, NULL, &cmd))
+                                && (cmd.value == p_param->min));
+            CHECK("S1-H10", (COMMS_ERR_NONE
+                             == parse(9u, COMMS_CMD_SET, (int32_t)idx,
+                                      p_param->max, NULL, &cmd))
+                                && (cmd.value == p_param->max));
             CHECK("S1-H10", COMMS_ERR_RANGE
-                                == parse(9u, COMMS_CMD_SET, (int)idx,
+                                == parse(9u, COMMS_CMD_SET, (int32_t)idx,
                                          p_param->min - 1, NULL, &cmd));
             CHECK("S1-H10", COMMS_ERR_RANGE
-                                == parse(9u, COMMS_CMD_SET, (int)idx,
+                                == parse(9u, COMMS_CMD_SET, (int32_t)idx,
                                          p_param->max + 1, NULL, &cmd));
         }
-        CHECK("S1-H10",
-              COMMS_ERR_RANGE == parse(9u, COMMS_CMD_SET, 0, -32768, NULL, &cmd)
-                  && -32768 == cmd.value);
+        CHECK("S1-H10", (COMMS_ERR_RANGE
+                         == parse(9u, COMMS_CMD_SET, 0, -32768, NULL, &cmd))
+                            && (-32768 == cmd.value));
     }
 
     /* S1-H11: rejections, each with its reason */
@@ -447,10 +455,10 @@ static void test_parser (void)
     frame[0] = 0x45u; /* version 2 */
     CHECK("S1-H11", COMMS_ERR_BAD_FRAME == comms_parse_cmd(frame, count, &cmd));
     frame[0] = 0x25u;
-    CHECK("S1-H11",
-          COMMS_ERR_NO_ID == comms_parse_cmd(frame, 1u, &cmd) && !cmd.b_has_id);
-    CHECK("S1-H11", COMMS_ERR_BAD_FRAME == comms_parse_cmd(frame, 2u, &cmd)
-                        && cmd.b_has_id && 1u == cmd.cmd_id);
+    CHECK("S1-H11", (COMMS_ERR_NO_ID == comms_parse_cmd(frame, 1u, &cmd))
+                        && !cmd.b_has_id);
+    CHECK("S1-H11", (COMMS_ERR_BAD_FRAME == comms_parse_cmd(frame, 2u, &cmd))
+                        && cmd.b_has_id && (1u == cmd.cmd_id));
     CHECK("S1-H11", COMMS_ERR_BAD_FRAME
                         == comms_parse_cmd(frame, 4u, &cmd)); /* START is 3 B */
     count = cmd_frame(frame, 1u, COMMS_CMD_SET, 2, 20, NULL);
@@ -484,8 +492,8 @@ static void test_parser (void)
     /* S1-H14: random bytes and every truncation never crash (ASan/UBSan) */
     {
         uint8_t  junk[64];
-        unsigned kdx;
-        unsigned mid;
+        uint32_t kdx;
+        uint32_t mid;
 
         count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
         for (mid = 0u; mid <= count; mid++)
@@ -495,7 +503,7 @@ static void test_parser (void)
         srand(1234);
         for (kdx = 0u; kdx < 20000u; kdx++)
         {
-            unsigned len = (unsigned)rand() % sizeof(junk);
+            uint32_t len = (uint32_t)rand() % sizeof(junk);
 
             for (mid = 0u; mid < len; mid++)
             {
@@ -517,7 +525,7 @@ static void test_ring (void)
     comms_rec_t  rec;
     uint8_t      seq;
     uint32_t     idx;
-    int          overwrote = 0;
+    int32_t      overwrote = 0;
 
     comms_ring_init(&ring);
     CHECK("S1-H15", !comms_ring_peek(&ring, &rec, &seq));
@@ -529,27 +537,27 @@ static void test_ring (void)
                          ? 1
                          : 0; /* seq wraps */
     }
-    CHECK("S1-H15", 4 == overwrote && COMMS_RING_LEN == ring.count);
+    CHECK("S1-H15", (4 == overwrote) && (COMMS_RING_LEN == ring.count));
     for (idx = 5u; idx <= 20u; idx++)
     {
         CHECK("S1-H15", comms_ring_peek(&ring, &rec, &seq)
-                            && seq == (uint8_t)(idx + 250u)
-                            && rec.data == (int32_t)idx);
+                            && (seq == (uint8_t)(idx + 250u))
+                            && (rec.data == (int32_t)idx));
         comms_ring_pop(&ring);
     }
-    CHECK("S1-H15", 0u == ring.count && !comms_ring_peek(&ring, &rec, &seq));
+    CHECK("S1-H15", (0u == ring.count) && !comms_ring_peek(&ring, &rec, &seq));
     comms_ring_pop(&ring); /* pop on empty is harmless */
     CHECK("S1-H15", 0u == ring.count);
     CHECK("S1-H15", sizeof(ring) <= (COMMS_RING_LEN * 9u) + 4u);
 }
 
-static int run_button (char const * p_pattern, uint16_t long_ms,
-                       char * p_events)
+static int32_t run_button (char const * p_pattern, uint16_t long_ms,
+                           char * p_events)
 {
     /* One char per 20 ms sample: '1' pressed, '0' released.
        Output: P press, S short, L long. */
     hmi_btn_t btn;
-    int       count = 0;
+    int32_t   count = 0;
 
     hmi_btn_init(&btn);
     for (; *p_pattern != '\0'; p_pattern++)
@@ -606,7 +614,7 @@ static void test_dedup (void)
     comms_cmd_t   cmd_a;
     comms_cmd_t   cmd_b;
     comms_cmd_t   stop;
-    unsigned      idx;
+    uint32_t      idx;
 
     comms_dedup_init(&dedup);
     (void)parse(7u, COMMS_CMD_START, 0, 0, NULL, &cmd_a);
@@ -664,10 +672,10 @@ static void test_map (void)
 
     /* S1-H19: the barcode map arrives over MQTT (not hard-coded) */
     count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
-    CHECK("S1-H19", 6u == count && hex_eq(frame, count, GOLD_CMD_MAP));
-    CHECK("S1-H19", COMMS_ERR_NONE == comms_parse_cmd(frame, count, &cmd)
-                        && COMMS_CMD_MAP == cmd.cmd
-                        && (uint32_t)cmd.value == afzw);
+    CHECK("S1-H19", (6u == count) && hex_eq(frame, count, GOLD_CMD_MAP));
+    CHECK("S1-H19", (COMMS_ERR_NONE == comms_parse_cmd(frame, count, &cmd))
+                        && (COMMS_CMD_MAP == cmd.cmd)
+                        && ((uint32_t)cmd.value == afzw));
     CHECK("S1-H19",
           COMMS_ERR_BAD_MAP
               == parse(5u, COMMS_CMD_MAP, 0, 0, "AAZW", &cmd)); /* used twice */
@@ -679,21 +687,21 @@ static void test_map (void)
     frame[3] = (uint8_t)(frame[3] | 0x01u);
     CHECK("S1-H19", COMMS_ERR_BAD_MAP == comms_parse_cmd(frame, count, &cmd));
     (void)parse(5u, COMMS_CMD_MAP, 0, 0, "AFZW", &cmd);
-    CHECK("S1-H19", COMMS_ERR_BUSY == comms_check_cmd(&cmd, false)
-                        && COMMS_ERR_NONE == comms_check_cmd(&cmd, true));
+    CHECK("S1-H19", (COMMS_ERR_BUSY == comms_check_cmd(&cmd, false))
+                        && (COMMS_ERR_NONE == comms_check_cmd(&cmd, true)));
     CHECK("S1-H19", comms_map_char_ok('Z') && comms_map_char_ok('7')
                         && !comms_map_char_ok('*') && !comms_map_char_ok('a'));
-    CHECK("S1-H19",
-          1u == comms_symbol_index('0') && 43u == comms_symbol_index('%')
-              && 0u == comms_symbol_index('*') && '%' == comms_symbol_char(43u)
-              && '\0' == comms_symbol_char(44u));
+    CHECK("S1-H19", (1u == comms_symbol_index('0'))
+                        && (43u == comms_symbol_index('%'))
+                        && (0u == comms_symbol_index('*'))
+                        && ('%' == comms_symbol_char(43u))
+                        && ('\0' == comms_symbol_char(44u)));
 
 #if APP_BENCH
-    CHECK("S1-H20",
-          COMMS_ERR_NONE
-                  == parse(7u, COMMS_CMD_SET, param_index("bench_turn"), -900,
-                           NULL, &cmd)
-              && 102u == cmd.param_id && -900 == cmd.value);
+    CHECK("S1-H20", (COMMS_ERR_NONE
+                     == parse(7u, COMMS_CMD_SET, param_index("bench_turn"),
+                              -900, NULL, &cmd))
+                        && (102u == cmd.param_id) && (-900 == cmd.value));
     CHECK("S1-H20", COMMS_ERR_RANGE
                         == parse(7u, COMMS_CMD_SET, param_index("bench_turn"),
                                  3601, NULL, &cmd));
@@ -721,3 +729,5 @@ int main (void)
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (0 == g_fail) ? 0 : 1;
 }
+
+/*** end of file ***/

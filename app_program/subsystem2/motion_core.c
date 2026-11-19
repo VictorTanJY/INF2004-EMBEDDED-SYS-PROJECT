@@ -180,7 +180,7 @@ motion_result_t motion_core_command (motion_core_t *      p_mc,
             {
                 p_mc->auth = (uint8_t)p_cmd->arg0;
             }
-            break;
+        break;
 
         case MOTION_CMD_STOP:
             if ((p_cmd->src != (uint8_t)MOTION_SRC_MISSION)
@@ -197,7 +197,7 @@ motion_result_t motion_core_command (motion_core_t *      p_mc,
             {
                 /* already braked */
             }
-            break;
+        break;
 
         case MOTION_CMD_DRIVE:
             if (p_cmd->src != p_mc->auth)
@@ -213,7 +213,7 @@ motion_result_t motion_core_command (motion_core_t *      p_mc,
                 p_mc->last_drive_ms = now_ms;
                 p_mc->state         = (uint8_t)MOTION_ST_VELOCITY_TRACK;
             }
-            break;
+        break;
 
         case MOTION_CMD_MOVE:
         case MOTION_CMD_TURN:
@@ -253,11 +253,11 @@ motion_result_t motion_core_command (motion_core_t *      p_mc,
                     end_maneuver(p_mc, true); /* nothing to do */
                 }
             }
-            break;
+        break;
 
         default:
             res = MOTION_RES_INVALID;
-            break;
+        break;
     }
 
     if ((MOTION_RES_REJECTED_AUTH == res) || (MOTION_RES_INVALID == res))
@@ -556,7 +556,7 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
                 ramp(p_mc->sp_v, p_mc->drive_v,
                      (int32_t)(((uint32_t)MOTION_ACCEL_MM_S2 * dt_ms) / 1000u));
             p_mc->sp_w = p_mc->drive_w;
-            break;
+        break;
 
         case MOTION_ST_STOPPING:
         {
@@ -572,17 +572,17 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
                 p_mc->state = (uint8_t)MOTION_ST_IDLE_BRAKED;
                 b_drive     = false;
             }
-            break;
         }
+        break;
 
         case MOTION_ST_MANEUVER:
             b_drive = step_maneuver(p_mc, now_ms, dt_ms);
-            break;
+        break;
 
         default: /* IDLE_BRAKED, ESTOP_LATCHED */
             brake(p_mc);
             b_drive = false;
-            break;
+        break;
     }
 
     if (b_drive)
@@ -802,3 +802,5 @@ uint32_t motion_odom_layout_bits (void)
 {
     return pk_layout_bits(g_odom_layout, ODOM_FIELDS);
 }
+
+/*** end of file ***/

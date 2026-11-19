@@ -19,7 +19,8 @@
 
 /* Barr-C 5.2: floating point, if ever used, is declared with this type.
    The firmware itself is integer / fixed point (Cortex-M0+, no FPU). */
-typedef float float32_t;
+typedef float  float32_t;
+typedef double float64_t; /* host unit tests only */
 
 static inline int32_t app_abs_i32 (int32_t value)
 {
@@ -58,3 +59,5 @@ static inline uint32_t app_elapsed_ms (uint32_t now_ms, uint32_t since_ms)
 }
 
 #endif /* APP_TYPES_H */
+
+/*** end of file ***/

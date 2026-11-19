@@ -73,3 +73,5 @@
 #define MOTION_PWM_TOP 6249u
 
 #endif /* MOTION_CFG_H */
+
+/*** end of file ***/

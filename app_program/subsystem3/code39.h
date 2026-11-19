@@ -83,3 +83,5 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths,
                                        bool * pb_reversed);
 
 #endif /* CODE39_H */
+
+/*** end of file ***/

@@ -1,34 +1,34 @@
 /*
- *	app_pack.h
- *	Minimum-bit data representation (Change Requirement 1).
+ *  app_pack.h
+ *  Minimum-bit data representation (Change Requirement 1).
  *
- *	The helpers every packed layout in the firmware is built from.  Pure C
- *	(stdint only), so the same code runs in the firmware and in the host
- *	tests (testing/shared/host, SH-H05).
+ *  The helpers every packed layout in the firmware is built from.  Pure C
+ *  (stdint only), so the same code runs in the firmware and in the host
+ *  tests (testing/shared/host, SH-H05).
  *
- *	Rules for every packed field:
- *	  - a field holds only the bits its valid range needs;
- *	  - an unsigned value SATURATES at the largest value of its field, so
- *	    a value out of range is never stored as a wrong, wrapped value;
- *	  - a signed value is stored offset-binary in an unsigned field
- *	    (stored = value + 2^(width-1)), saturating at both ends, so no
- *	    signed bit-field and no bit operation on signed data is used;
- *	  - counters that only feed differences (encoder counts, distance,
- *	    sequence numbers, timestamps) keep their low bits and WRAP; the
- *	    reader takes modular differences (pk_wrap_diff).
+ *  Rules for every packed field:
+ *    - a field holds only the bits its valid range needs;
+ *    - an unsigned value SATURATES at the largest value of its field, so
+ *      a value out of range is never stored as a wrong, wrapped value;
+ *    - a signed value is stored offset-binary in an unsigned field
+ *      (stored = value + 2^(width-1)), saturating at both ends, so no
+ *      signed bit-field and no bit operation on signed data is used;
+ *    - counters that only feed differences (encoder counts, distance,
+ *      sequence numbers, timestamps) keep their low bits and WRAP; the
+ *      reader takes modular differences (pk_wrap_diff).
  *
- *	Three forms:
- *	  - words in RAM (messages): pk_set() / pk_get() place a field at a
- *	    fixed bit position of a uint32_t with masks and shifts;
- *	  - records in RAM (shared snapshots): a layout table (pk_field_t)
- *	    lists each field of the task-local struct with its width and kind;
- *	    pk_pack_rec() / pk_unpack_rec() move the fields into / out of an
- *	    array of words, one after the other.  The table is also the data
- *	    representation table of that record;
- *	  - byte streams (MQTT payloads): pk_writer_t / pk_reader_t append
- *	    fields LSB first, so bit 0 of the stream is bit 0 of byte 0 and the
- *	    layout does not depend on the compiler or the CPU's byte order.
- *	    The laptop decoder (dashboard/picocar_codec.py) reads the same way.
+ *  Three forms:
+ *    - words in RAM (messages): pk_set() / pk_get() place a field at a
+ *      fixed bit position of a uint32_t with masks and shifts;
+ *    - records in RAM (shared snapshots): a layout table (pk_field_t)
+ *      lists each field of the task-local struct with its width and kind;
+ *      pk_pack_rec() / pk_unpack_rec() move the fields into / out of an
+ *      array of words, one after the other.  The table is also the data
+ *      representation table of that record;
+ *    - byte streams (MQTT payloads): pk_writer_t / pk_reader_t append
+ *      fields LSB first, so bit 0 of the stream is bit 0 of byte 0 and the
+ *      layout does not depend on the compiler or the CPU's byte order.
+ *      The laptop decoder (dashboard/picocar_codec.py) reads the same way.
  */
 
 #ifndef APP_PACK_H
@@ -174,3 +174,5 @@ void pk_unpack_rec(pk_field_t const * p_f, uint16_t n_fields,
                    uint32_t const * p_words, void * p_rec);
 
 #endif /* APP_PACK_H */
+
+/*** end of file ***/

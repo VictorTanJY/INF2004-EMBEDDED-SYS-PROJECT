@@ -449,3 +449,5 @@ uint32_t line_snap_layout_bits (void)
 {
     return pk_layout_bits(g_line_layout, LINE_FIELDS);
 }
+
+/*** end of file ***/

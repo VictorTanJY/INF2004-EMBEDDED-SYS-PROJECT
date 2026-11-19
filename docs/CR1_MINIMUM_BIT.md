@@ -11,10 +11,10 @@ Raw measurements: `testing/system/logs/2026-11-15_cr1_before_after.txt`.
 
 | # | Area | What is stored in minimum bits | Where |
 |---|---|---|---|
-| 1 | Motion control and encoder data | `mbf_motion` command: one 32-bit word. Odometry snapshot: 329 bits (11 words) | `motion_core.c` (`motion_cmd_pack`, `k_odom_layout`) |
-| 2 | Line and barcode sensing | Line snapshot: 208 bits (7 words); barcode character as a 6-bit Code 39 symbol | `line_track.c` (`k_line_layout`) |
+| 1 | Motion control and encoder data | `mbf_motion` command: one 32-bit word. Odometry snapshot: 329 bits (11 words) | `motion_core.c` (`motion_cmd_pack`, `g_odom_layout`) |
+| 2 | Line and barcode sensing | Line snapshot: 208 bits (7 words); barcode character as a 6-bit Code 39 symbol | `line_track.c` (`g_line_layout`) |
 | 3 | Obstacle detection | Obstacle snapshot: 166 bits (6 words); `mbf_scan` request: 16 bits | `obstacle_core.c`, `mission_core.c` |
-| 4 | Hump estimation | IMU snapshot (pitch, humps, motion class): 164 bits (6 words) | `imu_core.c` (`k_imu_layout`) |
+| 4 | Hump estimation | IMU snapshot (pitch, humps, motion class): 164 bits (6 words) | `imu_core.c` (`g_imu_layout`) |
 | 5 | Vehicle and controller states | Every state stored outside its task in 2-4 bits (mission 4, obstacle 4, motion 3, phase 3, barcode 2, hump 2, motion class 3) | the layout tables above |
 | 6 | Data shared between tasks / ISR and task | Snapshots stored packed; heartbeat counters one byte each; faults one bit each in `flg_safety`; echo ISR result one 17-bit word | `subsystem2.c` ... `subsystem5.c`, `drv_ultrasonic.c` |
 | 7 | Inter-task queue messages | `mbf_motion` 8 -> 4 B, `mbf_mission` 8 -> 4 B, `mbf_scan` 4 -> 2 B, `mbf_telem` 12 -> 8 B | `motion_core.c`, `mission_core.c`, `comms_proto.c` |

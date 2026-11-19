@@ -67,3 +67,5 @@ EXPORT uint32_t comms_telem_drops (void)
 {
     return (uint32_t)g_telem_drops;
 }
+
+/*** end of file ***/

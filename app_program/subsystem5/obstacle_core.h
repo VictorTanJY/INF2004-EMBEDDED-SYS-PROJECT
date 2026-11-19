@@ -250,3 +250,5 @@ void     obst_snap_unpack(uint32_t const * p_words, obst_snap_t * p_snap);
 uint32_t obst_snap_layout_bits(void);
 
 #endif /* OBSTACLE_CORE_H */
+
+/*** end of file ***/

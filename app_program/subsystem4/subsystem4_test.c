@@ -22,8 +22,8 @@
 
 #define T_NFR8_US    20000u /* NFR8: brake within 20 ms of a fault       */
 #define T_LEVEL_CDEG 500    /* level bench: |pitch|, |roll| <= 5.0 deg   */
-#define T_FAULT_BIT  SAFETY_FLT_STALL /* not re-checked on reset (live_causes) \
-                                       */
+/* not re-checked on reset (live_causes) */
+#define T_FAULT_BIT SAFETY_FLT_STALL
 
 static bool brake_pins_low (void)
 {
@@ -165,3 +165,5 @@ EXPORT void subsystem4_test (void)
 }
 
 #endif /* APP_TEST */
+
+/*** end of file ***/

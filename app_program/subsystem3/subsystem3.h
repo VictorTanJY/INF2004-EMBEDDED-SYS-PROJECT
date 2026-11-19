@@ -32,3 +32,5 @@ IMPORT void line_task(INT stacd, void * p_exinf);
 IMPORT ID   g_tid_line;
 
 #endif /* SUBSYSTEM3_H */
+
+/*** end of file ***/

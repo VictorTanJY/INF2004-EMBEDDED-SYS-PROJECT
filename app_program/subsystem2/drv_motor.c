@@ -12,11 +12,31 @@
 #include "motion_cfg.h"
 #include "subsystem2.h"
 
-#define PWM_CH_CSR(s) (PWM_BASE + (0x14u * (s)) + 0x00u)
-#define PWM_CH_DIV(s) (PWM_BASE + (0x14u * (s)) + 0x04u)
-#define PWM_CH_CTR(s) (PWM_BASE + (0x14u * (s)) + 0x08u)
-#define PWM_CH_CC(s)  (PWM_BASE + (0x14u * (s)) + 0x0Cu)
-#define PWM_CH_TOP(s) (PWM_BASE + (0x14u * (s)) + 0x10u)
+static inline uint32_t pwm_ch_csr (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x00u;
+}
+
+static inline uint32_t pwm_ch_div (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x04u;
+}
+
+static inline uint32_t pwm_ch_ctr (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x08u;
+}
+
+static inline uint32_t pwm_ch_cc (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x0Cu;
+}
+
+static inline uint32_t pwm_ch_top (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x10u;
+}
+
 #define PWM_DIV_INT_1 (1u << 4)
 
 #define SLICE_L 4u /* GP8 = 4A, GP9 = 4B   */
@@ -69,16 +89,16 @@ EXPORT ER drv_motor_init (void)
     app_reset_release(RESETS_RESET_PWM);
     for (idx = 0u; idx < 2u; idx++)
     {
-        out_w(PWM_CH_CSR(slices[idx]), 0u);
-        out_w(PWM_CH_DIV(slices[idx]), PWM_DIV_INT_1);
-        out_w(PWM_CH_TOP(slices[idx]), MOTION_PWM_TOP);
-        out_w(PWM_CH_CC(slices[idx]), 0u);
-        out_w(PWM_CH_CTR(slices[idx]), 0u);
-        out_w(PWM_CH_CSR(slices[idx]), PWM_CH_CSR_EN);
+        out_w(pwm_ch_csr(slices[idx]), 0u);
+        out_w(pwm_ch_div(slices[idx]), PWM_DIV_INT_1);
+        out_w(pwm_ch_top(slices[idx]), MOTION_PWM_TOP);
+        out_w(pwm_ch_cc(slices[idx]), 0u);
+        out_w(pwm_ch_ctr(slices[idx]), 0u);
+        out_w(pwm_ch_csr(slices[idx]), PWM_CH_CSR_EN);
     }
 
     /* Read back: the block really left reset and took the settings. */
-    return (MOTION_PWM_TOP == in_w(PWM_CH_TOP(SLICE_L))) ? E_OK : E_IO;
+    return (MOTION_PWM_TOP == in_w(pwm_ch_top(SLICE_L))) ? E_OK : E_IO;
 }
 
 EXPORT void drv_motor_connect (void)
@@ -91,6 +111,8 @@ EXPORT void drv_motor_connect (void)
 
 EXPORT void drv_motor_write (int16_t duty_l, int16_t duty_r)
 {
-    out_w(PWM_CH_CC(SLICE_L), cc_for(duty_l, MOTION_MOT_SIGN_L));
-    out_w(PWM_CH_CC(SLICE_R), cc_for(duty_r, MOTION_MOT_SIGN_R));
+    out_w(pwm_ch_cc(SLICE_L), cc_for(duty_l, MOTION_MOT_SIGN_L));
+    out_w(pwm_ch_cc(SLICE_R), cc_for(duty_r, MOTION_MOT_SIGN_R));
 }
+
+/*** end of file ***/

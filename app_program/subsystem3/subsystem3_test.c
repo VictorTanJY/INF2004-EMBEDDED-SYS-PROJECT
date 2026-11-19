@@ -31,8 +31,8 @@ static uint16_t make_star_code (char chr, uint32_t * p_w)
 {
     char const seq[3]  = {'*', chr, '*'};
     uint16_t   n_elems = 0u;
-    int        kdx;
-    int        elem;
+    int32_t    kdx;
+    int32_t    elem;
 
     for (kdx = 0; kdx < 3; kdx++)
     {
@@ -76,8 +76,8 @@ EXPORT void subsystem3_test (void)
     bool        b_rev   = false;
     uint16_t    n_elems = 0u;
     char const  seq[3]  = {'*', 'F', '*'};
-    int         kdx;
-    int         elem;
+    int32_t     kdx;
+    int32_t     elem;
 
     TEST_INIT();
 
@@ -183,3 +183,5 @@ EXPORT void subsystem3_test (void)
 }
 
 #endif /* APP_TEST */
+
+/*** end of file ***/

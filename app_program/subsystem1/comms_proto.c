@@ -12,7 +12,7 @@
 #include "comms_proto.h"
 #include "../app_pack.h"
 
-typedef char
+typedef uint8_t
     comms_check_symbols_t[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
 
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
@@ -306,7 +306,7 @@ comms_err_t comms_parse_cmd (uint8_t const * p_data, uint16_t len,
             {
                 return COMMS_ERR_BAD_FRAME;
             }
-            break;
+        break;
 
         case COMMS_CMD_SET:
         {
@@ -330,8 +330,8 @@ comms_err_t comms_parse_cmd (uint8_t const * p_data, uint16_t len,
             {
                 return COMMS_ERR_RANGE;
             }
-            break;
         }
+        break;
 
         case COMMS_CMD_MAP:
         {
@@ -361,8 +361,8 @@ comms_err_t comms_parse_cmd (uint8_t const * p_data, uint16_t len,
                 packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
             }
             p_cmd->value = (int32_t)packed;
-            break;
         }
+        break;
 
         default:
             return COMMS_ERR_BAD_CMD;
@@ -501,3 +501,5 @@ void comms_ring_pop (comms_ring_t * p_ring)
         p_ring->count--;
     }
 }
+
+/*** end of file ***/

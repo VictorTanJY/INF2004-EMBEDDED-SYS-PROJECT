@@ -24,3 +24,5 @@ IMPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf,
 IMPORT ER drv_i2c1_probe(uint8_t addr7);
 
 #endif /* DRV_I2C1_H */
+
+/*** end of file ***/

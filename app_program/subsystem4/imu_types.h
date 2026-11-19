@@ -17,12 +17,12 @@
  *  SAFETY_REQ_RESET is not a fault: MissionTask sets it to ask SafetyTask
  *  to clear the latch after an operator reset (if every cause is gone).
  * --------------------------------------------------------------------- */
-#define SAFETY_FLT_LIFT \
-    0x0001u /* ImuTask: lifted while running (end of run, 14 Nov) */
+/* ImuTask: lifted while running (end of run, 14 Nov) */
+#define SAFETY_FLT_LIFT      0x0001u
 #define SAFETY_FLT_TOO_CLOSE 0x0002u /* ObstacleTask, d < 8 cm         */
 #define SAFETY_FLT_STALL     0x0004u /* MotionTask                     */
-#define SAFETY_FLT_TILT \
-    0x0008u /* ImuTask: > 30 deg (overturned) while running */
+/* ImuTask: > 30 deg (overturned) while running */
+#define SAFETY_FLT_TILT 0x0008u
 /* 0x0010 unused: the remote E-stop was removed (14 Nov) */
 #define SAFETY_FLT_HEARTBEAT 0x0020u /* SafetyTask itself (latched only) */
 #define SAFETY_FLT_ENC_FAULT 0x0040u /* report-only: MotionTask        */
@@ -99,3 +99,5 @@ typedef struct
 } imu_snap_t;
 
 #endif /* IMU_TYPES_H */
+
+/*** end of file ***/

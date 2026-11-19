@@ -119,3 +119,5 @@ void     mission_snap_unpack(uint32_t const * p_words, mission_snap_t * p_snap);
 uint32_t mission_snap_layout_bits(void);
 
 #endif /* MISSION_CORE_H */
+
+/*** end of file ***/

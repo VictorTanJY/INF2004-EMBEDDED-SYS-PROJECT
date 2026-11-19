@@ -26,3 +26,5 @@ IMPORT ER drv_encoder_init(void);
 IMPORT int32_t drv_encoder_read(uint32_t which);
 
 #endif /* DRV_ENCODER_H */
+
+/*** end of file ***/

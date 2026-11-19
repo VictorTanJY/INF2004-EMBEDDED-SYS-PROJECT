@@ -1,5 +1,5 @@
 # Host unit tests for subsystem 3's pure modules (code39, line_barcode,
-# line_track), including the instructor's barcode sheets (vectors_slides.h,
+# line_track), including the instructor's barcode sheets (vectors_slides.c/.h,
 # made by make_vectors.py from BARCODE.pptx).
 # Run on a PC:   make -C testing/subsystem3/host
 SRC_DIR := ../../../app_program
@@ -14,8 +14,8 @@ test_s3: $(HDRS)
 SRCS    := $(SRC_DIR)/subsystem3/code39.c $(SRC_DIR)/subsystem3/line_barcode.c \
            $(SRC_DIR)/subsystem3/line_track.c $(SRC_DIR)/app_pack.c
 
-test_s3: test_s3.c vectors_slides.h $(SRCS)
-	$(CC) $(CFLAGS) $(SAN) -o $@ test_s3.c $(SRCS) -lm
+test_s3: test_s3.c vectors_slides.c vectors_slides.h $(SRCS)
+	$(CC) $(CFLAGS) $(SAN) -o $@ test_s3.c vectors_slides.c $(SRCS) -lm
 
 run: test_s3
 	./test_s3

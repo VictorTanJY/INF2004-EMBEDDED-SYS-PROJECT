@@ -528,7 +528,7 @@ bc_result_t bc_sample (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
                 p_bc->q_wlo = 0xFFFFu;
                 p_bc->q_whi = 0u;
             }
-            break;
+        break;
 
         case LINE_BC_ARMED:
             if (!p_bc->b_black)
@@ -574,7 +574,7 @@ bc_result_t bc_sample (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
             {
                 pre_feed(p_bc, norm, step_um);
             }
-            break;
+        break;
 
         case LINE_BC_CAPTURING:
             p_bc->total_um += step_um;
@@ -639,7 +639,7 @@ bc_result_t bc_sample (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
                 start_cooldown(p_bc);
                 return BC_REJECT;
             }
-            break;
+        break;
 
         default: /* LINE_BC_COOLDOWN */
             p_bc->cooldown_um += step_um;
@@ -648,7 +648,9 @@ bc_result_t bc_sample (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
                 p_bc->state    = (uint8_t)LINE_BC_WAIT_QUIET;
                 p_bc->white_um = 0u;
             }
-            break;
+        break;
     }
     return BC_NONE;
 }
+
+/*** end of file ***/

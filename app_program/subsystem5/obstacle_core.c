@@ -9,8 +9,8 @@
 #include "../app_types.h"
 #include "../app_math.h"
 
-#define OBST_NEAR_EXTRA_MM \
-    300 /* other objects this close matter for clearance */
+/* other objects this close matter for clearance */
+#define OBST_NEAR_EXTRA_MM 300
 
 uint16_t obst_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
 {
@@ -560,7 +560,7 @@ void obst_scan_feed (obst_scan_t * p_s, uint16_t r_mm)
                         centre + OBST_FINE_HALF_DEG, OBST_SCAN_MAX_DEG);
                 }
             }
-            break;
+        break;
 
         case OBST_SCAN_FINE:
             fine_insert(p_s, p_s->angle, r_mm);
@@ -572,7 +572,7 @@ void obst_scan_feed (obst_scan_t * p_s, uint16_t r_mm)
             {
                 start_refine(p_s, true);
             }
-            break;
+        break;
 
         case OBST_SCAN_REFINE_R:
         case OBST_SCAN_REFINE_L:
@@ -604,11 +604,11 @@ void obst_scan_feed (obst_scan_t * p_s, uint16_t r_mm)
                     p_s->phase = (uint8_t)OBST_SCAN_DONE;
                 }
             }
-            break;
         }
+        break;
 
         default:
-            break;
+        break;
     }
 }
 
@@ -858,8 +858,8 @@ uint8_t obst_bypass_plan (obst_profile_t const * p_prof, uint8_t side,
 /* ---- step-out leg (7 Nov) -------------------------------------------- */
 #define OUT_EXTRA_MM \
     (OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM)
-#define OUT_SHAFT_MM \
-    (OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM) /* servo shaft ahead of the axle */
+/* servo shaft ahead of the axle */
+#define OUT_SHAFT_MM (OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM)
 
 void obst_out_start (obst_out_t * p_o, int32_t min_lat)
 {
@@ -1102,3 +1102,5 @@ uint32_t obst_snap_layout_bits (void)
 {
     return pk_layout_bits(g_obst_layout, OBST_FIELDS);
 }
+
+/*** end of file ***/

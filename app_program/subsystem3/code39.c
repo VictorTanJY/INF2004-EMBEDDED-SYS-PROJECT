@@ -707,6 +707,10 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
             {
                 next_cost = cost;
             }
+            else
+            {
+                /* No action required. */
+            }
         }
     }
     if (('\0' == ch1) || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T))
@@ -719,3 +723,5 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
     *pb_reversed = b_rev1;
     return CODE39_OK;
 }
+
+/*** end of file ***/

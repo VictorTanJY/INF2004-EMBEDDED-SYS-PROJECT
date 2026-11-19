@@ -23,8 +23,8 @@
 #include "app_types.h"
 #include "vectors_slides.h"
 
-static int g_pass;
-static int g_fail;
+static int32_t g_pass;
+static int32_t g_fail;
 
 #define CHECK(id, cond)                                                      \
     do                                                                       \
@@ -40,7 +40,7 @@ static int g_fail;
         }                                                                    \
     } while (0)
 
-#define N_SLIDES ((int)(sizeof(g_slides) / sizeof(g_slides[0])))
+#define N_SLIDES ((int32_t)SLIDE_VEC_COUNT)
 
 static char const g_data_chars[] =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
@@ -52,19 +52,19 @@ static uint32_t rnd (void)
     return (g_rng >> 8) & 0xFFFFu;
 }
 /* uniform in [-1, 1] */
-static double rndu (void)
+static float64_t rndu (void)
 {
-    return ((double)rnd() / 32767.5) - 1.0;
+    return ((float64_t)rnd() / 32767.5) - 1.0;
 }
 
 /* Widths of *c* with the given narrow width, ratio and +-jitter. */
-static uint16_t make_code (char chr, uint32_t narrow, double ratio,
-                           double jitter, uint32_t * p_w)
+static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
+                           float64_t jitter, uint32_t * p_w)
 {
     char const seq[3]  = {'*', chr, '*'};
     uint16_t   n_elems = 0u;
-    int        kdx;
-    int        elem;
+    int32_t    kdx;
+    int32_t    elem;
 
     for (kdx = 0; kdx < 3; kdx++)
     {
@@ -72,14 +72,14 @@ static uint16_t make_code (char chr, uint32_t narrow, double ratio,
 
         for (elem = 0; elem < 9; elem++)
         {
-            double omega =
-                (double)narrow * (((pat >> (8 - elem)) & 1u) ? ratio : 1.0);
+            float64_t omega =
+                (float64_t)narrow * (((pat >> (8 - elem)) & 1u) ? ratio : 1.0);
             p_w[n_elems++] = (uint32_t)(omega * (1.0 + jitter * rndu()));
         }
         if (kdx < 2)
         {
-            p_w[n_elems++] =
-                (uint32_t)((double)narrow * (1.0 + jitter * rndu())); /* gap */
+            p_w[n_elems++] = (uint32_t)((float64_t)narrow
+                                        * (1.0 + jitter * rndu())); /* gap */
         }
     }
     return n_elems;
@@ -149,7 +149,7 @@ static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
 
 /* Run one pass at v_mm_s; returns the result and fills *p_out. */
 static bc_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
-                             uint32_t v_mm_s, int noise, bc_out_t * p_out)
+                             uint32_t v_mm_s, int32_t noise, bc_out_t * p_out)
 {
     static bc_capture_t capture;
     uint32_t            x_val;
@@ -185,6 +185,10 @@ static bc_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
         {
             return BC_REJECT; /* more than one result per code */
         }
+        else
+        {
+            /* No action required. */
+        }
     }
     return found;
 }
@@ -193,14 +197,14 @@ static void test_table (void)
 {
     size_t idx;
     size_t jdx;
-    int    b_ok = 1;
+    bool   b_ok = true;
 
     for (idx = 0u; idx < sizeof(g_data_chars) - 1u; idx++)
     {
         uint16_t pos     = code39_pattern(g_data_chars[idx]);
-        int      wide    = 0;
-        int      wide_sp = 0;
-        int      val_b;
+        int32_t  wide    = 0;
+        int32_t  wide_sp = 0;
+        int32_t  val_b;
 
         for (val_b = 0; val_b < 9; val_b++)
         {
@@ -215,36 +219,36 @@ static void test_table (void)
         }
         if ((0u == pos) || (wide != 3) || ((wide_sp != 1) && (wide_sp != 3)))
         {
-            b_ok = 0;
+            b_ok = false;
         }
         if (code39_char(pos) != g_data_chars[idx])
         {
-            b_ok = 0;
+            b_ok = false;
         }
         for (jdx = 0u; jdx < idx; jdx++)
         {
             if (code39_pattern(g_data_chars[jdx]) == pos)
             {
-                b_ok = 0;
+                b_ok = false;
             }
         }
     }
     CHECK("S3-H01", b_ok);
     CHECK("S3-H01",
-          0x094u == code39_pattern('*') && '\0' == code39_char(0x1FFu));
+          (0x094u == code39_pattern('*')) && ('\0' == code39_char(0x1FFu)));
 }
 
 static void test_slides (void)
 {
-    int step;
+    int32_t step;
 
     for (step = 0; step < N_SLIDES; step++)
     {
-        uint32_t widths[29];
-        char     chr;
-        bool     b_rev;
-        int      kdx;
-        double   scale;
+        uint32_t  widths[29];
+        char      chr;
+        bool      b_rev;
+        int32_t   kdx;
+        float64_t scale;
 
         for (scale = 1.0; scale > 0.5;
              scale -= (1.0 - 297.0 / 338.67)) /* screen, A4 */
@@ -254,12 +258,12 @@ static void test_slides (void)
                 widths[kdx] = (uint32_t)(g_slides[step].p_w[kdx] * scale);
             }
             CHECK("S3-H02",
-                  CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev)
-                      && chr == g_slides[step].chr && !b_rev);
+                  (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
+                      && (chr == g_slides[step].chr) && !b_rev);
             reverse(widths, 29);
             CHECK("S3-H02",
-                  CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev)
-                      && chr == g_slides[step].chr && b_rev);
+                  (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
+                      && (chr == g_slides[step].chr) && b_rev);
             if (scale < 1.0)
             {
                 break;
@@ -271,12 +275,12 @@ static void test_slides (void)
 static void test_synthetic (void)
 {
     uint32_t const narrows[3] = {3000u, 5100u, 6900u};
-    int            b_ok       = 1;
-    int            wrong      = 0;
+    bool           b_ok       = true;
+    int32_t        wrong      = 0;
     size_t         idx;
-    int            val_a;
-    int            ret;
-    int            diff;
+    int32_t        val_a;
+    int32_t        ret;
+    int32_t        diff;
 
     for (idx = 0u; idx < sizeof(g_data_chars) - 1u; idx++)
     {
@@ -284,7 +288,7 @@ static void test_synthetic (void)
         {
             for (ret = 0; ret < 3; ret++)
             {
-                double const ratio =
+                float64_t const ratio =
                     (0 == ret) ? 2.2 : ((1 == ret) ? 2.5 : 3.0);
 
                 for (diff = 0; diff < 2; diff++)
@@ -303,11 +307,15 @@ static void test_synthetic (void)
                     res = code39_decode_one(widths, n_elems, 15, &chr, &b_rev);
                     if (res != CODE39_OK)
                     {
-                        b_ok = 0;
+                        b_ok = false;
                     }
                     else if (chr != g_data_chars[idx])
                     {
                         wrong++;
+                    }
+                    else
+                    {
+                        /* No action required. */
                     }
                 }
             }
@@ -322,13 +330,13 @@ static void test_rejects (void)
     uint16_t n_elems;
     char     chr;
     bool     b_rev;
-    int      idx;
-    int      wrong = 0;
+    int32_t  idx;
+    int32_t  wrong = 0;
 
     /* a wide bar printed narrow: rejected, never a different character */
-    for (idx = 0; idx < (int)(sizeof(g_data_chars) - 1u); idx++)
+    for (idx = 0; idx < (int32_t)(sizeof(g_data_chars) - 1u); idx++)
     {
-        int elem;
+        int32_t elem;
         for (elem = 10; elem < 19; elem++)
         {
             uint16_t pat = code39_pattern(g_data_chars[idx]);
@@ -359,8 +367,8 @@ static void test_rejects (void)
         /* "*AB*": valid Code 39 but two data characters */
         uint32_t   words_out[40];
         char const seq[4] = {'*', 'A', 'B', '*'};
-        int        kdx;
-        int        elem;
+        int32_t    kdx;
+        int32_t    elem;
         n_elems = 0u;
         for (kdx = 0; kdx < 4; kdx++)
         {
@@ -384,13 +392,13 @@ static void test_rejects (void)
 static void test_capture (void)
 {
     uint32_t const speeds[2] = {150u, 300u}; /* NFR3 speeds, mm/s */
-    int            step;
-    int            value;
-    int            diff;
-    int            pass;
-    int            good  = 0;
-    int            total = 0;
-    int            wrong = 0;
+    int32_t        step;
+    int32_t        value;
+    int32_t        diff;
+    int32_t        pass;
+    int32_t        good  = 0;
+    int32_t        total = 0;
+    int32_t        wrong = 0;
 
     /* every slide, both speeds, both directions, clean */
     for (step = 0; step < N_SLIDES; step++)
@@ -401,7 +409,7 @@ static void test_capture (void)
             {
                 uint32_t widths[29];
                 bc_out_t out;
-                int      kdx;
+                int32_t  kdx;
 
                 for (kdx = 0; kdx < 29; kdx++)
                 {
@@ -413,8 +421,8 @@ static void test_capture (void)
                 }
                 memset(&out, 0, sizeof(out));
                 CHECK("S3-H05",
-                      BC_VALID == run_pass(widths, 29, speeds[value], 0, &out)
-                          && out.chr == g_slides[step].chr);
+                      (BC_VALID == run_pass(widths, 29, speeds[value], 0, &out))
+                          && (out.chr == g_slides[step].chr));
             }
         }
     }
@@ -429,12 +437,12 @@ static void test_capture (void)
                 uint32_t    widths[29];
                 bc_out_t    out;
                 bc_result_t result;
-                int         kdx;
+                int32_t     kdx;
 
                 for (kdx = 0; kdx < 29; kdx++)
                 {
                     widths[kdx] =
-                        (uint32_t)((double)g_slides[step].p_w[kdx] * 297.0
+                        (uint32_t)((float64_t)g_slides[step].p_w[kdx] * 297.0
                                    / 338.67 * (1.0 + 0.10 * rndu()));
                 }
                 if (pass % 2)
@@ -452,11 +460,15 @@ static void test_capture (void)
                 {
                     wrong++;
                 }
+                else
+                {
+                    /* No action required. */
+                }
             }
         }
     }
     printf("noisy passes: %d / %d decoded, %d wrong\n", good, total, wrong);
-    CHECK("S3-H05", 0 == wrong && (good * 100) >= (total * 95));
+    CHECK("S3-H05", (0 == wrong) && ((good * 100) >= (total * 95)));
 
     /* S3-H15: blurred sensor spot (2 Nov, the robot saw 3 elements: thin
        bars and thin gaps never crossed the old fixed 350 / 220 levels).  A
@@ -467,13 +479,13 @@ static void test_capture (void)
        decode, never a wrong character (old levels: none, all too long). */
     {
         uint32_t const spots[2] = {3500u, 4000u};
-        int            setpoint;
-        int            blur_good  = 0;
-        int            blur_total = 0;
-        int            blur_wrong = 0;
-        int            weak_good  = 0;
-        int            weak_total = 0;
-        int            weak_wrong = 0;
+        int32_t        setpoint;
+        int32_t        blur_good  = 0;
+        int32_t        blur_total = 0;
+        int32_t        blur_wrong = 0;
+        int32_t        weak_good  = 0;
+        int32_t        weak_total = 0;
+        int32_t        weak_wrong = 0;
 
         for (setpoint = 0; setpoint < 2; setpoint++)
         {
@@ -487,7 +499,7 @@ static void test_capture (void)
                         uint32_t    widths[29];
                         bc_out_t    out;
                         bc_result_t result;
-                        int         kdx;
+                        int32_t     kdx;
 
                         for (kdx = 0; kdx < 29; kdx++)
                         {
@@ -510,6 +522,10 @@ static void test_capture (void)
                         {
                             blur_wrong++;
                         }
+                        else
+                        {
+                            /* No action required. */
+                        }
                     }
                 }
             }
@@ -521,7 +537,7 @@ static void test_capture (void)
         {
             uint32_t widths[29];
             bc_out_t out;
-            int      kdx;
+            int32_t  kdx;
 
             for (kdx = 0; kdx < 29; kdx++)
             {
@@ -540,6 +556,10 @@ static void test_capture (void)
             {
                 weak_wrong++;
             }
+            else
+            {
+                /* No action required. */
+            }
         }
         g_spot_um = 1500u;
         g_white   = 80u;
@@ -548,8 +568,9 @@ static void test_capture (void)
                "%d, %d wrong\n",
                blur_good, blur_total, blur_wrong, weak_good, weak_total,
                weak_wrong);
-        CHECK("S3-H15", 0 == blur_wrong && blur_good == blur_total);
-        CHECK("S3-H15", 0 == weak_wrong && (weak_good * 3) >= (weak_total * 2));
+        CHECK("S3-H15", (0 == blur_wrong) && (blur_good == blur_total));
+        CHECK("S3-H15",
+              (0 == weak_wrong) && ((weak_good * 3) >= (weak_total * 2)));
     }
 
     /* S3-H18 (7 Nov): (a) a read one bar short at either end (2 elements
@@ -559,16 +580,16 @@ static void test_capture (void)
        elements: the profile's second try decodes more than the swing
        reading alone, never a wrong letter. */
     {
-        int good  = 0;
-        int total = 0;
-        int wrong = 0;
-        int kdx;
+        int32_t good  = 0;
+        int32_t total = 0;
+        int32_t wrong = 0;
+        int32_t kdx;
 
         for (step = 0; step < N_SLIDES; step++)
         {
             for (diff = 0; diff < 2; diff++)
             {
-                int cut;
+                int32_t cut;
 
                 for (cut = 0; cut < 2; cut++)
                 {
@@ -649,8 +670,8 @@ static void test_capture (void)
 
         {
             uint32_t const spots[2] = {5000u, 6000u};
-            int            setpoint;
-            int            pass2 = 0;
+            int32_t        setpoint;
+            int32_t        pass2 = 0;
 
             good  = 0;
             total = 0;
@@ -686,6 +707,10 @@ static void test_capture (void)
                         {
                             wrong++;
                         }
+                        else
+                        {
+                            /* No action required. */
+                        }
                         pass2 += (g_last_pass != 0u) ? 1 : 0;
                     }
                 }
@@ -706,12 +731,12 @@ static void test_capture (void)
        With the 40 mm end the whole code is kept and the darkness record
        (low threshold) finds the faint bars. */
     {
-        int step;
-        int diff;
-        int good  = 0;
-        int total = 0;
-        int wrong = 0;
-        int noise;
+        int32_t step;
+        int32_t diff;
+        int32_t good  = 0;
+        int32_t total = 0;
+        int32_t wrong = 0;
+        int32_t noise;
 
         g_spot_um    = 1500u;
         g_white      = 20u;
@@ -730,7 +755,7 @@ static void test_capture (void)
                     uint32_t    widths[29];
                     bc_out_t    out;
                     bc_result_t result;
-                    int         kdx;
+                    int32_t     kdx;
 
                     uint32_t wmin = 0xFFFFFFFFu;
 
@@ -767,9 +792,9 @@ static void test_capture (void)
                     {
                         printf("  Z slide %d dir %d noise %d: result %d, %u "
                                "elements, %u mm\n",
-                               g_slides[step].slide, diff, noise, (int)result,
-                               (unsigned)out.elements,
-                               (unsigned)(out.length_um / 1000u));
+                               g_slides[step].slide, diff, noise,
+                               (int32_t)result, (uint32_t)out.elements,
+                               (uint32_t)(out.length_um / 1000u));
                     }
                 }
             }
@@ -800,11 +825,11 @@ static void test_capture (void)
             1000u, 9600u, 2400u, 2600u, 2000u, 10000u, 3000u,  2400u, 3400u,
             3600u, 9600u, 2400u, 3600u, 8200u, 3600u,  2400u,  9600u, 3000u,
             3400u, 8600u, 3400u, 9000u, 3400u, 3400u};
-        int diff;
-        int noise;
-        int good  = 0;
-        int total = 0;
-        int wrong = 0;
+        int32_t diff;
+        int32_t noise;
+        int32_t good  = 0;
+        int32_t total = 0;
+        int32_t wrong = 0;
 
         g_spot_um = 1000u;
         g_white   = 25u;
@@ -840,8 +865,8 @@ static void test_capture (void)
                 {
                     printf("  14 Nov read %d dir %d noise %d: result %d reason "
                            "%u, %u elements\n",
-                           diff / 2 + 1, diff % 2, noise, (int)result,
-                           (unsigned)out.reason, (unsigned)out.elements);
+                           diff / 2 + 1, diff % 2, noise, (int32_t)result,
+                           (uint32_t)out.reason, (uint32_t)out.elements);
                 }
             }
         }
@@ -865,8 +890,8 @@ static void test_capture (void)
         uint32_t widths[1] = {500000u};
         bc_out_t out;
         memset(&out, 0, sizeof(out));
-        CHECK("S3-H07", BC_REJECT == run_pass(widths, 1, 300u, 0, &out)
-                            && CODE39_ERR_TOO_LONG == out.reason);
+        CHECK("S3-H07", (BC_REJECT == run_pass(widths, 1, 300u, 0, &out))
+                            && (CODE39_ERR_TOO_LONG == out.reason));
     }
 }
 
@@ -895,9 +920,11 @@ static void test_track (void)
     /* S3-H10: steering sign: line under the left sensor -> turn left */
     line_track_init(&track);
     (void)feed(&track, 500u, 500u, 60000u);
-    CHECK("S3-H10", 0 == track.err && 0 == track.omega && 300 == track.v_mm_s);
+    CHECK("S3-H10",
+          (0 == track.err) && (0 == track.omega) && (300 == track.v_mm_s));
     (void)line_track_step(&track, &g_cfg, 800u, 200u, 3000u);
-    CHECK("S3-H10", 600 == track.err && track.omega > 0 && track.v_mm_s < 300);
+    CHECK("S3-H10",
+          (600 == track.err) && (track.omega > 0) && (track.v_mm_s < 300));
     (void)feed(&track, 200u, 800u, 9000u);
     CHECK("S3-H10", track.omega < 0);
 
@@ -907,7 +934,8 @@ static void test_track (void)
     events = feed(&track, 1000u, 1000u, 15000u);
     CHECK("S3-H08", 0u == (events & LINE_TRK_EV_JUNCTION));
     events = feed(&track, 1000u, 1000u, 15000u);
-    CHECK("S3-H08", (events & LINE_TRK_EV_JUNCTION) != 0u && 0 == track.omega);
+    CHECK("S3-H08",
+          ((events & LINE_TRK_EV_JUNCTION) != 0u) && (0 == track.omega));
     events = feed(&track, 1000u, 1000u, 30000u);
     CHECK("S3-H08", 0u == (events & LINE_TRK_EV_JUNCTION));
     line_track_init(&track);
@@ -920,23 +948,23 @@ static void test_track (void)
     line_track_init(&track);
     (void)feed(&track, 500u, 500u, 60000u);
     events = feed(&track, 50u, 50u, 50000u);
-    CHECK("S3-H09", 0u == (events & LINE_TRK_EV_LOST) && 0 == track.omega
-                        && 300 == track.v_mm_s);
+    CHECK("S3-H09", (0u == (events & LINE_TRK_EV_LOST)) && (0 == track.omega)
+                        && (300 == track.v_mm_s));
     (void)feed(&track, 500u, 500u, 30000u);
     events = feed(&track, 50u, 50u, 90000u);
-    CHECK("S3-H09", (events & LINE_TRK_EV_LOST) != 0u && track.b_lost
-                        && 0 == track.v_mm_s);
+    CHECK("S3-H09", ((events & LINE_TRK_EV_LOST) != 0u) && track.b_lost
+                        && (0 == track.v_mm_s));
     events = feed(&track, 50u, 50u, 90000u);
     CHECK("S3-H09", 0u == (events & LINE_TRK_EV_LOST));
     events = feed(&track, 600u, 400u, 3000u);
-    CHECK("S3-H09", (events & LINE_TRK_EV_FOUND) != 0u && !track.b_lost);
+    CHECK("S3-H09", ((events & LINE_TRK_EV_FOUND) != 0u) && !track.b_lost);
 
     /* S3-H11: drifting off the right of the line -> keeps turning back left */
     line_track_init(&track);
     (void)feed(&track, 500u, 500u, 60000u);
     (void)feed(&track, 950u, 80u, 6000u); /* line under the left sensor only */
     (void)feed(&track, 60u, 60u, 9000u);  /* ... then past it */
-    CHECK("S3-H11", track.omega > 0 && track.v_mm_s < 300);
+    CHECK("S3-H11", (track.omega > 0) && (track.v_mm_s < 300));
 
     /* S3-H14: right curve, the line slides out past the right sensor and
        the error FADES (-1000 -> -300) before both read white: still a turn
@@ -948,14 +976,14 @@ static void test_track (void)
     (void)feed(&track, 0u, 300u, 6000u);  /* sliding out: error fades */
     CHECK("S3-H14", -300 == track.err);
     (void)line_track_step(&track, &g_cfg, 60u, 60u, 3000u); /* both white */
-    CHECK("S3-H14",
-          -1000 == track.exit_err && track.omega < 0 && track.v_mm_s < 300);
+    CHECK("S3-H14", (-1000 == track.exit_err) && (track.omega < 0)
+                        && (track.v_mm_s < 300));
     line_track_init(&track);
     (void)feed(&track, 500u, 500u, 60000u);
     (void)feed(&track, 0u, 1000u, 6000u);
     (void)feed(&track, 500u, 500u, 45000u); /* centred again for 45 mm */
     (void)feed(&track, 60u, 60u, 9000u);    /* a gap */
-    CHECK("S3-H14", 0 == track.omega && 300 == track.v_mm_s);
+    CHECK("S3-H14", (0 == track.omega) && (300 == track.v_mm_s));
 
     /* S3-H13: steering ramp: the error flips full left / full right every
        10 ms (the weaving seen on 2 Nov); the turn command never moves more
@@ -1004,7 +1032,7 @@ static void test_track (void)
     {
         line_cal_t cal;
         uint16_t   raw[3];
-        int        idx;
+        int32_t    idx;
 
         memset(&cal, 0, sizeof(cal));
         line_cal_start(&cal);
@@ -1016,11 +1044,11 @@ static void test_track (void)
             raw[2] = (uint16_t)((idx < 50) ? 250 : 2500);
             line_cal_sample(&cal, raw);
         }
-        CHECK("S3-H12", line_cal_finish(&cal) && cal.contrast_x10 >= 30);
-        CHECK("S3-H12", 0 == line_cal_norm(&cal, 0, 300)
-                            && 1000 == line_cal_norm(&cal, 0, 3000));
-        CHECK("S3-H12", 500 == line_cal_norm(&cal, 0, 1650)
-                            && 1000 == line_cal_norm(&cal, 0, 4095));
+        CHECK("S3-H12", line_cal_finish(&cal) && (cal.contrast_x10 >= 30));
+        CHECK("S3-H12", (0 == line_cal_norm(&cal, 0, 300))
+                            && (1000 == line_cal_norm(&cal, 0, 3000)));
+        CHECK("S3-H12", (500 == line_cal_norm(&cal, 0, 1650))
+                            && (1000 == line_cal_norm(&cal, 0, 4095)));
         line_cal_start(&cal);
         for (idx = 0; idx < 100; idx++)
         {
@@ -1030,7 +1058,7 @@ static void test_track (void)
             line_cal_sample(&cal, raw);
         }
         CHECK("S3-H12", !line_cal_finish(&cal) && cal.b_valid
-                            && 1000 == line_cal_norm(&cal, 0, 3000));
+                            && (1000 == line_cal_norm(&cal, 0, 3000)));
         /* the barcode sensor does not take part: fixed levels from
            line_cfg.h, even when it saw no contrast during the spin */
         line_cal_start(&cal);
@@ -1042,11 +1070,11 @@ static void test_track (void)
             line_cal_sample(&cal, raw);
         }
         CHECK("S3-H12", line_cal_finish(&cal));
-        CHECK("S3-H12", LINE_BC_WHITE_RAW == cal.white[2]
-                            && LINE_BC_BLACK_RAW == cal.black[2]);
+        CHECK("S3-H12", (LINE_BC_WHITE_RAW == cal.white[2])
+                            && (LINE_BC_BLACK_RAW == cal.black[2]));
         CHECK("S3-H12",
-              0 == line_cal_norm(&cal, 2, LINE_BC_WHITE_RAW)
-                  && 1000 == line_cal_norm(&cal, 2, LINE_BC_BLACK_RAW));
+              (0 == line_cal_norm(&cal, 2, LINE_BC_WHITE_RAW))
+                  && (1000 == line_cal_norm(&cal, 2, LINE_BC_BLACK_RAW)));
     }
 }
 
@@ -1055,12 +1083,12 @@ static void test_track (void)
    line sensors are OBST_IR_AHEAD 120 mm ahead, 9 mm either side (both
    half on the line at the start); the encoders count `gain` x the real
    rotation; a sensor reads the fraction of its 8 mm spot on black. */
-static double g_slip_half = 9.0; /* sensor offset from the centreline, mm */
+static float64_t g_slip_half = 9.0; /* sensor offset from the centreline, mm */
 
-static uint16_t slip_raw (double x_val, double y_val)
+static uint16_t slip_raw (float64_t x_val, float64_t y_val)
 {
-    double const half = 9.0;
-    double       factor;
+    float64_t const half = 9.0;
+    float64_t       factor;
 
     (void)x_val;
     factor = (half - fabs(y_val) + 4.0) / 8.0;
@@ -1068,24 +1096,26 @@ static uint16_t slip_raw (double x_val, double y_val)
     return (uint16_t)(300.0 + (factor * 2700.0));
 }
 
-static uint16_t slip_run (int gain_pm, bool b_line, int start_cdeg)
+static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
 {
     static line_slip_t slip;
     line_cal_t         cal;
-    int                kdx;
+    int32_t            kdx;
 
     memset(&cal, 0, sizeof(cal));
     line_cal_start(&cal);
     line_slip_start(&slip, start_cdeg);
     for (kdx = 1; kdx <= 400; kdx++)
     {
-        double const enc     = 360.0 * kdx / 400.0;
-        double const real    = enc * 1000.0 / gain_pm * M_PI / 180.0;
-        double const x_start = 120.0 * cos(real);
-        double const y_left  = (120.0 * sin(real)) + (g_slip_half * cos(real));
-        double const y_right = (120.0 * sin(real)) - (g_slip_half * cos(real));
-        uint16_t     raw[3];
-        int          height = start_cdeg + (int)(enc * 100.0);
+        float64_t const enc     = 360.0 * kdx / 400.0;
+        float64_t const real    = enc * 1000.0 / gain_pm * M_PI / 180.0;
+        float64_t const x_start = 120.0 * cos(real);
+        float64_t const y_left =
+            (120.0 * sin(real)) + (g_slip_half * cos(real));
+        float64_t const y_right =
+            (120.0 * sin(real)) - (g_slip_half * cos(real));
+        uint16_t raw[3];
+        int32_t  height = start_cdeg + (int32_t)(enc * 100.0);
 
         while (height > 18000)
         {
@@ -1112,16 +1142,16 @@ static uint16_t slip_run (int gain_pm, bool b_line, int start_cdeg)
 
 static void test_slip (void)
 {
-    int const gains[4] = {1000, 1200, 1500, 1800};
-    int       idx;
+    int32_t const gains[4] = {1000, 1200, 1500, 1800};
+    int32_t       idx;
 
     for (idx = 0; idx < 4; idx++)
     {
         uint16_t const gap = slip_run(gains[idx], true, 17000);
 
         printf("turn slip: real gain %d -> measured %u\n", gains[idx],
-               (unsigned)gap);
-        CHECK("S3-H16", abs((int)gap - gains[idx]) <= 25);
+               (uint32_t)gap);
+        CHECK("S3-H16", abs((int32_t)gap - gains[idx]) <= 25);
     }
     CHECK("S3-H16", slip_run(1500, true, -9000) != 0u);
     /* sensors 25 mm either side: they cross the line one after the other */
@@ -1131,8 +1161,8 @@ static void test_slip (void)
         uint16_t const gap = slip_run(gains[idx], true, 0);
 
         printf("turn slip, wide sensors: real gain %d -> measured %u\n",
-               gains[idx], (unsigned)gap);
-        CHECK("S3-H16", abs((int)gap - gains[idx]) <= 25);
+               gains[idx], (uint32_t)gap);
+        CHECK("S3-H16", abs((int32_t)gap - gains[idx]) <= 25);
     }
     g_slip_half = 9.0;
     /* no line under the car: not measured */
@@ -1203,16 +1233,16 @@ static bool thin_triplet (uint32_t const * p_w, uint16_t at_idx,
 
 static void test_best (void)
 {
-    size_t cnt;
-    int    good  = 0;
-    int    total = 0;
-    int    wrong = 0;
-    int    kind;
+    size_t  cnt;
+    int32_t good  = 0;
+    int32_t total = 0;
+    int32_t wrong = 0;
+    int32_t kind;
 
     for (kind = 0; kind < 4; kind++)
     {
-        int kgood  = 0;
-        int ktotal = 0;
+        int32_t kgood  = 0;
+        int32_t ktotal = 0;
 
         for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
@@ -1220,16 +1250,17 @@ static void test_best (void)
 
             for (at_idx = 1u; at_idx < 28u; at_idx++)
             {
-                int diff;
+                int32_t diff;
 
                 for (diff = 0; diff < 2; diff++)
                 {
                     uint32_t widths[29];
                     uint32_t accel[40];
                     uint32_t buf[40];
-                    uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5,
-                                                 0.08, widths),
-                             elem, mid;
+                    uint16_t n_elems =
+                        make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths);
+                    uint16_t elem;
+                    uint16_t mid;
                     char     chr;
                     bool     b_rev;
 
@@ -1268,8 +1299,8 @@ static void test_best (void)
                         if ((at_idx > 26u)
                             || !thin_triplet(widths, at_idx, 3000u)
                             || ((setpoint % 2u) != 0u)
-                            || ((setpoint + 2u) >= at_idx
-                                && setpoint <= (at_idx + 2u)))
+                            || (((setpoint + 2u) >= at_idx)
+                                && (setpoint <= (at_idx + 2u))))
                         {
                             continue;
                         }
@@ -1301,7 +1332,7 @@ static void test_best (void)
                         {
                             wrong++;
                             printf("  WRONG kind %d '%c' at %u d %d -> '%c'\n",
-                                   kind, g_data_chars[cnt], (unsigned)at_idx,
+                                   kind, g_data_chars[cnt], (uint32_t)at_idx,
                                    diff, chr);
                         }
                     }
@@ -1326,15 +1357,16 @@ static void test_best (void)
 
     /* random widths and heavier damage: never accepted as a wrong letter */
     {
-        int ret;
-        int accepted = 0;
-        int bad      = 0;
-        int tries    = 0;
+        int32_t ret;
+        int32_t accepted = 0;
+        int32_t bad      = 0;
+        int32_t tries    = 0;
 
         for (ret = 0; ret < 20000; ret++)
         {
             uint32_t widths[60];
-            uint16_t n_elems = (uint16_t)(25u + 2u * (rnd() % 5u)), elem;
+            uint16_t n_elems = (uint16_t)(25u + 2u * (rnd() % 5u));
+            uint16_t elem;
             char     chr;
             bool     b_rev;
 
@@ -1356,9 +1388,11 @@ static void test_best (void)
                 uint32_t widths[29];
                 uint32_t accel[60];
                 uint32_t buf[60];
-                uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5,
-                                             0.08, widths),
-                         mid, proj, elem;
+                uint16_t n_elems =
+                    make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths);
+                uint16_t mid;
+                uint16_t proj;
+                uint16_t elem;
                 char     chr;
                 bool     b_rev;
 
@@ -1400,12 +1434,12 @@ static void test_best (void)
 
     /* the slide samples through the whole capture with a speck in a wide bar */
     {
-        int step2;
-        int diff2;
-        int gap2     = 0;
-        int elapsed2 = 0;
-        int w2n      = 0;
-        int pos3     = 0;
+        int32_t step2;
+        int32_t diff2;
+        int32_t gap2     = 0;
+        int32_t elapsed2 = 0;
+        int32_t w2n      = 0;
+        int32_t pos3     = 0;
 
         g_spot_um = 300u; /* sharp enough that the speck reads as a gap */
 
@@ -1456,8 +1490,8 @@ static void test_best (void)
                 {
                     printf("  speck slide %d dir %d: result %d reason %d, %u "
                            "elements\n",
-                           g_slides[step2].slide, diff2, (int)result2,
-                           (int)out.reason, (unsigned)out.elements);
+                           g_slides[step2].slide, diff2, (int32_t)result2,
+                           (int32_t)out.reason, (uint32_t)out.elements);
                 }
             }
         }
@@ -1481,16 +1515,16 @@ static void test_light_print (void)
     uint32_t const spots[3] = {3000u, 4000u, 5000u};
     uint32_t const thin[3]  = {300u, 230u,
                                170u}; /* 3 mm bars: rise under BC_DELTA */
-    int            theta;
+    int32_t        theta;
     uint32_t const speeds[3] = {90u, 150u, 250u};
-    int            setpoint;
-    int            value;
-    int            diff;
-    int            good     = 0;
-    int            total    = 0;
-    int            wrong    = 0;
-    int            by_adapt = 0;
-    int            before   = 0;
+    int32_t        setpoint;
+    int32_t        value;
+    int32_t        diff;
+    int32_t        good     = 0;
+    int32_t        total    = 0;
+    int32_t        wrong    = 0;
+    int32_t        by_adapt = 0;
+    int32_t        before   = 0;
     size_t         cnt;
 
     g_white   = 7u;
@@ -1534,16 +1568,20 @@ static void test_light_print (void)
                             wrong++;
                             printf("  WRONG light '%c' spot %u v %u d %d -> "
                                    "'%c' pass %u\n",
-                                   g_data_chars[cnt], (unsigned)spots[setpoint],
-                                   (unsigned)speeds[value], diff, out.chr,
-                                   (unsigned)g_last_pass);
+                                   g_data_chars[cnt], (uint32_t)spots[setpoint],
+                                   (uint32_t)speeds[value], diff, out.chr,
+                                   (uint32_t)g_last_pass);
+                        }
+                        else
+                        {
+                            /* No action required. */
                         }
                     }
                 }
             }
             printf("light print, thin bars %u, %u mm spot: %d / %d so far (%d "
                    "by the adaptive swing, %d by the first three readings)\n",
-                   (unsigned)thin[theta], (unsigned)(spots[setpoint] / 1000u),
+                   (uint32_t)thin[theta], (uint32_t)(spots[setpoint] / 1000u),
                    good, total, by_adapt, before);
         }
     }
@@ -1565,9 +1603,9 @@ static void test_pack_s3 (void)
     line_snap_t ret;
     uint32_t    widths[LINE_SNAP_WORDS];
 
-    CHECK("S3-H22", LINE_SNAP_BITS == line_snap_layout_bits()
-                        && LINE_SNAP_WORDS == PK_WORDS(LINE_SNAP_BITS)
-                        && sizeof(widths) < sizeof(snap));
+    CHECK("S3-H22", (LINE_SNAP_BITS == line_snap_layout_bits())
+                        && (LINE_SNAP_WORDS == PK_WORDS(LINE_SNAP_BITS))
+                        && (sizeof(widths) < sizeof(snap)));
     memset(&snap, 0, sizeof(snap));
     snap.t_ms          = 123456u;
     snap.blocks        = 4000000000u;
@@ -1603,8 +1641,8 @@ static void test_pack_s3 (void)
     snap.omega_mrad_s = -6000;
     line_snap_pack(&snap, widths);
     line_snap_unpack(widths, &ret);
-    CHECK("S3-H22", '\0' == ret.last_barcode && 1023u == ret.contrast_x10
-                        && -2048 == ret.omega_mrad_s);
+    CHECK("S3-H22", ('\0' == ret.last_barcode) && (1023u == ret.contrast_x10)
+                        && (-2048 == ret.omega_mrad_s));
 }
 
 int main (void)
@@ -1622,3 +1660,5 @@ int main (void)
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (0 == g_fail) ? 0 : 1;
 }
+
+/*** end of file ***/

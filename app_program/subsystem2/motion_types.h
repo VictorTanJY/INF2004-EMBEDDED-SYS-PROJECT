@@ -124,3 +124,5 @@ typedef struct
 } motion_odom_t;
 
 #endif /* MOTION_TYPES_H */
+
+/*** end of file ***/

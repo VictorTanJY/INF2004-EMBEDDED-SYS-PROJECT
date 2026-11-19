@@ -25,8 +25,8 @@
 /* Line sensors to wheel axle: drive this far so the robot turns about the
    junction centre.  Measured 3 Nov: 120 mm (OBST_IR_AHEAD_MM).          */
 #define MISSION_NAV_CENTRE_MM 120
-#define MISSION_NAV_STRAIGHT_MM \
-    60 /* clear the crossing before following again */
+/* clear the crossing before following again */
+#define MISSION_NAV_STRAIGHT_MM 60
 #define MISSION_NAV_SPEED_MM_S  200
 #define MISSION_TURN_RATE_DEG_S 120
 
@@ -43,10 +43,10 @@
 #define MISSION_CAL_SPIN_RATE       90   /* deg/s, 360 deg spin             */
 #define MISSION_CAL_DONE_TIMEOUT_MS 2000
 #define MISSION_NAV_TIMEOUT_MS      10000
-#define MISSION_OBST_TIMEOUT_MS 60000 /* > BLOCKED 10 s + the 4 Nov edge scan \
-                                       */
-#define MISSION_AVOID_TIMEOUT_MS \
-    90000 /* 5 Nov: 40 mm/s bypass with the edge scan takes ~60 s */
+/* > BLOCKED 10 s + the 4 Nov edge scan */
+#define MISSION_OBST_TIMEOUT_MS 60000
+/* 5 Nov: 40 mm/s bypass with the edge scan takes ~60 s */
+#define MISSION_AVOID_TIMEOUT_MS   90000
 #define MISSION_RECOVER_TIMEOUT_MS 30000 /* 0.5 m at 30 mm/s + the sweep */
 #define MISSION_SEARCH_RATE_DEG_S  60    /* LINE_SEARCH sweep +-60 deg      */
 #define MISSION_SEARCH_ANGLE_DDEG  600   /* 60.0 deg                        */
@@ -63,10 +63,9 @@
 #define OBST_SERVO_ARM_MM 29
 #define OBST_MARGIN_MM    50  /* FR11 clearance                  */
 #define OBST_MAX_RANGE_MM 800 /* profile only what is this close */
-#define OBST_DEPTH_TOL_MM                                                     \
-    60                          /* same object: within r_min + this; a flat   \
-                                   face 20 cm wide at 15-20 cm spans < 30 mm. \
-                                   MEASURE with angled boxes (A11)        */
+/* same object: within r_min + this; a flat face 20 cm wide at 15-20 cm spans
+   < 30 mm. MEASURE with angled boxes (A11) */
+#define OBST_DEPTH_TOL_MM   60
 #define OBST_HALF_BEAM_CDEG 750 /* servo scan: HC-SR04 ~15 deg beam */
 /* Step-out leg (7 Nov): how far a box keeps echoing past its corner
    depends on the box (9.5 cm black box: 33-36 deg off the beam; blue box
@@ -147,18 +146,18 @@
    slip; back in at 45 deg until a line sensor touches the line, then
    OBST_IR_AHEAD_MM on (axle on the line), then turn onto it.            */
 #define OBST_TURN_OUT_DDEG 450 /* bypass turn-out 45.0 deg        */
-#define OBST_BYPASS_SPEED_MM_S \
-    40 /* 5 Nov: slower legs slip less; MOTION_PROFILE_V_MIN is 40 */
+/* 5 Nov: slower legs slip less; MOTION_PROFILE_V_MIN is 40 */
+#define OBST_BYPASS_SPEED_MM_S 40
 #define OBST_BYPASS_TURN_DEG_S MISSION_CAL_SPIN_RATE
-#define OBST_JOIN_MAX_PERMILLE \
-    1500 /* back in: give up after 1.5 x the step-out leg */
-#define OBST_JOIN_EXTRA_MM 100 /* ... + this                      */
+/* back in: give up after 1.5 x the step-out leg */
+#define OBST_JOIN_MAX_PERMILLE 1500
+#define OBST_JOIN_EXTRA_MM     100 /* ... + this                      */
 /* 4 Nov: the car overshot the line after the fixed 45 deg turn back.
    Now it spins slowly toward the line's direction and stops where the
    line is centred between the two line sensors (measured, not assumed:
    the line may curve there); up to the turn-out angle + this.          */
-#define OBST_LINESCAN_DEG_S \
-    60 /* 6 Nov: 30 (~29 mm/s a wheel) stalled; ~58 mm/s */
+/* 6 Nov: 30 (~29 mm/s a wheel) stalled; ~58 mm/s */
+#define OBST_LINESCAN_DEG_S 60
 /* 4 Nov edge scan: after the
    servo scan, the sensor looks straight ahead and the CAR turns in steps
    to each side until the echo leaves the obstacle's face; the edge comes
@@ -171,9 +170,9 @@
 /* 4 Nov: 40 let something beside the box, ~28 mm behind its face, count
    as the face (right edge read 20 cm right of the line).  25: 80 is too
    loose, 35 cut faces at 25-30 deg. */
-#define OBST_EDGE_BAND_MM 25 /* echo within this behind the face plane = face \
-                              */
-#define OBST_EDGE_MISSES 2u  /* clear readings in a row that end a side */
+/* echo within this behind the face plane = face */
+#define OBST_EDGE_BAND_MM 25
+#define OBST_EDGE_MISSES  2u /* clear readings in a row that end a side */
 /* 7 Nov: after a side ends, halve the gap between the last echo and the
    first miss this many times (5 deg -> 1.25 deg), as the servo scan's
    refine; about 1.5 s more per side.                                  */
@@ -198,14 +197,14 @@
    is taken: no turn-in, the line scan turns toward the bypass side.  */
 #define OBST_PREF_LEFT 1 /* 1: pass on the left when equal, 0: right */
 #define OBST_LINESCAN_SPARE_DDEG 450
-#define OBST_LINESCAN_SETTLE_MS \
-    150 /* 6 Nov: stop, then turn to the middle of the crossings */
-#define OBST_PASS_MAX_MM     800 /* 3 Nov: room to extend past a seen side */
-#define OBST_SEEK_MAX_MM     500 /* FR11: back on the line within 0.5 m */
-#define OBST_SEEK_SPEED_MM_S 30  /* 5 Nov: creep to the line */
-#define OBST_SEEK_LAT_MM     60  /* accept black only within +-60 mm */
-#define OBST_SEEK_HEADING_CDEG \
-    2000 /* ... and +-20 deg of the original heading */
+/* 6 Nov: stop, then turn to the middle of the crossings */
+#define OBST_LINESCAN_SETTLE_MS 150
+#define OBST_PASS_MAX_MM        800 /* 3 Nov: room to extend past a seen side */
+#define OBST_SEEK_MAX_MM        500 /* FR11: back on the line within 0.5 m */
+#define OBST_SEEK_SPEED_MM_S    30  /* 5 Nov: creep to the line */
+#define OBST_SEEK_LAT_MM        60  /* accept black only within +-60 mm */
+/* ... and +-20 deg of the original heading */
+#define OBST_SEEK_HEADING_CDEG  2000
 #define OBST_REVERSE_MM         100
 #define OBST_REVERSE_TRIES      2
 #define OBST_BLOCKED_RESCAN_MS  2000
@@ -221,8 +220,8 @@
 #define OBST_SCAN_MIN_DEG  20
 #define OBST_SCAN_MAX_DEG  160
 #define OBST_REFINE_ITERS  2 /* bisection pings per edge: 5 -> ~1 deg */
-#define OBST_EDGE_ALLOW_MM \
-    15 /* bypass: extra offset for width-estimate error */
+/* bypass: extra offset for width-estimate error */
+#define OBST_EDGE_ALLOW_MM    15
 #define OBST_SERVO_MS_PER_DEG 2 /* SG90 ~0.1 s / 60 deg, + margin  */
 #define OBST_SERVO_SETTLE_MS  20
 #define OBST_SERVO_MIN_US     500  /* pulse at 0 deg   MEASURE        */
@@ -242,3 +241,5 @@
 #define OBST_ECHO_MAX_US        23200 /* 4 m; longer = no target          */
 
 #endif /* MISSION_CFG_H */
+
+/*** end of file ***/

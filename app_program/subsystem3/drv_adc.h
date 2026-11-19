@@ -37,3 +37,5 @@ IMPORT bool drv_adc_get_block(uint16_t   p_out[DRV_ADC_BLOCK_LEN],
 IMPORT uint32_t drv_adc_errors(void);
 
 #endif /* DRV_ADC_H */
+
+/*** end of file ***/

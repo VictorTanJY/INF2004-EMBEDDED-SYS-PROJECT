@@ -23,21 +23,20 @@
 #define IMU_LOG_MOTION      51u
 #define IMU_LOG_RAMP        52u
 #define IMU_LOG_INIT        53u
-#define IMU_LOG_TILT_ON \
-    55u /* tilt warning: data = larger of |pitch|, |roll|, 0.01 deg */
+/* tilt warning: data = larger of |pitch|, |roll|, 0.01 deg */
+#define IMU_LOG_TILT_ON 55u
+/* tilt warning cleared: back below IMU_TILT_OFF_CDEG */
 #define IMU_LOG_TILT_OFF 56u
-#define IMU_LOG_LVL_N \
-    57u /* level calibration: samples (needs >= 50)          */
-#define IMU_LOG_LVL_SPREAD \
-    58u /* level calibration: largest axis spread, mg (<= 60) */
-#define IMU_LOG_LIFT \
-    77u /* lift seen: data = up-axis rise above level, mg (14 Nov) */
-#define IMU_LOG_RISE_MAX \
-    78u /* largest up-axis rise while driving this run, mg      */
-#define IMU_LOG_LVL_UP                                                                \
-    59u /* level calibration: up-axis mean, mg (>= 500)       */ /* back below        \
-                                                                    IMU_TILT_OFF_CDEG \
-                                                                  */
+/* level calibration: samples (needs >= 50) */
+#define IMU_LOG_LVL_N 57u
+/* level calibration: largest axis spread, mg (<= 60) */
+#define IMU_LOG_LVL_SPREAD 58u
+/* lift seen: data = up-axis rise above level, mg (14 Nov) */
+#define IMU_LOG_LIFT 77u
+/* largest up-axis rise while driving this run, mg */
+#define IMU_LOG_RISE_MAX 78u
+/* level calibration: up-axis mean, mg (>= 500) */
+#define IMU_LOG_LVL_UP 59u
 
 static imu_core_t g_ic;
 
@@ -64,9 +63,9 @@ static bool imu_hw_init (void)
     }
 
     /* Report once initially, then only when a result changes. */
-    if (!b_reported || bus_er != last_bus || read_er != last_read
-        || sensor_er != last_sensor || chip_id != last_id
-        || diagnostic != last_diag)
+    if (!b_reported || (bus_er != last_bus) || (read_er != last_read)
+        || (sensor_er != last_sensor) || (chip_id != last_id)
+        || (diagnostic != last_diag))
     {
         b_reported  = true;
         last_bus    = bus_er;
@@ -274,6 +273,10 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
                     (uint8_t)MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_SAFETY_IMU,
                     (uint16_t)APP_SRC_SAFETY_IMU, b_level ? 1 : 0);
             }
+            else
+            {
+                /* No action required. */
+            }
 
             prev_phase = mission.cal_phase;
         }
@@ -294,6 +297,10 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
         else if (((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase) && b_mag)
         {
             imu_cal_mag_sample(&g_ic, mag);
+        }
+        else
+        {
+            /* No action required. */
         }
 
         /* ---- 14 Nov: humps while the floor may have gone ---- */
@@ -439,11 +446,11 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
            exceed lwIP's MQTT in-flight limit and fill the laptop's log. */
 #if IMU_DEBUG_LOGS
         {
-            static bool first_sample = true;
+            static bool b_first_sample = true;
 
-            if (first_sample || (0u == (cycle % 100u)))
+            if (b_first_sample || (0u == (cycle % 100u)))
             {
-                first_sample = false;
+                b_first_sample = false;
 
                 (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 100u,
                                        acc[0]);
@@ -470,3 +477,5 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
         }
     }
 }
+
+/*** end of file ***/

@@ -8,11 +8,12 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "app_types.h"
 #include "app_math.h"
 #include "app_pack.h"
 
-static int g_pass;
-static int g_fail;
+static int32_t g_pass;
+static int32_t g_fail;
 
 #define CHECK(id, cond)                                                      \
     do                                                                       \
@@ -33,8 +34,8 @@ static void test_pack (void)
 {
     static uint8_t const widths[] = {2u,  3u,  4u,  5u,  6u,  7u,  8u, 9u,
                                      10u, 11u, 12u, 16u, 20u, 24u, 32u};
-    unsigned             idx;
-    int                  b_ok = 1;
+    uint32_t             idx;
+    bool                 b_ok = true;
 
     for (idx = 0u; idx < sizeof(widths); idx++)
     {
@@ -57,7 +58,7 @@ static void test_pack (void)
 
             if ((factor > pk_mask(width)) || (pk_unoff_s(factor, width) != exp))
             {
-                b_ok = 0;
+                b_ok = false;
             }
         }
         /* unsigned: saturates at the field maximum */
@@ -65,35 +66,35 @@ static void test_pack (void)
             || ((width < 32u)
                 && (pk_sat_u(pk_mask(width) + 1u, width) != pk_mask(width))))
         {
-            b_ok = 0;
+            b_ok = false;
         }
         /* wrapping counters: modular difference within +-half */
         if ((width >= 8u)
             && ((pk_wrap_diff(2u, pk_mask(width) - 1u, width) != 4)
                 || (pk_wrap_diff(pk_mask(width) - 1u, 2u, width) != -4)))
         {
-            b_ok = 0;
+            b_ok = false;
         }
     }
     CHECK("SH-H05", b_ok);
-    CHECK("SH-H05", 0u == pk_off_s(INT32_MIN, 32u)
-                        && 0xFFFFFFFFu == pk_off_s(INT32_MAX, 32u));
-    CHECK("SH-H05", INT32_MIN == pk_unoff_s(0u, 32u)
-                        && INT32_MAX == pk_unoff_s(0xFFFFFFFFu, 32u));
+    CHECK("SH-H05", (0u == pk_off_s(INT32_MIN, 32u))
+                        && (0xFFFFFFFFu == pk_off_s(INT32_MAX, 32u)));
+    CHECK("SH-H05", (INT32_MIN == pk_unoff_s(0u, 32u))
+                        && (INT32_MAX == pk_unoff_s(0xFFFFFFFFu, 32u)));
 
     /* fields in a word: set one without touching its neighbours */
     {
         uint32_t bit_width = 0xFFFFFFFFu;
 
         bit_width = pk_set(bit_width, 5u, 7u, 0u);
-        CHECK("SH-H05", 0xFFFFF01Fu == bit_width
-                            && 0u == pk_get(bit_width, 5u, 7u)
-                            && 0x1Fu == pk_get(bit_width, 0u, 5u));
+        CHECK("SH-H05", (0xFFFFF01Fu == bit_width)
+                            && (0u == pk_get(bit_width, 5u, 7u))
+                            && (0x1Fu == pk_get(bit_width, 0u, 5u)));
         bit_width = pk_set(bit_width, 5u, 7u, 0x55u);
-        CHECK("SH-H05", 0x55u == pk_get(bit_width, 5u, 7u)
-                            && 0xFFFFFu == pk_get(bit_width, 12u, 20u));
-        CHECK("SH-H05", 0x12345678u == pk_set(0u, 0u, 32u, 0x12345678u)
-                            && 1u == pk_get(0x80000000u, 31u, 1u));
+        CHECK("SH-H05", (0x55u == pk_get(bit_width, 5u, 7u))
+                            && (0xFFFFFu == pk_get(bit_width, 12u, 20u)));
+        CHECK("SH-H05", (0x12345678u == pk_set(0u, 0u, 32u, 0x12345678u))
+                            && (1u == pk_get(0x80000000u, 31u, 1u)));
     }
 
     /* streams: random widths and values round-trip; overflow is reported */
@@ -103,9 +104,9 @@ static void test_pack (void)
         uint8_t     bit_widths[100];
         pk_writer_t writer;
         pk_reader_t reader;
-        unsigned    count = 0u;
-        unsigned    kdx;
-        int         ret = 1;
+        uint32_t    count = 0u;
+        uint32_t    kdx;
+        int32_t     ret = 1;
 
         srand(77);
         pk_writer_init(&writer, buf, sizeof(buf));
@@ -114,7 +115,7 @@ static void test_pack (void)
             bit_widths[count] = (uint8_t)(1 + (rand() % 32));
             vals[count]       = ((uint32_t)rand() << 16 ^ (uint32_t)rand())
                                 & pk_mask(bit_widths[count]);
-            if ((unsigned)writer.bits + bit_widths[count] > sizeof(buf) * 8u)
+            if ((uint32_t)writer.bits + bit_widths[count] > sizeof(buf) * 8u)
             {
                 break;
             }
@@ -129,28 +130,29 @@ static void test_pack (void)
                 ret = 0;
             }
         }
-        CHECK("SH-H05", ret && !reader.b_short && count > 10u);
+        CHECK("SH-H05", ret && !reader.b_short && (count > 10u));
         pk_put(&writer, 0xFFFFFFFFu, 32u);
         pk_put(&writer, 0u, 33u);
-        CHECK("SH-H05", writer.b_overflow && 0u == pk_writer_len(&writer));
+        CHECK("SH-H05", writer.b_overflow && (0u == pk_writer_len(&writer)));
     }
 }
 
 int main (void)
 {
-    int32_t  val_a;
-    int      worst_sin  = 0;
-    double   worst_atan = 0.0;
-    uint32_t x_val;
+    int32_t   val_a;
+    int32_t   worst_sin  = 0;
+    float64_t worst_atan = 0.0;
+    uint32_t  x_val;
 
     test_pack();
 
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
     for (val_a = -72000; val_a <= 72000; val_a += 7)
     {
-        int ref = (int)lround(sin((double)val_a * M_PI / 18000.0) * 32768.0);
-        int got = app_sin_q15(val_a);
-        int diff;
+        int32_t ref =
+            (int32_t)lround(sin((float64_t)val_a * M_PI / 18000.0) * 32768.0);
+        int32_t got = app_sin_q15(val_a);
+        int32_t diff;
 
         if (ref > 32767)
         {
@@ -161,7 +163,7 @@ int main (void)
         {
             worst_sin = diff;
         }
-        ref = (int)lround(cos((double)val_a * M_PI / 18000.0) * 32768.0);
+        ref = (int32_t)lround(cos((float64_t)val_a * M_PI / 18000.0) * 32768.0);
         if (ref > 32767)
         {
             ref = 32767;
@@ -183,10 +185,10 @@ int main (void)
         {
             for (y_start = -3000; y_start <= 3000; y_start += 41)
             {
-                double ref =
-                    atan2((double)y_start, (double)x_start) * 18000.0 / M_PI;
-                double diff =
-                    fabs((double)app_atan2_cdeg(y_start, x_start) - ref);
+                float64_t ref = atan2((float64_t)y_start, (float64_t)x_start)
+                                * 18000.0 / M_PI;
+                float64_t diff =
+                    fabs((float64_t)app_atan2_cdeg(y_start, x_start) - ref);
 
                 if (diff > 18000.0)
                 {
@@ -238,3 +240,5 @@ int main (void)
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
     return (0 == g_fail) ? 0 : 1;
 }
+
+/*** end of file ***/

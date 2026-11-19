@@ -163,3 +163,5 @@ void     motion_odom_unpack(uint32_t const * p_words, motion_odom_t * p_odom);
 uint32_t motion_odom_layout_bits(void);
 
 #endif /* MOTION_CORE_H */
+
+/*** end of file ***/

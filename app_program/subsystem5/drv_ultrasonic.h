@@ -22,3 +22,5 @@ IMPORT void drv_us_trigger(void);
 IMPORT bool drv_us_take(uint32_t * p_width_us);
 
 #endif /* DRV_ULTRASONIC_H */
+
+/*** end of file ***/

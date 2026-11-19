@@ -35,18 +35,18 @@
 #include "../subsystem5/subsystem5.h"
 
 /* The frame fields must hold subsystem 5's enums (Change Requirement 1). */
-typedef char s1_check_states_t
+typedef uint8_t s1_check_states_t
     [((uint32_t)MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
-typedef char s1_check_events_t
+typedef uint8_t s1_check_events_t
     [((uint32_t)MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1 : -1];
-typedef char
+typedef uint8_t
     s1_check_src_t[(APP_SRC_OBST_MISSION < (1uL << COMMS_SRC_BITS)) ? 1 : -1];
-typedef char s1_check_rec_size_t[(sizeof(comms_rec_t) == 8u) ? 1 : -1];
+typedef uint8_t s1_check_rec_size_t[(8u == sizeof(comms_rec_t)) ? 1 : -1];
 
 #define COMMS_DRAIN_MAX   8u /* records per poll                     */
 #define COMMS_TX_BUF_SIZE COMMS_FRAME_MAX /* largest frame: 27 B      */
 
-static T_MQTT_UTK_CFG const g_mqtt_cfg = {
+static mqtt_utk_cfg_t const g_mqtt_cfg = {
     COMMS_TOPIC_CMD,
     1u,                 /* subscribe: commands, QoS 1           */
     COMMS_TOPIC_STATUS, /* Last Will on the retained status     */
@@ -202,7 +202,7 @@ static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
 /* ---------------------------------------------------------------------
  *  mqtt_utk hooks
  * --------------------------------------------------------------------- */
-const T_MQTT_UTK_CFG * mqtt_utk_app_config (void)
+mqtt_utk_cfg_t const * mqtt_utk_app_config (void)
 {
     return &g_mqtt_cfg;
 }
@@ -294,23 +294,23 @@ static comms_err_t comms_execute (comms_cmd_t const * p_cmd)
     {
         case COMMS_CMD_START:
             event = MISSION_EV_REMOTE_START;
-            break;
+        break;
 
         case COMMS_CMD_STOP:
             event = MISSION_EV_REMOTE_STOP;
-            break;
+        break;
 
         case COMMS_CMD_RESET:
             event = MISSION_EV_REMOTE_RESET;
-            break;
+        break;
 
         case COMMS_CMD_SET:
             event = MISSION_EV_REMOTE_SET;
-            break;
+        break;
 
         case COMMS_CMD_MAP:
             event = MISSION_EV_REMOTE_MAP; /* MissionTask stores the map */
-            break;
+        break;
 
         default:
             return COMMS_ERR_BAD_CMD;
@@ -390,6 +390,8 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
 #else /* !TM_MQTT */
 
 /* MQTT is not built: nothing drains mbf_telem. */
-typedef int s1_comms_service_unused_t;
+typedef int32_t s1_comms_service_unused_t;
 
 #endif /* TM_MQTT */
+
+/*** end of file ***/

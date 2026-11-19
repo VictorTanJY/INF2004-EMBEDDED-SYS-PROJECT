@@ -42,3 +42,5 @@ int32_t app_wrap_cdeg(int32_t cdeg);
 int32_t app_mul_q15(int32_t value, int32_t q15);
 
 #endif /* APP_MATH_H */
+
+/*** end of file ***/

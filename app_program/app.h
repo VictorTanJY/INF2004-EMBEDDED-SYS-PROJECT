@@ -1,9 +1,9 @@
 /*
- *	app.h
- *	Definitions shared by the whole team.  Changed only by team agreement.
+ *  app.h
+ *  Definitions shared by the whole team.  Changed only by team agreement.
  *
- *	Anything that belongs to ONE subsystem goes in that subsystem's own
- *	header instead (app_program/subsystemN/subsystemN.h).
+ *  Anything that belongs to ONE subsystem goes in that subsystem's own
+ *  header instead (app_program/subsystemN/subsystemN.h).
  */
 
 #ifndef APP_H
@@ -221,3 +221,5 @@ IMPORT void subsystem5_test(void);
     } while (0)
 
 #endif /* APP_H */
+
+/*** end of file ***/

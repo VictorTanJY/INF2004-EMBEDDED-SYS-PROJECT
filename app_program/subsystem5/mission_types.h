@@ -220,3 +220,5 @@ typedef struct
 } obst_snap_t;
 
 #endif /* MISSION_TYPES_H */
+
+/*** end of file ***/

@@ -27,17 +27,16 @@
 #define S2_PIN_MOT_R_B 11u /* PWM5 B */
 #define S2_PIN_ENC_L_A 4u  /* PIO0 SM0, B = A + 1 */
 #define S2_PIN_ENC_R_A 16u /* PIO0 SM1, B = A + 1 */
-#define S2_PIN_TIMING                         \
-    6u /* spare GP6: toggled every cycle when \
-          built with APP_TIMING_PINS=1 (NFR1) */
+/* spare GP6: toggled every cycle when built with APP_TIMING_PINS=1 (NFR1) */
+#define S2_PIN_TIMING 6u
 
 /* ---------------------------------------------------------------------
  *  IF-01  mbf_motion: motion commands to MotionTask (owned by S2).
  *  Senders: MissionTask (S5), LineBarcodeTask (S3), ObstacleTask (S5).
  *  Always sent with TMO_POL; MotionTask drains it every 10 ms cycle.
  * --------------------------------------------------------------------- */
-#define S2_MBF_MOTION_DEPTH \
-    8u /* commands; 8 B each in the buffer (4 B word + header) */
+/* commands; 8 B each in the buffer (4 B word + header) */
+#define S2_MBF_MOTION_DEPTH 8u
 
 IMPORT ID g_mbf_motion; /* mbf_motion in the design documents */
 
@@ -94,3 +93,5 @@ IMPORT void motion_task(INT stacd, void * p_exinf);
 IMPORT bool motion_estop_clear_reconnect(void); /* MotionTask only */
 
 #endif /* SUBSYSTEM2_H */
+
+/*** end of file ***/

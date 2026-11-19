@@ -28,8 +28,8 @@
 
 #define LINE_WAKE_TIMEOUT_MS 30  /* still heartbeats if the DMA stops */
 #define LINE_LOG_BC_REJECT   31u /* comms_rec_t code for a rejected read */
-#define LINE_LOG_CAL_LEVELS \
-    32u /* 32/33/34 = L/R/barcode: max << 16 | min raw */
+/* 32/33/34 = L/R/barcode: max << 16 | min raw */
+#define LINE_LOG_CAL_LEVELS 32u
 /* Diagnosis of a rejected barcode (2 Nov), right after LOG 31:
    35 = elements << 24 | length mm << 8 | darkest reading / 4 (0..250),
    36 = narrowest element << 16 | widest element, both in 0.1 mm.        */
@@ -54,8 +54,8 @@
 #define LINE_LOG_BC_COUNTS 76u
 #define LINE_LOG_ELEM_MAX  45u /* widths logged per reading (15 records) */
 /* 38 = turn slip from the calibration spin, permille (0 = not found) */
-#define LINE_LOG_NO_FLOOR \
-    79u /* 14 Nov, lifted: raw_l << 20 | raw_r << 10 | raw_bc */
+/* 14 Nov, lifted: raw_l << 20 | raw_r << 10 | raw_bc */
+#define LINE_LOG_NO_FLOOR 79u
 /* 14 Nov: 80 = how long the decode at the end of a capture took, us
    (the line task's heartbeat allows 50 ms; best match took longer). */
 #define LINE_LOG_BC_DECODE_US 80u
@@ -485,3 +485,5 @@ EXPORT void line_task (INT stacd, void * p_exinf)
         line_put_snap(&snap);
     }
 }
+
+/*** end of file ***/

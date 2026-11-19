@@ -58,3 +58,5 @@ uint32_t safety_hb_check (safety_hb_state_t * p_st,
     }
     return missed;
 }
+
+/*** end of file ***/

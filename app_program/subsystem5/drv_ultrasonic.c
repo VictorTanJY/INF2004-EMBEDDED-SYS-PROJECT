@@ -113,3 +113,5 @@ EXPORT bool drv_us_take (uint32_t * p_width_us)
     *p_width_us = echo & ((1uL << ECHO_WIDTH_BITS) - 1uL);
     return ((echo & ECHO_DONE) != 0u);
 }
+
+/*** end of file ***/

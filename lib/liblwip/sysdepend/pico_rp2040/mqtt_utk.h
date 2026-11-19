@@ -1,17 +1,17 @@
 /*
- *	mqtt_utk.h
- *	MQTT client wiring for micro T-Kernel (RP2040, NO_SYS=1)
+ *  mqtt_utk.h
+ *  MQTT client wiring for micro T-Kernel (RP2040, NO_SYS=1)
  *
- *	PicoCar extension (agreed with the team and the instructor, Week 6
- *	A14 / TEAM.md IF-11).  Everything here runs on the WiFi service task
- *	cyw43_utk_task (core 0, priority 4) -- the only task allowed to call
- *	lwIP.  The application side lives in app_program/subsystem1/
- *	comms_service.c and is reached through the hook functions at the
- *	bottom of this file, which mqtt_utk.c calls from that same task.
+ *  PicoCar extension (agreed with the team and the instructor, Week 6
+ *  A14 / TEAM.md IF-11).  Everything here runs on the WiFi service task
+ *  cyw43_utk_task (core 0, priority 4) -- the only task allowed to call
+ *  lwIP.  The application side lives in app_program/subsystem1/
+ *  comms_service.c and is reached through the hook functions at the
+ *  bottom of this file, which mqtt_utk.c calls from that same task.
  *
- *	Only <stdint.h> types are used, so this header is safe both in the
- *	pico-sdk/lwIP namespace (cyw43_utk.c, mqtt_utk.c) and next to
- *	tk/tkernel.h in application code.
+ *  Only <stdint.h> types are used, so this header is safe both in the
+ *  pico-sdk/lwIP namespace (cyw43_utk.c, mqtt_utk.c) and next to
+ *  tk/tkernel.h in application code.
  */
 
 #ifndef MQTT_UTK_H
@@ -22,16 +22,17 @@
 /* Returned by mqtt_utk_publish() when there is no broker connection.
    Other negative values are lwIP err_t codes (ERR_MEM = -1 when the
    output ring or the request slots are full). */
-#define MQTT_UTK_E_OFFLINE	(-100)
+#define MQTT_UTK_E_OFFLINE (-100)
 
-typedef struct {
-	const char	*sub_topic;	/* NULL = subscribe to nothing        */
-	uint8_t		sub_qos;
-	const char	*will_topic;	/* NULL = no Last Will                */
-	const char	*will_msg;	/* text; its strlen() is used         */
-	uint8_t		will_qos;
-	uint8_t		will_retain;
-} T_MQTT_UTK_CFG;
+typedef struct
+{
+    char const * p_sub_topic; /* NULL = subscribe to nothing        */
+    uint8_t      sub_qos;
+    char const * p_will_topic; /* NULL = no Last Will                */
+    char const * p_will_msg;   /* text; its strlen() is used         */
+    uint8_t      will_qos;
+    uint8_t      will_retain;
+} mqtt_utk_cfg_t;
 
 /*
  * Call once from cyw43_utk_task() before its poll loop.  Starts the
@@ -54,8 +55,8 @@ uint8_t mqtt_utk_is_connected(void);
  * Publish one message.  Never blocks.  Returns 0 when lwIP queued it,
  * MQTT_UTK_E_OFFLINE, or a negative lwIP err_t.  The caller owns retries.
  */
-int32_t mqtt_utk_publish(const char *topic, const uint8_t *data,
-			 uint16_t len, uint8_t qos, uint8_t retain);
+int32_t mqtt_utk_publish(char const * p_topic, uint8_t const * p_data,
+                         uint16_t len, uint8_t qos, uint8_t retain);
 
 /* QoS 1/2 publishes that lwIP later reported as failed (e.g. timeout). */
 uint32_t mqtt_utk_pub_failures(void);
@@ -68,10 +69,13 @@ uint32_t mqtt_utk_rx_dropped(void);
  * without the application still links.  All are called on the WiFi
  * service task and must not block.
  * --------------------------------------------------------------------- */
-const T_MQTT_UTK_CFG *mqtt_utk_app_config(void);	/* NULL = defaults */
-void mqtt_utk_app_connected(void);
-void mqtt_utk_app_disconnected(void);
-void mqtt_utk_app_poll(void);
-void mqtt_utk_app_rx(const char *topic, const uint8_t *data, uint16_t len);
+mqtt_utk_cfg_t const * mqtt_utk_app_config(void); /* NULL = defaults */
+void                   mqtt_utk_app_connected(void);
+void                   mqtt_utk_app_disconnected(void);
+void                   mqtt_utk_app_poll(void);
+void mqtt_utk_app_rx(char const * p_topic, uint8_t const * p_data,
+                     uint16_t len);
 
 #endif /* MQTT_UTK_H */
+
+/*** end of file ***/

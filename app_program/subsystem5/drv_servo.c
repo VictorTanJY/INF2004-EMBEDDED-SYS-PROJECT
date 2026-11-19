@@ -8,23 +8,38 @@
 #include "mission_cfg.h"
 #include "subsystem5.h"
 
-#define SERVO_SLICE   7u
-#define PWM_CH_CSR(s) (PWM_BASE + (0x14u * (s)) + 0x00u)
-#define PWM_CH_DIV(s) (PWM_BASE + (0x14u * (s)) + 0x04u)
-#define PWM_CH_CC(s)  (PWM_BASE + (0x14u * (s)) + 0x0Cu)
-#define PWM_CH_TOP(s) (PWM_BASE + (0x14u * (s)) + 0x10u)
+#define SERVO_SLICE 7u
+static inline uint32_t pwm_ch_csr (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x00u;
+}
+
+static inline uint32_t pwm_ch_div (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x04u;
+}
+
+static inline uint32_t pwm_ch_cc (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x0Cu;
+}
+
+static inline uint32_t pwm_ch_top (uint32_t slice)
+{
+    return PWM_BASE + (0x14u * slice) + 0x10u;
+}
 
 EXPORT ER drv_servo_init (void)
 {
     app_reset_release(RESETS_RESET_PWM);
-    out_w(PWM_CH_CSR(SERVO_SLICE), 0u);
-    out_w(PWM_CH_DIV(SERVO_SLICE), 125uL << 4);
-    out_w(PWM_CH_TOP(SERVO_SLICE), 19999u);
+    out_w(pwm_ch_csr(SERVO_SLICE), 0u);
+    out_w(pwm_ch_div(SERVO_SLICE), 125uL << 4);
+    out_w(pwm_ch_top(SERVO_SLICE), 19999u);
     drv_servo_set_deg(OBST_SERVO_CENTRE_DEG);
-    out_w(PWM_CH_CSR(SERVO_SLICE), PWM_CH_CSR_EN);
+    out_w(pwm_ch_csr(SERVO_SLICE), PWM_CH_CSR_EN);
     clr_w(GPIO(S5_PIN_SERVO), GPIO_OD);
     out_w(GPIO_CTRL(S5_PIN_SERVO), GPIO_CTRL_FUNCSEL_PWM);
-    return (19999u == in_w(PWM_CH_TOP(SERVO_SLICE))) ? E_OK : E_IO;
+    return (19999u == in_w(pwm_ch_top(SERVO_SLICE))) ? E_OK : E_IO;
 }
 
 EXPORT void drv_servo_set_deg (int32_t angle_deg)
@@ -45,6 +60,8 @@ EXPORT void drv_servo_set_deg (int32_t angle_deg)
 #endif
     pulse_us = OBST_SERVO_MIN_US
                + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
-    out_w(PWM_CH_CC(SERVO_SLICE),
+    out_w(pwm_ch_cc(SERVO_SLICE),
           (uint32_t)pulse_us << 16); /* channel B; A (GP14) = 0 */
 }
+
+/*** end of file ***/

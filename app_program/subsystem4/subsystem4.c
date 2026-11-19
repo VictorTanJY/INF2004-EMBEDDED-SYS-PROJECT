@@ -134,3 +134,5 @@ EXPORT void imu_put_snap (imu_snap_t const * p_in)
     }
     app_unlock(&g_imu_lock, sts);
 }
+
+/*** end of file ***/

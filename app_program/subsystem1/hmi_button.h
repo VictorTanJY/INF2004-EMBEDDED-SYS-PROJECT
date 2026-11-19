@@ -36,3 +36,5 @@ hmi_btn_ev_t hmi_btn_update(hmi_btn_t * p_btn, bool b_pressed_raw,
                             uint16_t dt_ms, uint16_t long_ms);
 
 #endif /* HMI_BUTTON_H */
+
+/*** end of file ***/

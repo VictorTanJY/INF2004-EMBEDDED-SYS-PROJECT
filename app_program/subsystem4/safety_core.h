@@ -35,3 +35,5 @@ uint32_t safety_hb_check(safety_hb_state_t * p_st,
                          uint32_t            now_ms);
 
 #endif /* SAFETY_CORE_H */
+
+/*** end of file ***/

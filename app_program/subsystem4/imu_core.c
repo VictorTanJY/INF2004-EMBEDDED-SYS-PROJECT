@@ -13,7 +13,7 @@
 #define MG_PER_G_MM_S2 9807 /* 1 g = 9807 mm/s^2 */
 
 /* body-frame value of one raw axis triple */
-static int32_t axis (int32_t const vec[3], int axis_no, int32_t sign)
+static int32_t axis (int32_t const vec[3], int32_t axis_no, int32_t sign)
 {
     return sign * vec[axis_no];
 }
@@ -180,8 +180,9 @@ void imu_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
 
 bool imu_cal_mag_finish (imu_core_t * p_ic)
 {
-    int const axes[2] = {IMU_AXIS_FWD, IMU_AXIS_LEFT}; /* horizontal plane */
-    uint8_t   kdx;
+    int32_t const axes[2] = {IMU_AXIS_FWD,
+                             IMU_AXIS_LEFT}; /* horizontal plane */
+    uint8_t       kdx;
 
     for (kdx = 0u; kdx < 2u; kdx++)
     {
@@ -249,7 +250,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             {
                 hump_reset(p_ic);
             }
-            break;
+        break;
 
         case IMU_HUMP_CLIMBING:
         case IMU_HUMP_CREST:
@@ -277,7 +278,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             {
                 /* between crest and climb thresholds: stay */
             }
-            break;
+        break;
 
         default: /* IMU_HUMP_DESCENDING */
             integrate(p_ic, theta, ds_um);
@@ -311,7 +312,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
                 hump_reset(p_ic);
                 events |= IMU_EV_HUMP_END;
             }
-            break;
+        break;
     }
     return events;
 }
@@ -691,3 +692,5 @@ uint32_t imu_snap_layout_bits (void)
 {
     return pk_layout_bits(g_imu_layout, IMU_FIELDS);
 }
+
+/*** end of file ***/
