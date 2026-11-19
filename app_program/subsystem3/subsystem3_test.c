@@ -1,5 +1,5 @@
 /*
- *  subsystem3_test.c
+ *  subsystem3_test_run.c
  *  On-target tests for subsystem 3.  Built only with: make TEST=1
  *  Record results in testing/subsystem3/TEST_LOG.md.
  *  Decoding and tracking are tested on a PC (testing/subsystem3/host).
@@ -25,7 +25,7 @@
 #define T_BLACK     920u
 #define T_BLOCK_US  10000u /* one 10 ms ADC block (NFR2)     */
 
-static bc_capture_t g_t_bc; /* ~3 KB: kept off the task stack */
+static line_barcode_capture_t g_t_bc; /* ~3 KB: kept off the task stack */
 
 static uint16_t make_star_code (char chr, uint32_t * p_w)
 {
@@ -67,23 +67,23 @@ static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
     return (uint16_t)T_WHITE;
 }
 
-EXPORT void subsystem3_test (void)
+EXPORT void subsystem3_test_run (void)
 {
-    line_snap_t snap_a;
-    line_snap_t snap_b;
-    uint32_t    elem_widths[29];
-    char        chr     = '\0';
-    bool        b_rev   = false;
-    uint16_t    n_elems = 0u;
-    char const  seq[3]  = {'*', 'F', '*'};
-    int32_t     kdx;
-    int32_t     elem;
+    line_types_snap_t snap_a;
+    line_types_snap_t snap_b;
+    uint32_t          elem_widths[29];
+    char              chr     = '\0';
+    bool              b_rev   = false;
+    uint16_t          n_elems = 0u;
+    char const        seq[3]  = {'*', 'F', '*'};
+    int32_t           kdx;
+    int32_t           elem;
 
     TEST_INIT();
 
-    line_get_snap(&snap_a);
+    subsystem3_get_snap(&snap_a);
     (void)tk_dly_tsk(100);
-    line_get_snap(&snap_b);
+    subsystem3_get_snap(&snap_b);
     TEST_CHECK("S3-U02", snap_b.t_ms != snap_a.t_ms,
                "LineBarcodeTask publishes its snapshot");
     TEST_CHECK("S3-U03",
@@ -113,9 +113,9 @@ EXPORT void subsystem3_test (void)
                "Code 39 *F* decodes on target");
 
     /* ---- S3-U05: no ADC block lost in 1 s; live readings (NFR2) ---- */
-    line_get_snap(&snap_a);
+    subsystem3_get_snap(&snap_a);
     (void)tk_dly_tsk(1000);
-    line_get_snap(&snap_b);
+    subsystem3_get_snap(&snap_b);
     tm_printf((UB *)"[INFO] S3-U05 blocks %d in 1 s, lost %d; IR now L %d R %d "
                     "barcode %d (0..1000, 1000 = black)\n",
               (INT)(snap_b.blocks - snap_a.blocks),
@@ -132,22 +132,22 @@ EXPORT void subsystem3_test (void)
 
     /* ---- S3-U07: whole barcode pipeline on the target, timed -------- */
     {
-        uint32_t    widths[29];
-        uint16_t    n_widths = make_star_code('A', widths);
-        uint32_t    x_val;
-        uint32_t    worst_us = 0u;
-        uint32_t    total_us = 0u;
-        uint32_t    samples  = 0u;
-        bc_result_t found    = BC_NONE;
-        uint8_t     results  = 0u;
-        bc_out_t    out_ok   = {0};
+        uint32_t              widths[29];
+        uint16_t              n_widths = make_star_code('A', widths);
+        uint32_t              x_val;
+        uint32_t              worst_us = 0u;
+        uint32_t              total_us = 0u;
+        uint32_t              samples  = 0u;
+        line_barcode_result_t found    = BC_NONE;
+        uint8_t               results  = 0u;
+        line_barcode_out_t    out_ok   = {0};
 
-        bc_init(&g_t_bc);
+        line_barcode_init(&g_t_bc);
         for (x_val = 0u; x_val < T_TRACK_UM; x_val += T_STEP_UM)
         {
-            bc_out_t       out     = {0};
-            uint32_t const t_start = (uint32_t)app_time_us();
-            bc_result_t    result  = bc_sample(
+            line_barcode_out_t    out     = {0};
+            uint32_t const        t_start = (uint32_t)app_time_us();
+            line_barcode_result_t result  = line_barcode_sample(
                 &g_t_bc, level_at(widths, n_widths, x_val), T_STEP_UM, &out);
             uint32_t const elapsed = (uint32_t)app_time_us() - t_start;
 

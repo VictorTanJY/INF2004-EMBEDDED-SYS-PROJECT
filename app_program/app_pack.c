@@ -15,7 +15,8 @@ typedef uint8_t
     pk_check_sym_t[(PK_SYM_COUNT == (sizeof(g_symbols) - 1u)) ? 1 : -1];
 
 /* ---- Byte streams, LSB first ---------------------------------------- */
-void pk_writer_init (pk_writer_t * p_w, uint8_t * p_buf, uint16_t cap)
+void app_pack_writer_init (app_pack_writer_t * p_w, uint8_t * p_buf,
+                           uint16_t cap)
 {
     uint16_t idx;
 
@@ -30,7 +31,7 @@ void pk_writer_init (pk_writer_t * p_w, uint8_t * p_buf, uint16_t cap)
 }
 
 /* Append the low width bits (1..32) of value. */
-void pk_put (pk_writer_t * p_w, uint32_t value, uint8_t width)
+void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
 {
     uint8_t idx;
 
@@ -51,12 +52,13 @@ void pk_put (pk_writer_t * p_w, uint32_t value, uint8_t width)
 }
 
 /* Frame length in whole bytes, 0 if anything overflowed. */
-uint16_t pk_writer_len (pk_writer_t const * p_w)
+uint16_t app_pack_writer_len (app_pack_writer_t const * p_w)
 {
     return p_w->b_overflow ? 0u : (uint16_t)((p_w->bits + 7u) >> 3);
 }
 
-void pk_reader_init (pk_reader_t * p_r, uint8_t const * p_buf, uint16_t len)
+void app_pack_reader_init (app_pack_reader_t * p_r, uint8_t const * p_buf,
+                           uint16_t len)
 {
     p_r->p_buf   = p_buf;
     p_r->len     = len;
@@ -65,7 +67,7 @@ void pk_reader_init (pk_reader_t * p_r, uint8_t const * p_buf, uint16_t len)
 }
 
 /* Read the next width bits (1..32); 0 and b_short once past the end. */
-uint32_t pk_take (pk_reader_t * p_r, uint8_t width)
+uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
 {
     uint32_t value = 0u;
     uint8_t  idx;
@@ -89,7 +91,7 @@ uint32_t pk_take (pk_reader_t * p_r, uint8_t width)
 }
 
 /* ---- Code 39 data character in 6 bits (index 1..43, 0 = none) ------- */
-uint8_t pk_sym_index (char chr)
+uint8_t app_pack_sym_index (char chr)
 {
     uint8_t idx;
 
@@ -103,14 +105,14 @@ uint8_t pk_sym_index (char chr)
     return 0u;
 }
 
-char pk_sym_char (uint8_t index)
+char app_pack_sym_char (uint8_t index)
 {
     return ((index >= 1u) && (index <= PK_SYM_COUNT)) ? g_symbols[index - 1u]
                                                       : '\0';
 }
 
 /* ---- Records: table-driven packing of a struct into words ------------ */
-uint32_t pk_layout_bits (pk_field_t const * p_f, uint16_t n_fields)
+uint32_t app_pack_layout_bits (app_pack_field_t const * p_f, uint16_t n_fields)
 {
     uint32_t bits = 0u;
     uint16_t idx;
@@ -128,7 +130,7 @@ static void pk_word_put (uint32_t * p_w, uint32_t * p_pos, uint32_t value,
     uint32_t const word = *p_pos >> 5;
     uint32_t const bit  = *p_pos & 31u;
 
-    value &= pk_mask(width);
+    value &= app_pack_mask(width);
     p_w[word] |= value << bit;
     if ((bit + width) > 32u)
     {
@@ -149,11 +151,11 @@ static uint32_t pk_word_take (uint32_t const * p_w, uint32_t * p_pos,
         value |= p_w[word + 1u] << (32u - bit);
     }
     *p_pos += width;
-    return value & pk_mask(width);
+    return value & app_pack_mask(width);
 }
 
 /* Read a member of size 1, 2 or 4 as unsigned / signed. */
-static uint32_t pk_member_u (void const * p_rec, pk_field_t const * p_f)
+static uint32_t pk_member_u (void const * p_rec, app_pack_field_t const * p_f)
 {
     uint8_t const * p_byte = (uint8_t const *)p_rec + p_f->offset;
     uint32_t        value  = 0u;
@@ -179,7 +181,7 @@ static uint32_t pk_member_u (void const * p_rec, pk_field_t const * p_f)
     return value;
 }
 
-static int32_t pk_member_s (void const * p_rec, pk_field_t const * p_f)
+static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
 {
     uint32_t const raw = pk_member_u(p_rec, p_f);
 
@@ -194,7 +196,8 @@ static int32_t pk_member_s (void const * p_rec, pk_field_t const * p_f)
     return (int32_t)raw;
 }
 
-static void pk_member_set (void * p_rec, pk_field_t const * p_f, uint32_t value)
+static void pk_member_set (void * p_rec, app_pack_field_t const * p_f,
+                           uint32_t value)
 {
     uint8_t * p_byte = (uint8_t *)p_rec + p_f->offset;
 
@@ -217,8 +220,8 @@ static void pk_member_set (void * p_rec, pk_field_t const * p_f, uint32_t value)
 }
 
 /* Pack every field of p_rec into p_words (nwords, cleared first). */
-void pk_pack_rec (pk_field_t const * p_f, uint16_t n_fields, void const * p_rec,
-                  uint32_t * p_words, uint16_t nwords)
+void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
+                        void const * p_rec, uint32_t * p_words, uint16_t nwords)
 {
     uint32_t pos = 0u;
     uint16_t idx;
@@ -236,7 +239,7 @@ void pk_pack_rec (pk_field_t const * p_f, uint16_t n_fields, void const * p_rec,
         switch (p_f[idx].kind)
         {
             case PK_S:
-                value = pk_off_s(pk_member_s(p_rec, &p_f[idx]), width);
+                value = app_pack_off_s(pk_member_s(p_rec, &p_f[idx]), width);
             break;
             case PK_W:
                 value = raw;
@@ -248,18 +251,19 @@ void pk_pack_rec (pk_field_t const * p_f, uint16_t n_fields, void const * p_rec,
                         ? 0xFFFFFFFFuL
                         : ((1uL << (8u * p_f[idx].size)) - 1uL);
 
-                value = (raw == none) ? pk_mask(width) : pk_sat_u(raw, width);
-                if ((raw != none) && (value == pk_mask(width)))
+                value = (raw == none) ? app_pack_mask(width)
+                                      : app_pack_sat_u(raw, width);
+                if ((raw != none) && (value == app_pack_mask(width)))
                 {
-                    value = pk_mask(width) - 1u;
+                    value = app_pack_mask(width) - 1u;
                 }
             }
             break;
             case PK_SYM:
-                value = pk_sym_index((char)(uint8_t)raw);
+                value = app_pack_sym_index((char)(uint8_t)raw);
             break;
             default: /* PK_U */
-                value = pk_sat_u(raw, width);
+                value = app_pack_sat_u(raw, width);
             break;
         }
         pk_word_put(p_words, &pos, value, width);
@@ -268,8 +272,8 @@ void pk_pack_rec (pk_field_t const * p_f, uint16_t n_fields, void const * p_rec,
 
 /* Unpack p_words into the fields of p_rec (other bytes are left as they are).
  */
-void pk_unpack_rec (pk_field_t const * p_f, uint16_t n_fields,
-                    uint32_t const * p_words, void * p_rec)
+void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
+                          uint32_t const * p_words, void * p_rec)
 {
     uint32_t pos = 0u;
     uint16_t idx;
@@ -283,13 +287,13 @@ void pk_unpack_rec (pk_field_t const * p_f, uint16_t n_fields,
         switch (p_f[idx].kind)
         {
             case PK_S:
-                raw = (uint32_t)pk_unoff_s(value, width);
+                raw = (uint32_t)app_pack_unoff_s(value, width);
             break;
             case PK_UN:
-                raw = (value == pk_mask(width)) ? 0xFFFFFFFFuL : value;
+                raw = (value == app_pack_mask(width)) ? 0xFFFFFFFFuL : value;
             break;
             case PK_SYM:
-                raw = (uint8_t)pk_sym_char((uint8_t)value);
+                raw = (uint8_t)app_pack_sym_char((uint8_t)value);
             break;
             default: /* PK_U, PK_W */
                 raw = value;

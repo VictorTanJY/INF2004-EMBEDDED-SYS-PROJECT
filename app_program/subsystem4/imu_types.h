@@ -47,7 +47,7 @@ typedef enum
     SAFETY_HB_OBSTACLE = 3, /* timeout 300 ms */
     SAFETY_HB_IMU      = 4, /* timeout 100 ms */
     SAFETY_HB_COUNT    = 5
-} safety_hb_t;
+} imu_types_safety_hb_t;
 
 /* ---------------------------------------------------------------------
  *  IF-08  IMU snapshot (written by ImuTask every 10 ms).
@@ -58,7 +58,7 @@ typedef enum
     IMU_HUMP_CLIMBING   = 1,
     IMU_HUMP_CREST      = 2,
     IMU_HUMP_DESCENDING = 3
-} imu_hump_state_t;
+} imu_types_hump_state_t;
 
 typedef enum
 {
@@ -71,9 +71,9 @@ typedef enum
         5, /* not produced since 14 Nov (IMU collision detection removed) */
     IMU_MOTION_CRUISING     = 6,
     IMU_MOTION_DECELERATING = 7 /* speed falling (forward or reverse) */
-} imu_motion_t;
+} imu_types_motion_t;
 
-/* imu_snap_t.cal */
+/* imu_types_snap_t.cal */
 #define IMU_CAL_LEVEL 0x01u /* level offsets stored           */
 #define IMU_CAL_MAG   0x02u /* hard-iron offsets stored       */
 
@@ -89,14 +89,14 @@ typedef struct
     uint16_t last_hump_mm;     /* peak of the last completed hump        */
     uint16_t humps;            /* completed humps this run               */
     uint16_t i2c_errors;       /* since boot                             */
-    uint8_t  hump_state;       /* imu_hump_state_t                       */
-    uint8_t  motion;           /* imu_motion_t                           */
-    uint8_t  b_ok;             /* 1 = readings valid (no IMU_FAULT)      */
-    uint8_t  cal;              /* IMU_CAL_* bits                         */
-    uint8_t  pitch_valid;      /* 1 = fresh, validated pitch (hump mask) */
-    uint8_t  tilt;             /* 1 = beyond 30 deg now (reset refused)  */
+    uint8_t  hump_state;  /* imu_types_hump_state_t                       */
+    uint8_t  motion;      /* imu_types_motion_t                           */
+    uint8_t  b_ok;        /* 1 = readings valid (no IMU_FAULT)      */
+    uint8_t  cal;         /* IMU_CAL_* bits                         */
+    uint8_t  pitch_valid; /* 1 = fresh, validated pitch (hump mask) */
+    uint8_t  tilt;        /* 1 = beyond 30 deg now (reset refused)  */
     uint8_t  reserved[2];
-} imu_snap_t;
+} imu_types_snap_t;
 
 #endif /* IMU_TYPES_H */
 

@@ -1,5 +1,5 @@
 /*
- *  safety_task.c
+ *  safety_task_thread.c
  *  Subsystem 4 -- SafetyTask (priority 5, core 1): fault supervisor
  *  (Week 6 Section 3, FR15, NFR8).  Owner: Buddy 4.
  *
@@ -7,8 +7,8 @@
  *    - tk_wai_flg(flg_safety, SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
  *      TWF_ORW | TWF_BITCLR, 20 ms): the bits that woke it are taken in the
  *      same call, so they cannot re-wake it (Tribunal 1 gap 1);
- *    - any brake bit: motor_estop() at once, OR into the latched word,
- *      FAULT -> mbf_mission, fault record -> mbf_telem;
+ *    - any brake bit: subsystem2_motor_estop() at once, OR into the latched
+ * word, FAULT -> mbf_mission, fault record -> mbf_telem;
  *    - heartbeat check (50 / 50 / 300 / 300 / 100 ms): a missed task is
  *      HEARTBEAT_TIMEOUT, handled like a brake cause;
  *    - feed the watchdog (the only feeder; 200 ms).
@@ -33,7 +33,7 @@
 
 #define SAFETY_WD_TIMEOUT_MS 200u
 #define SAFETY_TOO_CLOSE_MM  80u
-/* comms_rec_t code: data = missed-task mask */
+/* comms_proto_rec_t code: data = missed-task mask */
 #define SAFETY_LOG_HB_MISSED 41u
 
 IMPORT volatile uint32_t g_safety_latched; /* subsystem4.c */
@@ -42,7 +42,7 @@ static bool volatile gb_tick_ok;
 static bool volatile gb_tick_checked;
 EXPORT volatile UW g_safety_tick_us; /* measured us per 100 ms of kernel time */
 
-EXPORT bool safety_timer_tick_ok (void)
+EXPORT bool safety_task_timer_tick_ok (void)
 {
     return gb_tick_checked && gb_tick_ok;
 }
@@ -53,7 +53,7 @@ static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
 
     for (kdx = 0u; kdx < (uint8_t)SAFETY_HB_COUNT; kdx++)
     {
-        counts[kdx] = safety_heartbeat_count((safety_hb_t)kdx);
+        counts[kdx] = subsystem4_heartbeat_count((imu_types_safety_hb_t)kdx);
     }
 }
 
@@ -65,24 +65,25 @@ static void latch (uint32_t bits, uint32_t now_ms)
     g_safety_latched |= bits;
     if (fresh != 0u)
     {
-        (void)mission_post((uint8_t)MISSION_EV_FAULT,
-                           (uint8_t)APP_SRC_SAFETY_IMU, 0u,
-                           (int32_t)g_safety_latched);
-        (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT,
-                               (uint8_t)APP_SRC_SAFETY_IMU, 0u, (int32_t)fresh);
+        (void)subsystem5_mission_post((uint8_t)MISSION_EV_FAULT,
+                                      (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                      (int32_t)g_safety_latched);
+        (void)subsystem1_telem_post((uint8_t)COMMS_KIND_FAULT,
+                                    (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                    (int32_t)fresh);
     }
 }
 
 /* Causes that are still present right now (for an operator reset). */
-static uint32_t live_causes (safety_hb_state_t * p_hb, uint32_t now_ms)
+static uint32_t live_causes (safety_core_hb_state_t * p_hb, uint32_t now_ms)
 {
-    imu_snap_t  imu;
-    obst_snap_t obst;
-    uint32_t    counts[SAFETY_HB_COUNT];
-    uint32_t    live = 0u;
+    imu_types_snap_t          imu;
+    mission_types_obst_snap_t obst;
+    uint32_t                  counts[SAFETY_HB_COUNT];
+    uint32_t                  live = 0u;
 
-    imu_get_snap(&imu);
-    obst_get_snap(&obst);
+    subsystem4_get_imu_snap(&imu);
+    subsystem5_get_obst_snap(&obst);
     read_heartbeats(counts);
     if ((obst.d_mm != OBST_RANGE_NONE) && (obst.d_mm < SAFETY_TOO_CLOSE_MM))
     {
@@ -92,7 +93,7 @@ static uint32_t live_causes (safety_hb_state_t * p_hb, uint32_t now_ms)
     {
         live |= SAFETY_FLT_TILT;
     }
-    if (safety_hb_check(p_hb, counts, now_ms) != 0u)
+    if (safety_core_hb_check(p_hb, counts, now_ms) != 0u)
     {
         live |= SAFETY_FLT_HEARTBEAT;
     }
@@ -166,11 +167,11 @@ static void check_timer_tick (void)
     gb_tick_checked = true;
 }
 
-EXPORT void safety_task (INT stacd, void * p_exinf)
+EXPORT void safety_task_thread (INT stacd, void * p_exinf)
 {
-    safety_hb_state_t hb_state = {0};
-    uint32_t          counts[SAFETY_HB_COUNT];
-    uint32_t          missed_logged = 0u;
+    safety_core_hb_state_t hb_state = {0};
+    uint32_t               counts[SAFETY_HB_COUNT];
+    uint32_t               missed_logged = 0u;
 
     (void)stacd;
     (void)p_exinf;
@@ -178,13 +179,13 @@ EXPORT void safety_task (INT stacd, void * p_exinf)
     check_timer_tick();
     if (drv_watchdog_caused_reboot())
     {
-        (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                               (uint8_t)APP_SRC_SAFETY_IMU, 42u, 1);
+        (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                    (uint8_t)APP_SRC_SAFETY_IMU, 42u, 1);
     }
     drv_watchdog_enable(SAFETY_WD_TIMEOUT_MS);
 
     read_heartbeats(counts);
-    safety_hb_start(&hb_state, counts, (uint32_t)app_time_ms());
+    safety_core_hb_start(&hb_state, counts, (uint32_t)app_time_ms());
 
     for (;;)
     {
@@ -200,22 +201,22 @@ EXPORT void safety_task (INT stacd, void * p_exinf)
 
         if ((E_OK == err) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
         {
-            motor_estop(); /* NFR8: brake first */
+            subsystem2_motor_estop(); /* NFR8: brake first */
             latch(ptn & SAFETY_BRAKE_MASK, now_ms);
         }
 
         read_heartbeats(counts);
-        missed = safety_hb_check(&hb_state, counts, now_ms);
+        missed = safety_core_hb_check(&hb_state, counts, now_ms);
         if (missed != 0u)
         {
-            motor_estop();
+            subsystem2_motor_estop();
             latch(SAFETY_FLT_HEARTBEAT, now_ms);
             if (missed != missed_logged)
             {
                 missed_logged = missed;
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       SAFETY_LOG_HB_MISSED, (int32_t)missed);
+                (void)subsystem1_telem_post(
+                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                    SAFETY_LOG_HB_MISSED, (int32_t)missed);
             }
         }
 
@@ -228,17 +229,18 @@ EXPORT void safety_task (INT stacd, void * p_exinf)
                 g_safety_latched = 0u;
                 missed_logged    = 0u;
                 read_heartbeats(counts);
-                safety_hb_start(&hb_state, counts, now_ms);
-                (void)mission_post((uint8_t)MISSION_EV_SAFETY_OK,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
+                safety_core_hb_start(&hb_state, counts, now_ms);
+                (void)subsystem5_mission_post((uint8_t)MISSION_EV_SAFETY_OK,
+                                              (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                              0);
             }
             else
             {
                 /* still present: stay latched and say why */
                 g_safety_latched |= live;
-                (void)mission_post((uint8_t)MISSION_EV_FAULT,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, 1u,
-                                   (int32_t)g_safety_latched);
+                (void)subsystem5_mission_post((uint8_t)MISSION_EV_FAULT,
+                                              (uint8_t)APP_SRC_SAFETY_IMU, 1u,
+                                              (int32_t)g_safety_latched);
             }
         }
     }

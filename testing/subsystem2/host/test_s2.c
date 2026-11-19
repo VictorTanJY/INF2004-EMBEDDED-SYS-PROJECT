@@ -51,10 +51,10 @@ typedef struct
 static motion_core_t g_mc;
 static plant_t       g_pl;
 static uint32_t      g_now;
-static int32_t       g_ev[8]; /* counts per motion_ev_code_t */
+static int32_t       g_ev[8]; /* counts per motion_core_ev_code_t */
 static uint8_t       g_last_seq;
 
-/* Stand-in for subsystem2.c's motion_post (the real one posts to
+/* Stand-in for subsystem2.c's subsystem2_post (the real one posts to
    mbf_motion): records the last command for the motion_api tests. */
 static struct
 {
@@ -66,8 +66,8 @@ static struct
     int16_t arg1;
 } g_post;
 
-int32_t motion_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
-                     int16_t arg1)
+int32_t subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
+                         int16_t arg1)
 {
     g_post.count++;
     g_post.src  = src;
@@ -139,8 +139,8 @@ static int32_t enc_of (int32_t width)
 
 static void run_ms (uint32_t delay_ms, bool b_estop)
 {
-    uint32_t       elapsed;
-    motion_event_t event;
+    uint32_t            elapsed;
+    motion_core_event_t event;
 
     for (elapsed = 0; elapsed < delay_ms; elapsed += 10u)
     {
@@ -155,12 +155,12 @@ static void run_ms (uint32_t delay_ms, bool b_estop)
     }
 }
 
-static motion_result_t cmd (uint8_t src, uint8_t seq, uint8_t code,
-                            int16_t arg0, int16_t arg1)
+static motion_core_result_t cmd (uint8_t src, uint8_t seq, uint8_t code,
+                                 int16_t arg0, int16_t arg1)
 {
-    motion_cmd_t    cmd_msg = {src, seq, code, 0u, arg0, arg1};
-    motion_event_t  event;
-    motion_result_t result = motion_core_command(&g_mc, &cmd_msg, g_now);
+    motion_types_cmd_t   cmd_msg = {src, seq, code, 0u, arg0, arg1};
+    motion_core_event_t  event;
+    motion_core_result_t result = motion_core_command(&g_mc, &cmd_msg, g_now);
 
     while (motion_core_pop_event(&g_mc, &event))
     {
@@ -195,10 +195,10 @@ static uint32_t run_until_event (int32_t code, uint32_t max_ms)
 /* S2-H16: Change Requirement 1, the packed mbf_motion word and odometry */
 static void test_pack_s2 (void)
 {
-    motion_cmd_t         cmd;
-    motion_cmd_t         unpacked;
-    motion_odom_t        odom;
-    motion_odom_t        ret;
+    motion_types_cmd_t   cmd;
+    motion_types_cmd_t   unpacked;
+    motion_types_odom_t  odom;
+    motion_types_odom_t  ret;
     uint32_t             words[MOTION_ODOM_WORDS];
     bool                 b_ok = true;
     int32_t              kdx;
@@ -215,7 +215,7 @@ static void test_pack_s2 (void)
         cmd.cmd  = (uint8_t)MOTION_CMD_DRIVE;
         cmd.arg0 = drive[kdx][0];
         cmd.arg1 = drive[kdx][1];
-        motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
+        motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
         if ((unpacked.src != cmd.src) || (unpacked.seq != cmd.seq)
             || (unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0)
             || (unpacked.arg1 != cmd.arg1))
@@ -226,7 +226,7 @@ static void test_pack_s2 (void)
         cmd.cmd  = (uint8_t)((kdx & 1) ? MOTION_CMD_TURN : MOTION_CMD_MOVE);
         cmd.arg0 = move[kdx][0];
         cmd.arg1 = move[kdx][1];
-        motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
+        motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
         if ((unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0)
             || (unpacked.arg1 != cmd.arg1))
         {
@@ -239,26 +239,27 @@ static void test_pack_s2 (void)
     cmd.arg1 = 0;
     cmd.seq  = 31u;
     cmd.src  = 0u;
-    motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
+    motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
     CHECK("S2-H16", (MOTION_CMD_SET_AUTH == unpacked.cmd)
                         && (2 == unpacked.arg0) && (31u == unpacked.seq));
     cmd.cmd  = (uint8_t)MOTION_CMD_DRIVE;
     cmd.arg0 = 600;
     cmd.arg1 = -6000;
     cmd.seq  = 33u; /* saturate, seq 5 bits */
-    motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
+    motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
     CHECK("S2-H16", (511 == unpacked.arg0) && (-2048 == unpacked.arg1)
                         && (1u == unpacked.seq));
-    CHECK("S2-H16",
-          (0u == motion_seq_next(31u)) && (6u == motion_seq_next(5u)));
+    CHECK("S2-H16", (0u == motion_types_seq_next(31u))
+                        && (6u == motion_types_seq_next(5u)));
     /* the named API refuses what the word cannot carry */
-    CHECK("S2-H16",
-          (MOTION_API_E_PAR == motion_move_forward(0u, 1u, 4096u, 200u))
-              && (MOTION_API_E_PAR == motion_turn_left(0u, 1u, 900u, 512u)));
+    CHECK(
+        "S2-H16",
+        (MOTION_API_E_PAR == motion_api_move_forward(0u, 1u, 4096u, 200u))
+            && (MOTION_API_E_PAR == motion_api_turn_left(0u, 1u, 900u, 512u)));
 
     /* odometry: the layout fills MOTION_ODOM_WORDS; values in range come back
      * exactly */
-    CHECK("S2-H16", (MOTION_ODOM_BITS == motion_odom_layout_bits())
+    CHECK("S2-H16", (MOTION_ODOM_BITS == motion_core_odom_layout_bits())
                         && (MOTION_ODOM_WORDS == PK_WORDS(MOTION_ODOM_BITS))
                         && (sizeof(words) < sizeof(odom)));
     memset(&odom, 0, sizeof(odom));
@@ -285,30 +286,30 @@ static void test_pack_s2 (void)
     odom.done_count      = 255u;
     odom.fail_count      = 1u;
     odom.hw_ok           = 1u;
-    motion_odom_pack(&odom, words);
+    motion_core_odom_pack(&odom, words);
     memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
-    motion_odom_unpack(words, &ret);
+    motion_core_odom_unpack(words, &ret);
     {
         uint32_t words_out[MOTION_ODOM_WORDS];
 
-        motion_odom_pack(&ret, words_out);
+        motion_core_odom_pack(&ret, words_out);
         CHECK("S2-H16", 0 == memcmp(words, words_out, sizeof(words)));
     }
     memset(&ret, 0, sizeof(ret)); /* same padding as o */
-    motion_odom_unpack(words, &ret);
+    motion_core_odom_unpack(words, &ret);
     CHECK("S2-H16", 0 == memcmp(&odom, &ret, sizeof(odom)));
     odom.v_l_mm_s = 32767;
     odom.duty_r   = -32768;
     odom.x_mm     = 100000000; /* out of range: saturate */
-    motion_odom_pack(&odom, words);
-    motion_odom_unpack(words, &ret);
+    motion_core_odom_pack(&odom, words);
+    motion_core_odom_unpack(words, &ret);
     CHECK("S2-H16", (511 == ret.v_l_mm_s) && (-1024 == ret.duty_r)
                         && (8388607 == ret.x_mm));
 }
 
 int main (void)
 {
-    motion_odom_t odom;
+    motion_types_odom_t odom;
 
     /* S2-H01: authority rules (Week 6 Section 6.1) */
     reset_all(0.5);
@@ -499,38 +500,39 @@ int main (void)
     /* S2-H14: the named API (FR5) posts the right command and signs */
     memset(&g_post, 0, sizeof(g_post));
     CHECK("S2-H14",
-          (0 == motion_move_forward(MOTION_SRC_MISSION, 7u, 500u, 250u))
+          (0 == motion_api_move_forward(MOTION_SRC_MISSION, 7u, 500u, 250u))
               && posted(MOTION_CMD_MOVE, 500, 250)
               && (MOTION_SRC_MISSION == g_post.src) && (7u == g_post.seq));
     CHECK("S2-H14",
-          (0 == motion_move_backward(MOTION_SRC_AVOID, 8u, 100u, 250u))
+          (0 == motion_api_move_backward(MOTION_SRC_AVOID, 8u, 100u, 250u))
               && posted(MOTION_CMD_MOVE, -100, 250)
               && (MOTION_SRC_AVOID == g_post.src));
-    CHECK("S2-H14", (0 == motion_turn_left(MOTION_SRC_MISSION, 9u, 900u, 120u))
-                        && posted(MOTION_CMD_TURN, 900, 120));
     CHECK("S2-H14",
-          (0 == motion_turn_right(MOTION_SRC_MISSION, 10u, 1800u, 90u))
+          (0 == motion_api_turn_left(MOTION_SRC_MISSION, 9u, 900u, 120u))
+              && posted(MOTION_CMD_TURN, 900, 120));
+    CHECK("S2-H14",
+          (0 == motion_api_turn_right(MOTION_SRC_MISSION, 10u, 1800u, 90u))
               && posted(MOTION_CMD_TURN, -1800, 90));
-    CHECK("S2-H14", (0 == motion_stop(MOTION_SRC_MISSION, 11u))
+    CHECK("S2-H14", (0 == motion_api_stop(MOTION_SRC_MISSION, 11u))
                         && posted(MOTION_CMD_STOP, 0, 0));
-    CHECK("S2-H14", (0 == motion_drive(MOTION_SRC_LINE, 12u, 250, -400))
+    CHECK("S2-H14", (0 == motion_api_drive(MOTION_SRC_LINE, 12u, 250, -400))
                         && posted(MOTION_CMD_DRIVE, 250, -400)
                         && (MOTION_SRC_LINE == g_post.src));
     /* out of range: refused, nothing posted */
     {
         int32_t const count = g_post.count;
 
+        CHECK("S2-H14", MOTION_API_E_PAR
+                            == motion_api_move_forward(MOTION_SRC_MISSION, 1u,
+                                                       40000u, 250u));
         CHECK("S2-H14",
               MOTION_API_E_PAR
-                  == motion_move_forward(MOTION_SRC_MISSION, 1u, 40000u, 250u));
-        CHECK("S2-H14",
-              MOTION_API_E_PAR
-                  == motion_turn_left(MOTION_SRC_MISSION, 1u, 900u, 0u));
+                  == motion_api_turn_left(MOTION_SRC_MISSION, 1u, 900u, 0u));
         CHECK("S2-H14", g_post.count == count);
     }
     /* end to end: what the API posts, MotionTask executes (turn left 90) */
     reset_all(0.5);
-    (void)motion_turn_left(MOTION_SRC_MISSION, 90u, 900u, 120u);
+    (void)motion_api_turn_left(MOTION_SRC_MISSION, 90u, 900u, 120u);
     (void)cmd(g_post.src, g_post.seq, g_post.cmd, g_post.arg0, g_post.arg1);
     (void)run_until_event(MOTION_EV_DONE, 5000u);
     CHECK("S2-H14", 90u == g_mc.last_done_seq);

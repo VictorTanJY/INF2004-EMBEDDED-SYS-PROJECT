@@ -161,11 +161,11 @@ static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
 /* S4-H11: Change Requirement 1, the packed IMU snapshot */
 static void test_pack_s4 (void)
 {
-    imu_snap_t snap;
-    imu_snap_t ret;
-    uint32_t   words[IMU_SNAP_WORDS];
+    imu_types_snap_t snap;
+    imu_types_snap_t ret;
+    uint32_t         words[IMU_SNAP_WORDS];
 
-    CHECK("S4-H11", (IMU_SNAP_BITS == imu_snap_layout_bits())
+    CHECK("S4-H11", (IMU_SNAP_BITS == imu_core_snap_layout_bits())
                         && (IMU_SNAP_WORDS == PK_WORDS(IMU_SNAP_BITS))
                         && (sizeof(words) < sizeof(snap)));
     memset(&snap, 0, sizeof(snap));
@@ -185,22 +185,22 @@ static void test_pack_s4 (void)
     snap.cal              = 3u;
     snap.pitch_valid      = 1u;
     snap.tilt             = 1u;
-    imu_snap_pack(&snap, words);
+    imu_core_snap_pack(&snap, words);
     memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
-    imu_snap_unpack(words, &ret);
+    imu_core_snap_unpack(words, &ret);
     {
         uint32_t words_out[IMU_SNAP_WORDS];
 
-        imu_snap_pack(&ret, words_out);
+        imu_core_snap_pack(&ret, words_out);
         CHECK("S4-H11", 0 == memcmp(words, words_out, sizeof(words)));
     }
     memset(&ret, 0, sizeof(ret)); /* same padding as s */
-    imu_snap_unpack(words, &ret);
+    imu_core_snap_unpack(words, &ret);
     CHECK("S4-H11", 0 == memcmp(&snap, &ret, sizeof(snap)));
     snap.humps       = 300u;
     snap.hump_max_mm = 5000u; /* saturate */
-    imu_snap_pack(&snap, words);
-    imu_snap_unpack(words, &ret);
+    imu_core_snap_pack(&snap, words);
+    imu_core_snap_unpack(words, &ret);
     CHECK("S4-H11", (255u == ret.humps) && (1023u == ret.hump_max_mm));
 }
 
@@ -607,7 +607,7 @@ int main (void)
     /* S4-H06: level calibration removes a 3 deg mounting offset */
     imu_core_init(&g_ic);
     g_now = 0u;
-    imu_cal_level_start(&g_ic);
+    imu_core_cal_level_start(&g_ic);
     {
         int32_t kdx;
         int32_t accel[3];
@@ -615,9 +615,9 @@ int main (void)
         accel_for(3.0, -2.0, 0.0, accel);
         for (kdx = 0; kdx < 100; kdx++)
         {
-            imu_cal_level_sample(&g_ic, accel);
+            imu_core_cal_level_sample(&g_ic, accel);
         }
-        CHECK("S4-H06", imu_cal_level_finish(&g_ic));
+        CHECK("S4-H06", imu_core_cal_level_finish(&g_ic));
         for (kdx = 0; kdx < 20; kdx++)
         {
             step(3.0, -2.0, 0.0, 0, 0, 0);
@@ -625,26 +625,26 @@ int main (void)
         CHECK("S4-H06",
               (abs(g_ic.pitch_cdeg) <= 10) && (abs(g_ic.roll_cdeg) <= 10));
         /* moving robot: calibration refused */
-        imu_cal_level_start(&g_ic);
+        imu_core_cal_level_start(&g_ic);
         for (kdx = 0; kdx < 100; kdx++)
         {
             accel_for((kdx % 2) ? 5.0 : -5.0, 0.0, 0.0, accel);
-            imu_cal_level_sample(&g_ic, accel);
+            imu_core_cal_level_sample(&g_ic, accel);
         }
-        CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
+        CHECK("S4-H06", !imu_core_cal_level_finish(&g_ic));
         CHECK("S4-H06", (100u == g_ic.lvl_n)
                             && (g_ic.lvl_spread_mg
                                 > IMU_LEVEL_MAX_SPREAD_MG)); /* LOG 57/58 */
         /* stuck accelerometer (2 Nov: full scale, no noise): refused */
-        imu_cal_level_start(&g_ic);
+        imu_core_cal_level_start(&g_ic);
         accel[0] = -3997;
         accel[1] = 0;
         accel[2] = -3997;
         for (kdx = 0; kdx < 100; kdx++)
         {
-            imu_cal_level_sample(&g_ic, accel);
+            imu_core_cal_level_sample(&g_ic, accel);
         }
-        CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
+        CHECK("S4-H06", !imu_core_cal_level_finish(&g_ic));
         CHECK("S4-H06",
               (0 == g_ic.lvl_spread_mg)
                   && (g_ic.lvl_up_mg > IMU_LEVEL_UP_MAX_MG)); /* LOG 58/59 */
@@ -652,7 +652,7 @@ int main (void)
 
     /* S4-H07: hard-iron offsets and heading after a 360 deg spin */
     imu_core_init(&g_ic);
-    imu_cal_mag_start(&g_ic);
+    imu_core_cal_mag_start(&g_ic);
     {
         int32_t diff;
         for (diff = 0; diff < 360; diff += 5)
@@ -665,9 +665,9 @@ int main (void)
             mag[IMU_AXIS_LEFT] =
                 (int16_t)((400.0 * sin(radius)) * IMU_SIGN_LEFT - 80);
             mag[IMU_AXIS_UP] = 30;
-            imu_cal_mag_sample(&g_ic, mag);
+            imu_core_cal_mag_sample(&g_ic, mag);
         }
-        CHECK("S4-H07", imu_cal_mag_finish(&g_ic));
+        CHECK("S4-H07", imu_core_cal_mag_finish(&g_ic));
         {
             int16_t mag[3] = {0, 0, 0};
             int32_t accel[3];
@@ -747,19 +747,20 @@ int main (void)
 
     /* S4-H09: heartbeats: each task times out after its own limit */
     {
-        safety_hb_state_t hb_state;
-        uint32_t          coefs[SAFETY_HB_COUNT] = {0u, 0u, 0u, 0u, 0u};
-        uint32_t          elapsed;
-        uint32_t          mid = 0u;
+        safety_core_hb_state_t hb_state;
+        uint32_t               coefs[SAFETY_HB_COUNT] = {0u, 0u, 0u, 0u, 0u};
+        uint32_t               elapsed;
+        uint32_t               mid = 0u;
 
         memset(&hb_state, 0, sizeof(hb_state));
-        CHECK("S4-H09", 0u
-                            == safety_hb_check(&hb_state, coefs,
-                                               1000u)); /* starts supervision */
+        CHECK("S4-H09",
+              0u
+                  == safety_core_hb_check(&hb_state, coefs,
+                                          1000u)); /* starts supervision */
         for (elapsed = 1000u; elapsed <= 1320u; elapsed += 20u)
         {
             coefs[SAFETY_HB_MISSION]++; /* only Mission keeps running */
-            mid = safety_hb_check(&hb_state, coefs, elapsed);
+            mid = safety_core_hb_check(&hb_state, coefs, elapsed);
             if (1040u == elapsed)
             {
                 CHECK("S4-H09", 0u == mid);
@@ -778,12 +779,13 @@ int main (void)
         CHECK("S4-H09", 0u == (mid & (1u << SAFETY_HB_MISSION)));
         CHECK("S4-H09",
               (mid & (1u << SAFETY_HB_OBSTACLE)) != 0u); /* > 300 ms */
-        safety_hb_start(&hb_state, coefs, 1320u);
-        CHECK("S4-H09", 0u == safety_hb_check(&hb_state, coefs, 1360u));
-        CHECK("S4-H09", 100u == safety_hb_timeout_ms(SAFETY_HB_IMU));
+        safety_core_hb_start(&hb_state, coefs, 1320u);
+        CHECK("S4-H09", 0u == safety_core_hb_check(&hb_state, coefs, 1360u));
+        CHECK("S4-H09", 100u == safety_core_hb_timeout_ms(SAFETY_HB_IMU));
         /* the 32-bit millisecond wrap does not trigger a timeout */
-        safety_hb_start(&hb_state, coefs, 0xFFFFFFF0u);
-        CHECK("S4-H09", 0u == safety_hb_check(&hb_state, coefs, 0x00000010u));
+        safety_core_hb_start(&hb_state, coefs, 0xFFFFFFF0u);
+        CHECK("S4-H09",
+              0u == safety_core_hb_check(&hb_state, coefs, 0x00000010u));
     }
 
     test_pack_s4();

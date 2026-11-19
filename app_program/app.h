@@ -179,7 +179,7 @@ Inline void app_reset_release (UW mask)
 
 /* Create and start a task.  prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or
    0 for "any core".  Defined in app_main.c. */
-IMPORT ID app_start_task(FP entry, PRI pri, UW prc, char const * p_name);
+IMPORT ID app_main_start_task(FP entry, PRI pri, UW prc, char const * p_name);
 
 /* ---------------------------------------------------------------------
  *  Every subsystem provides these.  usermain() calls ALL the _init()
@@ -202,11 +202,11 @@ IMPORT ER subsystem4_start(void);
 IMPORT ER subsystem5_start(void);
 
 #if APP_TEST
-IMPORT void subsystem1_test(void);
-IMPORT void subsystem2_test(void);
-IMPORT void subsystem3_test(void);
-IMPORT void subsystem4_test(void);
-IMPORT void subsystem5_test(void);
+IMPORT void subsystem1_test_run(void);
+IMPORT void subsystem2_test_run(void);
+IMPORT void subsystem3_test_run(void);
+IMPORT void subsystem4_test_run(void);
+IMPORT void subsystem5_test_run(void);
 #endif
 
 /* Print a readable message if a kernel call failed (negative error code) */

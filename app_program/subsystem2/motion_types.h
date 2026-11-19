@@ -28,7 +28,7 @@ typedef enum
     MOTION_SRC_LINE    = 1, /* LineBarcodeTask: DRIVE                 */
     MOTION_SRC_AVOID   = 2, /* ObstacleTask during a bypass           */
     MOTION_SRC_COUNT   = 3
-} motion_src_t;
+} motion_types_src_t;
 
 typedef enum
 {
@@ -40,12 +40,12 @@ typedef enum
         3, /* p0 = angle [0.1 deg, +left], p1 = rate [deg/s, > 0] */
     MOTION_CMD_STOP = 4, /* ramp down (MOTION_STOP_DECEL), then brake       */
     MOTION_CMD_SET_AUTH =
-        5, /* p0 = new authority (motion_src_t); MISSION only */
+        5, /* p0 = new authority (motion_types_src_t); MISSION only */
     MOTION_CMD_CLEAR_ESTOP = 6 /* MISSION only, after an operator reset */
-} motion_cmd_code_t;
+} motion_types_cmd_code_t;
 
 /* Unpacked command (task-local).  Through mbf_motion it travels as ONE
-   32-bit word (Change Requirement 1, motion_cmd_pack()):
+   32-bit word (Change Requirement 1, motion_core_cmd_pack()):
      src 2 | cmd 3 | seq 5 | payload 22, the payload by command:
      DRIVE  v 10 (+-511 mm/s) | omega 12 (+-2047 mrad/s), offset-binary
      MOVE   distance 13 (+-4095 mm) | speed 9 (0..511 mm/s)
@@ -58,16 +58,16 @@ typedef enum
 
 typedef struct
 {
-    uint8_t src;      /* motion_src_t                          */
+    uint8_t src;      /* motion_types_src_t                          */
     uint8_t seq;      /* sender's sequence number, 5 bits, wraps */
-    uint8_t cmd;      /* motion_cmd_code_t                     */
+    uint8_t cmd;      /* motion_types_cmd_code_t                     */
     uint8_t reserved; /* 0                                     */
-    int16_t arg0;     /* see motion_cmd_code_t                 */
+    int16_t arg0;     /* see motion_types_cmd_code_t                 */
     int16_t arg1;
-} motion_cmd_t;
+} motion_types_cmd_t;
 
 /* Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */
-static inline uint8_t motion_seq_next (uint8_t seq)
+static inline uint8_t motion_types_seq_next (uint8_t seq)
 {
     return (uint8_t)((seq + 1u) & MOTION_SEQ_MASK);
 }
@@ -84,7 +84,7 @@ typedef enum
     MOTION_ST_MANEUVER       = 2,
     MOTION_ST_STOPPING       = 3,
     MOTION_ST_ESTOP_LATCHED  = 4
-} motion_state_t;
+} motion_types_state_t;
 
 typedef enum
 {
@@ -93,7 +93,7 @@ typedef enum
     MOTION_PH_CRUISE = 2,
     MOTION_PH_DECEL  = 3,
     MOTION_PH_SETTLE = 4
-} motion_phase_t;
+} motion_types_phase_t;
 
 typedef struct
 {
@@ -111,9 +111,9 @@ typedef struct
     int16_t  duty_l;          /* applied duty, per mille, signed       */
     int16_t  duty_r;
     uint16_t rejected;      /* commands rejected (wrong authority)   */
-    uint8_t  state;         /* motion_state_t                        */
-    uint8_t  phase;         /* motion_phase_t (MANEUVER only)        */
-    uint8_t  auth;          /* motion_src_t currently obeyed         */
+    uint8_t  state;         /* motion_types_state_t                        */
+    uint8_t  phase;         /* motion_types_phase_t (MANEUVER only)        */
+    uint8_t  auth;          /* motion_types_src_t currently obeyed         */
     uint8_t  last_done_seq; /* seq of the last completed MOVE/TURN   */
     uint8_t  last_done_src; /* its source                            */
     uint8_t  last_fail_seq; /* seq of the last failed MOVE/TURN      */
@@ -121,7 +121,7 @@ typedef struct
     uint8_t  fail_count;    /* + 1 per failure (wraps)               */
     uint8_t  hw_ok;         /* 1 = PWM and PIO encoders initialised  */
     uint8_t  reserved;
-} motion_odom_t;
+} motion_types_odom_t;
 
 #endif /* MOTION_TYPES_H */
 

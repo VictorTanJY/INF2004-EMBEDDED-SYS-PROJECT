@@ -29,7 +29,7 @@ EV_BARCODE = 8
 
 
 class Reader:
-    """Reads fields LSB first, as pk_take() does."""
+    """Reads fields LSB first, as app_pack_take() does."""
 
     def __init__(self, data):
         self.data, self.pos = bytes(data), 0

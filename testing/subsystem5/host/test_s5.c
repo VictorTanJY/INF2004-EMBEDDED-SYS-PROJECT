@@ -36,14 +36,14 @@ static int32_t g_fail;
         }                                                                    \
     } while (0)
 
-static mission_core_t   g_mc;
-static mission_out_t    g_out;
-static mission_inputs_t g_in;
-static uint32_t         g_now;
+static mission_core_t        g_mc;
+static mission_core_out_t    g_out;
+static mission_core_inputs_t g_in;
+static uint32_t              g_now;
 
 static void ev (uint8_t type, uint16_t val_a, int32_t data)
 {
-    mission_evt_t evt = {type, 0u, val_a, data};
+    mission_types_evt_t evt = {type, 0u, val_a, data};
 
     g_out.n_acts = 0u;
     mission_core_event(&g_mc, &evt, g_now, &g_out);
@@ -179,20 +179,20 @@ static void test_mission (void)
               && (find(MISSION_ACT_LOG, MISSION_LOG_NAV_UNMAPPED) >= 0));
     memcpy(map, "AFZW", 4);
     ev(MISSION_EV_REMOTE_MAP, 0u,
-       mission_map_pack(map)); /* refused while running */
+       mission_core_map_pack(map)); /* refused while running */
     CHECK("S5-H03", '\0' == g_mc.snap.nav_map[0]);
     ev(MISSION_EV_REMOTE_STOP, 0u, 0);
     CHECK("S5-H03", (MISSION_ST_MISSION_COMPLETE == g_mc.snap.state)
                         && (find(MISSION_ACT_LOG, MISSION_LOG_SUMMARY) >= 0));
     memcpy(map, "AFAW", 4);
     ev(MISSION_EV_REMOTE_MAP, 0u,
-       mission_map_pack(map)); /* duplicate: refused */
+       mission_core_map_pack(map)); /* duplicate: refused */
     CHECK("S5-H03", ('\0' == g_mc.snap.nav_map[0])
                         && (find(MISSION_ACT_LOG, MISSION_LOG_MAP_BAD) >= 0));
     memcpy(map, "AF*W", 4);
-    CHECK("S5-H03", !mission_map_unpack(mission_map_pack(map), map));
+    CHECK("S5-H03", !mission_core_map_unpack(mission_core_map_pack(map), map));
     memcpy(map, "QFZW", 4); /* left Q, right F, straight Z, U-turn W */
-    ev(MISSION_EV_REMOTE_MAP, 0u, mission_map_pack(map));
+    ev(MISSION_EV_REMOTE_MAP, 0u, mission_core_map_pack(map));
     CHECK("S5-H03", 0 == memcmp(g_mc.snap.nav_map, "QFZW", 4));
 
     /* S5-H04: barcode latched, executed at the NEXT junction (FR4) */
@@ -388,7 +388,7 @@ static int32_t  g_edge_phi[2]; /* last echo per side (left, right), 0.01 deg */
 static uint16_t g_edge_r[2];
 
 static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
-                      obst_profile_t * p_prof)
+                      obstacle_core_profile_t * p_prof)
 {
     bool    b_has[2]   = {false, false};
     int32_t lat[2]     = {0, 0};
@@ -417,17 +417,17 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
             {
                 ret = g_edge_clutter;
             } /* something to the right */
-            if (obst_edge_on_face(phi, ret, (uint16_t)diff))
+            if (obstacle_core_edge_on_face(phi, ret, (uint16_t)diff))
             {
-                if (obst_edge_past_max(obst_edge_wide_lat(phi, ret, side),
-                                       side))
+                if (obstacle_core_edge_past_max(
+                        obstacle_core_edge_wide_lat(phi, ret, side), side))
                 {
                     b_past = true;
                     break;
                 }
                 b_has[kdx]      = true;
-                lat[kdx]        = obst_edge_wide_lat(phi, ret, side);
-                minimum[kdx]    = obst_edge_lat(phi);
+                lat[kdx]        = obstacle_core_edge_wide_lat(phi, ret, side);
+                minimum[kdx]    = obstacle_core_edge_lat(phi);
                 miss            = 0u;
                 g_edge_phi[kdx] = phi;
                 g_edge_r[kdx]   = ret;
@@ -452,12 +452,12 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
 
             phi = (low + high) / 2;
             ret = edge_ping(diff, omega, coef, phi / 100.0);
-            if (obst_edge_on_face(phi, ret, (uint16_t)diff)
-                && !obst_edge_past_max(obst_edge_wide_lat(phi, ret, side),
-                                       side))
+            if (obstacle_core_edge_on_face(phi, ret, (uint16_t)diff)
+                && !obstacle_core_edge_past_max(
+                    obstacle_core_edge_wide_lat(phi, ret, side), side))
             {
-                lat[kdx]        = obst_edge_wide_lat(phi, ret, side);
-                minimum[kdx]    = obst_edge_lat(phi);
+                lat[kdx]        = obstacle_core_edge_wide_lat(phi, ret, side);
+                minimum[kdx]    = obstacle_core_edge_lat(phi);
                 g_edge_phi[kdx] = phi;
                 g_edge_r[kdx]   = ret;
                 low             = phi;
@@ -471,8 +471,9 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
                 / 2; /* the edge is between the last echo and the miss */
         }
     }
-    obst_edge_plan(p_prof, b_has[0], lat[0], b_has[1], lat[1]);
-    obst_edge_plan_min(p_prof, b_has[0], minimum[0], b_has[1], minimum[1]);
+    obstacle_core_edge_plan(p_prof, b_has[0], lat[0], b_has[1], lat[1]);
+    obstacle_core_edge_plan_min(p_prof, b_has[0], minimum[0], b_has[1],
+                                minimum[1]);
 }
 
 /* 7 Nov step-out leg model: from where the edge scan stopped (box face d
@@ -488,17 +489,17 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
                         int32_t sign, int32_t min_lat, float64_t beam_deg,
                         float64_t * p_edge)
 {
-    float64_t const theta = 45.0 * M_PI / 180.0;
-    float64_t const shaft = OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM;
-    float64_t const face  = OBST_US_AHEAD_MM + diff; /* ahead of the axle */
-    float64_t const low   = (sign * coef) - (omega / 2.0);
-    float64_t const high  = (sign * coef) + (omega / 2.0); /* box toward s */
-    float64_t const step  = (OBST_BYPASS_SPEED_MM_S * 60.0) / 1000.0;
-    obst_out_t      out_state;
-    float64_t       time_s;
+    float64_t const     theta = 45.0 * M_PI / 180.0;
+    float64_t const     shaft = OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM;
+    float64_t const     face  = OBST_US_AHEAD_MM + diff; /* ahead of the axle */
+    float64_t const     low   = (sign * coef) - (omega / 2.0);
+    float64_t const     high = (sign * coef) + (omega / 2.0); /* box toward s */
+    float64_t const     step = (OBST_BYPASS_SPEED_MM_S * 60.0) / 1000.0;
+    obstacle_core_out_t out_state;
+    float64_t           time_s;
 
     *p_edge = high;
-    obst_out_start(&out_state, min_lat);
+    obstacle_core_out_start(&out_state, min_lat);
     for (time_s = 0.0; time_s < 2000.0; time_s += step)
     {
         float64_t const accel_x = time_s * sin(theta);
@@ -510,7 +511,7 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
         float64_t x_val;
         uint16_t  ret;
 
-        if (obst_out_done(&out_state, (int32_t)accel_x))
+        if (obstacle_core_out_done(&out_state, (int32_t)accel_x))
         {
             return (int32_t)accel_x;
         }
@@ -530,8 +531,8 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
             }
         }
         ret = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
-        obst_out_ping(&out_state, (int32_t)accel_x, (int32_t)accel_y, 4500, ret,
-                      (int32_t)face);
+        obstacle_core_out_ping(&out_state, (int32_t)accel_x, (int32_t)accel_y,
+                               4500, ret, (int32_t)face);
     }
     return -1;
 }
@@ -576,34 +577,38 @@ static uint16_t ping (box_t const * p_b, int32_t n_b, int32_t angle_deg)
 
 static int32_t g_pings;
 
-static void scan_box (box_t const * p_b, int32_t n_b, obst_profile_t * p_prof)
+static void scan_box (box_t const * p_b, int32_t n_b,
+                      obstacle_core_profile_t * p_prof)
 {
-    obst_scan_t scan;
+    obstacle_core_scan_t scan;
 
-    obst_scan_start(&scan);
+    obstacle_core_scan_start(&scan);
     g_pings = 0;
-    while (!obst_scan_done(&scan) && (g_pings < 60))
+    while (!obstacle_core_scan_done(&scan) && (g_pings < 60))
     {
-        obst_scan_feed(&scan, ping(p_b, n_b, obst_scan_angle(&scan)));
+        obstacle_core_scan_feed(
+            &scan, ping(p_b, n_b, obstacle_core_scan_angle(&scan)));
         g_pings++;
     }
-    obst_scan_profile(&scan, p_prof);
+    obstacle_core_scan_profile(&scan, p_prof);
 }
 
 static void test_obstacle (void)
 {
-    obst_profile_t prof;
-    obst_step_t    steps[OBST_BYPASS_MAX_STEPS];
-    float64_t      worst = 0.0;
-    int32_t        width;
-    int32_t        cnt;
+    obstacle_core_profile_t prof;
+    obstacle_core_step_t    steps[OBST_BYPASS_MAX_STEPS];
+    float64_t               worst = 0.0;
+    int32_t                 width;
+    int32_t                 cnt;
 
     /* S5-H09: helpers */
-    CHECK("S5-H09", (200 == obst_median3(300, 120, 200))
-                        && (100 == obst_median3(OBST_RANGE_NONE, 100, 90)));
-    CHECK("S5-H09", (200u == obst_echo_to_mm(1160u))
-                        && (OBST_RANGE_NONE == obst_echo_to_mm(23200u)));
-    CHECK("S5-H09", OBST_RANGE_NONE == obst_echo_to_mm(0u));
+    CHECK("S5-H09",
+          (200 == obstacle_core_median3(300, 120, 200))
+              && (100 == obstacle_core_median3(OBST_RANGE_NONE, 100, 90)));
+    CHECK("S5-H09",
+          (200u == obstacle_core_echo_to_mm(1160u))
+              && (OBST_RANGE_NONE == obstacle_core_echo_to_mm(23200u)));
+    CHECK("S5-H09", OBST_RANGE_NONE == obstacle_core_echo_to_mm(0u));
 
     /* S5-H10: width of 10-20 cm boxes (instructor, 23 Oct) at 20 cm, centred
        and offset; model error target: within 10 % (grade A) */
@@ -691,7 +696,7 @@ static void test_obstacle (void)
 
             scan_box(&box, 1, &prof);
             w_seen = prof.w_mm;
-            obst_edge_plan(&prof, false, 0, false, 0);
+            obstacle_core_edge_plan(&prof, false, 0, false, 0);
             prof.w_mm = w_seen;
             CHECK("S5-H25", abs((int32_t)w_seen - 150) <= 15);
             printf("single sweep: box at %+d mm -> plan %u, step-out %d mm, "
@@ -721,9 +726,12 @@ static void test_obstacle (void)
     {
         /* 9 Nov: the approach ping before the width probe */
         CHECK("S5-H24",
-              300u == obst_probe_face(470u, 300u)); /* passed the box */
-        CHECK("S5-H24", 300u == obst_probe_face(OBST_RANGE_NONE, 300u));
-        CHECK("S5-H24", 330u == obst_probe_face(330u, 300u)); /* the face */
+              300u
+                  == obstacle_core_probe_face(470u, 300u)); /* passed the box */
+        CHECK("S5-H24",
+              300u == obstacle_core_probe_face(OBST_RANGE_NONE, 300u));
+        CHECK("S5-H24",
+              330u == obstacle_core_probe_face(330u, 300u)); /* the face */
     }
     {
         box_t box[3] = {
@@ -747,29 +755,29 @@ static void test_obstacle (void)
                                 > (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM));
     }
     {
-        obst_point_t none[3] = {{80, OBST_RANGE_NONE},
-                                {90, OBST_RANGE_NONE},
-                                {100, OBST_RANGE_NONE}};
-        obst_profile(none, 3u, none, 0u, &prof);
+        obstacle_core_point_t none[3] = {{80, OBST_RANGE_NONE},
+                                         {90, OBST_RANGE_NONE},
+                                         {100, OBST_RANGE_NONE}};
+        obstacle_core_profile(none, 3u, none, 0u, &prof);
         CHECK("S5-H11", !prof.b_valid && (OBST_PLAN_CONTINUE == prof.plan));
     }
     {
         /* 3 Nov: a round bottle seen at 16 cm while driving, no echo at
            all in the scan: plan around a 20 cm object there, never CONTINUE */
-        obst_point_t  none[3] = {{80, OBST_RANGE_NONE},
-                                 {90, OBST_RANGE_NONE},
-                                 {100, OBST_RANGE_NONE}};
+        obstacle_core_point_t none[3] = {{80, OBST_RANGE_NONE},
+                                         {90, OBST_RANGE_NONE},
+                                         {100, OBST_RANGE_NONE}};
         int32_t const need = (OBST_WIDTH_MAX_MM / 2) + (OBST_ROBOT_WIDTH_MM / 2)
                              + OBST_MARGIN_MM;
 
-        obst_profile_detected(none, 3u, none, 0u, 160u, 0u, &prof);
+        obstacle_core_profile_detected(none, 3u, none, 0u, 160u, 0u, &prof);
         CHECK("S5-H16", prof.b_valid && (160u == prof.closest_mm)
                             && ((OBST_PLAN_LEFT == prof.plan)
                                 || (OBST_PLAN_RIGHT == prof.plan))
                             && (abs(prof.deviation_mm) >= need));
         /* 4 Nov: seen at 192 mm, backed off 60 mm, still no echo: still a
          * bypass */
-        obst_profile_detected(none, 3u, none, 0u, 192u, 60u, &prof);
+        obstacle_core_profile_detected(none, 3u, none, 0u, 192u, 60u, &prof);
         CHECK("S5-H16", prof.b_valid && (252u == prof.closest_mm)
                             && (prof.plan != OBST_PLAN_CONTINUE));
         /* the scan saw it off to the side and clear: the detection does not
@@ -871,9 +879,9 @@ static void test_obstacle (void)
                 g_edge_beam   = OBST_WIDTH_BEAM_CDEG / 100.0;
                 edge_sim(dists[val_b2], widths[val_a], 0.0, &prof);
                 g_edge_beam = 36.0;
-                width       = obst_edge_width(g_edge_phi[0], g_edge_r[0],
-                                              g_edge_phi[1], g_edge_r[1]);
-                elem        = fabs(width - widths[val_a]) / widths[val_a];
+                width = obstacle_core_edge_width(g_edge_phi[0], g_edge_r[0],
+                                                 g_edge_phi[1], g_edge_r[1]);
+                elem  = fabs(width - widths[val_a]) / widths[val_a];
                 if (elem > worst_w)
                 {
                     worst_w = elem;
@@ -889,8 +897,8 @@ static void test_obstacle (void)
         edge_sim(326.0, 95.0, 0.0, &prof);
         printf("width: 95 mm box heard to 36 deg (black box) -> %u mm with the "
                "%d deg calibration\n",
-               (uint32_t)obst_edge_width(g_edge_phi[0], g_edge_r[0],
-                                         g_edge_phi[1], g_edge_r[1]),
+               (uint32_t)obstacle_core_edge_width(g_edge_phi[0], g_edge_r[0],
+                                                  g_edge_phi[1], g_edge_r[1]),
                OBST_WIDTH_BEAM_CDEG / 100);
     }
 
@@ -927,14 +935,14 @@ static void test_obstacle (void)
                     int32_t const face = OBST_US_AHEAD_MM + OBST_PROBE_FACE_MM;
                     float64_t const step =
                         (OBST_PROBE_SPEED_MM_S * 60.0) / 1000.0;
-                    obst_probe_t probe;
-                    float64_t    diff = 0.0;
-                    int32_t      pass;
-                    int32_t      left;
-                    int32_t      ret;
-                    float64_t    elem;
+                    obstacle_core_probe_t probe;
+                    float64_t             diff = 0.0;
+                    int32_t               pass;
+                    int32_t               left;
+                    int32_t               ret;
+                    float64_t             elem;
 
-                    obst_probe_start(&probe);
+                    obstacle_core_probe_start(&probe);
                     for (pass = 0; pass < 2; pass++)
                     {
                         bool b_seen = false;
@@ -947,17 +955,17 @@ static void test_obstacle (void)
                             int32_t const fwd =
                                 (int32_t)(diff * cos(th_deg * M_PI / 180.0));
                             int32_t const slope =
-                                obst_probe_sensor_lat(lat, theta);
+                                obstacle_core_probe_sensor_lat(lat, theta);
                             int32_t const expected =
-                                obst_out_expect_mm(face, fwd, theta);
+                                obstacle_core_out_expect_mm(face, fwd, theta);
                             bool const b_on =
                                 (slope <= (coef + (omega / 2.0) + run))
                                 && (slope >= (coef - (omega / 2.0) - run));
 
-                            if (obst_probe_ping(&probe, slope,
-                                                b_on ? (uint16_t)expected
-                                                     : OBST_RANGE_NONE,
-                                                expected))
+                            if (obstacle_core_probe_ping(
+                                    &probe, slope,
+                                    b_on ? (uint16_t)expected : OBST_RANGE_NONE,
+                                    expected))
                             {
                                 b_seen = true;
                             }
@@ -982,7 +990,8 @@ static void test_obstacle (void)
                             }
                         }
                     }
-                    CHECK("S5-H23", obst_probe_edges(&probe, &left, &ret));
+                    CHECK("S5-H23",
+                          obstacle_core_probe_edges(&probe, &left, &ret));
                     elem = fabs((left - ret) - omega) / omega;
                     if ((1 == cnt4) && (elem > worst))
                     {
@@ -1013,10 +1022,10 @@ static void test_obstacle (void)
 
     /* S5-H21: the servo looks back along the line (> 90 = left), and the
        leg ends before the front corner reaches the face */
-    CHECK("S5-H21", (45 == obst_out_servo_deg(4500, 1))
-                        && (135 == obst_out_servo_deg(4500, -1)));
-    CHECK("S5-H21", !obst_out_blocked(411, 100, 4500)
-                        && obst_out_blocked(411, 250, 4500));
+    CHECK("S5-H21", (45 == obstacle_core_out_servo_deg(4500, 1))
+                        && (135 == obstacle_core_out_servo_deg(4500, -1)));
+    CHECK("S5-H21", !obstacle_core_out_blocked(411, 100, 4500)
+                        && obstacle_core_out_blocked(411, 250, 4500));
 
     /* S5-H17 (4 Nov): edge scan with the car turning.  The wide edges
        (side choice) never inside the truth; side away from the centre.
@@ -1059,23 +1068,23 @@ static void test_obstacle (void)
         prof.w_mm      = 160u;
         prof.plan_l_mm = 73;
         prof.plan_r_mm = -87;
-        obst_edge_plan(&prof, false, 0, true, -88);
+        obstacle_core_edge_plan(&prof, false, 0, true, -88);
         /* 5 Nov: the step-outs are within 2 cm (203 / 218): the side whose
            edge was measured (right) is taken, its edge being known */
         CHECK("S5-H17",
               (73 == prof.left_lat_mm) && (OBST_PLAN_RIGHT == prof.plan));
         /* 5 Nov tie rule: centred within 2 cm -> measured side, then left */
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, true, 80, true,
-                       -90); /* 1 cm right of centre: tie */
+        obstacle_core_edge_plan(&prof, true, 80, true,
+                                -90); /* 1 cm right of centre: tie */
         CHECK("S5-H18", OBST_PLAN_LEFT == prof.plan);
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, true, 90, true,
-                       -80); /* 1 cm left of centre: tie, still left */
+        obstacle_core_edge_plan(&prof, true, 90, true,
+                                -80); /* 1 cm left of centre: tie, still left */
         CHECK("S5-H18", OBST_PLAN_LEFT == prof.plan);
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, true, 120, true,
-                       -60); /* 3 cm left: right is 6 cm shorter */
+        obstacle_core_edge_plan(&prof, true, 120, true,
+                                -60); /* 3 cm left: right is 6 cm shorter */
         CHECK("S5-H18", OBST_PLAN_RIGHT == prof.plan);
         /* 6 Nov: no echo either side; servo scan put the box 25..134 mm
            left: the right is the short way round */
@@ -1085,7 +1094,7 @@ static void test_obstacle (void)
         prof.plan_l_mm = 134;
         prof.plan_r_mm = 25;
         prof.plan = OBST_PLAN_LEFT; /* what the servo scan's own rules said */
-        obst_edge_plan(&prof, false, 0, false, 0);
+        obstacle_core_edge_plan(&prof, false, 0, false, 0);
         CHECK("S5-H20",
               (OBST_PLAN_RIGHT == prof.plan)
                   && (-(-25 + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2)
@@ -1094,11 +1103,11 @@ static void test_obstacle (void)
         /* nothing from either scan: unchanged */
         memset(&prof, 0, sizeof(prof));
         prof.plan = OBST_PLAN_CONTINUE;
-        obst_edge_plan(&prof, false, 0, false, 0);
+        obstacle_core_edge_plan(&prof, false, 0, false, 0);
         CHECK("S5-H20", OBST_PLAN_CONTINUE == prof.plan);
         /* without a servo reading: as far as the largest obstacle */
         memset(&prof, 0, sizeof(prof));
-        obst_edge_plan(&prof, false, 0, true, -88);
+        obstacle_core_edge_plan(&prof, false, 0, true, -88);
         CHECK("S5-H17", (-88 + OBST_WIDTH_MAX_MM == prof.left_lat_mm));
     }
     {
@@ -1138,7 +1147,7 @@ static void test_obstacle (void)
         bool      b_joined = false;
 
         scan_box(&box, 1, &prof);
-        count = obst_bypass_plan(&prof, prof.plan, steps);
+        count = obstacle_core_bypass_plan(&prof, prof.plan, steps);
         for (idx = 0; idx < count; idx++)
         {
             float64_t       diff = ((OBST_STEP_TURN == steps[idx].kind)
@@ -1226,16 +1235,17 @@ static void test_obstacle (void)
         /* (f) guard: the profile itself sees nothing usable (no fine
            scan), yet the raw reading straight ahead is
            150 mm: plan a bypass for a 20 cm object, never CONTINUE */
-        obst_point_t pts[5];
-        uint8_t      kdx;
+        obstacle_core_point_t pts[5];
+        uint8_t               kdx;
 
         for (kdx = 0u; kdx < 5u; kdx++)
         {
             pts[kdx].angle_deg = (int16_t)(30 + (30 * kdx));
             pts[kdx].r_mm      = OBST_RANGE_NONE;
         }
-        pts[2].r_mm = 150u;                    /* 90 deg */
-        obst_profile(pts, 0u, pts, 5u, &prof); /* no fine scan at all */
+        pts[2].r_mm = 150u; /* 90 deg */
+        obstacle_core_profile(pts, 0u, pts, 5u,
+                              &prof); /* no fine scan at all */
         CHECK("S5-H15",
               (prof.plan != OBST_PLAN_CONTINUE) && (150u == prof.closest_mm));
         CHECK("S5-H15", (prof.plan_l_mm >= (OBST_WIDTH_MAX_MM / 2))
@@ -1243,8 +1253,8 @@ static void test_obstacle (void)
     }
     {
         /* (d) one dropout inside a face does not split it (2-miss edges) */
-        obst_point_t pts[13];
-        uint8_t      kdx;
+        obstacle_core_point_t pts[13];
+        uint8_t               kdx;
 
         for (kdx = 0u; kdx < 13u; kdx++)
         {
@@ -1253,31 +1263,32 @@ static void test_obstacle (void)
                 ((0u == kdx) || (12u == kdx)) ? OBST_RANGE_NONE : 200u;
         }
         pts[6].r_mm = OBST_RANGE_NONE; /* the dropout, straight ahead */
-        obst_profile(pts, 13u, pts, 0u, &prof);
+        obstacle_core_profile(pts, 13u, pts, 0u, &prof);
         CHECK("S5-H15", prof.b_valid && (prof.left_lat_mm > 50)
                             && (prof.right_lat_mm < -50));
     }
 
     /* S5-H13: seek-line acceptance window and the hump mask */
-    CHECK("S5-H13", obst_line_accept(500, 40, 1000, 0, 0, 0));
-    CHECK("S5-H13", !obst_line_accept(500, 80, 0, 0, 0, 0));
-    CHECK("S5-H13", !obst_line_accept(500, 0, 2500, 0, 0, 0));
-    CHECK("S5-H13", (0 == obst_cross_track_mm(0, 100, 0, 0, 9000))
-                        && (-100 == obst_cross_track_mm(100, 0, 0, 0, 9000)));
+    CHECK("S5-H13", obstacle_core_line_accept(500, 40, 1000, 0, 0, 0));
+    CHECK("S5-H13", !obstacle_core_line_accept(500, 80, 0, 0, 0, 0));
+    CHECK("S5-H13", !obstacle_core_line_accept(500, 0, 2500, 0, 0, 0));
+    CHECK("S5-H13",
+          (0 == obstacle_core_cross_track_mm(0, 100, 0, 0, 9000))
+              && (-100 == obstacle_core_cross_track_mm(100, 0, 0, 0, 9000)));
     {
-        obst_mask_t mask = {false, 0u, 0};
-        CHECK("S5-H13", !obst_hump_mask(&mask, true, 200, 0, 1000u));
-        CHECK("S5-H13", obst_hump_mask(&mask, true, 700, 0, 1100u));
-        CHECK("S5-H13", obst_hump_mask(&mask, true, 700, 500, 2000u));
-        CHECK("S5-H13", !obst_hump_mask(&mask, true, 700, 650,
-                                        2100u)); /* > 600 mm: lapsed */
-        CHECK("S5-H13", !obst_hump_mask(&mask, true, 700, 700, 2200u));
-        CHECK("S5-H13", !obst_hump_mask(&mask, false, 700, 700,
-                                        2300u)); /* pitch not valid */
-        CHECK("S5-H13",
-              obst_hump_mask(&mask, true, 700, 700, 2400u)); /* re-armed */
-        CHECK("S5-H13",
-              !obst_hump_mask(&mask, true, 700, 700, 6500u)); /* > 4 s */
+        obstacle_core_mask_t mask = {false, 0u, 0};
+        CHECK("S5-H13", !obstacle_core_hump_mask(&mask, true, 200, 0, 1000u));
+        CHECK("S5-H13", obstacle_core_hump_mask(&mask, true, 700, 0, 1100u));
+        CHECK("S5-H13", obstacle_core_hump_mask(&mask, true, 700, 500, 2000u));
+        CHECK("S5-H13", !obstacle_core_hump_mask(&mask, true, 700, 650,
+                                                 2100u)); /* > 600 mm: lapsed */
+        CHECK("S5-H13", !obstacle_core_hump_mask(&mask, true, 700, 700, 2200u));
+        CHECK("S5-H13", !obstacle_core_hump_mask(&mask, false, 700, 700,
+                                                 2300u)); /* pitch not valid */
+        CHECK("S5-H13", obstacle_core_hump_mask(&mask, true, 700, 700,
+                                                2400u)); /* re-armed */
+        CHECK("S5-H13", !obstacle_core_hump_mask(&mask, true, 700, 700,
+                                                 6500u)); /* > 4 s */
     }
 }
 
@@ -1313,20 +1324,20 @@ static void test_bench (void)
 /* S5-H26: Change Requirement 1, packed mbf_mission / mbf_scan and snapshots */
 static void test_pack_s5 (void)
 {
-    mission_evt_t        evt;
-    mission_evt_t        decoded;
-    scan_req_t           req;
-    scan_req_t           req_out;
-    mission_snap_t       mission;
-    mission_snap_t       mission_r;
-    obst_snap_t          snap_o;
-    obst_snap_t          orr;
-    uint32_t             words_min[MISSION_SNAP_WORDS];
-    uint32_t             words_out[OBST_SNAP_WORDS];
-    static int32_t const datas[] = {0,   -1,   65535, -65536,
-                                    'F', 3600, -3600, 0x07FF};
-    uint32_t             kdx;
-    bool                 b_ok = true;
+    mission_types_evt_t       evt;
+    mission_types_evt_t       decoded;
+    mission_types_scan_req_t  req;
+    mission_types_scan_req_t  req_out;
+    mission_types_snap_t      mission;
+    mission_types_snap_t      mission_r;
+    mission_types_obst_snap_t snap_o;
+    mission_types_obst_snap_t orr;
+    uint32_t                  words_min[MISSION_SNAP_WORDS];
+    uint32_t                  words_out[OBST_SNAP_WORDS];
+    static int32_t const      datas[] = {0,   -1,   65535, -65536,
+                                         'F', 3600, -3600, 0x07FF};
+    uint32_t                  kdx;
+    bool                      b_ok = true;
 
     for (kdx = 0u; kdx < sizeof(datas) / sizeof(datas[0]); kdx++)
     {
@@ -1334,7 +1345,7 @@ static void test_pack_s5 (void)
         evt.src  = 5u;
         evt.arg  = (uint16_t)(kdx * 15u);
         evt.data = datas[kdx];
-        mission_evt_unpack(mission_evt_pack(&evt), &decoded);
+        mission_core_evt_unpack(mission_core_evt_pack(&evt), &decoded);
         if ((decoded.type != evt.type) || (decoded.src != evt.src)
             || (decoded.arg != evt.arg) || (decoded.data != evt.data))
         {
@@ -1345,27 +1356,27 @@ static void test_pack_s5 (void)
     evt.type = (uint8_t)MISSION_EV_OBSTACLE;
     evt.arg  = 200u;
     evt.data = 100000; /* saturate */
-    mission_evt_unpack(mission_evt_pack(&evt), &decoded);
+    mission_core_evt_unpack(mission_core_evt_pack(&evt), &decoded);
     CHECK("S5-H26", (127u == decoded.arg) && (65535 == decoded.data));
     evt.type = (uint8_t)MISSION_EV_REMOTE_MAP;
     evt.src  = 1u;
     evt.arg  = 0u;
     evt.data = (int32_t)((uint32_t)'A' | ((uint32_t)'F' << 8)
                          | ((uint32_t)'Z' << 16) | ((uint32_t)'%' << 24));
-    mission_evt_unpack(mission_evt_pack(&evt), &decoded);
+    mission_core_evt_unpack(mission_core_evt_pack(&evt), &decoded);
     CHECK("S5-H26", (MISSION_EV_REMOTE_MAP == decoded.type)
                         && (decoded.data == evt.data) && (1u == decoded.src));
     CHECK("S5-H26", (uint32_t)MISSION_EV_COUNT <= 32u);
     req.type  = (uint8_t)SCAN_REQ_STOP;
     req.seq   = 37u;
     req.param = 180;
-    scan_req_unpack(scan_req_pack(&req), &req_out);
+    mission_core_scan_req_unpack(mission_core_scan_req_pack(&req), &req_out);
     CHECK("S5-H26", (req_out.type == req.type) && (5u == req_out.seq)
                         && (180 == req_out.param));
 
-    CHECK("S5-H26", (MISSION_SNAP_BITS == mission_snap_layout_bits())
+    CHECK("S5-H26", (MISSION_SNAP_BITS == mission_core_snap_layout_bits())
                         && (MISSION_SNAP_WORDS == PK_WORDS(MISSION_SNAP_BITS))
-                        && (OBST_SNAP_BITS == obst_snap_layout_bits())
+                        && (OBST_SNAP_BITS == obstacle_core_snap_layout_bits())
                         && (OBST_SNAP_WORDS == PK_WORDS(OBST_SNAP_BITS)));
     memset(&mission, 0, sizeof(mission));
     mission.t_ms           = 777u;
@@ -1388,23 +1399,23 @@ static void test_pack_s5 (void)
     mission.calibrated     = 3u;
     mission.cal_phase      = 3u;
     mission.cause          = 6u;
-    mission_snap_pack(&mission, words_min);
+    mission_core_snap_pack(&mission, words_min);
     memset(&mission_r, 0x5A,
            sizeof(mission_r)); /* every field must be written */
-    mission_snap_unpack(words_min, &mission_r);
+    mission_core_snap_unpack(words_min, &mission_r);
     {
         uint32_t words2[MISSION_SNAP_WORDS];
 
-        mission_snap_pack(&mission_r, words2);
+        mission_core_snap_pack(&mission_r, words2);
         CHECK("S5-H26", 0 == memcmp(words_min, words2, sizeof(words_min)));
     }
     memset(&mission_r, 0, sizeof(mission_r)); /* same padding as m */
-    mission_snap_unpack(words_min, &mission_r);
+    mission_core_snap_unpack(words_min, &mission_r);
     CHECK("S5-H26", 0 == memcmp(&mission, &mission_r, sizeof(mission)));
     mission.pending_nav  = 2u;
     mission.pending_char = 'Q';
-    mission_snap_pack(&mission, words_min);
-    mission_snap_unpack(words_min, &mission_r);
+    mission_core_snap_pack(&mission, words_min);
+    mission_core_snap_unpack(words_min, &mission_r);
     CHECK("S5-H26",
           (2u == mission_r.pending_nav) && ('Q' == mission_r.pending_char));
 
@@ -1423,22 +1434,22 @@ static void test_pack_s5 (void)
     snap_o.plan         = 4u;
     snap_o.state        = 12u;
     snap_o.retries      = 2u;
-    obst_snap_pack(&snap_o, words_out);
+    obstacle_core_snap_pack(&snap_o, words_out);
     memset(&orr, 0x5A, sizeof(orr)); /* every field must be written */
-    obst_snap_unpack(words_out, &orr);
+    obstacle_core_snap_unpack(words_out, &orr);
     {
         uint32_t words2[OBST_SNAP_WORDS];
 
-        obst_snap_pack(&orr, words2);
+        obstacle_core_snap_pack(&orr, words2);
         CHECK("S5-H26", 0 == memcmp(words_out, words2, sizeof(words_out)));
     }
     memset(&orr, 0, sizeof(orr)); /* same padding as o */
-    obst_snap_unpack(words_out, &orr);
+    obstacle_core_snap_unpack(words_out, &orr);
     CHECK("S5-H26", 0 == memcmp(&snap_o, &orr, sizeof(snap_o)));
     snap_o.d_mm    = 4095u;
     snap_o.no_echo = 1000u; /* 4095 is not "none": saturates below it */
-    obst_snap_pack(&snap_o, words_out);
-    obst_snap_unpack(words_out, &orr);
+    obstacle_core_snap_pack(&snap_o, words_out);
+    obstacle_core_snap_unpack(words_out, &orr);
     CHECK("S5-H26", (4094u == orr.d_mm) && (255u == orr.no_echo));
 }
 

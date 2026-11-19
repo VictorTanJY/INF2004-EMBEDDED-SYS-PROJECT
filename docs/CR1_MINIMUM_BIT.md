@@ -11,7 +11,7 @@ Raw measurements: `testing/system/logs/2026-11-15_cr1_before_after.txt`.
 
 | # | Area | What is stored in minimum bits | Where |
 |---|---|---|---|
-| 1 | Motion control and encoder data | `mbf_motion` command: one 32-bit word. Odometry snapshot: 329 bits (11 words) | `motion_core.c` (`motion_cmd_pack`, `g_odom_layout`) |
+| 1 | Motion control and encoder data | `mbf_motion` command: one 32-bit word. Odometry snapshot: 329 bits (11 words) | `motion_core.c` (`motion_core_cmd_pack`, `g_odom_layout`) |
 | 2 | Line and barcode sensing | Line snapshot: 208 bits (7 words); barcode character as a 6-bit Code 39 symbol | `line_track.c` (`g_line_layout`) |
 | 3 | Obstacle detection | Obstacle snapshot: 166 bits (6 words); `mbf_scan` request: 16 bits | `obstacle_core.c`, `mission_core.c` |
 | 4 | Hump estimation | IMU snapshot (pitch, humps, motion class): 164 bits (6 words) | `imu_core.c` (`g_imu_layout`) |
@@ -37,10 +37,10 @@ Faults were already one bit each in the `flg_safety` kernel event flag:
   `pings`, `blocks`, sequence numbers) keep their low bits and wrap.
 - **"None" values** (`0xFFFF` = no range) map to the field's all-ones value.
 - **Code 39 characters** are stored as a 6-bit symbol index (1..43, 0 = none).
-- Words in RAM use explicit masks and shifts (`pk_set` / `pk_get`); MQTT
-  frames are written least significant bit first (`pk_put` / `pk_take`), so
+- Words in RAM use explicit masks and shifts (`app_pack_set` / `app_pack_get`); MQTT
+  frames are written least significant bit first (`app_pack_put` / `app_pack_take`), so
   the layout does not depend on the compiler or byte order.
-- Each snapshot has a **layout table** (`pk_field_t`): one line per field with
+- Each snapshot has a **layout table** (`app_pack_field_t`): one line per field with
   its width and kind. The tables are the data representation tables below,
   in the code itself, and the host tests check that every table's widths
   add up to the declared number of bits.
@@ -149,7 +149,7 @@ decoded, commands acknowledged) and the self-test image (S2-U07, S4-U08).
 - **Running totals stay 32 bits** (encoder counts, distance, heading,
   timestamps, `pings`, `blocks`): their valid range is the whole run, and
   readers take differences, which a shorter wrapping field would break.
-- **Sequence numbers are 5 bits.** Senders wrap them with `motion_seq_next()`;
+- **Sequence numbers are 5 bits.** Senders wrap them with `motion_types_seq_next()`;
   a completion is matched to the latest command, never to one 32 commands old.
 - **Command ids are 8 bits.** The laptop counts them up; an id comes back only
   after 256 commands, far outside the 60 s duplicate window.

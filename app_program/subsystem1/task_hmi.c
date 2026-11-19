@@ -31,48 +31,50 @@ static bool hmi_pressed (UW pin)
     return (S1_BTN_PRESSED_LEVEL == gpio_get_val(pin));
 }
 
-static void hmi_report (mission_ev_t event)
+static void hmi_report (mission_types_ev_t event)
 {
     /* Both sends use TMO_POL; a full mbf_mission is reported, not waited on. */
-    if (mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS, 0u, 0) != E_OK)
+    if (subsystem5_mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS, 0u, 0)
+        != E_OK)
     {
-        (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_COMMS,
-                               (uint16_t)event, -1);
+        (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                    (uint8_t)APP_SRC_COMMS, (uint16_t)event,
+                                    -1);
     }
-    (void)comms_telem_post((uint8_t)COMMS_KIND_EVENT, (uint8_t)APP_SRC_COMMS,
-                           (uint16_t)event, 0);
+    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_EVENT,
+                                (uint8_t)APP_SRC_COMMS, (uint16_t)event, 0);
 }
 
-EXPORT void hmi_task (INT stacd, void * p_exinf)
+EXPORT void task_hmi_thread (INT stacd, void * p_exinf)
 {
-    hmi_btn_t btn_start;
-    hmi_btn_t btn_mode;
+    hmi_button_t btn_start;
+    hmi_button_t btn_mode;
 
     (void)stacd;
     (void)p_exinf;
 
     hmi_pin_init(S1_PIN_BTN_START);
     hmi_pin_init(S1_PIN_BTN_MODE);
-    hmi_btn_init(&btn_start);
-    hmi_btn_init(&btn_mode);
+    hmi_button_init(&btn_start);
+    hmi_button_init(&btn_mode);
 
     for (;;)
     {
-        hmi_btn_ev_t event;
+        hmi_button_ev_t event;
 
         (void)tk_dly_tsk(HMI_PERIOD_MS);
 
-        event = hmi_btn_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
-                               (uint16_t)HMI_PERIOD_MS,
-                               (uint16_t)HMI_LONG_PRESS_MS);
+        event = hmi_button_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
+                                  (uint16_t)HMI_PERIOD_MS,
+                                  (uint16_t)HMI_LONG_PRESS_MS);
         if (HMI_BTN_EV_PRESS == event)
         {
             hmi_report(MISSION_EV_BTN_START_STOP);
         }
 
-        event = hmi_btn_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
-                               (uint16_t)HMI_PERIOD_MS,
-                               (uint16_t)HMI_LONG_PRESS_MS);
+        event = hmi_button_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
+                                  (uint16_t)HMI_PERIOD_MS,
+                                  (uint16_t)HMI_LONG_PRESS_MS);
         if (HMI_BTN_EV_SHORT == event)
         {
             hmi_report(MISSION_EV_BTN_CALIBRATE);

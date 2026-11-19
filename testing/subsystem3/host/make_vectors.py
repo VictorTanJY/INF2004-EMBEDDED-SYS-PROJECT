@@ -65,9 +65,9 @@ def main(pptx):
             '    uint32_t const * p_w;',
             '    char             chr;',
             '    int32_t          slide;',
-            '} slide_vec_t;',
+            '} vectors_slides_vec_t;',
             '',
-            'extern slide_vec_t const g_slides[SLIDE_VEC_COUNT];',
+            'extern vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT];',
             '',
             '#endif /* VECTORS_SLIDES_H */',
             '',
@@ -78,7 +78,7 @@ def main(pptx):
             [banner, '#include "vectors_slides.h"', '',
              '/* Element widths in um at on-screen slide size (slide = 338.67 mm). */']
             + arrays
-            + ['', 'slide_vec_t const g_slides[SLIDE_VEC_COUNT] = {']
+            + ['', 'vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT] = {']
             + ['    {%s, \'%c\', %d},' % item for item in names]
             + ['};', '', '/*** end of file ***/', '']))
 

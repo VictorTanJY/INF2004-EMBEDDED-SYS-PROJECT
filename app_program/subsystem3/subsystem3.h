@@ -24,11 +24,12 @@
 #define S3_PIN_IR_BARCODE 28u /* ADC2 (VBAT jumper open) */
 #define S3_PIN_TIMING     7u  /* spare GP7, APP_TIMING_PINS=1 */
 
-IMPORT void line_get_snap(line_snap_t * p_out);      /* any task       */
-IMPORT void line_put_snap(line_snap_t const * p_in); /* LineBarcodeTask only */
+IMPORT void subsystem3_get_snap(line_types_snap_t * p_out); /* any task       */
+IMPORT void
+subsystem3_put_snap(line_types_snap_t const * p_in); /* LineBarcodeTask only */
 
 /* Private to subsystem 3 */
-IMPORT void line_task(INT stacd, void * p_exinf);
+IMPORT void line_task_thread(INT stacd, void * p_exinf);
 IMPORT ID   g_tid_line;
 
 #endif /* SUBSYSTEM3_H */

@@ -19,7 +19,7 @@ HISTORY_S = 120                     # telemetry kept for the graphs
 FRESH_S = 3                         # telemetry older than this is stale
 BYPASS_STATES = ('OBSTACLE_HANDLING', 'AVOIDING', 'LINE_RECOVERY')
 
-# Code 39 characters the firmware accepts in a map (comms_map_char_ok).
+# Code 39 characters the firmware accepts in a map (comms_proto_map_char_ok).
 MAP_CHARS = set('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%')
 MAP_KEYS = ('left', 'right', 'straight', 'uturn')
 # Bench moves: only accepted by firmware built with APP_BENCH=1, in IDLE.

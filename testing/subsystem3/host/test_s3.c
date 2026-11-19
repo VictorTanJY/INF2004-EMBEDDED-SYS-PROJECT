@@ -148,22 +148,23 @@ static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
 }
 
 /* Run one pass at v_mm_s; returns the result and fills *p_out. */
-static bc_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
-                             uint32_t v_mm_s, int32_t noise, bc_out_t * p_out)
+static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
+                                       uint32_t v_mm_s, int32_t noise,
+                                       line_barcode_out_t * p_out)
 {
-    static bc_capture_t capture;
-    uint32_t            x_val;
-    uint32_t            step  = v_mm_s; /* um per 1 ms sample = mm/s */
-    bc_result_t         found = BC_NONE;
+    static line_barcode_capture_t capture;
+    uint32_t                      x_val;
+    uint32_t                      step = v_mm_s; /* um per 1 ms sample = mm/s */
+    line_barcode_result_t         found = BC_NONE;
 
     g_last_pass = 0u;
-    bc_init(&capture);
+    line_barcode_init(&capture);
     for (x_val = 0u; x_val < TRACK_LEN_UM; x_val += step)
     {
-        int32_t     sample = (int32_t)profile_at(p_w, n_elems, x_val)
-                             + (int32_t)(noise * rndu());
-        bc_out_t    out;
-        bc_result_t result;
+        int32_t               sample = (int32_t)profile_at(p_w, n_elems, x_val)
+                                       + (int32_t)(noise * rndu());
+        line_barcode_out_t    out;
+        line_barcode_result_t result;
 
         if (sample < 0)
         {
@@ -174,7 +175,7 @@ static bc_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
             sample = 1000;
         }
         memset(&out, 0, sizeof(out));
-        result = bc_sample(&capture, (uint16_t)sample, step, &out);
+        result = line_barcode_sample(&capture, (uint16_t)sample, step, &out);
         if ((result != BC_NONE) && (BC_NONE == found))
         {
             found       = result;
@@ -407,9 +408,9 @@ static void test_capture (void)
         {
             for (diff = 0; diff < 2; diff++)
             {
-                uint32_t widths[29];
-                bc_out_t out;
-                int32_t  kdx;
+                uint32_t           widths[29];
+                line_barcode_out_t out;
+                int32_t            kdx;
 
                 for (kdx = 0; kdx < 29; kdx++)
                 {
@@ -434,10 +435,10 @@ static void test_capture (void)
         {
             for (pass = 0; pass < 20; pass++)
             {
-                uint32_t    widths[29];
-                bc_out_t    out;
-                bc_result_t result;
-                int32_t     kdx;
+                uint32_t              widths[29];
+                line_barcode_out_t    out;
+                line_barcode_result_t result;
+                int32_t               kdx;
 
                 for (kdx = 0; kdx < 29; kdx++)
                 {
@@ -496,10 +497,10 @@ static void test_capture (void)
                 {
                     for (diff = 0; diff < 2; diff++)
                     {
-                        uint32_t    widths[29];
-                        bc_out_t    out;
-                        bc_result_t result;
-                        int32_t     kdx;
+                        uint32_t              widths[29];
+                        line_barcode_out_t    out;
+                        line_barcode_result_t result;
+                        int32_t               kdx;
 
                         for (kdx = 0; kdx < 29; kdx++)
                         {
@@ -535,15 +536,15 @@ static void test_capture (void)
         g_black   = 800u;
         for (step = 0; step < N_SLIDES; step++)
         {
-            uint32_t widths[29];
-            bc_out_t out;
-            int32_t  kdx;
+            uint32_t           widths[29];
+            line_barcode_out_t out;
+            int32_t            kdx;
 
             for (kdx = 0; kdx < 29; kdx++)
             {
                 widths[kdx] = g_slides[step].p_w[kdx] * 297u / 339u;
             }
-            bc_result_t result;
+            line_barcode_result_t result;
 
             memset(&out, 0, sizeof(out));
             result = run_pass(widths, 29, 150u, 0, &out);
@@ -683,9 +684,9 @@ static void test_capture (void)
                 {
                     for (diff = 0; diff < 2; diff++)
                     {
-                        uint32_t    widths[29];
-                        bc_out_t    out;
-                        bc_result_t result;
+                        uint32_t              widths[29];
+                        line_barcode_out_t    out;
+                        line_barcode_result_t result;
 
                         for (kdx = 0; kdx < 29; kdx++)
                         {
@@ -750,10 +751,10 @@ static void test_capture (void)
                 {
                     for (diff = 0; diff < 2; diff++)
                     {
-                        uint32_t    widths[29];
-                        bc_out_t    out;
-                        bc_result_t result;
-                        int32_t     kdx;
+                        uint32_t              widths[29];
+                        line_barcode_out_t    out;
+                        line_barcode_result_t result;
+                        int32_t               kdx;
 
                         uint32_t wmin = 0xFFFFFFFFu;
 
@@ -840,10 +841,10 @@ static void test_capture (void)
         {
             for (diff = 0; diff < 4; diff++)
             {
-                uint32_t       widths[33];
-                uint16_t const n_elems = (diff < 2) ? 31u : 33u;
-                bc_out_t       out;
-                bc_result_t    result;
+                uint32_t              widths[33];
+                uint16_t const        n_elems = (diff < 2) ? 31u : 33u;
+                line_barcode_out_t    out;
+                line_barcode_result_t result;
 
                 memcpy(widths, (diff < 2) ? k_r1 : k_r2,
                        n_elems * sizeof(uint32_t));
@@ -883,14 +884,14 @@ static void test_capture (void)
     /* S3-H06: a crossing line (18 mm black) is not a barcode and not an error
      */
     {
-        uint32_t widths[1] = {18000u};
-        bc_out_t out;
+        uint32_t           widths[1] = {18000u};
+        line_barcode_out_t out;
         CHECK("S3-H06", BC_NONE == run_pass(widths, 1, 300u, 0, &out));
     }
     /* S3-H07: a long dark patch is rejected, never decoded */
     {
-        uint32_t widths[1] = {500000u};
-        bc_out_t out;
+        uint32_t           widths[1] = {500000u};
+        line_barcode_out_t out;
         memset(&out, 0, sizeof(out));
         CHECK("S3-H07", (BC_REJECT == run_pass(widths, 1, 300u, 0, &out))
                             && (CODE39_ERR_TOO_LONG == out.reason));
@@ -898,7 +899,7 @@ static void test_capture (void)
 }
 
 /* ---- line tracking ---------------------------------------------------- */
-static line_trk_cfg_t const g_cfg = {20000u, 80000u, 300};
+static line_track_cfg_t const g_cfg = {20000u, 80000u, 300};
 
 /* Feed blocks of 3 mm (0.3 m/s x 10 ms) for dist_um; returns OR of events. */
 static uint8_t feed (line_track_t * p_t, uint16_t left, uint16_t ret,
@@ -1009,8 +1010,8 @@ static void test_track (void)
             {
                 (void)line_track_step(&track, &g_cfg, 0u, 1000u, 3000u);
             }
-            max_jump = (app_abs_i32(track.omega - prev) > max_jump)
-                           ? app_abs_i32(track.omega - prev)
+            max_jump = (app_types_abs_i32(track.omega - prev) > max_jump)
+                           ? app_types_abs_i32(track.omega - prev)
                            : max_jump;
             prev     = track.omega;
         }
@@ -1025,58 +1026,60 @@ static void test_track (void)
         CHECK("S3-H13", LINE_STEER_SIGN * LINE_KP == track.omega);
         (void)line_track_step(&track, &g_cfg, 500u, 500u,
                               3000u); /* back on centre */
-        CHECK("S3-H13", track.omega
-                            == LINE_STEER_SIGN
-                                   * app_max_i32(LINE_KP - LINE_OMEGA_STEP, 0));
+        CHECK("S3-H13",
+              track.omega
+                  == LINE_STEER_SIGN
+                         * app_types_max_i32(LINE_KP - LINE_OMEGA_STEP, 0));
     }
 
     /* S3-H12: calibration: contrast check and normalisation */
     {
-        line_cal_t cal;
-        uint16_t   raw[3];
-        int32_t    idx;
+        line_track_cal_t cal;
+        uint16_t         raw[3];
+        int32_t          idx;
 
         memset(&cal, 0, sizeof(cal));
-        line_cal_start(&cal);
+        line_track_cal_start(&cal);
         for (idx = 0; idx < 100; idx++)
         {
             raw[0] =
                 (uint16_t)((idx < 50) ? 300 : 3000); /* white 300, black 3000 */
             raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
             raw[2] = (uint16_t)((idx < 50) ? 250 : 2500);
-            line_cal_sample(&cal, raw);
+            line_track_cal_sample(&cal, raw);
         }
-        CHECK("S3-H12", line_cal_finish(&cal) && (cal.contrast_x10 >= 30));
-        CHECK("S3-H12", (0 == line_cal_norm(&cal, 0, 300))
-                            && (1000 == line_cal_norm(&cal, 0, 3000)));
-        CHECK("S3-H12", (500 == line_cal_norm(&cal, 0, 1650))
-                            && (1000 == line_cal_norm(&cal, 0, 4095)));
-        line_cal_start(&cal);
+        CHECK("S3-H12",
+              line_track_cal_finish(&cal) && (cal.contrast_x10 >= 30));
+        CHECK("S3-H12", (0 == line_track_cal_norm(&cal, 0, 300))
+                            && (1000 == line_track_cal_norm(&cal, 0, 3000)));
+        CHECK("S3-H12", (500 == line_track_cal_norm(&cal, 0, 1650))
+                            && (1000 == line_track_cal_norm(&cal, 0, 4095)));
+        line_track_cal_start(&cal);
         for (idx = 0; idx < 100; idx++)
         {
             raw[0] = (uint16_t)((idx < 50) ? 1000 : 2000); /* 2:1 only */
             raw[1] = 1000;
             raw[2] = 1000;
-            line_cal_sample(&cal, raw);
+            line_track_cal_sample(&cal, raw);
         }
-        CHECK("S3-H12", !line_cal_finish(&cal) && cal.b_valid
-                            && (1000 == line_cal_norm(&cal, 0, 3000)));
+        CHECK("S3-H12", !line_track_cal_finish(&cal) && cal.b_valid
+                            && (1000 == line_track_cal_norm(&cal, 0, 3000)));
         /* the barcode sensor does not take part: fixed levels from
            line_cfg.h, even when it saw no contrast during the spin */
-        line_cal_start(&cal);
+        line_track_cal_start(&cal);
         for (idx = 0; idx < 100; idx++)
         {
             raw[0] = (uint16_t)((idx < 50) ? 300 : 3000);
             raw[1] = (uint16_t)((idx < 50) ? 350 : 2900);
             raw[2] = 3700; /* stuck */
-            line_cal_sample(&cal, raw);
+            line_track_cal_sample(&cal, raw);
         }
-        CHECK("S3-H12", line_cal_finish(&cal));
+        CHECK("S3-H12", line_track_cal_finish(&cal));
         CHECK("S3-H12", (LINE_BC_WHITE_RAW == cal.white[2])
                             && (LINE_BC_BLACK_RAW == cal.black[2]));
         CHECK("S3-H12",
-              (0 == line_cal_norm(&cal, 2, LINE_BC_WHITE_RAW))
-                  && (1000 == line_cal_norm(&cal, 2, LINE_BC_BLACK_RAW)));
+              (0 == line_track_cal_norm(&cal, 2, LINE_BC_WHITE_RAW))
+                  && (1000 == line_track_cal_norm(&cal, 2, LINE_BC_BLACK_RAW)));
     }
 }
 
@@ -1100,13 +1103,13 @@ static uint16_t slip_raw (float64_t x_val, float64_t y_val)
 
 static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
 {
-    static line_slip_t slip;
-    line_cal_t         cal;
-    int32_t            kdx;
+    static line_track_slip_t slip;
+    line_track_cal_t         cal;
+    int32_t                  kdx;
 
     memset(&cal, 0, sizeof(cal));
-    line_cal_start(&cal);
-    line_slip_start(&slip, start_cdeg);
+    line_track_cal_start(&cal);
+    line_track_slip_start(&slip, start_cdeg);
     for (kdx = 1; kdx <= 400; kdx++)
     {
         float64_t const enc     = 360.0 * kdx / 400.0;
@@ -1131,13 +1134,13 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
             raw[0] = 3000u;
             raw[1] = 3000u;
         } /* contrast for the cal */
-        line_cal_sample(&cal, raw);
-        line_slip_sample(&slip, height, raw[0], raw[1]);
+        line_track_cal_sample(&cal, raw);
+        line_track_slip_sample(&slip, height, raw[0], raw[1]);
     }
-    (void)line_cal_finish(&cal);
+    (void)line_track_cal_finish(&cal);
     {
         uint32_t diag;
-        return line_slip_gain(
+        return line_track_slip_gain(
             &slip, &cal, &diag); /* no line: both dark for one block only */
     }
 }
@@ -1469,13 +1472,13 @@ static void test_best (void)
         {
             for (diff2 = 0; diff2 < 2; diff2++)
             {
-                uint32_t    widths[29];
-                uint32_t    accel[31];
-                uint32_t    wmin = 0xFFFFFFFFu;
-                uint16_t    kdx;
-                uint16_t    at_idx = 0u;
-                bc_out_t    out;
-                bc_result_t result2;
+                uint32_t              widths[29];
+                uint32_t              accel[31];
+                uint32_t              wmin = 0xFFFFFFFFu;
+                uint16_t              kdx;
+                uint16_t              at_idx = 0u;
+                line_barcode_out_t    out;
+                line_barcode_result_t result2;
 
                 for (kdx = 0u; kdx < 29u; kdx++)
                 {
@@ -1567,8 +1570,8 @@ static void test_light_print (void)
                         uint32_t widths[29];
                         uint16_t n_elems = make_code(g_data_chars[cnt], 3000u,
                                                      3.0, 0.05, widths);
-                        bc_out_t out;
-                        bc_result_t result;
+                        line_barcode_out_t    out;
+                        line_barcode_result_t result;
 
                         if (diff)
                         {
@@ -1621,11 +1624,11 @@ static void test_light_print (void)
 /* S3-H22: Change Requirement 1, the packed line snapshot */
 static void test_pack_s3 (void)
 {
-    line_snap_t snap;
-    line_snap_t ret;
-    uint32_t    widths[LINE_SNAP_WORDS];
+    line_types_snap_t snap;
+    line_types_snap_t ret;
+    uint32_t          widths[LINE_SNAP_WORDS];
 
-    CHECK("S3-H22", (LINE_SNAP_BITS == line_snap_layout_bits())
+    CHECK("S3-H22", (LINE_SNAP_BITS == line_track_snap_layout_bits())
                         && (LINE_SNAP_WORDS == PK_WORDS(LINE_SNAP_BITS))
                         && (sizeof(widths) < sizeof(snap)));
     memset(&snap, 0, sizeof(snap));
@@ -1646,23 +1649,23 @@ static void test_pack_s3 (void)
     snap.last_reject   = 8u;
     snap.turn_gain_pm  = 1180u;
     snap.sens          = 7u;
-    line_snap_pack(&snap, widths);
+    line_track_snap_pack(&snap, widths);
     memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
-    line_snap_unpack(widths, &ret);
+    line_track_snap_unpack(widths, &ret);
     {
         uint32_t words_out[LINE_SNAP_WORDS];
 
-        line_snap_pack(&ret, words_out);
+        line_track_snap_pack(&ret, words_out);
         CHECK("S3-H22", 0 == memcmp(widths, words_out, sizeof(widths)));
     }
     memset(&ret, 0, sizeof(ret)); /* same padding as s */
-    line_snap_unpack(widths, &ret);
+    line_track_snap_unpack(widths, &ret);
     CHECK("S3-H22", 0 == memcmp(&snap, &ret, sizeof(snap)));
     snap.last_barcode = '\0';
     snap.contrast_x10 = 5000u;
     snap.omega_mrad_s = -6000;
-    line_snap_pack(&snap, widths);
-    line_snap_unpack(widths, &ret);
+    line_track_snap_pack(&snap, widths);
+    line_track_snap_unpack(widths, &ret);
     CHECK("S3-H22", ('\0' == ret.last_barcode) && (1023u == ret.contrast_x10)
                         && (-2048 == ret.omega_mrad_s));
 }

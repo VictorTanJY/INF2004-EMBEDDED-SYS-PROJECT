@@ -70,7 +70,7 @@ static void wait_ms (uint32_t delay_ms)
     for (elapsed = 0u; elapsed < delay_ms; elapsed += 10u)
     {
         (void)tk_dly_tsk(10);
-        safety_heartbeat(SAFETY_HB_IMU);
+        subsystem4_heartbeat(SAFETY_HB_IMU);
     }
 }
 

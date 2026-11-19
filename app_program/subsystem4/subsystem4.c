@@ -2,7 +2,8 @@
  *  subsystem4.c
  *  Subsystem 4 -- IMU and safety: kernel objects, heartbeat words, the
  *  latched-fault word and the IMU snapshot.  Owner: Buddy 4 (Purvez).
- *  Tasks: safety_task.c, imu_task.c.  Logic: imu_core.c, safety_core.c.
+ *  Tasks: safety_task_thread.c, imu_task_thread.c.  Logic: imu_core.c,
+ * safety_core.c.
  */
 
 #include "subsystem4.h"
@@ -41,10 +42,10 @@ EXPORT ER subsystem4_init (void)
     drv_watchdog_tick_init();
     app_lock_init(&g_imu_lock);
     {
-        imu_snap_t const zero = {0};
+        imu_types_snap_t const zero = {0};
 
-        imu_snap_pack(&zero,
-                      g_imu_snap); /* packed zero (offset-binary fields) */
+        imu_core_snap_pack(&zero,
+                           g_imu_snap); /* packed zero (offset-binary fields) */
     }
 
     /* TA_WMUL: a stray second waiter gets queued instead of E_OBJ.  By
@@ -69,13 +70,14 @@ EXPORT ER subsystem4_start (void)
 {
     ID tid;
 
-    tid = app_start_task((FP)safety_task, S4_PRI_SAFETY, S4_CORE_SAFETY,
-                         "safety");
+    tid = app_main_start_task((FP)safety_task_thread, S4_PRI_SAFETY,
+                              S4_CORE_SAFETY, "safety");
     if (tid < E_OK)
     {
         return tid;
     }
-    g_tid_imu = app_start_task((FP)imu_task, S4_PRI_IMU, S4_CORE_IMU, "imu");
+    g_tid_imu = app_main_start_task((FP)imu_task_thread, S4_PRI_IMU,
+                                    S4_CORE_IMU, "imu");
     if (g_tid_imu < E_OK)
     {
         return g_tid_imu;
@@ -83,17 +85,17 @@ EXPORT ER subsystem4_start (void)
     return tk_sta_cyc(g_cyc_imu);
 }
 
-EXPORT uint32_t safety_get_latched (void)
+EXPORT uint32_t subsystem4_get_latched (void)
 {
     return g_safety_latched;
 }
 
-EXPORT void safety_request_reset (void)
+EXPORT void subsystem4_request_reset (void)
 {
     (void)tk_set_flg(g_flg_safety, SAFETY_REQ_RESET);
 }
 
-EXPORT void safety_heartbeat (safety_hb_t task)
+EXPORT void subsystem4_heartbeat (imu_types_safety_hb_t task)
 {
     if ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT)
     {
@@ -101,12 +103,12 @@ EXPORT void safety_heartbeat (safety_hb_t task)
     }
 }
 
-EXPORT uint32_t safety_heartbeat_count (safety_hb_t task)
+EXPORT uint32_t subsystem4_heartbeat_count (imu_types_safety_hb_t task)
 {
     return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_hb[task] : 0u;
 }
 
-EXPORT void imu_get_snap (imu_snap_t * p_out)
+EXPORT void subsystem4_get_imu_snap (imu_types_snap_t * p_out)
 {
     uint32_t words[IMU_SNAP_WORDS];
     uint32_t idx;
@@ -117,16 +119,16 @@ EXPORT void imu_get_snap (imu_snap_t * p_out)
         words[idx] = g_imu_snap[idx];
     }
     app_unlock(&g_imu_lock, sts);
-    imu_snap_unpack(words, p_out);
+    imu_core_snap_unpack(words, p_out);
 }
 
-EXPORT void imu_put_snap (imu_snap_t const * p_in)
+EXPORT void subsystem4_put_imu_snap (imu_types_snap_t const * p_in)
 {
     uint32_t words[IMU_SNAP_WORDS];
     uint32_t idx;
     UINT     sts;
 
-    imu_snap_pack(p_in, words);
+    imu_core_snap_pack(p_in, words);
     sts = app_lock(&g_imu_lock);
     for (idx = 0u; idx < IMU_SNAP_WORDS; idx++)
     {

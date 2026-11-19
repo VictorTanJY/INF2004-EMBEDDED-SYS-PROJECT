@@ -1,5 +1,5 @@
 /*
- *  motion_task.c
+ *  motion_task_thread.c
  *  Subsystem 2 -- MotionTask (priority 6, core 1), woken by motion_cyc
  *  every 10 ms (Week 6 Sections 3 and 6.1).  Owner: Buddy 2 (Jedrek).
  *
@@ -8,7 +8,7 @@
  *    2. drain mbf_motion (TMO_POL) into the controller (authority rules);
  *    3. one controller step (PID, profiles, STOPPING, stall);
  *    4. write the PWM duty -- the latch is checked immediately before the
- *       write, inside DI/EI, so motor_estop() cannot be undone;
+ *       write, inside DI/EI, so subsystem2_motor_estop() cannot be undone;
  *    5. publish the odometry snapshot; report events:
  *       MOTION_DONE / MOTION_FAILED -> mbf_mission, STALL -> flg_safety.
  */
@@ -76,12 +76,12 @@ static void tt_done (uint32_t wake_us)
     }
 }
 
-EXPORT void motion_test_timing_restart (void)
+EXPORT void motion_task_timing_restart (void)
 {
     g_tt_restart = 1u;
 }
 
-EXPORT void motion_test_timing (motion_test_timing_t * p_out)
+EXPORT void motion_task_test_timing (subsystem2_test_timing_t * p_out)
 {
     p_out->per_min_us  = g_tt_per_min_us;
     p_out->per_max_us  = g_tt_per_max_us;
@@ -112,7 +112,7 @@ static void write_pwm (int16_t duty_l, int16_t duty_r)
     UINT intsts;
 
     DI(intsts);
-    if (!motion_estop_latched())
+    if (!subsystem2_estop_latched())
     {
         drv_motor_write(duty_l, duty_r);
     }
@@ -121,22 +121,22 @@ static void write_pwm (int16_t duty_l, int16_t duty_r)
 
 static void report_events (void)
 {
-    motion_event_t event;
+    motion_core_event_t event;
 
     while (motion_core_pop_event(&g_core, &event))
     {
         switch (event.code)
         {
             case MOTION_EV_DONE:
-                (void)mission_post((uint8_t)MISSION_EV_MOTION_DONE,
-                                   (uint8_t)APP_SRC_MOTION, (uint16_t)event.seq,
-                                   (int32_t)event.src);
+                (void)subsystem5_mission_post(
+                    (uint8_t)MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
+                    (uint16_t)event.seq, (int32_t)event.src);
             break;
 
             case MOTION_EV_FAILED:
-                (void)mission_post((uint8_t)MISSION_EV_MOTION_FAILED,
-                                   (uint8_t)APP_SRC_MOTION, (uint16_t)event.seq,
-                                   (int32_t)event.src);
+                (void)subsystem5_mission_post(
+                    (uint8_t)MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
+                    (uint16_t)event.seq, (int32_t)event.src);
             break;
 
             case MOTION_EV_STALL:
@@ -145,9 +145,9 @@ static void report_events (void)
 
             case MOTION_EV_ENC_FAULT:
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
-                (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT,
-                                       (uint8_t)APP_SRC_MOTION, 0u,
-                                       (int32_t)SAFETY_FLT_ENC_FAULT);
+                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_FAULT,
+                                            (uint8_t)APP_SRC_MOTION, 0u,
+                                            (int32_t)SAFETY_FLT_ENC_FAULT);
             break;
 
             case MOTION_EV_ENC_OK:
@@ -160,13 +160,13 @@ static void report_events (void)
     }
 }
 
-EXPORT void motion_task (INT stacd, void * p_exinf)
+EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 {
-    motion_odom_t odom = {0};
-    motion_cmd_t  cmd;
-    uint32_t      cmd_word; /* mbf_motion: one packed word (CR1) */
-    bool          b_hw_ok;
-    UINT          intsts;
+    motion_types_odom_t odom = {0};
+    motion_types_cmd_t  cmd;
+    uint32_t            cmd_word; /* mbf_motion: one packed word (CR1) */
+    bool                b_hw_ok;
+    UINT                intsts;
 
     (void)stacd;
     (void)p_exinf;
@@ -177,7 +177,7 @@ EXPORT void motion_task (INT stacd, void * p_exinf)
 
     /* Connect PWM (duty 0) unless SafetyTask already latched the brake. */
     DI(intsts);
-    if (!motion_estop_latched())
+    if (!subsystem2_estop_latched())
     {
         drv_motor_connect();
     }
@@ -200,7 +200,7 @@ EXPORT void motion_task (INT stacd, void * p_exinf)
         tt_wake(wake_us);
 #endif
         timing_pin_toggle();
-        safety_heartbeat(SAFETY_HB_MOTION);
+        subsystem4_heartbeat(SAFETY_HB_MOTION);
 
         now_ms = (uint32_t)app_time_ms_hw();
         enc_l  = drv_encoder_read(DRV_ENC_LEFT);
@@ -209,26 +209,27 @@ EXPORT void motion_task (INT stacd, void * p_exinf)
         while ((INT)sizeof(cmd_word)
                == tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL))
         {
-            motion_cmd_unpack(cmd_word, &cmd);
-            motion_result_t const res =
+            motion_core_cmd_unpack(cmd_word, &cmd);
+            motion_core_result_t const res =
                 motion_core_command(&g_core, &cmd, now_ms);
 
             if (MOTION_RES_CLEAR_ESTOP == res)
             {
-                if (motion_estop_clear_reconnect())
+                if (subsystem2_estop_reconnect())
                 {
                     motion_core_estop_cleared(&g_core);
                 }
             }
         }
 
-        motion_core_step(&g_core, enc_l, enc_r, motion_estop_latched(), now_ms);
+        motion_core_step(&g_core, enc_l, enc_r, subsystem2_estop_latched(),
+                         now_ms);
         write_pwm(g_core.duty_l, g_core.duty_r);
 
         motion_core_snapshot(&g_core, &odom);
         odom.t_ms  = (uint32_t)app_time_ms();
         odom.hw_ok = b_hw_ok ? 1u : 0u;
-        motion_put_odom(&odom);
+        subsystem2_put_odom(&odom);
 
         report_events();
 #if APP_TEST

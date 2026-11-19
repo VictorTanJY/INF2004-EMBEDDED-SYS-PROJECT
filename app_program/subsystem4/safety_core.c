@@ -8,14 +8,15 @@
 static uint32_t const g_timeout_ms[SAFETY_HB_COUNT] = {50u, 50u, 300u, 300u,
                                                        100u};
 
-uint32_t safety_hb_timeout_ms (safety_hb_t task)
+uint32_t safety_core_hb_timeout_ms (imu_types_safety_hb_t task)
 {
     return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_timeout_ms[task]
                                                         : 0u;
 }
 
-void safety_hb_start (safety_hb_state_t * p_st,
-                      uint32_t const counts[SAFETY_HB_COUNT], uint32_t now_ms)
+void safety_core_hb_start (safety_core_hb_state_t * p_st,
+                           uint32_t const           counts[SAFETY_HB_COUNT],
+                           uint32_t                 now_ms)
 {
     uint8_t kdx;
 
@@ -27,16 +28,16 @@ void safety_hb_start (safety_hb_state_t * p_st,
     p_st->b_started = true;
 }
 
-uint32_t safety_hb_check (safety_hb_state_t * p_st,
-                          uint32_t const      counts[SAFETY_HB_COUNT],
-                          uint32_t            now_ms)
+uint32_t safety_core_hb_check (safety_core_hb_state_t * p_st,
+                               uint32_t const           counts[SAFETY_HB_COUNT],
+                               uint32_t                 now_ms)
 {
     uint32_t missed = 0u;
     uint8_t  kdx;
 
     if (!p_st->b_started)
     {
-        safety_hb_start(p_st, counts, now_ms);
+        safety_core_hb_start(p_st, counts, now_ms);
         return 0u;
     }
     for (kdx = 0u; kdx < (uint8_t)SAFETY_HB_COUNT; kdx++)

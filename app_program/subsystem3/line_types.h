@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-/* line_snap_t.flags */
+/* line_types_snap_t.flags */
 #define LINE_FLAG_CALIBRATED 0x01u
 #define LINE_FLAG_LOST       0x02u /* both white >= lost_mm (80)       */
 #define LINE_FLAG_JUNCTION   0x04u /* both black >= junction_mm, straight */
@@ -17,7 +17,7 @@
 #define LINE_FLAG_ON_LINE    0x10u /* at least one line sensor on black */
 #define LINE_FLAG_HW_OK      0x20u /* ADC + DMA running                */
 #define LINE_FLAG_GAP        0x40u /* bridging a short white gap       */
-/* line_snap_t.sens: this sensor is not fully white (sees the line) */
+/* line_types_snap_t.sens: this sensor is not fully white (sees the line) */
 #define LINE_SENS_L 0x01u
 #define LINE_SENS_R 0x02u
 /* 14 Nov: all three IR sensors black now (floor may be gone) */
@@ -25,14 +25,14 @@
 /* all three black for LINE_NOFLOOR_UM: lifted */
 #define LINE_SENS_NO_FLOOR 0x08u
 
-/* line_snap_t.bc_state */
+/* line_types_snap_t.bc_state */
 typedef enum
 {
     LINE_BC_WAIT_QUIET = 0,
     LINE_BC_ARMED      = 1, /* quiet zone seen, waiting for a bar */
     LINE_BC_CAPTURING  = 2,
     LINE_BC_COOLDOWN   = 3
-} line_bc_state_t;
+} line_types_bc_state_t;
 
 /* IF-04  Line snapshot (written by LineBarcodeTask every 10 ms). */
 typedef struct
@@ -49,13 +49,13 @@ typedef struct
     uint16_t barcode_err;  /* rejected reads since boot                */
     uint16_t contrast_x10; /* worst calibration contrast x 10 (>= 30)  */
     uint8_t  flags;        /* LINE_FLAG_*                              */
-    uint8_t  bc_state;     /* line_bc_state_t                          */
+    uint8_t  bc_state;     /* line_types_bc_state_t                          */
     char     last_barcode; /* last valid Code 39 character, 0 = none   */
     uint8_t  last_reject;  /* code39_result_t of the last reject       */
     uint16_t turn_gain_pm; /* turn slip from the calibration spin: ask
                               for real deg x this / 1000; 0 = not measured */
     uint8_t sens;          /* LINE_SENS_*: each line sensor on the line  */
-} line_snap_t;
+} line_types_snap_t;
 
 #endif /* LINE_TYPES_H */
 

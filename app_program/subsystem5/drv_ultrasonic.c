@@ -54,7 +54,7 @@ static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
 }
 #endif
 
-EXPORT ER drv_us_init (void)
+EXPORT ER drv_ultrasonic_init (void)
 {
 #if !US_PINS_FREE
     return E_NOSPT;
@@ -72,7 +72,7 @@ EXPORT ER drv_us_init (void)
 #endif
 }
 
-EXPORT ER drv_us_attach (void)
+EXPORT ER drv_ultrasonic_attach (void)
 {
 #if !US_PINS_FREE
     return E_NOSPT;
@@ -82,7 +82,7 @@ EXPORT ER drv_us_attach (void)
 #endif
 }
 
-EXPORT void drv_us_trigger (void)
+EXPORT void drv_ultrasonic_trigger (void)
 {
     UW t_start;
 
@@ -101,7 +101,7 @@ EXPORT void drv_us_trigger (void)
     out_w(GPIO_OUT_CLR, 1uL << S5_PIN_US_TRIG);
 }
 
-EXPORT bool drv_us_take (uint32_t * p_width_us)
+EXPORT bool drv_ultrasonic_take (uint32_t * p_width_us)
 {
     UINT     intsts;
     uint32_t echo;

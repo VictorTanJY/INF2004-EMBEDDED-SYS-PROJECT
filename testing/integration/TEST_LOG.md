@@ -15,7 +15,7 @@ Define a test here before running it. Test IDs never change.
 |---|---|---|---|---|---|
 | INT-01 | motion commands reach MotionTask only from the source with authority | IF-01, FR5 | auto + manual | (a) S2-U06 on target. (b) A run: line following, then a barcode turn. | (a) DRIVE without LINE authority rejected. (b) Line follower drives in LINE_FOLLOW; MissionTask's turn runs in EXECUTE_NAV. |
 | INT-02 | odometry snapshot read by the other tasks | IF-02 | auto + manual | (a) S2-U03 on target. (b) Telemetry during a run. | (a) Snapshot updated every cycle. (b) `enc`, `dist_mm`, `v_mm_s` change with the wheels. |
-| INT-03 | SafetyTask brakes the motors through `motor_estop()` | IF-03, FR15 | manual | Lift or tilt the robot during a run. | Wheels stop at once; FAULT; motors stay braked until reset. |
+| INT-03 | SafetyTask brakes the motors through `subsystem2_motor_estop()` | IF-03, FR15 | manual | Lift or tilt the robot during a run. | Wheels stop at once; FAULT; motors stay braked until reset. |
 | INT-04 | line snapshot read by mission, obstacle and comms | IF-04 | auto + manual | (a) S3-U02 on target. (b) Line loss during a run. | (a) Snapshot published. (b) Telemetry `line.lost` and LINE_SEARCH follow the loss. |
 | INT-05 | fault bits from S2, S4, S5 reach SafetyTask | IF-05, FR15 | auto + manual | (a) S4-U01 on target. (b) The SYS-15 fault tests. | (a) `flg_safety` exists. (b) Each cause gives FAULT with its own code. |
 | INT-06 | events from every task reach MissionTask | IF-06 | manual | A run with a barcode, a junction and an obstacle; remote start / stop. | Barcode latched → EXECUTE_NAV; obstacle → OBSTACLE_HANDLING; remote start / stop change the state. |

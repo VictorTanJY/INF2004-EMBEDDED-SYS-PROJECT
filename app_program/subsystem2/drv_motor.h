@@ -2,7 +2,7 @@
  *  drv_motor.h
  *  Subsystem 2 -- Robo Pico motor driver on PWM slices 4 and 5 (GP8-GP11),
  *  20 kHz.  Register-level (A3: no SDK hardware_pwm in this port).
- *  Owner: Buddy 2.  Used by MotionTask (and motor_estop) only.
+ *  Owner: Buddy 2.  Used by MotionTask (and subsystem2_motor_estop) only.
  */
 
 #ifndef DRV_MOTOR_H

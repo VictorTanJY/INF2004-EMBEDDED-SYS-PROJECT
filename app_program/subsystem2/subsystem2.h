@@ -42,22 +42,23 @@ IMPORT ID g_mbf_motion; /* mbf_motion in the design documents */
 
 /* Post a command without waiting.  Returns E_OK, or E_TMOUT when the
    buffer is full (the command is dropped; the caller decides). */
-IMPORT ER motion_send(motion_cmd_t const * p_cmd);
+IMPORT ER subsystem2_send(motion_types_cmd_t const * p_cmd);
 
 /* Helper for senders: fills and posts one command. */
-IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
-                      int16_t arg1);
+IMPORT ER subsystem2_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
+                          int16_t arg1);
 
-/* The named API (FR5): motion_move_forward / _backward, motion_turn_left /
-   _right, motion_stop, motion_drive.  Use these; motion_post stays for
-   SET_AUTH and CLEAR_ESTOP. */
+/* The named API (FR5): motion_api_move_forward / _backward,
+   motion_api_turn_left / _right, motion_api_stop, motion_api_drive.  Use these;
+   subsystem2_post stays for SET_AUTH and CLEAR_ESTOP. */
 #include "motion_api.h"
 
 /* ---------------------------------------------------------------------
  *  IF-02  Odometry snapshot (written by MotionTask, read by everyone).
  * --------------------------------------------------------------------- */
-IMPORT void motion_get_odom(motion_odom_t * p_out);      /* any task      */
-IMPORT void motion_put_odom(motion_odom_t const * p_in); /* MotionTask only */
+IMPORT void subsystem2_get_odom(motion_types_odom_t * p_out); /* any task */
+IMPORT void
+subsystem2_put_odom(motion_types_odom_t const * p_in); /* MotionTask only */
 
 /* ---------------------------------------------------------------------
  *  IF-03  Emergency brake (the one documented motor write outside
@@ -67,8 +68,8 @@ IMPORT void motion_put_odom(motion_odom_t const * p_in); /* MotionTask only */
  *  reconnects PWM only on CLEAR_ESTOP, doing check-clear-reconnect inside
  *  one DI/EI section (Tribunal 1 gap 3).  Idempotent.
  * --------------------------------------------------------------------- */
-IMPORT void motor_estop(void);
-IMPORT bool motion_estop_latched(void);
+IMPORT void subsystem2_motor_estop(void);
+IMPORT bool subsystem2_estop_latched(void);
 
 #if APP_TEST
 /* make TEST=1 only (S2-U07): MotionTask period and run time, since the
@@ -79,18 +80,18 @@ typedef struct
     uint32_t per_max_us;
     uint32_t exec_max_us; /* wake-up to end of the cycle's work */
     uint32_t cycles;
-} motion_test_timing_t;
+} subsystem2_test_timing_t;
 
-IMPORT void motion_test_timing_restart(void);
-IMPORT void motion_test_timing(motion_test_timing_t * p_out);
+IMPORT void motion_task_timing_restart(void);
+IMPORT void motion_task_test_timing(subsystem2_test_timing_t * p_out);
 
-/* Time of the last motor_estop() call, us (app_time_us); S4-U07. */
+/* Time of the last subsystem2_motor_estop() call, us (app_time_us); S4-U07. */
 IMPORT volatile uint32_t g_estop_test_us;
 #endif
 
 /* Private to subsystem 2 */
-IMPORT void motion_task(INT stacd, void * p_exinf);
-IMPORT bool motion_estop_clear_reconnect(void); /* MotionTask only */
+IMPORT void motion_task_thread(INT stacd, void * p_exinf);
+IMPORT bool subsystem2_estop_reconnect(void); /* MotionTask only */
 
 #endif /* SUBSYSTEM2_H */
 

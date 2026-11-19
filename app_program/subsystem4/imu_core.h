@@ -55,7 +55,7 @@ typedef struct
     bool    b_have_v;
 
     /* hump sequence */
-    uint8_t  hump_state; /* imu_hump_state_t */
+    uint8_t  hump_state; /* imu_types_hump_state_t */
     uint32_t dwell_um;   /* guard distance in the current condition */
     uint32_t hump_um;    /* distance since the climb started */
     int64_t  h_um;       /* integrated height */
@@ -87,21 +87,21 @@ typedef struct
     uint16_t saved_hump_max_mm;
     uint16_t saved_last_hump_mm;
     uint16_t saved_humps;
-    uint8_t  motion; /* imu_motion_t */
+    uint8_t  motion; /* imu_types_motion_t */
     uint32_t motion_ms;
 } imu_core_t;
 
 void imu_core_init(imu_core_t * p_ic);
 
 /* Level offsets: stand still ~1 s (CALIBRATING STILL phase). */
-void imu_cal_level_start(imu_core_t * p_ic);
-void imu_cal_level_sample(imu_core_t * p_ic, int32_t const acc_mg[3]);
-bool imu_cal_level_finish(imu_core_t * p_ic);
+void imu_core_cal_level_start(imu_core_t * p_ic);
+void imu_core_cal_level_sample(imu_core_t * p_ic, int32_t const acc_mg[3]);
+bool imu_core_cal_level_finish(imu_core_t * p_ic);
 
 /* Hard-iron offsets: 360 deg spin (CALIBRATING SPIN phase). */
-void imu_cal_mag_start(imu_core_t * p_ic);
-void imu_cal_mag_sample(imu_core_t * p_ic, int16_t const mag[3]);
-bool imu_cal_mag_finish(imu_core_t * p_ic);
+void imu_core_cal_mag_start(imu_core_t * p_ic);
+void imu_core_cal_mag_sample(imu_core_t * p_ic, int16_t const mag[3]);
+bool imu_core_cal_mag_finish(imu_core_t * p_ic);
 
 /*
  * One 10 ms step.  acc_mg: raw axes in mg; mag: raw counts (NULL = no new
@@ -127,9 +127,9 @@ void imu_core_new_run(imu_core_t * p_ic);
 /* Change Requirement 1: the IMU snapshot (IF-08) as stored between tasks. */
 #define IMU_SNAP_BITS  164u /* sum of the layout widths      */
 #define IMU_SNAP_WORDS 6u   /* 24 B instead of 32 B          */
-void     imu_snap_pack(imu_snap_t const * p_snap, uint32_t * p_words);
-void     imu_snap_unpack(uint32_t const * p_words, imu_snap_t * p_snap);
-uint32_t imu_snap_layout_bits(void);
+void imu_core_snap_pack(imu_types_snap_t const * p_snap, uint32_t * p_words);
+void imu_core_snap_unpack(uint32_t const * p_words, imu_types_snap_t * p_snap);
+uint32_t imu_core_snap_layout_bits(void);
 
 #endif /* IMU_CORE_H */
 

@@ -35,34 +35,35 @@
 IMPORT ID g_flg_safety; /* flg_safety in the design documents */
 
 /* Latched faults (SAFETY_FLT_* bits), written only by SafetyTask. */
-IMPORT uint32_t safety_get_latched(void);
+IMPORT uint32_t subsystem4_get_latched(void);
 
 /* MissionTask: ask SafetyTask to clear the latch after an operator reset.
    SafetyTask answers MISSION_EV_SAFETY_OK, or MISSION_EV_FAULT if a cause
    is still present. */
-IMPORT void safety_request_reset(void);
+IMPORT void subsystem4_request_reset(void);
 
 /* ---------------------------------------------------------------------
- *  IF-07  Heartbeats.  Each monitored task calls safety_heartbeat() on
+ *  IF-07  Heartbeats.  Each monitored task calls subsystem4_heartbeat() on
  *  every pass: one 32-bit word per task, one writer each (an aligned word
  *  store is indivisible), so no lock is needed.  SafetyTask checks them
  *  every 20 ms against 50/50/300/300/100 ms.
  * --------------------------------------------------------------------- */
-IMPORT void     safety_heartbeat(safety_hb_t task);
-IMPORT uint32_t safety_heartbeat_count(safety_hb_t task);
+IMPORT void     subsystem4_heartbeat(imu_types_safety_hb_t task);
+IMPORT uint32_t subsystem4_heartbeat_count(imu_types_safety_hb_t task);
 
 /* ---------------------------------------------------------------------
  *  IF-08  IMU snapshot (written by ImuTask).
  * --------------------------------------------------------------------- */
-IMPORT void imu_get_snap(imu_snap_t * p_out);      /* any task       */
-IMPORT void imu_put_snap(imu_snap_t const * p_in); /* ImuTask only   */
+IMPORT void subsystem4_get_imu_snap(imu_types_snap_t * p_out); /* any task */
+IMPORT void
+subsystem4_put_imu_snap(imu_types_snap_t const * p_in); /* ImuTask only   */
 
 /* Boot self-test: the 1 us timer really ticks at 1 MHz (NFR8). */
-IMPORT bool safety_timer_tick_ok(void);
+IMPORT bool safety_task_timer_tick_ok(void);
 
 /* Private to subsystem 4 */
-IMPORT void safety_task(INT stacd, void * p_exinf);
-IMPORT void imu_task(INT stacd, void * p_exinf);
+IMPORT void safety_task_thread(INT stacd, void * p_exinf);
+IMPORT void imu_task_thread(INT stacd, void * p_exinf);
 IMPORT ID   g_tid_imu;
 
 #endif /* SUBSYSTEM4_H */

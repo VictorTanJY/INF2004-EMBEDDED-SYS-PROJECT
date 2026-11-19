@@ -41,7 +41,7 @@ typedef uint8_t s1_check_events_t
     [((uint32_t)MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1 : -1];
 typedef uint8_t
     s1_check_src_t[(APP_SRC_OBST_MISSION < (1uL << COMMS_SRC_BITS)) ? 1 : -1];
-typedef uint8_t s1_check_rec_size_t[(8u == sizeof(comms_rec_t)) ? 1 : -1];
+typedef uint8_t s1_check_rec_size_t[(8u == sizeof(comms_proto_rec_t)) ? 1 : -1];
 
 #define COMMS_DRAIN_MAX   8u /* records per poll                     */
 #define COMMS_TX_BUF_SIZE COMMS_FRAME_MAX /* largest frame: 27 B      */
@@ -56,17 +56,17 @@ static mqtt_utk_cfg_t const g_mqtt_cfg = {
 };
 
 /* All state is zero-initialised and touched only by the WiFi task. */
-static comms_ring_t  g_ring;
-static uint8_t       g_telem_seq; /* 8 bits on the wire, wraps            */
-static uint8_t       g_event_seq;
-static uint32_t      g_next_telem_ms;
-static uint32_t      g_next_status_ms;
-static bool          gb_online;
-static bool          gb_flag_synced; /* WIFI_LOSS bit set once at start-up   */
-static comms_dedup_t g_dedup;        /* recently accepted commands (gap 9)   */
-static uint32_t      g_ring_lost;    /* events overwritten while offline     */
-static uint32_t      g_pub_errors;   /* mqtt_publish() refused (ERR_MEM ...) */
-static uint8_t       g_tx[COMMS_TX_BUF_SIZE];
+static comms_proto_ring_t g_ring;
+static uint8_t  g_telem_seq; /* 8 bits on the wire, wraps            */
+static uint8_t  g_event_seq;
+static uint32_t g_next_telem_ms;
+static uint32_t g_next_status_ms;
+static bool     gb_online;
+static bool     gb_flag_synced;     /* WIFI_LOSS bit set once at start-up   */
+static comms_proto_dedup_t g_dedup; /* recently accepted commands (gap 9)   */
+static uint32_t g_ring_lost;        /* events overwritten while offline     */
+static uint32_t g_pub_errors;       /* mqtt_publish() refused (ERR_MEM ...) */
+static uint8_t  g_tx[COMMS_TX_BUF_SIZE];
 
 static ID comms_telem_id (void)
 {
@@ -115,46 +115,47 @@ static bool comms_publish (char const * p_topic, uint16_t len, uint8_t qos,
     return true;
 }
 
-static bool comms_publish_event (comms_rec_t const * p_rec, uint8_t seq)
+static bool comms_publish_event (comms_proto_rec_t const * p_rec, uint8_t seq)
 {
-    comms_event_t event;
-    uint16_t      len;
+    comms_proto_event_t event;
+    uint16_t            len;
 
-    comms_rec_unpack(p_rec, (uint32_t)app_time_ms(), &event);
-    len = comms_build_event(&event, seq, g_tx, (uint16_t)sizeof(g_tx));
+    comms_proto_rec_unpack(p_rec, (uint32_t)app_time_ms(), &event);
+    len = comms_proto_build_event(&event, seq, g_tx, (uint16_t)sizeof(g_tx));
     return comms_publish(COMMS_TOPIC_EVENT, len, 1u, 0u);
 }
 
 static void comms_publish_status (uint32_t now_ms)
 {
-    uint32_t       drops = comms_telem_drops() + g_ring_lost + g_pub_errors
-                           + mqtt_utk_pub_failures() + mqtt_utk_rx_dropped();
-    mission_snap_t mission;
-    uint16_t       len;
+    uint32_t drops = subsystem1_telem_drops() + g_ring_lost + g_pub_errors
+                     + mqtt_utk_pub_failures() + mqtt_utk_rx_dropped();
+    mission_types_snap_t mission;
+    uint16_t             len;
 
-    mission_get_snap(&mission);
-    len = comms_build_status(now_ms / 1000u, cyw43_utk_get_rssi(), drops,
-                             mission.nav_map, g_tx, (uint16_t)sizeof(g_tx));
+    subsystem5_get_mission_snap(&mission);
+    len =
+        comms_proto_build_status(now_ms / 1000u, cyw43_utk_get_rssi(), drops,
+                                 mission.nav_map, g_tx, (uint16_t)sizeof(g_tx));
 
     (void)comms_publish(COMMS_TOPIC_STATUS, len, 1u, 1u);
 }
 
 static void comms_publish_telemetry (uint32_t now_ms)
 {
-    comms_telem_t  telem;
-    motion_odom_t  odom;
-    line_snap_t    line;
-    imu_snap_t     imu;
-    mission_snap_t mission;
-    obst_snap_t    obst;
-    uint16_t       len;
+    comms_proto_telem_t       telem;
+    motion_types_odom_t       odom;
+    line_types_snap_t         line;
+    imu_types_snap_t          imu;
+    mission_types_snap_t      mission;
+    mission_types_obst_snap_t obst;
+    uint16_t                  len;
 
     /* Each copy holds its own lock for a few microseconds only. */
-    motion_get_odom(&odom);
-    line_get_snap(&line);
-    imu_get_snap(&imu);
-    mission_get_snap(&mission);
-    obst_get_snap(&obst);
+    subsystem2_get_odom(&odom);
+    subsystem3_get_snap(&line);
+    subsystem4_get_imu_snap(&imu);
+    subsystem5_get_mission_snap(&mission);
+    subsystem5_get_obst_snap(&obst);
 
     g_telem_seq++;
     telem.seq          = g_telem_seq;
@@ -179,7 +180,7 @@ static void comms_publish_telemetry (uint32_t now_ms)
     telem.clr_l_mm     = obst.clr_l_mm;
     telem.clr_r_mm     = obst.clr_r_mm;
 
-    len = comms_build_telemetry(&telem, g_tx, (uint16_t)sizeof(g_tx));
+    len = comms_proto_build_telemetry(&telem, g_tx, (uint16_t)sizeof(g_tx));
     (void)comms_publish(COMMS_TOPIC_TELEMETRY, len, 0u, 0u);
 }
 
@@ -225,12 +226,12 @@ void mqtt_utk_app_disconnected (void)
 
 void mqtt_utk_app_poll (void)
 {
-    ID          mbf = comms_telem_id();
-    uint32_t    now_ms;
-    comms_rec_t rec;
-    uint8_t     seq;
-    uint32_t    count;
-    bool        b_sent;
+    ID                mbf = comms_telem_id();
+    uint32_t          now_ms;
+    comms_proto_rec_t rec;
+    uint8_t           seq;
+    uint32_t          count;
+    bool              b_sent;
 
     if (mbf <= 0)
     {
@@ -244,13 +245,13 @@ void mqtt_utk_app_poll (void)
     }
 
     /* 1. Offline ring first, so events stay in order. */
-    while (gb_online && comms_ring_peek(&g_ring, &rec, &seq))
+    while (gb_online && comms_proto_ring_peek(&g_ring, &rec, &seq))
     {
         if (!comms_publish_event(&rec, seq))
         {
             break; /* lwIP full: retry on the next poll */
         }
-        comms_ring_pop(&g_ring);
+        comms_proto_ring_pop(&g_ring);
     }
 
     /* 2. New records. */
@@ -265,7 +266,7 @@ void mqtt_utk_app_poll (void)
            offline ring otherwise. */
         b_sent = gb_online && (0u == g_ring.count)
                  && comms_publish_event(&rec, g_event_seq);
-        if (!b_sent && comms_ring_push(&g_ring, &rec, g_event_seq))
+        if (!b_sent && comms_proto_ring_push(&g_ring, &rec, g_event_seq))
         {
             g_ring_lost++;
         }
@@ -285,10 +286,10 @@ void mqtt_utk_app_poll (void)
     }
 }
 
-static comms_err_t comms_execute (comms_cmd_t const * p_cmd)
+static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
 {
-    ER           err;
-    mission_ev_t event;
+    ER                 err;
+    mission_types_ev_t event;
 
     switch (p_cmd->cmd)
     {
@@ -320,38 +321,39 @@ static comms_err_t comms_execute (comms_cmd_t const * p_cmd)
     {
         return COMMS_ERR_FULL;
     }
-    err = mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS,
-                       (uint16_t)p_cmd->param_id, p_cmd->value);
+    err = subsystem5_mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS,
+                                  (uint16_t)p_cmd->param_id, p_cmd->value);
     if (err != E_OK)
     {
         return COMMS_ERR_FULL;
     }
-    (void)comms_telem_post((uint8_t)COMMS_KIND_EVENT, (uint8_t)APP_SRC_COMMS,
-                           (uint16_t)event, p_cmd->value);
+    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_EVENT,
+                                (uint8_t)APP_SRC_COMMS, (uint16_t)event,
+                                p_cmd->value);
     return COMMS_ERR_NONE;
 }
 
 void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
                       uint16_t len)
 {
-    comms_cmd_t    cmd;
-    comms_err_t    err;
-    mission_snap_t mission;
-    uint16_t       ack_len;
+    comms_proto_cmd_t    cmd;
+    comms_proto_err_t    err;
+    mission_types_snap_t mission;
+    uint16_t             ack_len;
 
     if ((comms_telem_id() <= 0) || !topic_eq(p_topic, COMMS_TOPIC_CMD))
     {
         return;
     }
 
-    err = comms_parse_cmd(p_data, len, &cmd);
+    err = comms_proto_parse_cmd(p_data, len, &cmd);
     if (COMMS_ERR_NONE == err)
     {
-        uint32_t             now_ms = (uint32_t)app_time_ms();
-        comms_dedup_result_t dup =
-            comms_cmd_repeat_safe(cmd.cmd)
+        uint32_t                   now_ms = (uint32_t)app_time_ms();
+        comms_proto_dedup_result_t dup =
+            comms_proto_cmd_repeat_safe(cmd.cmd)
                 ? COMMS_DEDUP_NEW
-                : comms_dedup_check(&g_dedup, &cmd, now_ms);
+                : comms_proto_dedup_check(&g_dedup, &cmd, now_ms);
 
         if (COMMS_DEDUP_REPEAT == dup)
         {
@@ -363,12 +365,12 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
         }
         else
         {
-            mission_get_snap(&mission);
-            err = comms_check_cmd(&cmd,
-                                  (uint8_t)MISSION_ST_IDLE == mission.state);
+            subsystem5_get_mission_snap(&mission);
+            err = comms_proto_check_cmd(&cmd, (uint8_t)MISSION_ST_IDLE
+                                                  == mission.state);
             if (COMMS_ERR_NONE == err)
             {
-                err = comms_check_ready(
+                err = comms_proto_check_ready(
                     &cmd,
                     MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
             }
@@ -376,14 +378,15 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
             {
                 err = comms_execute(&cmd);
             }
-            if ((COMMS_ERR_NONE == err) && !comms_cmd_repeat_safe(cmd.cmd))
+            if ((COMMS_ERR_NONE == err)
+                && !comms_proto_cmd_repeat_safe(cmd.cmd))
             {
-                comms_dedup_add(&g_dedup, &cmd, now_ms);
+                comms_proto_dedup_add(&g_dedup, &cmd, now_ms);
             }
         }
     }
 
-    ack_len = comms_build_ack(&cmd, err, g_tx, (uint16_t)sizeof(g_tx));
+    ack_len = comms_proto_build_ack(&cmd, err, g_tx, (uint16_t)sizeof(g_tx));
     (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
 }
 

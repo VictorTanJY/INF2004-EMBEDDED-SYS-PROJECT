@@ -10,13 +10,13 @@ Define a test here before running it. Test IDs never change.
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S1-U01 | mbf_telem exists and accepts a record without blocking | IF-12, NFR10 | auto | `subsystem1_test.c` | `[TEST] S1-U01 PASS` |
-| S1-U02 | worst-case telemetry fits the TX buffer (JSON: 320 B until 25 Oct, 384 B after; binary since 15 Nov: one 27-byte frame) | FR13, NFR9, CR1 | auto | `subsystem1_test.c` | PASS |
-| S1-U03 | command parser accepts valid / rejects invalid input (binary frames since 15 Nov) | FR14, IF-11, CR1 | auto | `subsystem1_test.c` | PASS |
-| S1-U04 | start accepted only in IDLE | FR14 | auto | `subsystem1_test.c` | PASS |
-| S1-U05 | ack format (JSON until 15 Nov; now a 3-byte frame: has-id, 8-bit id, 4-bit error) | IF-11, CR1 | auto | `subsystem1_test.c` | PASS |
-| S1-U06 | debounce ignores a 1-sample glitch; 2 s hold = one LONG, no SHORT | FR16 | auto | `subsystem1_test.c` | PASS (a, b) |
-| S1-U07 | a delayed QoS 1 redelivery is acknowledged but not re-executed; an id reused for another command is rejected | FR14, Version C gap 9 | auto | `subsystem1_test.c` | PASS |
+| S1-U01 | mbf_telem exists and accepts a record without blocking | IF-12, NFR10 | auto | `subsystem1_test_run.c` | `[TEST] S1-U01 PASS` |
+| S1-U02 | worst-case telemetry fits the TX buffer (JSON: 320 B until 25 Oct, 384 B after; binary since 15 Nov: one 27-byte frame) | FR13, NFR9, CR1 | auto | `subsystem1_test_run.c` | PASS |
+| S1-U03 | command parser accepts valid / rejects invalid input (binary frames since 15 Nov) | FR14, IF-11, CR1 | auto | `subsystem1_test_run.c` | PASS |
+| S1-U04 | start accepted only in IDLE | FR14 | auto | `subsystem1_test_run.c` | PASS |
+| S1-U05 | ack format (JSON until 15 Nov; now a 3-byte frame: has-id, 8-bit id, 4-bit error) | IF-11, CR1 | auto | `subsystem1_test_run.c` | PASS |
+| S1-U06 | debounce ignores a 1-sample glitch; 2 s hold = one LONG, no SHORT | FR16 | auto | `subsystem1_test_run.c` | PASS (a, b) |
+| S1-U07 | a delayed QoS 1 redelivery is acknowledged but not re-executed; an id reused for another command is rejected | FR14, Version C gap 9 | auto | `subsystem1_test_run.c` | PASS |
 | S1-H01–H18 | Since 15 Nov (CR1, binary frames; JSON before): bit writer LSB-first layout (H01), buffer bounds at every size (H02), telemetry / event / status / ack byte for byte against golden frames, every field's saturation and none code, the packed 8-byte `mbf_telem` record and its time across the 20-bit wrap (H03–H08), parser (valid, every rejection reason, exact length, every parameter boundary, 20 000 random inputs) (H09–H14), offline ring with packed records (H15), debounce patterns (H16–H17), duplicate-id window with 8-bit ids (H18) | FR13, FR14, FR16, CR1 | auto (host) | `make -C testing/subsystem1/host` (ASan + UBSan) | `host tests: N passed, 0 failed` |
 | S1-H19–H20 | `map` command: four 6-bit Code 39 symbols, duplicate / symbol 0 / symbol 63 rejected (`bad_map`), IDLE only; status shows the map or none; bench parameters only in an APP_BENCH build; START needs calibration (`not_calibrated`) | FR4 (instructor 24 Oct), FR14 | host | same | same |
 | S1-H21 | the laptop codec (`dashboard/picocar_codec.py`) decodes the C encoder's golden frames back to the test inputs, encodes the same command bytes, ignores non-frames (old JSON, wrong version, truncated), unwraps the 16-bit counters | IF-11, CR1 | auto (host) | `make -C testing/subsystem1/host` runs `test_codec.py` | `host tests: N passed, 0 failed` |

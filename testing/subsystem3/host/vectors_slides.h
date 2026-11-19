@@ -12,9 +12,9 @@ typedef struct
     uint32_t const * p_w;
     char             chr;
     int32_t          slide;
-} slide_vec_t;
+} vectors_slides_vec_t;
 
-extern slide_vec_t const g_slides[SLIDE_VEC_COUNT];
+extern vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT];
 
 #endif /* VECTORS_SLIDES_H */
 

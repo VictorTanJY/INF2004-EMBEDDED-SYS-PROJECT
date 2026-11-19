@@ -25,15 +25,17 @@ typedef struct
     uint16_t black[LINE_CH_COUNT]; /* raw level of black */
     uint16_t contrast_x10;         /* worst line-sensor contrast */
     bool     b_valid;
-} line_cal_t;
+} line_track_cal_t;
 
-void line_cal_start(line_cal_t * p_cal);
-void line_cal_sample(line_cal_t * p_cal, uint16_t const raw[LINE_CH_COUNT]);
+void line_track_cal_start(line_track_cal_t * p_cal);
+void line_track_cal_sample(line_track_cal_t * p_cal,
+                           uint16_t const     raw[LINE_CH_COUNT]);
 /* Computes white / black; true if every sensor reached LINE_CONTRAST_MIN_X10.
    Keeps the previous calibration if it fails. */
-bool line_cal_finish(line_cal_t * p_cal);
+bool line_track_cal_finish(line_track_cal_t * p_cal);
 /* Raw 12-bit -> 0..1000, 1000 = black. */
-uint16_t line_cal_norm(line_cal_t const * p_cal, uint8_t chan, uint16_t raw);
+uint16_t line_track_cal_norm(line_track_cal_t const * p_cal, uint8_t chan,
+                             uint16_t raw);
 /* After each barcode read: move the barcode channel's black level toward
    the darkest bar seen (its spin calibration only sees the line). */
 
@@ -44,7 +46,7 @@ typedef enum
     LINE_TRK_EV_JUNCTION = 0x01u,
     LINE_TRK_EV_LOST     = 0x02u,
     LINE_TRK_EV_FOUND    = 0x04u
-} line_trk_ev_t;
+} line_track_ev_t;
 
 typedef struct
 {
@@ -74,12 +76,12 @@ typedef struct
     uint32_t junction_um; /* FR2: 20 mm (param 5) */
     uint32_t lost_um;     /* FR2: 80 mm (param 4) */
     int32_t  cruise_mm_s; /* speed cap already applied */
-} line_trk_cfg_t;
+} line_track_cfg_t;
 
 void line_track_init(line_track_t * p_t);
 
 /* Returns LINE_TRK_EV_* bits; p_t->v / p_t->omega hold the DRIVE command. */
-uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
+uint8_t line_track_step(line_track_t * p_t, line_track_cfg_t const * p_cfg,
                         uint16_t norm_l, uint16_t norm_r, uint32_t step_um);
 
 /* ---- Turn slip (calibration spin, 3 Nov) ---------------------------- */
@@ -92,23 +94,25 @@ typedef struct
     uint16_t n_samples;
     int32_t  prev_cdeg;
     int32_t  acc_cdeg;
-} line_slip_t;
+} line_track_slip_t;
 
-void line_slip_start(line_slip_t * p_s, int32_t heading_cdeg);
-void line_slip_sample(line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l,
-                      uint16_t raw_r);
-/* After line_cal_finish(): encoder deg per real deg x 1000, from where the
-   line sensors cross the line again; 0 if not found or implausible.
-   *p_diag = dark runs seen by L << 24 | by R << 16 | encoder deg spun. */
-uint16_t line_slip_gain(line_slip_t const * p_s, line_cal_t const * p_cal,
-                        uint32_t * p_diag);
+void line_track_slip_start(line_track_slip_t * p_s, int32_t heading_cdeg);
+void line_track_slip_sample(line_track_slip_t * p_s, int32_t heading_cdeg,
+                            uint16_t raw_l, uint16_t raw_r);
+/* After line_track_cal_finish(): encoder deg per real deg x 1000, from where
+   the line sensors cross the line again; 0 if not found or implausible. *p_diag
+   = dark runs seen by L << 24 | by R << 16 | encoder deg spun. */
+uint16_t line_track_slip_gain(line_track_slip_t const * p_s,
+                              line_track_cal_t const *  p_cal,
+                              uint32_t *                p_diag);
 
 /* Change Requirement 1: the line snapshot (IF-04) as stored between tasks. */
 #define LINE_SNAP_BITS  208u /* sum of the layout widths      */
 #define LINE_SNAP_WORDS 7u   /* 28 B instead of 36 B          */
-void     line_snap_pack(line_snap_t const * p_snap, uint32_t * p_words);
-void     line_snap_unpack(uint32_t const * p_words, line_snap_t * p_snap);
-uint32_t line_snap_layout_bits(void);
+void line_track_snap_pack(line_types_snap_t const * p_snap, uint32_t * p_words);
+void line_track_snap_unpack(uint32_t const *    p_words,
+                            line_types_snap_t * p_snap);
+uint32_t line_track_snap_layout_bits(void);
 
 #endif /* LINE_TRACK_H */
 

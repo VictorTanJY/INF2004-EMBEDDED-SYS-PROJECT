@@ -30,8 +30,8 @@
 static char const g_map_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
 
 /* ------------------------------------------------------------------ */
-static void push (mission_out_t * p_out, uint8_t kind, uint8_t cmd, uint8_t seq,
-                  int16_t arg0, int16_t arg1)
+static void push (mission_core_out_t * p_out, uint8_t kind, uint8_t cmd,
+                  uint8_t seq, int16_t arg0, int16_t arg1)
 {
     if (p_out->n_acts < MISSION_ACT_MAX)
     {
@@ -44,33 +44,35 @@ static void push (mission_out_t * p_out, uint8_t kind, uint8_t cmd, uint8_t seq,
     }
 }
 
-static void motion (mission_core_t * p_mc, mission_out_t * p_out, uint8_t cmd,
-                    int16_t arg0, int16_t arg1)
+static void motion (mission_core_t * p_mc, mission_core_out_t * p_out,
+                    uint8_t cmd, int16_t arg0, int16_t arg1)
 {
     uint8_t seq = 0u;
 
     if (((uint8_t)MOTION_CMD_MOVE == cmd) || ((uint8_t)MOTION_CMD_TURN == cmd))
     {
-        p_mc->motion_seq = motion_seq_next(p_mc->motion_seq); /* 5 bits (CR1) */
-        seq              = p_mc->motion_seq;
-        p_mc->wait_seq   = seq;
-        p_mc->b_waiting  = true;
+        p_mc->motion_seq =
+            motion_types_seq_next(p_mc->motion_seq); /* 5 bits (CR1) */
+        seq             = p_mc->motion_seq;
+        p_mc->wait_seq  = seq;
+        p_mc->b_waiting = true;
     }
     push(p_out, (uint8_t)MISSION_ACT_MOTION, cmd, seq, arg0, arg1);
 }
 
-static void set_auth (mission_core_t * p_mc, mission_out_t * p_out, uint8_t src)
+static void set_auth (mission_core_t * p_mc, mission_core_out_t * p_out,
+                      uint8_t src)
 {
     motion(p_mc, p_out, (uint8_t)MOTION_CMD_SET_AUTH, (int16_t)src, 0);
     p_mc->snap.auth = src;
 }
 
-static void scan (mission_out_t * p_out, uint8_t type, int16_t param)
+static void scan (mission_core_out_t * p_out, uint8_t type, int16_t param)
 {
     push(p_out, (uint8_t)MISSION_ACT_SCAN, type, 0u, param, 0);
 }
 
-static void log_act (mission_out_t * p_out, uint8_t code, int16_t arg0,
+static void log_act (mission_core_out_t * p_out, uint8_t code, int16_t arg0,
                      int16_t arg1)
 {
     push(p_out, (uint8_t)MISSION_ACT_LOG, code, 0u, arg0, arg1);
@@ -130,10 +132,10 @@ static uint8_t nav_steps (uint8_t nav, step_t steps[2])
 }
 
 static void enter(mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
-                  mission_out_t * p_out);
+                  mission_core_out_t * p_out);
 
 static void nav_next (mission_core_t * p_mc, uint32_t now_ms,
-                      mission_out_t * p_out)
+                      mission_core_out_t * p_out)
 {
     step_t        steps[2];
     uint8_t const count = nav_steps(p_mc->nav_exec, steps);
@@ -153,7 +155,7 @@ static void nav_next (mission_core_t * p_mc, uint32_t now_ms,
 }
 
 static void search_next (mission_core_t * p_mc, uint32_t now_ms,
-                         mission_out_t * p_out)
+                         mission_core_out_t * p_out)
 {
     static int16_t const k_sweep[3] = {MISSION_SEARCH_ANGLE_DDEG,
                                        -2 * MISSION_SEARCH_ANGLE_DDEG,
@@ -175,7 +177,7 @@ static void search_next (mission_core_t * p_mc, uint32_t now_ms,
 
 /* ---- state entry -------------------------------------------------------- */
 static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
-                   mission_out_t * p_out)
+                   mission_core_out_t * p_out)
 {
     p_mc->snap.state = state;
     p_mc->entry_ms   = now_ms;
@@ -249,7 +251,7 @@ static void enter (mission_core_t * p_mc, uint8_t state, uint32_t now_ms,
 }
 
 static void enter_fault (mission_core_t * p_mc, uint8_t cause, uint32_t bits,
-                         uint32_t now_ms, mission_out_t * p_out)
+                         uint32_t now_ms, mission_core_out_t * p_out)
 {
     p_mc->snap.cause      = cause;
     p_mc->snap.fault_bits = bits;
@@ -260,7 +262,7 @@ static void enter_fault (mission_core_t * p_mc, uint8_t cause, uint32_t bits,
 }
 
 static void start_run (mission_core_t * p_mc, uint32_t now_ms,
-                       mission_out_t * p_out)
+                       mission_core_out_t * p_out)
 {
     if ((p_mc->snap.calibrated & MISSION_CAL_ALL) != MISSION_CAL_ALL)
     {
@@ -277,7 +279,7 @@ static void start_run (mission_core_t * p_mc, uint32_t now_ms,
 }
 
 /* ---- map helpers --------------------------------------------------------- */
-bool mission_map_char_ok (char chr)
+bool mission_core_map_char_ok (char chr)
 {
     size_t idx;
 
@@ -291,7 +293,7 @@ bool mission_map_char_ok (char chr)
     return false;
 }
 
-int32_t mission_map_pack (char const map[MISSION_NAV_COUNT])
+int32_t mission_core_map_pack (char const map[MISSION_NAV_COUNT])
 {
     uint32_t packed = 0u;
     uint8_t  kdx;
@@ -303,7 +305,7 @@ int32_t mission_map_pack (char const map[MISSION_NAV_COUNT])
     return (int32_t)packed;
 }
 
-bool mission_map_unpack (int32_t packed, char map[MISSION_NAV_COUNT])
+bool mission_core_map_unpack (int32_t packed, char map[MISSION_NAV_COUNT])
 {
     uint8_t kdx;
     uint8_t jdx;
@@ -311,7 +313,7 @@ bool mission_map_unpack (int32_t packed, char map[MISSION_NAV_COUNT])
     for (kdx = 0u; kdx < (uint8_t)MISSION_NAV_COUNT; kdx++)
     {
         map[kdx] = (char)(((uint32_t)packed >> (8u * kdx)) & 0xFFu);
-        if (!mission_map_char_ok(map[kdx]))
+        if (!mission_core_map_char_ok(map[kdx]))
         {
             return false;
         }
@@ -326,7 +328,7 @@ bool mission_map_unpack (int32_t packed, char map[MISSION_NAV_COUNT])
     return true;
 }
 
-uint8_t mission_nav_for (mission_snap_t const * p_snap, char chr)
+uint8_t mission_core_nav_for (mission_types_snap_t const * p_snap, char chr)
 {
     uint8_t kdx;
 
@@ -366,7 +368,7 @@ void mission_core_init (mission_core_t * p_mc, uint32_t now_ms)
 }
 
 static void apply_param (mission_core_t * p_mc, uint16_t param_id,
-                         int32_t value, mission_out_t * p_out)
+                         int32_t value, mission_core_out_t * p_out)
 {
     switch (param_id)
     {
@@ -404,7 +406,8 @@ static void apply_param (mission_core_t * p_mc, uint16_t param_id,
     log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id, (int16_t)value);
 }
 
-static bool seq_matches (mission_core_t * p_mc, mission_evt_t const * p_ev)
+static bool seq_matches (mission_core_t *            p_mc,
+                         mission_types_evt_t const * p_ev)
 {
     if (p_mc->b_waiting && ((uint8_t)p_ev->arg == p_mc->wait_seq)
         && ((int32_t)MOTION_SRC_MISSION == p_ev->data))
@@ -415,8 +418,9 @@ static bool seq_matches (mission_core_t * p_mc, mission_evt_t const * p_ev)
     return false;
 }
 
-void mission_core_event (mission_core_t * p_mc, mission_evt_t const * p_ev,
-                         uint32_t now_ms, mission_out_t * p_out)
+void mission_core_event (mission_core_t *            p_mc,
+                         mission_types_evt_t const * p_ev, uint32_t now_ms,
+                         mission_core_out_t * p_out)
 {
     uint8_t const state = p_mc->snap.state;
 
@@ -535,7 +539,7 @@ void mission_core_event (mission_core_t * p_mc, mission_evt_t const * p_ev,
             {
                 char map[MISSION_NAV_COUNT];
 
-                if (mission_map_unpack(p_ev->data, map))
+                if (mission_core_map_unpack(p_ev->data, map))
                 {
                     uint8_t kdx;
 
@@ -615,7 +619,7 @@ void mission_core_event (mission_core_t * p_mc, mission_evt_t const * p_ev,
             if (is_active(state))
             {
                 char const    chr = (char)p_ev->data;
-                uint8_t const nav = mission_nav_for(&p_mc->snap, chr);
+                uint8_t const nav = mission_core_nav_for(&p_mc->snap, chr);
 
                 if (nav != (uint8_t)MISSION_NAV_NONE)
                 {
@@ -743,8 +747,9 @@ void mission_core_event (mission_core_t * p_mc, mission_evt_t const * p_ev,
     }
 }
 
-void mission_core_tick (mission_core_t * p_mc, mission_inputs_t const * p_in,
-                        uint32_t now_ms, mission_out_t * p_out)
+void mission_core_tick (mission_core_t *              p_mc,
+                        mission_core_inputs_t const * p_in, uint32_t now_ms,
+                        mission_core_out_t * p_out)
 {
     uint8_t const  state     = p_mc->snap.state;
     uint32_t const age       = now_ms - p_mc->entry_ms;
@@ -869,14 +874,14 @@ void mission_core_tick (mission_core_t * p_mc, mission_inputs_t const * p_in,
 #define EVT_DATA_SHIFT 15u
 #define EVT_SYM_BITS   6u
 
-uint32_t mission_evt_pack (mission_evt_t const * p_ev)
+uint32_t mission_core_evt_pack (mission_types_evt_t const * p_ev)
 {
     uint32_t word = 0u;
 
-    word = pk_set(word, EVT_TYPE_SHIFT, EVT_TYPE_BITS,
-                  pk_sat_u(p_ev->type, EVT_TYPE_BITS));
-    word = pk_set(word, EVT_SRC_SHIFT, EVT_SRC_BITS,
-                  pk_sat_u(p_ev->src, EVT_SRC_BITS));
+    word = app_pack_set(word, EVT_TYPE_SHIFT, EVT_TYPE_BITS,
+                        app_pack_sat_u(p_ev->type, EVT_TYPE_BITS));
+    word = app_pack_set(word, EVT_SRC_SHIFT, EVT_SRC_BITS,
+                        app_pack_sat_u(p_ev->src, EVT_SRC_BITS));
     if ((uint8_t)MISSION_EV_REMOTE_MAP == p_ev->type)
     {
         uint32_t const packed = (uint32_t)p_ev->data;
@@ -884,25 +889,26 @@ uint32_t mission_evt_pack (mission_evt_t const * p_ev)
 
         for (kdx = 0u; kdx < (uint32_t)MISSION_NAV_COUNT; kdx++)
         {
-            word = pk_set(word, (uint8_t)(EVT_A_SHIFT + (kdx * EVT_SYM_BITS)),
-                          EVT_SYM_BITS,
-                          pk_sym_index((char)(uint8_t)(packed >> (8u * kdx))));
+            word = app_pack_set(
+                word, (uint8_t)(EVT_A_SHIFT + (kdx * EVT_SYM_BITS)),
+                EVT_SYM_BITS,
+                app_pack_sym_index((char)(uint8_t)(packed >> (8u * kdx))));
         }
     }
     else
     {
-        word = pk_set(word, EVT_A_SHIFT, MISSION_EVT_A_BITS,
-                      pk_sat_u(p_ev->arg, MISSION_EVT_A_BITS));
-        word = pk_set(word, EVT_DATA_SHIFT, MISSION_EVT_DATA_BITS,
-                      pk_off_s(p_ev->data, MISSION_EVT_DATA_BITS));
+        word = app_pack_set(word, EVT_A_SHIFT, MISSION_EVT_A_BITS,
+                            app_pack_sat_u(p_ev->arg, MISSION_EVT_A_BITS));
+        word = app_pack_set(word, EVT_DATA_SHIFT, MISSION_EVT_DATA_BITS,
+                            app_pack_off_s(p_ev->data, MISSION_EVT_DATA_BITS));
     }
     return word;
 }
 
-void mission_evt_unpack (uint32_t word, mission_evt_t * p_ev)
+void mission_core_evt_unpack (uint32_t word, mission_types_evt_t * p_ev)
 {
-    p_ev->type = (uint8_t)pk_get(word, EVT_TYPE_SHIFT, EVT_TYPE_BITS);
-    p_ev->src  = (uint8_t)pk_get(word, EVT_SRC_SHIFT, EVT_SRC_BITS);
+    p_ev->type = (uint8_t)app_pack_get(word, EVT_TYPE_SHIFT, EVT_TYPE_BITS);
+    p_ev->src  = (uint8_t)app_pack_get(word, EVT_SRC_SHIFT, EVT_SRC_BITS);
     if ((uint8_t)MISSION_EV_REMOTE_MAP == p_ev->type)
     {
         uint32_t packed = 0u;
@@ -910,21 +916,22 @@ void mission_evt_unpack (uint32_t word, mission_evt_t * p_ev)
 
         for (kdx = 0u; kdx < (uint32_t)MISSION_NAV_COUNT; kdx++)
         {
-            uint8_t const sym = (uint8_t)pk_get(
+            uint8_t const sym = (uint8_t)app_pack_get(
                 word, (uint8_t)(EVT_A_SHIFT + (kdx * EVT_SYM_BITS)),
                 EVT_SYM_BITS);
 
-            packed |= ((uint32_t)(uint8_t)pk_sym_char(sym)) << (8u * kdx);
+            packed |= ((uint32_t)(uint8_t)app_pack_sym_char(sym)) << (8u * kdx);
         }
         p_ev->arg  = 0u;
         p_ev->data = (int32_t)packed;
     }
     else
     {
-        p_ev->arg = (uint16_t)pk_get(word, EVT_A_SHIFT, MISSION_EVT_A_BITS);
-        p_ev->data =
-            pk_unoff_s(pk_get(word, EVT_DATA_SHIFT, MISSION_EVT_DATA_BITS),
-                       MISSION_EVT_DATA_BITS);
+        p_ev->arg =
+            (uint16_t)app_pack_get(word, EVT_A_SHIFT, MISSION_EVT_A_BITS);
+        p_ev->data = app_pack_unoff_s(
+            app_pack_get(word, EVT_DATA_SHIFT, MISSION_EVT_DATA_BITS),
+            MISSION_EVT_DATA_BITS);
     }
 }
 
@@ -932,72 +939,80 @@ void mission_evt_unpack (uint32_t word, mission_evt_t * p_ev)
 #define REQ_SEQ_BITS   5u
 #define REQ_PARAM_BITS 8u
 
-uint16_t scan_req_pack (scan_req_t const * p_req)
+uint16_t mission_core_scan_req_pack (mission_types_scan_req_t const * p_req)
 {
     uint32_t word = 0u;
 
-    word =
-        pk_set(word, 0u, REQ_TYPE_BITS, pk_sat_u(p_req->type, REQ_TYPE_BITS));
-    word = pk_set(word, REQ_TYPE_BITS, REQ_SEQ_BITS,
-                  (uint32_t)p_req->seq & pk_mask(REQ_SEQ_BITS));
-    word = pk_set(word, REQ_TYPE_BITS + REQ_SEQ_BITS, REQ_PARAM_BITS,
-                  pk_sat_u((p_req->param < 0) ? 0u : (uint32_t)p_req->param,
-                           REQ_PARAM_BITS));
+    word = app_pack_set(word, 0u, REQ_TYPE_BITS,
+                        app_pack_sat_u(p_req->type, REQ_TYPE_BITS));
+    word = app_pack_set(word, REQ_TYPE_BITS, REQ_SEQ_BITS,
+                        (uint32_t)p_req->seq & app_pack_mask(REQ_SEQ_BITS));
+    word = app_pack_set(
+        word, REQ_TYPE_BITS + REQ_SEQ_BITS, REQ_PARAM_BITS,
+        app_pack_sat_u((p_req->param < 0) ? 0u : (uint32_t)p_req->param,
+                       REQ_PARAM_BITS));
     return (uint16_t)word;
 }
 
-void scan_req_unpack (uint16_t word, scan_req_t * p_req)
+void mission_core_scan_req_unpack (uint16_t                   word,
+                                   mission_types_scan_req_t * p_req)
 {
-    p_req->type = (uint8_t)pk_get(word, 0u, REQ_TYPE_BITS);
-    p_req->seq  = (uint8_t)pk_get(word, REQ_TYPE_BITS, REQ_SEQ_BITS);
-    p_req->param =
-        (int16_t)pk_get(word, REQ_TYPE_BITS + REQ_SEQ_BITS, REQ_PARAM_BITS);
+    p_req->type  = (uint8_t)app_pack_get(word, 0u, REQ_TYPE_BITS);
+    p_req->seq   = (uint8_t)app_pack_get(word, REQ_TYPE_BITS, REQ_SEQ_BITS);
+    p_req->param = (int16_t)app_pack_get(word, REQ_TYPE_BITS + REQ_SEQ_BITS,
+                                         REQ_PARAM_BITS);
 }
 
 /* Data representation of IF-10 (mission part). */
-static pk_field_t const g_mission_layout[] = {
-    PK_FIELD(mission_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(mission_snap_t, fault_bits, 20u,
+static app_pack_field_t const g_mission_layout[] = {
+    PK_FIELD(mission_types_snap_t, t_ms, 32u, PK_W),
+    PK_FIELD(mission_types_snap_t, fault_bits, 20u,
              PK_U), /* SAFETY_FLT_* (16) + self-test mask << 16 */
-    PK_FIELD(mission_snap_t, cruise_mm_s, 9u, PK_U), /* <= 450 */
-    PK_FIELD(mission_snap_t, speed_cap_mm_s, 9u, PK_U),
-    PK_FIELD(mission_snap_t, slow_mm, 10u, PK_U), /* <= 600 (slow_cm 25..60) */
-    PK_FIELD(mission_snap_t, stop_mm, 9u, PK_U), /* <= 400 (stop_cm 15..40)   */
-    PK_FIELD(mission_snap_t, lost_mm, 8u, PK_U), /* <= 150                    */
-    PK_FIELD(mission_snap_t, junction_mm, 6u, PK_U), /* <= 40 */
-    PK_FIELD(mission_snap_t, runs, 16u, PK_W), /* counter                   */
-    PK_FIELD(mission_snap_t, state, 4u, PK_U), /* 11 states                 */
-    PK_FIELD(mission_snap_t, auth, 2u, PK_U),  /* 3 sources                 */
-    PK_FIELD(mission_snap_t, pending_nav, 3u, PK_UN), /* 0..3, NONE (0xFF) */
-    PK_FIELD(mission_snap_t, pending_char, 6u,
+    PK_FIELD(mission_types_snap_t, cruise_mm_s, 9u, PK_U), /* <= 450 */
+    PK_FIELD(mission_types_snap_t, speed_cap_mm_s, 9u, PK_U),
+    PK_FIELD(mission_types_snap_t, slow_mm, 10u,
+             PK_U), /* <= 600 (slow_cm 25..60) */
+    PK_FIELD(mission_types_snap_t, stop_mm, 9u,
+             PK_U), /* <= 400 (stop_cm 15..40)   */
+    PK_FIELD(mission_types_snap_t, lost_mm, 8u, PK_U),     /* <= 150 */
+    PK_FIELD(mission_types_snap_t, junction_mm, 6u, PK_U), /* <= 40 */
+    PK_FIELD(mission_types_snap_t, runs, 16u, PK_W),       /* counter */
+    PK_FIELD(mission_types_snap_t, state, 4u, PK_U),       /* 11 states */
+    PK_FIELD(mission_types_snap_t, auth, 2u, PK_U),        /* 3 sources */
+    PK_FIELD(mission_types_snap_t, pending_nav, 3u,
+             PK_UN), /* 0..3, NONE (0xFF) */
+    PK_FIELD(mission_types_snap_t, pending_char, 6u,
              PK_SYM), /* Code 39 symbol or none    */
-    PK_FIELD(mission_snap_t, nav_map[0], 6u, PK_SYM),
-    PK_FIELD(mission_snap_t, nav_map[1], 6u, PK_SYM),
-    PK_FIELD(mission_snap_t, nav_map[2], 6u, PK_SYM),
-    PK_FIELD(mission_snap_t, nav_map[3], 6u, PK_SYM),
-    PK_FIELD(mission_snap_t, calibrated, 2u, PK_U), /* MISSION_CAL_IR | _IMU */
-    PK_FIELD(mission_snap_t, cal_phase, 2u, PK_U),  /* 4 phases */
-    PK_FIELD(mission_snap_t, cause, 3u, PK_U) /* 7 causes                  */
+    PK_FIELD(mission_types_snap_t, nav_map[0], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, nav_map[1], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, nav_map[2], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, nav_map[3], 6u, PK_SYM),
+    PK_FIELD(mission_types_snap_t, calibrated, 2u,
+             PK_U), /* MISSION_CAL_IR | _IMU */
+    PK_FIELD(mission_types_snap_t, cal_phase, 2u, PK_U), /* 4 phases */
+    PK_FIELD(mission_types_snap_t, cause, 3u, PK_U)      /* 7 causes */
 };
 
 #define MISSION_FIELDS \
     ((uint16_t)(sizeof(g_mission_layout) / sizeof(g_mission_layout[0])))
 
-void mission_snap_pack (mission_snap_t const * p_snap, uint32_t * p_words)
+void mission_core_snap_pack (mission_types_snap_t const * p_snap,
+                             uint32_t *                   p_words)
 {
-    pk_pack_rec(g_mission_layout, MISSION_FIELDS, p_snap, p_words,
-                MISSION_SNAP_WORDS);
+    app_pack_pack_rec(g_mission_layout, MISSION_FIELDS, p_snap, p_words,
+                      MISSION_SNAP_WORDS);
 }
 
-void mission_snap_unpack (uint32_t const * p_words, mission_snap_t * p_snap)
+void mission_core_snap_unpack (uint32_t const *       p_words,
+                               mission_types_snap_t * p_snap)
 {
     p_snap->reserved = 0u;
-    pk_unpack_rec(g_mission_layout, MISSION_FIELDS, p_words, p_snap);
+    app_pack_unpack_rec(g_mission_layout, MISSION_FIELDS, p_words, p_snap);
 }
 
-uint32_t mission_snap_layout_bits (void)
+uint32_t mission_core_snap_layout_bits (void)
 {
-    return pk_layout_bits(g_mission_layout, MISSION_FIELDS);
+    return app_pack_layout_bits(g_mission_layout, MISSION_FIELDS);
 }
 
 /*** end of file ***/

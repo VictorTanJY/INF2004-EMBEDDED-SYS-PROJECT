@@ -51,7 +51,7 @@ static uint32_t const g_slide15_y[SLIDE_VEC_ELEMS] = {
     10665, 10750, 3640, 3555, 10750, 3555, 3555,  3555, 3640, 3555,
     3555,  10750, 3555, 3555, 10750, 3555, 10750, 3640, 3555};
 
-slide_vec_t const g_slides[SLIDE_VEC_COUNT] = {
+vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT] = {
     {g_slide02_a, 'A', 2},  {g_slide03_a, 'A', 3},  {g_slide04_a, 'A', 4},
     {g_slide06_f, 'F', 6},  {g_slide07_f, 'F', 7},  {g_slide08_f, 'F', 8},
     {g_slide10_z, 'Z', 10}, {g_slide11_z, 'Z', 11}, {g_slide12_z, 'Z', 12},

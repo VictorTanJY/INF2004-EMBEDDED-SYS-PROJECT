@@ -23,7 +23,7 @@ typedef enum
     BC_NONE   = 0,
     BC_VALID  = 1, /* p_out->ch holds the character        */
     BC_REJECT = 2  /* p_out->reason holds the code39_result_t */
-} bc_result_t;
+} line_barcode_result_t;
 
 typedef struct
 {
@@ -33,11 +33,11 @@ typedef struct
     uint16_t elements;
     uint32_t length_um;
     uint16_t peak_norm; /* darkest bar seen (black-level learning) */
-} bc_out_t;
+} line_barcode_out_t;
 
 typedef struct
 {
-    uint8_t  state;    /* line_bc_state_t */
+    uint8_t  state;    /* line_types_bc_state_t */
     bool     b_black;  /* hysteresis level */
     uint32_t run_um;   /* current run      */
     uint32_t white_um; /* WAIT_QUIET: white so far */
@@ -67,37 +67,39 @@ typedef struct
     uint16_t pre_i;   /* next slot                            */
     uint16_t pre_cur; /* darkest in the bin being filled      */
     uint32_t pre_um;  /* travel into it                       */
-} bc_capture_t;
+} line_barcode_capture_t;
 
-void bc_init(bc_capture_t * p_bc);
+void line_barcode_init(line_barcode_capture_t * p_bc);
 
 /* From a darkness profile (bins of BC_PROF_BIN_UM), the elements against
    threshold thr (bars at or above thr + hyst, spaces below thr - hyst);
    runs under BC_PROF_MIN_BINS merge into their neighbours.  Returns the
    element count (widths in um), the trailing white run excluded. */
-uint16_t bc_prof_elements(uint16_t const * p_prof, uint16_t n_bins,
-                          uint16_t thr, uint16_t hyst, uint32_t * p_widths,
-                          uint16_t max);
-/* As bc_prof_elements() but by swing: a bar starts delta above the
+uint16_t line_barcode_prof_elements(uint16_t const * p_prof, uint16_t n_bins,
+                                    uint16_t thr, uint16_t hyst,
+                                    uint32_t * p_widths, uint16_t max);
+/* As line_barcode_prof_elements() but by swing: a bar starts delta above the
    lightest point of the space before it and ends delta below its darkest
    point (BC_ADAPT_*, 9 Nov). */
-uint16_t bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
-                       uint32_t * p_widths, uint16_t max);
+uint16_t line_barcode_prof_swing(uint16_t const * p_prof, uint16_t n_bins,
+                                 uint16_t delta, uint32_t * p_widths,
+                                 uint16_t max);
 /* The widths of one reading of the capture just ended (for the log):
    reading 0 swing, 1 mid, 2 low, 3 / 4 / 5 adaptive swing at
    BC_ADAPT_PCT / PCT2 / PCT3 (0 if not tried); returns the count. */
 #define BC_READINGS 6u
-uint16_t bc_reading(bc_capture_t const * p_bc, uint8_t reading,
-                    uint32_t * p_widths);
+uint16_t line_barcode_reading(line_barcode_capture_t const * p_bc,
+                              uint8_t reading, uint32_t * p_widths);
 /* Light / dark levels of a profile (percentiles BC_PROF_WHITE_PCT / DARK_PCT).
  */
-void bc_prof_levels(uint16_t const * p_prof, uint16_t n_bins,
-                    uint16_t * p_white, uint16_t * p_dark);
+void line_barcode_prof_levels(uint16_t const * p_prof, uint16_t n_bins,
+                              uint16_t * p_white, uint16_t * p_dark);
 
 /* norm: 0..1000 (1000 = black).  step_um: distance since the last sample
    (absolute value).  Returns BC_VALID / BC_REJECT once per code. */
-bc_result_t bc_sample(bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
-                      bc_out_t * p_out);
+line_barcode_result_t line_barcode_sample(line_barcode_capture_t * p_bc,
+                                          uint16_t norm, uint32_t step_um,
+                                          line_barcode_out_t * p_out);
 
 #endif /* LINE_BARCODE_H */
 

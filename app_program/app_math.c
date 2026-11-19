@@ -5,7 +5,7 @@
 
 #include "app_math.h"
 
-uint32_t app_isqrt64 (uint64_t value)
+uint32_t app_math_isqrt64 (uint64_t value)
 {
     uint64_t result = 0u;
     uint64_t bit    = (uint64_t)1u << 62;
@@ -30,7 +30,7 @@ uint32_t app_isqrt64 (uint64_t value)
     return (uint32_t)result;
 }
 
-uint32_t app_isqrt32 (uint32_t value)
+uint32_t app_math_isqrt32 (uint32_t value)
 {
     uint32_t result = 0u;
     uint32_t bit    = (uint32_t)1u << 30;
@@ -77,7 +77,7 @@ static int32_t atan_unit_cdeg (int64_t ratio)
     return (int32_t)(((poly * 18000) + (pi_q30 / 2)) / pi_q30);
 }
 
-int32_t app_atan2_cdeg (int32_t y_val, int32_t x_val)
+int32_t app_math_atan2_cdeg (int32_t y_val, int32_t x_val)
 {
     uint32_t abs_x = (x_val < 0) ? (0u - (uint32_t)x_val) : (uint32_t)x_val;
     uint32_t abs_y = (y_val < 0) ? (0u - (uint32_t)y_val) : (uint32_t)y_val;
@@ -107,7 +107,7 @@ int32_t app_atan2_cdeg (int32_t y_val, int32_t x_val)
     return angle;
 }
 
-int32_t app_wrap_cdeg (int32_t cdeg)
+int32_t app_math_wrap_cdeg (int32_t cdeg)
 {
     int32_t angle = cdeg % APP_CDEG_360;
 
@@ -130,9 +130,9 @@ int32_t app_wrap_cdeg (int32_t cdeg)
  * sin(t) by its Taylor series to t^9 on |t| <= pi/2, in Q30.
  * Truncation error < (pi/2)^11 / 11! = 3.6e-6.
  */
-int32_t app_sin_q15 (int32_t cdeg)
+int32_t app_math_sin_q15 (int32_t cdeg)
 {
-    int32_t angle = app_wrap_cdeg(cdeg); /* -180 .. 180 deg */
+    int32_t angle = app_math_wrap_cdeg(cdeg); /* -180 .. 180 deg */
     int64_t term;
     int64_t term_sq;
     int64_t sine;
@@ -174,12 +174,12 @@ int32_t app_sin_q15 (int32_t cdeg)
     return (int32_t)sine;
 }
 
-int32_t app_cos_q15 (int32_t cdeg)
+int32_t app_math_cos_q15 (int32_t cdeg)
 {
-    return app_sin_q15(app_wrap_cdeg(cdeg) + APP_CDEG_90);
+    return app_math_sin_q15(app_math_wrap_cdeg(cdeg) + APP_CDEG_90);
 }
 
-int32_t app_mul_q15 (int32_t value, int32_t q15)
+int32_t app_math_mul_q15 (int32_t value, int32_t q15)
 {
     return (int32_t)(((int64_t)value * (int64_t)q15) / 32768);
 }

@@ -3,8 +3,8 @@
  *  Subsystem 2 -- the MotionTask controller as a pure state machine
  *  (Week 6 Section 6.1).  Owner: Buddy 2 (Jedrek).
  *
- *  No kernel, register or SDK access: MotionTask (motion_task.c) feeds it
- *  encoder counts and commands every 10 ms and writes the duty it returns,
+ *  No kernel, register or SDK access: MotionTask (motion_task_thread.c) feeds
+ * it encoder counts and commands every 10 ms and writes the duty it returns,
  *  and testing/subsystem2/host runs the same code against a motor model.
  *
  *  States: IDLE_BRAKED, VELOCITY_TRACK (DRIVE), MANEUVER (MOVE / TURN with
@@ -28,7 +28,7 @@ typedef enum
     MOTION_RES_CLEAR_ESTOP    = 4  /* valid CLEAR_ESTOP: the task must clear
                                       the latch, reconnect PWM, then call
                                       motion_core_estop_cleared()          */
-} motion_result_t;
+} motion_core_result_t;
 
 typedef enum
 {
@@ -38,23 +38,23 @@ typedef enum
     MOTION_EV_STALL     = 3, /* set SAFETY_FLT_STALL                 */
     MOTION_EV_ENC_FAULT = 4, /* report only                          */
     MOTION_EV_ENC_OK    = 5  /* glitches stopped for 1 s             */
-} motion_ev_code_t;
+} motion_core_ev_code_t;
 
 typedef struct
 {
-    uint8_t code; /* motion_ev_code_t */
+    uint8_t code; /* motion_core_ev_code_t */
     uint8_t seq;
     uint8_t src;
-} motion_event_t;
+} motion_core_event_t;
 
 #define MOTION_EV_QUEUE_LEN 6u
 
 typedef struct
 {
     /* state machine */
-    uint8_t  state; /* motion_state_t   */
-    uint8_t  phase; /* motion_phase_t   */
-    uint8_t  auth;  /* motion_src_t     */
+    uint8_t  state; /* motion_types_state_t   */
+    uint8_t  phase; /* motion_types_phase_t   */
+    uint8_t  auth;  /* motion_types_src_t     */
     uint16_t rejected;
 
     /* odometry */
@@ -115,16 +115,16 @@ typedef struct
     uint8_t fail_count;
 
     /* events of the current cycle */
-    motion_event_t events[MOTION_EV_QUEUE_LEN];
-    uint8_t        ev_count;
+    motion_core_event_t events[MOTION_EV_QUEUE_LEN];
+    uint8_t             ev_count;
 } motion_core_t;
 
 void motion_core_init(motion_core_t * p_mc, uint32_t now_ms);
 
 /* Apply one command (call for every message drained this cycle). */
-motion_result_t motion_core_command(motion_core_t *      p_mc,
-                                    motion_cmd_t const * p_cmd,
-                                    uint32_t             now_ms);
+motion_core_result_t motion_core_command(motion_core_t *            p_mc,
+                                         motion_types_cmd_t const * p_cmd,
+                                         uint32_t                   now_ms);
 
 /* The task cleared the latch and reconnected PWM: leave ESTOP_LATCHED. */
 void motion_core_estop_cleared(motion_core_t * p_mc);
@@ -140,11 +140,12 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
 /* Fill the public snapshot from the core (t_ms and hw_ok are set by the task).
  */
-void motion_core_snapshot(motion_core_t const * p_mc, motion_odom_t * p_out);
+void motion_core_snapshot(motion_core_t const * p_mc,
+                          motion_types_odom_t * p_out);
 
 /* Pop the next event (raised by commands or steps since the last pop);
    false when empty.  MotionTask drains them after every step. */
-bool motion_core_pop_event(motion_core_t * p_mc, motion_event_t * p_ev);
+bool motion_core_pop_event(motion_core_t * p_mc, motion_core_event_t * p_ev);
 
 /* Expected duration of a manoeuvre (ms), used for its timeout. */
 uint32_t motion_core_expected_ms(int64_t distance_um, int32_t vmax_mm_s);
@@ -153,14 +154,16 @@ uint32_t motion_core_expected_ms(int64_t distance_um, int32_t vmax_mm_s);
  *  Change Requirement 1 (minimum-bit data): the command word and the
  *  shared odometry snapshot as stored between tasks.
  * --------------------------------------------------------------------- */
-uint32_t motion_cmd_pack(motion_cmd_t const * p_cmd);
-void     motion_cmd_unpack(uint32_t word, motion_cmd_t * p_cmd);
+uint32_t motion_core_cmd_pack(motion_types_cmd_t const * p_cmd);
+void     motion_core_cmd_unpack(uint32_t word, motion_types_cmd_t * p_cmd);
 
 #define MOTION_ODOM_BITS  329u /* sum of the layout widths      */
 #define MOTION_ODOM_WORDS 11u  /* 44 B instead of 52 B          */
-void     motion_odom_pack(motion_odom_t const * p_odom, uint32_t * p_words);
-void     motion_odom_unpack(uint32_t const * p_words, motion_odom_t * p_odom);
-uint32_t motion_odom_layout_bits(void);
+void     motion_core_odom_pack(motion_types_odom_t const * p_odom,
+                               uint32_t *                  p_words);
+void     motion_core_odom_unpack(uint32_t const *      p_words,
+                                 motion_types_odom_t * p_odom);
+uint32_t motion_core_odom_layout_bits(void);
 
 #endif /* MOTION_CORE_H */
 

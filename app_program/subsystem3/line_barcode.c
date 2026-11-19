@@ -5,7 +5,7 @@
 
 #include "line_barcode.h"
 
-static void pre_reset (bc_capture_t * p_bc)
+static void pre_reset (line_barcode_capture_t * p_bc)
 {
     p_bc->pre_n   = 0u;
     p_bc->pre_i   = 0u;
@@ -14,7 +14,8 @@ static void pre_reset (bc_capture_t * p_bc)
 }
 
 /* While armed: keep the darkness record of the last BC_PRE_BINS bins. */
-static void pre_feed (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um)
+static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
+                      uint32_t step_um)
 {
     p_bc->pre_cur = (norm > p_bc->pre_cur) ? norm : p_bc->pre_cur;
     p_bc->pre_um += step_um;
@@ -31,7 +32,7 @@ static void pre_feed (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um)
     }
 }
 
-void bc_init (bc_capture_t * p_bc)
+void line_barcode_init (line_barcode_capture_t * p_bc)
 {
     p_bc->state       = (uint8_t)LINE_BC_WAIT_QUIET;
     p_bc->b_black     = false;
@@ -53,14 +54,14 @@ void bc_init (bc_capture_t * p_bc)
     pre_reset(p_bc);
 }
 
-static void start_cooldown (bc_capture_t * p_bc)
+static void start_cooldown (line_barcode_capture_t * p_bc)
 {
     p_bc->state       = (uint8_t)LINE_BC_COOLDOWN;
     p_bc->cooldown_um = 0u;
 }
 
-void bc_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
-                     uint16_t * p_white, uint16_t * p_dark)
+void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
+                               uint16_t * p_white, uint16_t * p_dark)
 {
     uint16_t hist[64];
     uint32_t sum = 0u;
@@ -132,9 +133,9 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
     return out;
 }
 
-uint16_t bc_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
-                           uint16_t thr, uint16_t hyst, uint32_t * p_widths,
-                           uint16_t max)
+uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
+                                     uint16_t thr, uint16_t hyst,
+                                     uint32_t * p_widths, uint16_t max)
 {
     static uint16_t runs[BC_PROF_BINS / 2u];
     uint16_t        n_runs  = 0u;
@@ -173,8 +174,9 @@ uint16_t bc_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
     return runs_to_widths(runs, n_runs, p_widths, max);
 }
 
-uint16_t bc_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
-                        uint16_t delta, uint32_t * p_widths, uint16_t max)
+uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
+                                  uint16_t delta, uint32_t * p_widths,
+                                  uint16_t max)
 {
     static uint16_t runs[BC_PROF_BINS / 2u];
     uint16_t        n_runs = 0u;
@@ -238,7 +240,7 @@ uint16_t bc_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
 /* Elements found again from the darkness profile at threshold k (1 mid,
    2 low for faint thin bars) against this code's own levels, or k 3 by
    swing sized to this code (BC_ADAPT_*); 0 if none or not useful. */
-static uint16_t prof_read (bc_capture_t const * p_bc, uint8_t kdx,
+static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
                            uint32_t * p_w)
 {
     uint16_t white;
@@ -250,7 +252,7 @@ static uint16_t prof_read (bc_capture_t const * p_bc, uint8_t kdx,
     {
         return 0u;
     }
-    bc_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
+    line_barcode_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
     if (dark <= white)
     {
         return 0u;
@@ -274,14 +276,15 @@ static uint16_t prof_read (bc_capture_t const * p_bc, uint8_t kdx,
         {
             return 0u; /* no smaller than the first reading */
         }
-        return bc_prof_swing(p_bc->prof, p_bc->prof_n, (uint16_t)delta, p_w,
-                             (uint16_t)BC_MAX_ELEMENTS);
+        return line_barcode_prof_swing(p_bc->prof, p_bc->prof_n,
+                                       (uint16_t)delta, p_w,
+                                       (uint16_t)BC_MAX_ELEMENTS);
     }
     thr = (uint16_t)(white
                      + ((1u == kdx) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
-    return bc_prof_elements(p_bc->prof, p_bc->prof_n, thr,
-                            (uint16_t)(span / 16u), p_w,
-                            (uint16_t)BC_MAX_ELEMENTS);
+    return line_barcode_prof_elements(p_bc->prof, p_bc->prof_n, thr,
+                                      (uint16_t)(span / 16u), p_w,
+                                      (uint16_t)BC_MAX_ELEMENTS);
 }
 
 /* 14 Nov: a speck before the start or after the stop adds a bar and a
@@ -373,7 +376,8 @@ static code39_result_t decode_exact (uint32_t const * p_w, uint16_t n_elems,
    speck was dropped): on the car it ran on up to four, took over 50 ms
    and tripped the line task's heartbeat (SafetyTask stopped the car,
    once right after reading the A). */
-static bc_result_t finish (bc_capture_t * p_bc, bc_out_t * p_out)
+static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
+                                     line_barcode_out_t *     p_out)
 {
     static uint32_t read_widths[BC_MAX_ELEMENTS + 1u];
     code39_result_t result;
@@ -416,7 +420,8 @@ static bc_result_t finish (bc_capture_t * p_bc, bc_out_t * p_out)
         for (kdx = 0u; kdx < BC_READINGS; kdx++)
         {
             uint16_t       first;
-            uint16_t const n_read = bc_reading(p_bc, kdx, read_widths);
+            uint16_t const n_read =
+                line_barcode_reading(p_bc, kdx, read_widths);
             uint16_t const n_trim = trim_specks(read_widths, n_read, &first);
             uint16_t const diff   = (n_trim > 29u) ? (uint16_t)(n_trim - 29u)
                                                    : (uint16_t)(29u - n_trim);
@@ -431,7 +436,8 @@ static bc_result_t finish (bc_capture_t * p_bc, bc_out_t * p_out)
         if (k_pick < BC_READINGS)
         {
             uint16_t       first;
-            uint16_t const n_read = bc_reading(p_bc, k_pick, read_widths);
+            uint16_t const n_read =
+                line_barcode_reading(p_bc, k_pick, read_widths);
             uint16_t const n_trim = trim_specks(read_widths, n_read, &first);
             char           chr;
             bool           b_rev;
@@ -464,8 +470,8 @@ static bc_result_t finish (bc_capture_t * p_bc, bc_out_t * p_out)
     return BC_REJECT;
 }
 
-uint16_t bc_reading (bc_capture_t const * p_bc, uint8_t reading,
-                     uint32_t * p_widths)
+uint16_t line_barcode_reading (line_barcode_capture_t const * p_bc,
+                               uint8_t reading, uint32_t * p_widths)
 {
     uint16_t kdx;
 
@@ -480,8 +486,9 @@ uint16_t bc_reading (bc_capture_t const * p_bc, uint8_t reading,
     return prof_read(p_bc, reading, p_widths);
 }
 
-bc_result_t bc_sample (bc_capture_t * p_bc, uint16_t norm, uint32_t step_um,
-                       bc_out_t * p_out)
+line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
+                                           uint16_t norm, uint32_t step_um,
+                                           line_barcode_out_t * p_out)
 {
     bool const b_was_black = p_bc->b_black;
 

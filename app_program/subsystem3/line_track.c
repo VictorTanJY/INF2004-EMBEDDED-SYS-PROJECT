@@ -8,7 +8,7 @@
 #include "../app_types.h"
 
 /* ------------------------------------------------------------------ */
-void line_cal_start (line_cal_t * p_cal)
+void line_track_cal_start (line_track_cal_t * p_cal)
 {
     uint8_t chan;
 
@@ -19,7 +19,8 @@ void line_cal_start (line_cal_t * p_cal)
     }
 }
 
-void line_cal_sample (line_cal_t * p_cal, uint16_t const raw[LINE_CH_COUNT])
+void line_track_cal_sample (line_track_cal_t * p_cal,
+                            uint16_t const     raw[LINE_CH_COUNT])
 {
     uint8_t chan;
 
@@ -36,7 +37,7 @@ void line_cal_sample (line_cal_t * p_cal, uint16_t const raw[LINE_CH_COUNT])
     }
 }
 
-bool line_cal_finish (line_cal_t * p_cal)
+bool line_track_cal_finish (line_track_cal_t * p_cal)
 {
     uint16_t white[LINE_CH_COUNT];
     uint16_t black[LINE_CH_COUNT];
@@ -99,7 +100,8 @@ bool line_cal_finish (line_cal_t * p_cal)
     return b_ok;
 }
 
-uint16_t line_cal_norm (line_cal_t const * p_cal, uint8_t chan, uint16_t raw)
+uint16_t line_track_cal_norm (line_track_cal_t const * p_cal, uint8_t chan,
+                              uint16_t raw)
 {
     int32_t const white = (int32_t)p_cal->white[chan];
     int32_t const black = (int32_t)p_cal->black[chan];
@@ -110,7 +112,7 @@ uint16_t line_cal_norm (line_cal_t const * p_cal, uint8_t chan, uint16_t raw)
         return 0u;
     }
     norm = (((int32_t)raw - white) * 1000) / (black - white);
-    return (uint16_t)app_clamp_i32(norm, 0, 1000);
+    return (uint16_t)app_types_clamp_i32(norm, 0, 1000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -141,7 +143,8 @@ void line_track_init (line_track_t * p_t)
    (10 ms), so a flip of the line error does not jump the wheel speeds. */
 static int32_t steer_toward (int32_t now, int32_t target)
 {
-    return app_clamp_i32(target, now - LINE_OMEGA_STEP, now + LINE_OMEGA_STEP);
+    return app_types_clamp_i32(target, now - LINE_OMEGA_STEP,
+                               now + LINE_OMEGA_STEP);
 }
 
 static bool is_black (bool b_black, uint16_t norm)
@@ -154,7 +157,7 @@ static bool is_white (bool b_white, uint16_t norm)
     return b_white ? (norm <= LINE_WHITE_OFF) : (norm < LINE_WHITE_ON);
 }
 
-uint8_t line_track_step (line_track_t * p_t, line_trk_cfg_t const * p_cfg,
+uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
                          uint16_t norm_l, uint16_t norm_r, uint32_t step_um)
 {
     uint8_t events = (uint8_t)LINE_TRK_EV_NONE;
@@ -220,7 +223,7 @@ uint8_t line_track_step (line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     {
         p_t->line_err = p_t->err;
         p_t->peak_um += step_um;
-        if ((app_abs_i32(p_t->err) >= app_abs_i32(p_t->peak_err))
+        if ((app_types_abs_i32(p_t->err) >= app_types_abs_i32(p_t->peak_err))
             || (p_t->peak_um > LINE_EXIT_PEAK_UM))
         {
             p_t->peak_err = p_t->err;
@@ -242,7 +245,7 @@ uint8_t line_track_step (line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         p_t->omega  = 0;
     }
     else if ((p_t->both_white_um > 0u)
-             && (app_abs_i32(p_t->exit_err) > LINE_EXIT_ERR))
+             && (app_types_abs_i32(p_t->exit_err) > LINE_EXIT_ERR))
     {
         /* drifted off one side: turn back toward it, slowly */
         p_t->v_mm_s = (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100;
@@ -263,16 +266,18 @@ uint8_t line_track_step (line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         int32_t const omega =
             LINE_STEER_SIGN
             * (((LINE_KP * p_t->err) / 1000) + (LINE_KD * derr));
-        int32_t const slow  = (LINE_SLOW_K * app_abs_i32(p_t->err)) / 1000;
+        int32_t const slow = (LINE_SLOW_K * app_types_abs_i32(p_t->err)) / 1000;
         int32_t       speed = (p_cfg->cruise_mm_s * (1000 - slow)) / 1000;
 
-        speed = app_max_i32(speed, (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
-        p_t->omega = steer_toward(
-            p_t->omega, app_clamp_i32(omega, -LINE_OMEGA_MAX, LINE_OMEGA_MAX));
+        speed = app_types_max_i32(speed,
+                                  (p_cfg->cruise_mm_s * LINE_V_MIN_PCT) / 100);
+        p_t->omega =
+            steer_toward(p_t->omega, app_types_clamp_i32(omega, -LINE_OMEGA_MAX,
+                                                         LINE_OMEGA_MAX));
         p_t->v_mm_s = speed;
     }
 
-    if (app_abs_i32(p_t->omega) >= LINE_STRAIGHT_OMEGA)
+    if (app_types_abs_i32(p_t->omega) >= LINE_STRAIGHT_OMEGA)
     {
         p_t->straight_um = 0u;
     }
@@ -288,15 +293,15 @@ uint8_t line_track_step (line_track_t * p_t, line_trk_cfg_t const * p_cfg,
 }
 
 /* ---- Turn slip (3 Nov) ---------------------------------------------- */
-void line_slip_start (line_slip_t * p_s, int32_t heading_cdeg)
+void line_track_slip_start (line_track_slip_t * p_s, int32_t heading_cdeg)
 {
     p_s->n_samples = 0u;
     p_s->prev_cdeg = heading_cdeg;
     p_s->acc_cdeg  = 0;
 }
 
-void line_slip_sample (line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l,
-                       uint16_t raw_r)
+void line_track_slip_sample (line_track_slip_t * p_s, int32_t heading_cdeg,
+                             uint16_t raw_l, uint16_t raw_r)
 {
     int32_t delta = heading_cdeg - p_s->prev_cdeg;
 
@@ -312,8 +317,8 @@ void line_slip_sample (line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l,
     p_s->acc_cdeg += delta;
     if (p_s->n_samples < LINE_SLIP_MAX_BLOCKS)
     {
-        p_s->h_ddeg[p_s->n_samples] =
-            (int16_t)app_clamp_i32(app_abs_i32(p_s->acc_cdeg) / 10, 0, 32767);
+        p_s->h_ddeg[p_s->n_samples] = (int16_t)app_types_clamp_i32(
+            app_types_abs_i32(p_s->acc_cdeg) / 10, 0, 32767);
         p_s->raw_l[p_s->n_samples] = raw_l;
         p_s->raw_r[p_s->n_samples] = raw_r;
         p_s->n_samples++;
@@ -323,8 +328,9 @@ void line_slip_sample (line_slip_t * p_s, int32_t heading_cdeg, uint16_t raw_l,
 /* One sensor: the norm-weighted centre (0.1 deg) of its first dark run
    after LINE_SLIP_SKIP_DDEG that lasts LINE_SLIP_MIN_BLOCKS; -1 if none.
    *p_runs counts the dark runs seen. */
-static int32_t slip_centre (line_slip_t const * p_s, line_cal_t const * p_cal,
-                            uint8_t chan, uint8_t * p_runs)
+static int32_t slip_centre (line_track_slip_t const * p_s,
+                            line_track_cal_t const * p_cal, uint8_t chan,
+                            uint8_t * p_runs)
 {
     int64_t  sum_weight = 0;
     int64_t  swh        = 0;
@@ -340,7 +346,7 @@ static int32_t slip_centre (line_slip_t const * p_s, line_cal_t const * p_cal,
                 ? ((LINE_CH_L == chan) ? p_s->raw_l[idx] : p_s->raw_r[idx])
                 : 0u;
         uint16_t const norm =
-            (idx < p_s->n_samples) ? line_cal_norm(p_cal, chan, raw) : 0u;
+            (idx < p_s->n_samples) ? line_track_cal_norm(p_cal, chan, raw) : 0u;
         bool const b_dark = (idx < p_s->n_samples)
                             && (p_s->h_ddeg[idx] >= LINE_SLIP_SKIP_DDEG)
                             && (norm >= LINE_SLIP_DARK);
@@ -377,8 +383,9 @@ static int32_t slip_centre (line_slip_t const * p_s, line_cal_t const * p_cal,
    their next crossings is where the centreline is on the line again: 180
    real deg from the start (the car starts centred on it).  The sensors
    need not see the line at the same time. */
-uint16_t line_slip_gain (line_slip_t const * p_s, line_cal_t const * p_cal,
-                         uint32_t * p_diag)
+uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
+                               line_track_cal_t const *  p_cal,
+                               uint32_t *                p_diag)
 {
     uint8_t       runs_l;
     uint8_t       runs_r;
@@ -397,7 +404,7 @@ uint16_t line_slip_gain (line_slip_t const * p_s, line_cal_t const * p_cal,
     }
     /* diagnosis: dark runs L << 24 | R << 16 | encoder deg spun */
     *p_diag = ((uint32_t)runs_l << 24) | ((uint32_t)runs_r << 16)
-              | (uint32_t)app_clamp_i32(tot / 10, 0, 0xFFFF);
+              | (uint32_t)app_types_clamp_i32(tot / 10, 0, 0xFFFF);
     if ((c_l < 0) || (c_r < 0))
     {
         return 0u;
@@ -411,45 +418,49 @@ uint16_t line_slip_gain (line_slip_t const * p_s, line_cal_t const * p_cal,
 /* ---------------------------------------------------------------------
  *  Change Requirement 1: data representation of IF-04 (line snapshot).
  * --------------------------------------------------------------------- */
-static pk_field_t const g_line_layout[] = {
-    PK_FIELD(line_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(line_snap_t, blocks, 32u, PK_W), /* counter since boot */
-    PK_FIELD(line_snap_t, missed_blocks, 16u,
+static app_pack_field_t const g_line_layout[] = {
+    PK_FIELD(line_types_snap_t, t_ms, 32u, PK_W),
+    PK_FIELD(line_types_snap_t, blocks, 32u, PK_W), /* counter since boot */
+    PK_FIELD(line_types_snap_t, missed_blocks, 16u,
              PK_W), /* counter, readers take differences */
-    PK_FIELD(line_snap_t, err, 11u, PK_S), /* -1000..1000                     */
-    PK_FIELD(line_snap_t, omega_mrad_s, 12u,
+    PK_FIELD(line_types_snap_t, err, 11u, PK_S), /* -1000..1000 */
+    PK_FIELD(line_types_snap_t, omega_mrad_s, 12u,
              PK_S), /* +-2047 (LINE_OMEGA_MAX 2000)    */
-    PK_FIELD(line_snap_t, raw_l, 10u, PK_U), /* 0..1000 */
-    PK_FIELD(line_snap_t, raw_r, 10u, PK_U),
-    PK_FIELD(line_snap_t, raw_bc, 10u, PK_U),
-    PK_FIELD(line_snap_t, barcode_ok, 16u, PK_W), /* counters */
-    PK_FIELD(line_snap_t, barcode_err, 16u, PK_W),
-    PK_FIELD(line_snap_t, contrast_x10, 10u, PK_U), /* saturates at 102.3 : 1 */
-    PK_FIELD(line_snap_t, flags, 7u, PK_U),         /* LINE_FLAG_* (7 bits) */
-    PK_FIELD(line_snap_t, bc_state, 2u, PK_U),      /* 4 states */
-    PK_FIELD(line_snap_t, last_barcode, 6u,
+    PK_FIELD(line_types_snap_t, raw_l, 10u, PK_U), /* 0..1000 */
+    PK_FIELD(line_types_snap_t, raw_r, 10u, PK_U),
+    PK_FIELD(line_types_snap_t, raw_bc, 10u, PK_U),
+    PK_FIELD(line_types_snap_t, barcode_ok, 16u, PK_W), /* counters */
+    PK_FIELD(line_types_snap_t, barcode_err, 16u, PK_W),
+    PK_FIELD(line_types_snap_t, contrast_x10, 10u,
+             PK_U),                               /* saturates at 102.3 : 1 */
+    PK_FIELD(line_types_snap_t, flags, 7u, PK_U), /* LINE_FLAG_* (7 bits) */
+    PK_FIELD(line_types_snap_t, bc_state, 2u, PK_U), /* 4 states */
+    PK_FIELD(line_types_snap_t, last_barcode, 6u,
              PK_SYM), /* Code 39 symbol or none          */
-    PK_FIELD(line_snap_t, last_reject, 4u, PK_U),   /* code39_result_t 0..8 */
-    PK_FIELD(line_snap_t, turn_gain_pm, 11u, PK_U), /* 0..2047 permille */
-    PK_FIELD(line_snap_t, sens, 3u, PK_U) /* LINE_SENS_* (3 bits)            */
+    PK_FIELD(line_types_snap_t, last_reject, 4u,
+             PK_U), /* code39_result_t 0..8 */
+    PK_FIELD(line_types_snap_t, turn_gain_pm, 11u, PK_U), /* 0..2047 permille */
+    PK_FIELD(line_types_snap_t, sens, 3u, PK_U) /* LINE_SENS_* (3 bits) */
 };
 
 #define LINE_FIELDS \
     ((uint16_t)(sizeof(g_line_layout) / sizeof(g_line_layout[0])))
 
-void line_snap_pack (line_snap_t const * p_snap, uint32_t * p_words)
+void line_track_snap_pack (line_types_snap_t const * p_snap, uint32_t * p_words)
 {
-    pk_pack_rec(g_line_layout, LINE_FIELDS, p_snap, p_words, LINE_SNAP_WORDS);
+    app_pack_pack_rec(g_line_layout, LINE_FIELDS, p_snap, p_words,
+                      LINE_SNAP_WORDS);
 }
 
-void line_snap_unpack (uint32_t const * p_words, line_snap_t * p_snap)
+void line_track_snap_unpack (uint32_t const *    p_words,
+                             line_types_snap_t * p_snap)
 {
-    pk_unpack_rec(g_line_layout, LINE_FIELDS, p_words, p_snap);
+    app_pack_unpack_rec(g_line_layout, LINE_FIELDS, p_words, p_snap);
 }
 
-uint32_t line_snap_layout_bits (void)
+uint32_t line_track_snap_layout_bits (void)
 {
-    return pk_layout_bits(g_line_layout, LINE_FIELDS);
+    return app_pack_layout_bits(g_line_layout, LINE_FIELDS);
 }
 
 /*** end of file ***/

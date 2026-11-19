@@ -1,5 +1,5 @@
 /*
- * imu_task.c
+ * imu_task_thread.c
  * Subsystem 4 -- ImuTask (priority 10, core 0).
  * Woken by imu_cyc every 10 ms. Owner: Buddy 4.
  *
@@ -74,37 +74,37 @@ static bool imu_hw_init (void)
         last_id     = chip_id;
         last_diag   = diagnostic;
 
-        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 90u,
-                               (int32_t)bus_er);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 90u,
+                                    (int32_t)bus_er);
 
-        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 91u,
-                               (int32_t)read_er);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 91u,
+                                    (int32_t)read_er);
 
-        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 92u,
-                               (int32_t)chip_id);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 92u,
+                                    (int32_t)chip_id);
 
-        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u,
-                               (int32_t)sensor_er);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u,
+                                    (int32_t)sensor_er);
 
-        (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, IMU_LOG_INIT,
-                               (int32_t)diagnostic);
+        (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                    IMU_LOG_INIT, (int32_t)diagnostic);
     }
 
     return (E_OK == bus_er) && (E_OK == sensor_er);
 }
 
-EXPORT void imu_task (INT stacd, void * p_exinf)
+EXPORT void imu_task_thread (INT stacd, void * p_exinf)
 {
-    imu_snap_t     snap = {0};
-    motion_odom_t  odom;
-    mission_snap_t mission;
-    int32_t        prev_dist_um = 0;
-    bool           b_have_dist  = false;
-    bool           b_hw_ok;
-    bool           b_fault    = false;
-    uint8_t        errors     = 0u;
-    uint8_t        good       = 0u;
-    uint8_t        prev_phase = (uint8_t)MISSION_CAL_PH_NONE;
+    imu_types_snap_t     snap = {0};
+    motion_types_odom_t  odom;
+    mission_types_snap_t mission;
+    int32_t              prev_dist_um = 0;
+    bool                 b_have_dist  = false;
+    bool                 b_hw_ok;
+    bool                 b_fault    = false;
+    uint8_t              errors     = 0u;
+    uint8_t              good       = 0u;
+    uint8_t              prev_phase = (uint8_t)MISSION_CAL_PH_NONE;
     bool b_tilt_sent   = false; /* SAFETY_FLT_TILT set for this tilt (14 Nov) */
     bool b_was_black   = false; /* line snapshot: all IR black last cycle     */
     bool b_was_air     = false; /* line snapshot: no floor last cycle         */
@@ -134,7 +134,7 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
         ER       err;
 
         (void)tk_slp_tsk(IMU_WAKE_TIMEOUT_MS);
-        safety_heartbeat(SAFETY_HB_IMU);
+        subsystem4_heartbeat(SAFETY_HB_IMU);
         cycle++;
 
         if (!b_hw_ok)
@@ -168,10 +168,10 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
                 b_fault = true;
 
                 /* One report per fault episode. */
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 110u,
-                                       (int32_t)err);
+                (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                            110u, (int32_t)err);
 
-                (void)comms_telem_post(
+                (void)subsystem1_telem_post(
                     COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 111u,
                     (int32_t)(((in_w(GPIO_IN) >> S4_PIN_IMU_SDA) & 1u)
                               | (((in_w(GPIO_IN) >> S4_PIN_IMU_SCL) & 1u)
@@ -179,9 +179,9 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
 
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_IMU_FAULT);
 
-                (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT,
-                                       (uint8_t)APP_SRC_SAFETY_IMU, 0u,
-                                       (int32_t)SAFETY_FLT_IMU_FAULT);
+                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_FAULT,
+                                            (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                            (int32_t)SAFETY_FLT_IMU_FAULT);
             }
 
             if (b_fault && b_hw_ok && (0u == (cycle % IMU_RETRY_CYCLES)))
@@ -192,7 +192,7 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
             snap.b_ok        = 0u;
             snap.pitch_valid = 0u;
             snap.t_ms        = (uint32_t)app_time_ms();
-            imu_put_snap(&snap);
+            subsystem4_put_imu_snap(&snap);
         }
         else
         {
@@ -207,15 +207,15 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
             {
                 b_fault = false;
 
-                (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 112u,
-                                       1);
+                (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
+                                            112u, 1);
 
                 (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_IMU_FAULT);
             }
 
             /* ---- Odometry ---- */
-            motion_get_odom(&odom);
-            mission_get_snap(&mission);
+            subsystem2_get_odom(&odom);
+            subsystem5_get_mission_snap(&mission);
 
             dist_um = odom.dist_mm * 1000;
             ds_um = b_have_dist
@@ -237,13 +237,13 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
             {
                 if ((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
                 {
-                    imu_cal_level_start(&g_ic);
+                    imu_core_cal_level_start(&g_ic);
                     still_ms = now_ms;
                 }
                 else if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
                 {
-                    (void)imu_cal_level_finish(&g_ic);
-                    imu_cal_mag_start(&g_ic);
+                    (void)imu_core_cal_level_finish(&g_ic);
+                    imu_core_cal_mag_start(&g_ic);
                 }
                 else if ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase)
                 {
@@ -251,29 +251,29 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
 
                     if ((uint8_t)MISSION_CAL_PH_STILL == prev_phase)
                     {
-                        (void)imu_cal_level_finish(&g_ic);
+                        (void)imu_core_cal_level_finish(&g_ic);
                     }
                     else
                     {
-                        (void)imu_cal_mag_finish(&g_ic);
+                        (void)imu_core_cal_mag_finish(&g_ic);
                     }
 
                     b_level = ((g_ic.cal & IMU_CAL_LEVEL) != 0u);
 
-                    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                           (uint8_t)APP_SRC_SAFETY_IMU,
-                                           IMU_LOG_LVL_N, (int32_t)g_ic.lvl_n);
-                    (void)comms_telem_post(
+                    (void)subsystem1_telem_post(
+                        (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                        IMU_LOG_LVL_N, (int32_t)g_ic.lvl_n);
+                    (void)subsystem1_telem_post(
                         (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
                         IMU_LOG_LVL_SPREAD, g_ic.lvl_spread_mg);
-                    (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                           (uint8_t)APP_SRC_SAFETY_IMU,
-                                           IMU_LOG_LVL_UP, g_ic.lvl_up_mg);
+                    (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                                (uint8_t)APP_SRC_SAFETY_IMU,
+                                                IMU_LOG_LVL_UP, g_ic.lvl_up_mg);
 
-                    (void)mission_post((uint8_t)MISSION_EV_CAL_DONE,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       (uint16_t)APP_SRC_SAFETY_IMU,
-                                       b_level ? 1 : 0);
+                    (void)subsystem5_mission_post((uint8_t)MISSION_EV_CAL_DONE,
+                                                  (uint8_t)APP_SRC_SAFETY_IMU,
+                                                  (uint16_t)APP_SRC_SAFETY_IMU,
+                                                  b_level ? 1 : 0);
                 }
                 else
                 {
@@ -284,7 +284,8 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
             }
 
             if (((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
-                && (app_elapsed_ms(now_ms, still_ms) >= IMU_LEVEL_SETTLE_MS))
+                && (app_types_elapsed_ms(now_ms, still_ms)
+                    >= IMU_LEVEL_SETTLE_MS))
             {
                 /* low-pass filtered (IMU_ACC_LPF_SHIFT), not single samples */
                 int32_t filt[3];
@@ -295,12 +296,12 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
                     filt[kdx] =
                         g_ic.b_have_acc ? (g_ic.acc_f[kdx] / 16) : acc[kdx];
                 }
-                imu_cal_level_sample(&g_ic, filt);
+                imu_core_cal_level_sample(&g_ic, filt);
             }
             else if (((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
                      && b_mag)
             {
-                imu_cal_mag_sample(&g_ic, mag);
+                imu_core_cal_mag_sample(&g_ic, mag);
             }
             else
             {
@@ -315,11 +316,11 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
                as they are; if it turns out lifted, undo every hump since and
                stop measuring humps until it is back on the floor. */
             {
-                line_snap_t line;
-                bool        b_black;
-                bool        b_air;
+                line_types_snap_t line;
+                bool              b_black;
+                bool              b_air;
 
-                line_get_snap(&line);
+                subsystem3_get_snap(&line);
                 b_black = (line.sens & LINE_SENS_ALL_BLACK) != 0u;
                 b_air   = (line.sens & LINE_SENS_NO_FLOOR) != 0u;
                 if (b_black && !b_was_black)
@@ -352,15 +353,16 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
 
             if ((events & IMU_EV_HUMP_START) != 0u)
             {
-                (void)mission_post((uint8_t)MISSION_EV_HUMP_START,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
+                (void)subsystem5_mission_post((uint8_t)MISSION_EV_HUMP_START,
+                                              (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                              0);
             }
 
             if ((events & IMU_EV_HUMP_END) != 0u)
             {
-                (void)mission_post((uint8_t)MISSION_EV_HUMP_END,
-                                   (uint8_t)APP_SRC_SAFETY_IMU, 0u,
-                                   (int32_t)g_ic.last_hump_mm);
+                (void)subsystem5_mission_post((uint8_t)MISSION_EV_HUMP_END,
+                                              (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+                                              (int32_t)g_ic.last_hump_mm);
             }
 
             /* 14 Nov: tilt (overturned) and lift brake the motors while a run
@@ -386,45 +388,45 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
             }
             if ((events & IMU_EV_LIFT) != 0u)
             {
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_LIFT, g_ic.lift_rise_mg);
+                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                            (uint8_t)APP_SRC_SAFETY_IMU,
+                                            IMU_LOG_LIFT, g_ic.lift_rise_mg);
             }
             if ((events & IMU_EV_RISE_MAX) != 0u)
             {
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_RISE_MAX, g_ic.rise_max_mg);
+                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                            (uint8_t)APP_SRC_SAFETY_IMU,
+                                            IMU_LOG_RISE_MAX, g_ic.rise_max_mg);
             }
 
             if ((events & IMU_EV_TILT_ON) != 0u)
             {
-                (void)comms_telem_post(
+                (void)subsystem1_telem_post(
                     (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
                     IMU_LOG_TILT_ON,
-                    app_max_i32(app_abs_i32(g_ic.pitch_cdeg),
-                                app_abs_i32(g_ic.roll_cdeg)));
+                    app_types_max_i32(app_types_abs_i32(g_ic.pitch_cdeg),
+                                      app_types_abs_i32(g_ic.roll_cdeg)));
             }
 
             if ((events & IMU_EV_TILT_OFF) != 0u)
             {
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_TILT_OFF, 0);
+                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                            (uint8_t)APP_SRC_SAFETY_IMU,
+                                            IMU_LOG_TILT_OFF, 0);
             }
 
             if ((events & IMU_EV_MOTION) != 0u)
             {
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_MOTION, (int32_t)g_ic.motion);
+                (void)subsystem1_telem_post(
+                    (uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                    IMU_LOG_MOTION, (int32_t)g_ic.motion);
             }
 
             if ((events & IMU_EV_RAMP) != 0u)
             {
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
-                                       (uint8_t)APP_SRC_SAFETY_IMU,
-                                       IMU_LOG_RAMP, 0);
+                (void)subsystem1_telem_post((uint8_t)COMMS_KIND_LOG,
+                                            (uint8_t)APP_SRC_SAFETY_IMU,
+                                            IMU_LOG_RAMP, 0);
             }
 
             /* ---- Snapshot ---- */
@@ -457,25 +459,27 @@ EXPORT void imu_task (INT stacd, void * p_exinf)
                 {
                     b_first_sample = false;
 
-                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
-                                           100u, acc[0]);
+                    (void)subsystem1_telem_post(
+                        COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 100u, acc[0]);
 
-                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
-                                           101u, acc[1]);
+                    (void)subsystem1_telem_post(
+                        COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 101u, acc[1]);
 
-                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
-                                           102u, acc[2]);
+                    (void)subsystem1_telem_post(
+                        COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 102u, acc[2]);
 
-                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
-                                           103u, (int32_t)snap.pitch_cdeg);
+                    (void)subsystem1_telem_post(COMMS_KIND_LOG,
+                                                APP_SRC_SAFETY_IMU, 103u,
+                                                (int32_t)snap.pitch_cdeg);
 
-                    (void)comms_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
-                                           104u, (int32_t)snap.roll_cdeg);
+                    (void)subsystem1_telem_post(COMMS_KIND_LOG,
+                                                APP_SRC_SAFETY_IMU, 104u,
+                                                (int32_t)snap.roll_cdeg);
                 }
             }
 #endif
 
-            imu_put_snap(&snap);
+            subsystem4_put_imu_snap(&snap);
             if (safety_bits != 0u)
             {
                 (void)tk_set_flg(g_flg_safety, safety_bits);

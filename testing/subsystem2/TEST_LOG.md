@@ -11,22 +11,22 @@ Define a test here before running it. Test IDs never change (retired IDs stay li
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
-| S2-U01 | mbf_motion exists | IF-01 | auto | `subsystem2_test.c` | PASS |
+| S2-U01 | mbf_motion exists | IF-01 | auto | `subsystem2_test_run.c` | PASS |
 | S2-U02 | *retired 25 Oct:* odometry snapshot round trip (MotionTask now writes the snapshot continuously, so a round trip would race it) | IF-02 | – | – | – |
-| S2-U03 | MotionTask publishes the odometry snapshot every cycle | IF-02, NFR1 | auto | `subsystem2_test.c` | PASS |
-| S2-U04 | PWM slices 4/5 at TOP 6249 (20 kHz), PIO0 SM0/SM1 enabled, `hw_ok` | NFR1, A3 | auto | `subsystem2_test.c` | PASS |
-| S2-U05 | boots braked (IDLE_BRAKED, duty 0/0) | FR15, Section 5 BOOT | auto | `subsystem2_test.c` | PASS |
-| S2-U06 | DRIVE from a source without authority is rejected and counted | IF-01, Section 6.1 | auto | `subsystem2_test.c` | PASS |
-| S2-U07 | MotionTask period and run time over 1 s (test-only timing in `motion_task.c`) | NFR1 | auto | `subsystem2_test.c`; prints `[INFO] S2-U07 period min / max, run time max` | ≥ 90 cycles; period 9–11 ms; run time ≤ 5 ms (half the period) |
+| S2-U03 | MotionTask publishes the odometry snapshot every cycle | IF-02, NFR1 | auto | `subsystem2_test_run.c` | PASS |
+| S2-U04 | PWM slices 4/5 at TOP 6249 (20 kHz), PIO0 SM0/SM1 enabled, `hw_ok` | NFR1, A3 | auto | `subsystem2_test_run.c` | PASS |
+| S2-U05 | boots braked (IDLE_BRAKED, duty 0/0) | FR15, Section 5 BOOT | auto | `subsystem2_test_run.c` | PASS |
+| S2-U06 | DRIVE from a source without authority is rejected and counted | IF-01, Section 6.1 | auto | `subsystem2_test_run.c` | PASS |
+| S2-U07 | MotionTask period and run time over 1 s (test-only timing in `motion_task_thread.c`) | NFR1 | auto | `subsystem2_test_run.c`; prints `[INFO] S2-U07 period min / max, run time max` | ≥ 90 cycles; period 9–11 ms; run time ≤ 5 ms (half the period) |
 | S2-U08 | speed step 0 → 200 mm/s and MOVE 300 mm end point | NFR5, NFR4 | auto | Robot on a stand, wheels off the floor, motor battery on, MissionTask IDLE. MOVE 300 mm at 200 mm/s; odometry sampled every ~10 ms. Prints settle time, peak, overshoot, distance, encoder counts | settles within ±10 % of 200 mm/s in ≤ 500 ms (includes the 800 mm/s² set-point ramp, ~250 ms); distance 300 ± 9 mm; both encoders count up. SKIP if MissionTask is not IDLE or no encoder counts in 400 ms |
 | S2-U09 | left and right wheels match at 200 mm/s | FR5, NFR4 | auto | as S2-U08, 400–1000 ms after the step (cruise). Prints mean \|vL − vR\| and encoder counts/s | mean \|vL − vR\| ≤ 20 mm/s (10 %) |
 | S2-U10 | MOVE backward 300 mm at 300 mm/s | FR5, NFR4 | auto | as S2-U08 | both encoders count down; distance −300 ± 9 mm |
 | S2-U11 | TURN left 90° at 90 °/s | FR5 | auto | as S2-U08 | left encoder counts down, right counts up; the turn completes in 6 s |
 | S2-H01–H13 | controller on a motor model: authority rules; MOVE 1 m within 2 % and straight; TURN +90 / -180 within 1 deg; DRIVE watchdog 100 ms; STOP ramp ~1 m/s^2; speed tracking within 10 %; stall after 300 ms; E-stop latch and CLEAR_ESTOP; timeout -> FAILED; pose after MOVE-TURN-MOVE; encoder counter wrap; glitch ENC_FAULT/OK; pre-empted MOVE reported FAILED | FR5, NFR4, NFR5, FR15 | host | `make -C testing/subsystem2/host` | `host tests: N passed, 0 failed` |
-| S2-H14 | named motion API (FR5): `motion_move_forward` / `_backward`, `motion_turn_left` / `_right`, `motion_stop`, `motion_drive` post the right command and sign; out-of-range arguments refused with nothing posted; a `motion_turn_left` 90 deg runs to MOTION_DONE in the controller | FR5 | host | `make -C testing/subsystem2/host` | `host tests: N passed, 0 failed` |
+| S2-H14 | named motion API (FR5): `motion_api_move_forward` / `_backward`, `motion_api_turn_left` / `_right`, `motion_api_stop`, `motion_api_drive` post the right command and sign; out-of-range arguments refused with nothing posted; a `motion_api_turn_left` 90 deg runs to MOTION_DONE in the controller | FR5 | host | `make -C testing/subsystem2/host` | `host tests: N passed, 0 failed` |
 | S2-H15 | *retired 17 Nov:* speed-step recorder (the recorder was removed from the firmware) | NFR5 | – | – | – |
 | S2-H16 | CR1: the packed `mbf_motion` word (every command round-trips; DRIVE / MOVE / TURN / SET_AUTH payloads; saturation; 5-bit seq); the API refuses what the word cannot carry; the odometry layout (329 bits, 11 words) round-trips exactly and saturates out of range | CR1, IF-01, IF-02 | auto (host) | `make -C testing/subsystem2/host` | `host tests: N passed`; S2-H16 no FAIL line |
-| S2-M01 | GP8–GP11 LOW at boot and after a safety stop (`motor_estop()`); 20 kHz, one input of each pair always 0 (**retired 20 Nov 2026: removed by the team**) | A3, NFR1, Section 2.2 | manual | scope or logic analyser on GP8–GP11 | LOW/LOW at boot; 20 kHz PWM on one pin per motor when driving |
+| S2-M01 | GP8–GP11 LOW at boot and after a safety stop (`subsystem2_motor_estop()`); 20 kHz, one input of each pair always 0 (**retired 20 Nov 2026: removed by the team**) | A3, NFR1, Section 2.2 | manual | scope or logic analyser on GP8–GP11 | LOW/LOW at boot; 20 kHz PWM on one pin per motor when driving |
 | S2-M02 | encoder counts per wheel revolution and direction sign | A4 | manual | hand-turn each wheel 10 revolutions, read `enc` in telemetry | set `MOTION_COUNTS_PER_REV`, `MOTION_ENC_SIGN_*` |
 | S2-M03 | wheel circumference: 1 m straight move, 5 forward + 5 back | NFR4 | manual | MOVE 1000 / -1000 (MQTT-free: bench test build, see guide) vs tape measure | within +-3 % after correcting `MOTION_WHEEL_CIRC_UM`; drift <= 50 mm (NFR4) |
 | S2-M04 | track width: 90 deg left, 90 deg right and 180 deg turns, 5 each | NFR4, A5 | manual | protractor / overhead video | +-8 deg / +-10 deg after correcting `MOTION_TRACK_MM` |

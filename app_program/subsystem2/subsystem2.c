@@ -3,7 +3,7 @@
  *  Subsystem 2 -- Motion control: kernel objects, odometry snapshot and
  *  the E-stop latch.  Owner: Buddy 2 (Jedrek).
  *
- *  The task is in motion_task.c, the controller in motion_core.c, the
+ *  The task is in motion_task_thread.c, the controller in motion_core.c, the
  *  drivers in drv_motor.c / drv_encoder.c.
  */
 
@@ -19,8 +19,8 @@ static uint32_t g_odom[MOTION_ODOM_WORDS]; /* packed (CR1), under g_odom_lock */
 static ID       g_tid_motion;
 static ID       g_cyc_motion;
 
-/* Written by motor_estop() (SafetyTask) and cleared by MotionTask, both
-   on core 1.  A byte store/load is indivisible on the Cortex-M0+, and both
+/* Written by subsystem2_motor_estop() (SafetyTask) and cleared by MotionTask,
+   both on core 1.  A byte store/load is indivisible on the Cortex-M0+, and both
    writers run inside DI/EI on the same core, so no update is lost. */
 static uint8_t volatile g_estop_latch;
 
@@ -42,10 +42,10 @@ EXPORT ER subsystem2_init (void)
 
     app_lock_init(&g_odom_lock);
     {
-        motion_odom_t const zero = {0};
+        motion_types_odom_t const zero = {0};
 
-        motion_odom_pack(&zero,
-                         g_odom); /* packed zero (offset-binary fields) */
+        motion_core_odom_pack(&zero,
+                              g_odom); /* packed zero (offset-binary fields) */
     }
 
     cmbf.mbfatr  = TA_TFIFO;
@@ -67,8 +67,8 @@ EXPORT ER subsystem2_init (void)
 
 EXPORT ER subsystem2_start (void)
 {
-    g_tid_motion = app_start_task((FP)motion_task, S2_PRI_MOTION,
-                                  S2_CORE_MOTION, "motion");
+    g_tid_motion = app_main_start_task((FP)motion_task_thread, S2_PRI_MOTION,
+                                       S2_CORE_MOTION, "motion");
     if (g_tid_motion < E_OK)
     {
         return g_tid_motion;
@@ -76,17 +76,17 @@ EXPORT ER subsystem2_start (void)
     return tk_sta_cyc(g_cyc_motion);
 }
 
-EXPORT ER motion_send (motion_cmd_t const * p_cmd)
+EXPORT ER subsystem2_send (motion_types_cmd_t const * p_cmd)
 {
-    uint32_t word = motion_cmd_pack(p_cmd);
+    uint32_t word = motion_core_cmd_pack(p_cmd);
 
     return tk_snd_mbf(g_mbf_motion, &word, sizeof(word), TMO_POL);
 }
 
-EXPORT ER motion_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
-                       int16_t arg1)
+EXPORT ER subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
+                           int16_t arg1)
 {
-    motion_cmd_t msg;
+    motion_types_cmd_t msg;
 
     msg.src      = src;
     msg.seq      = seq;
@@ -94,13 +94,13 @@ EXPORT ER motion_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
     msg.reserved = 0u;
     msg.arg0     = arg0;
     msg.arg1     = arg1;
-    return motion_send(&msg);
+    return subsystem2_send(&msg);
 }
 
 /* The snapshot is stored packed (MOTION_ODOM_WORDS words).  Writer and
    readers pack / unpack in their own task and copy the whole record under
    the lock, so no task ever does a read-modify-write on the shared words. */
-EXPORT void motion_get_odom (motion_odom_t * p_out)
+EXPORT void subsystem2_get_odom (motion_types_odom_t * p_out)
 {
     uint32_t words[MOTION_ODOM_WORDS];
     UINT     sts = app_lock(&g_odom_lock);
@@ -111,16 +111,16 @@ EXPORT void motion_get_odom (motion_odom_t * p_out)
         words[idx] = g_odom[idx];
     }
     app_unlock(&g_odom_lock, sts);
-    motion_odom_unpack(words, p_out);
+    motion_core_odom_unpack(words, p_out);
 }
 
-EXPORT void motion_put_odom (motion_odom_t const * p_in)
+EXPORT void subsystem2_put_odom (motion_types_odom_t const * p_in)
 {
     uint32_t words[MOTION_ODOM_WORDS];
     UINT     sts;
     uint32_t idx;
 
-    motion_odom_pack(p_in, words);
+    motion_core_odom_pack(p_in, words);
     sts = app_lock(&g_odom_lock);
     for (idx = 0u; idx < MOTION_ODOM_WORDS; idx++)
     {
@@ -129,7 +129,7 @@ EXPORT void motion_put_odom (motion_odom_t const * p_in)
     app_unlock(&g_odom_lock, sts);
 }
 
-EXPORT void motor_estop (void)
+EXPORT void subsystem2_motor_estop (void)
 {
     UW const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
                     | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
@@ -149,7 +149,7 @@ EXPORT void motor_estop (void)
     EI(intsts);
 }
 
-EXPORT bool motion_estop_latched (void)
+EXPORT bool subsystem2_estop_latched (void)
 {
     return (g_estop_latch != 0u);
 }
@@ -160,13 +160,13 @@ EXPORT bool motion_estop_latched (void)
  * SafetyTask's latched-fault word is zero, so a fault raised meanwhile
  * cannot be undone by a reconnect already in progress.
  */
-EXPORT bool motion_estop_clear_reconnect (void)
+EXPORT bool subsystem2_estop_reconnect (void)
 {
     bool b_ok = false;
     UINT intsts;
 
     DI(intsts);
-    if ((g_estop_latch != 0u) && (0u == safety_get_latched()))
+    if ((g_estop_latch != 0u) && (0u == subsystem4_get_latched()))
     {
         drv_motor_write(0, 0);
         drv_motor_connect();

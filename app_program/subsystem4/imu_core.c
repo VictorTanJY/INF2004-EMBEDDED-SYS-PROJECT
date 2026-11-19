@@ -75,7 +75,7 @@ void imu_core_hump_restore (imu_core_t * p_ic)
 }
 
 /* ---- calibration ------------------------------------------------------ */
-void imu_cal_level_start (imu_core_t * p_ic)
+void imu_core_cal_level_start (imu_core_t * p_ic)
 {
     uint8_t kdx;
 
@@ -88,7 +88,7 @@ void imu_cal_level_start (imu_core_t * p_ic)
     p_ic->lvl_n = 0u;
 }
 
-void imu_cal_level_sample (imu_core_t * p_ic, int32_t const acc_mg[3])
+void imu_core_cal_level_sample (imu_core_t * p_ic, int32_t const acc_mg[3])
 {
     uint8_t kdx;
 
@@ -99,13 +99,13 @@ void imu_cal_level_sample (imu_core_t * p_ic, int32_t const acc_mg[3])
     for (kdx = 0u; kdx < 3u; kdx++)
     {
         p_ic->lvl_sum[kdx] += acc_mg[kdx];
-        p_ic->lvl_min[kdx] = app_min_i32(p_ic->lvl_min[kdx], acc_mg[kdx]);
-        p_ic->lvl_max[kdx] = app_max_i32(p_ic->lvl_max[kdx], acc_mg[kdx]);
+        p_ic->lvl_min[kdx] = app_types_min_i32(p_ic->lvl_min[kdx], acc_mg[kdx]);
+        p_ic->lvl_max[kdx] = app_types_max_i32(p_ic->lvl_max[kdx], acc_mg[kdx]);
     }
     p_ic->lvl_n++;
 }
 
-bool imu_cal_level_finish (imu_core_t * p_ic)
+bool imu_core_cal_level_finish (imu_core_t * p_ic)
 {
     int32_t mean[3];
     int32_t fwd;
@@ -122,7 +122,7 @@ bool imu_cal_level_finish (imu_core_t * p_ic)
     }
     for (kdx = 0u; kdx < 3u; kdx++)
     {
-        p_ic->lvl_spread_mg = app_max_i32(
+        p_ic->lvl_spread_mg = app_types_max_i32(
             p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
         mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / p_ic->lvl_n);
     }
@@ -142,15 +142,15 @@ bool imu_cal_level_finish (imu_core_t * p_ic)
     {
         return false; /* stuck / saturated output (2 Nov) */
     }
-    p_ic->pitch0_cdeg = app_atan2_cdeg(
-        fwd, (int32_t)app_isqrt64(
+    p_ic->pitch0_cdeg = app_math_atan2_cdeg(
+        fwd, (int32_t)app_math_isqrt64(
                  (uint64_t)((int64_t)left * left + (int64_t)up_mg * up_mg)));
-    p_ic->roll0_cdeg = app_atan2_cdeg(left, up_mg);
+    p_ic->roll0_cdeg = app_math_atan2_cdeg(left, up_mg);
     p_ic->cal |= IMU_CAL_LEVEL;
     return true;
 }
 
-void imu_cal_mag_start (imu_core_t * p_ic)
+void imu_core_cal_mag_start (imu_core_t * p_ic)
 {
     uint8_t kdx;
 
@@ -161,7 +161,7 @@ void imu_cal_mag_start (imu_core_t * p_ic)
     }
 }
 
-void imu_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
+void imu_core_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
 {
     uint8_t kdx;
 
@@ -178,7 +178,7 @@ void imu_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
     }
 }
 
-bool imu_cal_mag_finish (imu_core_t * p_ic)
+bool imu_core_cal_mag_finish (imu_core_t * p_ic)
 {
     int32_t const axes[2] = {IMU_AXIS_FWD,
                              IMU_AXIS_LEFT}; /* horizontal plane */
@@ -214,7 +214,7 @@ static void hump_reset (imu_core_t * p_ic)
 
 static void integrate (imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
 {
-    p_ic->h_um += ((int64_t)app_sin_q15(theta) * ds_um) / 32768;
+    p_ic->h_um += ((int64_t)app_math_sin_q15(theta) * ds_um) / 32768;
     if (p_ic->h_um > p_ic->h_peak_um)
     {
         p_ic->h_peak_um = p_ic->h_um;
@@ -234,7 +234,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
     {
         case IMU_HUMP_FLAT:
             if ((theta > IMU_HUMP_ON_CDEG)
-                && (app_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
+                && (app_types_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
             {
                 integrate(p_ic, theta, ds_um);
                 p_ic->dwell_um += ds_um;
@@ -283,7 +283,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
         default: /* IMU_HUMP_DESCENDING */
             integrate(p_ic, theta, ds_um);
             p_ic->hump_um += ds_um;
-            if (app_abs_i32(theta) < IMU_FLAT_CDEG)
+            if (app_types_abs_i32(theta) < IMU_FLAT_CDEG)
             {
                 p_ic->dwell_um += ds_um;
             }
@@ -296,13 +296,14 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             {
                 /* HUMP_DONE: integrated peak, or the wheelbase geometry
                    check for humps shorter than the wheelbase. */
-                int64_t const geo_um = ((int64_t)IMU_WHEELBASE_MM * 1000
-                                        * app_sin_q15(p_ic->theta_max_cdeg))
-                                       / 32768;
+                int64_t const geo_um =
+                    ((int64_t)IMU_WHEELBASE_MM * 1000
+                     * app_math_sin_q15(p_ic->theta_max_cdeg))
+                    / 32768;
                 int64_t const peak =
                     (p_ic->h_peak_um > geo_um) ? p_ic->h_peak_um : geo_um;
 
-                p_ic->last_hump_mm = (uint16_t)app_clamp_i32(
+                p_ic->last_hump_mm = (uint16_t)app_types_clamp_i32(
                     (int32_t)((peak + 500) / 1000), 0, 65535);
                 if (p_ic->last_hump_mm > p_ic->hump_max_mm)
                 {
@@ -340,16 +341,17 @@ static void side_record (imu_core_t * p_ic, uint16_t height_mm)
    progress.  Returns IMU_EV_* bits. */
 static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
 {
-    int32_t const roll_abs = app_abs_i32(p_ic->roll_cdeg);
+    int32_t const roll_abs = app_types_abs_i32(p_ic->roll_cdeg);
     uint8_t       events   = 0u;
 
     if (0u == p_ic->side_state)
     {
         if ((roll_abs > IMU_SIDE_ON_CDEG)
-            && (app_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
+            && (app_types_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
         {
             p_ic->side_um += ds_um;
-            p_ic->side_peak_cdeg = app_max_i32(p_ic->side_peak_cdeg, roll_abs);
+            p_ic->side_peak_cdeg =
+                app_types_max_i32(p_ic->side_peak_cdeg, roll_abs);
             if (p_ic->side_um >= IMU_SIDE_DWELL_UM)
             {
                 p_ic->side_state = 1u;
@@ -364,7 +366,8 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
     else
     {
         p_ic->side_um += ds_um;
-        p_ic->side_peak_cdeg = app_max_i32(p_ic->side_peak_cdeg, roll_abs);
+        p_ic->side_peak_cdeg =
+            app_types_max_i32(p_ic->side_peak_cdeg, roll_abs);
         if (roll_abs < (p_ic->side_peak_cdeg - IMU_SIDE_DESC_CDEG))
         {
             p_ic->side_state = 2u; /* coming down */
@@ -377,10 +380,10 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
         else if (roll_abs < IMU_SIDE_OFF_CDEG)
         {
             int64_t const h_um = ((int64_t)IMU_SIDE_LEVER_MM * 1000
-                                  * app_sin_q15(p_ic->side_peak_cdeg))
+                                  * app_math_sin_q15(p_ic->side_peak_cdeg))
                                  / 32768;
 
-            side_record(p_ic, (uint16_t)app_clamp_i32(
+            side_record(p_ic, (uint16_t)app_types_clamp_i32(
                                   (int32_t)((h_um + 500) / 1000), 0, 65535));
             side_reset(p_ic);
             events |= IMU_EV_HUMP_END;
@@ -417,7 +420,7 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
             p_ic->lift_since_ms = now_ms;
         }
         else if (!p_ic->b_lift
-                 && (app_elapsed_ms(now_ms, p_ic->lift_since_ms)
+                 && (app_types_elapsed_ms(now_ms, p_ic->lift_since_ms)
                      >= IMU_LIFT_HOLD_MS))
         {
             p_ic->b_lift       = true;
@@ -439,9 +442,10 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
     }
 
     /* largest rise while driving on the flat, per excursion (LOG 78) */
-    if (b_flat && !p_ic->b_lift && (app_abs_i32(v_mm_s) > IMU_STATIONARY_MM_S))
+    if (b_flat && !p_ic->b_lift
+        && (app_types_abs_i32(v_mm_s) > IMU_STATIONARY_MM_S))
     {
-        p_ic->rise_peak_mg = app_max_i32(p_ic->rise_peak_mg, rise);
+        p_ic->rise_peak_mg = app_types_max_i32(p_ic->rise_peak_mg, rise);
     }
     if ((rise < IMU_RISE_END_MG) && (p_ic->rise_peak_mg > 0))
     {
@@ -481,12 +485,12 @@ static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
     {
         return (uint8_t)IMU_MOTION_DESCENDING;
     }
-    if ((app_abs_i32(v_mm_s) < IMU_STATIONARY_MM_S)
-        && (app_abs_i32(yaw_cdeg_s) < 500))
+    if ((app_types_abs_i32(v_mm_s) < IMU_STATIONARY_MM_S)
+        && (app_types_abs_i32(yaw_cdeg_s) < 500))
     {
         return (uint8_t)IMU_MOTION_STATIONARY;
     }
-    if (app_abs_i32(yaw_cdeg_s) > IMU_TURNING_CDEG_S)
+    if (app_types_abs_i32(yaw_cdeg_s) > IMU_TURNING_CDEG_S)
     {
         return (uint8_t)IMU_MOTION_TURNING;
     }
@@ -532,7 +536,8 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     }
 
     /* |a| for the snapshot (14 Nov: no longer an impact check). */
-    mag_mg = (int32_t)app_isqrt64((uint64_t)((int64_t)acc_mg[0] * acc_mg[0]
+    mag_mg =
+        (int32_t)app_math_isqrt64((uint64_t)((int64_t)acc_mg[0] * acc_mg[0]
                                              + (int64_t)acc_mg[1] * acc_mg[1]
                                              + (int64_t)acc_mg[2] * acc_mg[2]));
     p_ic->prev_mag_mg = mag_mg;
@@ -551,19 +556,19 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     /* Attitude.  The forward axis also sees the robot's own acceleration,
        so subtract the encoder estimate before taking the angle. */
     fwd   = axis(accel, IMU_AXIS_FWD, IMU_SIGN_FWD)
-            - ((app_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
-                              IMU_ACC_COMP_MAX_MM_S2)
+            - ((app_types_clamp_i32(p_ic->accel_mm_s2, -IMU_ACC_COMP_MAX_MM_S2,
+                                    IMU_ACC_COMP_MAX_MM_S2)
                 * 1000)
                / MG_PER_G_MM_S2);
     left  = axis(accel, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
     up_mg = axis(accel, IMU_AXIS_UP, IMU_SIGN_UP);
-    p_ic->pitch_cdeg = app_wrap_cdeg(
-        app_atan2_cdeg(
-            fwd, (int32_t)app_isqrt64(
+    p_ic->pitch_cdeg = app_math_wrap_cdeg(
+        app_math_atan2_cdeg(
+            fwd, (int32_t)app_math_isqrt64(
                      (uint64_t)((int64_t)left * left + (int64_t)up_mg * up_mg)))
         - p_ic->pitch0_cdeg);
     p_ic->roll_cdeg =
-        app_wrap_cdeg(app_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
+        app_math_wrap_cdeg(app_math_atan2_cdeg(left, up_mg) - p_ic->roll0_cdeg);
 
     if ((p_mag != NULL) && ((p_ic->cal & IMU_CAL_MAG) != 0u))
     {
@@ -571,8 +576,8 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
                                 (int32_t)p_mag[1] - p_ic->mag_off[1],
                                 (int32_t)p_mag[2] - p_ic->mag_off[2]};
         int32_t       heading =
-            app_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT),
-                           axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
+            app_math_atan2_cdeg(axis(mag, IMU_AXIS_LEFT, IMU_SIGN_LEFT),
+                                axis(mag, IMU_AXIS_FWD, IMU_SIGN_FWD));
 
         p_ic->heading_cdeg = (heading < 0) ? (heading + 36000)
                                            : heading; /* clockwise from north */
@@ -582,8 +587,8 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
        again below 25 deg on both axes. */
     {
         bool const b_over =
-            (app_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG)
-            || (app_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
+            (app_types_abs_i32(p_ic->pitch_cdeg) > IMU_TILT_ON_CDEG)
+            || (app_types_abs_i32(p_ic->roll_cdeg) > IMU_TILT_ON_CDEG);
 
         if (!b_over)
         {
@@ -600,15 +605,15 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
         }
 
         if (!p_ic->b_tilt && p_ic->b_tilt_over
-            && (app_elapsed_ms(now_ms, p_ic->tilt_since_ms)
+            && (app_types_elapsed_ms(now_ms, p_ic->tilt_since_ms)
                 >= IMU_TILT_HOLD_MS))
         {
             p_ic->b_tilt = true;
             events |= IMU_EV_TILT_ON;
         }
         else if (p_ic->b_tilt
-                 && (app_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG)
-                 && (app_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
+                 && (app_types_abs_i32(p_ic->pitch_cdeg) < IMU_TILT_OFF_CDEG)
+                 && (app_types_abs_i32(p_ic->roll_cdeg) < IMU_TILT_OFF_CDEG))
         {
             p_ic->b_tilt = false;
             events |= IMU_EV_TILT_OFF;
@@ -641,7 +646,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
 
     cls = classify(p_ic, v_mm_s, yaw_cdeg_s);
     if ((cls != p_ic->motion)
-        && (app_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
+        && (app_types_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
     {
         p_ic->motion    = cls;
         p_ic->motion_ms = now_ms;
@@ -653,44 +658,45 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
 /* ---------------------------------------------------------------------
  *  Change Requirement 1: data representation of IF-08 (IMU snapshot).
  * --------------------------------------------------------------------- */
-static pk_field_t const g_imu_layout[] = {
-    PK_FIELD(imu_snap_t, t_ms, 32u, PK_W),
-    PK_FIELD(imu_snap_t, pitch_cdeg, 15u,
+static app_pack_field_t const g_imu_layout[] = {
+    PK_FIELD(imu_types_snap_t, t_ms, 32u, PK_W),
+    PK_FIELD(imu_types_snap_t, pitch_cdeg, 15u,
              PK_S), /* +-163.83 deg (pitch is +-90)  */
-    PK_FIELD(imu_snap_t, roll_cdeg, 16u,
+    PK_FIELD(imu_types_snap_t, roll_cdeg, 16u,
              PK_S), /* +-327.67 deg (roll is +-180)  */
-    PK_FIELD(imu_snap_t, heading_cdeg, 16u, PK_U), /* 0..35999 */
-    PK_FIELD(imu_snap_t, turn_rate_cdeg_s, 16u,
+    PK_FIELD(imu_types_snap_t, heading_cdeg, 16u, PK_U), /* 0..35999 */
+    PK_FIELD(imu_types_snap_t, turn_rate_cdeg_s, 16u,
              PK_S), /* the int16_t range, +-327 deg/s */
-    PK_FIELD(imu_snap_t, accel_mg, 15u, PK_S),    /* +-16 g (sensor range) */
-    PK_FIELD(imu_snap_t, hump_max_mm, 10u, PK_U), /* 0..1023 mm */
-    PK_FIELD(imu_snap_t, last_hump_mm, 10u, PK_U),
-    PK_FIELD(imu_snap_t, humps, 8u, PK_U), /* per run, saturates at 255     */
-    PK_FIELD(imu_snap_t, i2c_errors, 16u, PK_W), /* counter */
-    PK_FIELD(imu_snap_t, hump_state, 2u, PK_U),  /* 4 states */
-    PK_FIELD(imu_snap_t, motion, 3u, PK_U), /* 8 classes                     */
-    PK_FIELD(imu_snap_t, b_ok, 1u, PK_U),
-    PK_FIELD(imu_snap_t, cal, 2u, PK_U), /* IMU_CAL_LEVEL | IMU_CAL_MAG   */
-    PK_FIELD(imu_snap_t, pitch_valid, 1u, PK_U),
-    PK_FIELD(imu_snap_t, tilt, 1u, PK_U)};
+    PK_FIELD(imu_types_snap_t, accel_mg, 15u, PK_S), /* +-16 g (sensor range) */
+    PK_FIELD(imu_types_snap_t, hump_max_mm, 10u, PK_U), /* 0..1023 mm */
+    PK_FIELD(imu_types_snap_t, last_hump_mm, 10u, PK_U),
+    PK_FIELD(imu_types_snap_t, humps, 8u, PK_U), /* per run, saturates at 255 */
+    PK_FIELD(imu_types_snap_t, i2c_errors, 16u, PK_W), /* counter */
+    PK_FIELD(imu_types_snap_t, hump_state, 2u, PK_U),  /* 4 states */
+    PK_FIELD(imu_types_snap_t, motion, 3u, PK_U),      /* 8 classes */
+    PK_FIELD(imu_types_snap_t, b_ok, 1u, PK_U),
+    PK_FIELD(imu_types_snap_t, cal, 2u, PK_U), /* IMU_CAL_LEVEL | IMU_CAL_MAG */
+    PK_FIELD(imu_types_snap_t, pitch_valid, 1u, PK_U),
+    PK_FIELD(imu_types_snap_t, tilt, 1u, PK_U)};
 
 #define IMU_FIELDS ((uint16_t)(sizeof(g_imu_layout) / sizeof(g_imu_layout[0])))
 
-void imu_snap_pack (imu_snap_t const * p_snap, uint32_t * p_words)
+void imu_core_snap_pack (imu_types_snap_t const * p_snap, uint32_t * p_words)
 {
-    pk_pack_rec(g_imu_layout, IMU_FIELDS, p_snap, p_words, IMU_SNAP_WORDS);
+    app_pack_pack_rec(g_imu_layout, IMU_FIELDS, p_snap, p_words,
+                      IMU_SNAP_WORDS);
 }
 
-void imu_snap_unpack (uint32_t const * p_words, imu_snap_t * p_snap)
+void imu_core_snap_unpack (uint32_t const * p_words, imu_types_snap_t * p_snap)
 {
     p_snap->reserved[0] = 0u;
     p_snap->reserved[1] = 0u;
-    pk_unpack_rec(g_imu_layout, IMU_FIELDS, p_words, p_snap);
+    app_pack_unpack_rec(g_imu_layout, IMU_FIELDS, p_words, p_snap);
 }
 
-uint32_t imu_snap_layout_bits (void)
+uint32_t imu_core_snap_layout_bits (void)
 {
-    return pk_layout_bits(g_imu_layout, IMU_FIELDS);
+    return app_pack_layout_bits(g_imu_layout, IMU_FIELDS);
 }
 
 /*** end of file ***/

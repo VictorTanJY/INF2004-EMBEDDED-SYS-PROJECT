@@ -23,7 +23,7 @@ EXPORT ER subsystem1_init (void)
 
     cmbf.mbfatr = TA_TFIFO;
     cmbf.bufsz  = S1_MBF_TELEM_BYTES;
-    cmbf.maxmsz = sizeof(comms_rec_t);
+    cmbf.maxmsz = sizeof(comms_proto_rec_t);
     obj_id      = tk_cre_mbf(&cmbf);
     if (obj_id < E_OK)
     {
@@ -39,22 +39,23 @@ EXPORT ER subsystem1_init (void)
 
 EXPORT ER subsystem1_start (void)
 {
-    ID tid = app_start_task(hmi_task, S1_PRI_HMI, S1_CORE_HMI, "hmi_task");
+    ID tid = app_main_start_task(task_hmi_thread, S1_PRI_HMI, S1_CORE_HMI,
+                                 "hmi_task");
 
     return (tid < E_OK) ? tid : E_OK;
 }
 
-EXPORT bool comms_telem_post (uint8_t kind, uint8_t src, uint16_t code,
-                              int32_t data)
+EXPORT bool subsystem1_telem_post (uint8_t kind, uint8_t src, uint16_t code,
+                                   int32_t data)
 {
-    comms_rec_t rec;
+    comms_proto_rec_t rec;
 
     if (g_mbf_telem <= 0)
     {
         app_atomic_inc(&g_telem_drops);
         return false;
     }
-    comms_rec_pack(&rec, kind, src, code, data, (uint32_t)app_time_ms());
+    comms_proto_rec_pack(&rec, kind, src, code, data, (uint32_t)app_time_ms());
     if (tk_snd_mbf(g_mbf_telem, &rec, sizeof(rec), TMO_POL) != E_OK)
     {
         app_atomic_inc(&g_telem_drops);
@@ -63,7 +64,7 @@ EXPORT bool comms_telem_post (uint8_t kind, uint8_t src, uint16_t code,
     return true;
 }
 
-EXPORT uint32_t comms_telem_drops (void)
+EXPORT uint32_t subsystem1_telem_drops (void)
 {
     return (uint32_t)g_telem_drops;
 }

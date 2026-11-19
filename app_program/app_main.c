@@ -41,7 +41,7 @@
  * Create and start one task (declared in app.h for every subsystem).
  *   prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or 0 for "any core".
  */
-EXPORT ID app_start_task (FP entry, PRI pri, UW prc, char const * p_name)
+EXPORT ID app_main_start_task (FP entry, PRI pri, UW prc, char const * p_name)
 {
     T_CTSK ctsk = {0};
     ID     tid;
@@ -117,11 +117,11 @@ EXPORT INT usermain (void)
        here in the initial task, while the system is running.  Tests may
        call tk_dly_tsk() to let the other tasks work for a while. */
     tm_printf((UB *)"[TEST] === test run start ===\n");
-    subsystem1_test();
-    subsystem2_test();
-    subsystem3_test();
-    subsystem4_test();
-    subsystem5_test();
+    subsystem1_test_run();
+    subsystem2_test_run();
+    subsystem3_test_run();
+    subsystem4_test_run();
+    subsystem5_test_run();
     tm_printf((UB *)"[TEST] === test run end ===\n");
 #endif
 

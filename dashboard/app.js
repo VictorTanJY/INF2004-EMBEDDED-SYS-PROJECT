@@ -47,7 +47,7 @@ const ev = e => e.payload || {};
 const isType = (e, t) => e.topic.endsWith('/event') && ev(e).type === t;
 /* 7 Nov: OBST_WIDTH_BEAM_CDEG calibration.  The last edge scan's last
    echo each side (LOG 71/72: heading, range) and the ruler width give the
-   beam half-angle that reproduces it (firmware: obst_edge_width, sensor
+   beam half-angle that reproduces it (firmware: obstacle_core_edge_width, sensor
    OBST_US_AHEAD_MM = 85 ahead of the axle). */
 const US_AHEAD_MM = 85;
 const PROBE_OVER_MM = 20;   /* OBST_PROBE_EDGE_OVER_MM in mission_cfg.h */

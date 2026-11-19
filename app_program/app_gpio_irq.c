@@ -36,7 +36,7 @@ static inline uint32_t io_proc1_ints (uint32_t gpio_bank)
 #define IO_INT_REGS  4u
 #define IO_EDGE_BITS (APP_GPIO_EDGE_FALL | APP_GPIO_EDGE_RISE)
 
-static app_gpio_cb_t g_cb[GPIO_NUM];
+static app_gpio_irq_cb_t g_cb[GPIO_NUM];
 static uint32_t volatile g_count;
 static bool gb_defined;
 
@@ -94,7 +94,7 @@ EXPORT ER app_gpio_irq_init (void)
 }
 
 EXPORT ER app_gpio_irq_attach (uint32_t pin, uint32_t edges,
-                               app_gpio_cb_t p_callback)
+                               app_gpio_irq_cb_t p_callback)
 {
     uint32_t const reg   = pin / 8u;
     uint32_t const shift = (pin % 8u) * 4u;

@@ -1,5 +1,5 @@
 /*
- *  subsystem5_test.c
+ *  subsystem5_test_run.c
  *  On-target tests for subsystem 5.  Built only with: make TEST=1
  *  Record results in testing/subsystem5/TEST_LOG.md.
  *  The statechart and geometry are tested on a PC (testing/subsystem5/host).
@@ -26,13 +26,13 @@
 #define T_RANGE_MIN_MM 20u   /* HC-SR04 datasheet: 2 cm .. 4 m */
 #define T_RANGE_MAX_MM 4000u
 
-EXPORT void subsystem5_test (void)
+EXPORT void subsystem5_test_run (void)
 {
-    T_RMBF         rmbf;
-    T_RFLG         rflg;
-    mission_snap_t mission;
-    obst_snap_t    snap_a;
-    obst_snap_t    snap_b;
+    T_RMBF                    rmbf;
+    T_RFLG                    rflg;
+    mission_types_snap_t      mission;
+    mission_types_obst_snap_t snap_a;
+    mission_types_obst_snap_t snap_b;
 
     TEST_INIT();
 
@@ -43,29 +43,29 @@ EXPORT void subsystem5_test (void)
     TEST_CHECK("S5-U03", E_OK == tk_ref_flg(g_flg_obst, &rflg),
                "flg_obst exists");
 
-    mission_get_snap(&mission);
+    subsystem5_get_mission_snap(&mission);
     TEST_CHECK("S5-U05",
                (mission.state < (uint8_t)MISSION_ST_COUNT)
                    && (mission.cruise_mm_s > 0u)
                    && ('\0' == mission.nav_map[0]),
                "mission snapshot valid; no barcode map until MQTT sends one");
 
-    obst_get_snap(&snap_a);
+    subsystem5_get_obst_snap(&snap_a);
     (void)tk_dly_tsk(150);
-    obst_get_snap(&snap_b);
+    subsystem5_get_obst_snap(&snap_b);
     TEST_CHECK("S5-U06", snap_b.t_ms != snap_a.t_ms,
                "ObstacleTask runs (range_cyc / 100 ms wait)");
     TEST_CHECK("S5-U07",
-               (200u == obst_echo_to_mm(1160u))
-                   && (200u == obst_median3(300u, 120u, 200u)),
+               (200u == obstacle_core_echo_to_mm(1160u))
+                   && (200u == obstacle_core_median3(300u, 120u, 200u)),
                "echo conversion and median on target");
 
     /* ---- S5-U08: ping rate ------------------------------------------ */
-    (void)scan_request((uint8_t)SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
+    (void)subsystem5_scan_request((uint8_t)SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
     (void)tk_dly_tsk(T_SETTLE_MS); /* servo to 90 deg, first 3 pings */
-    obst_get_snap(&snap_a);
+    subsystem5_get_obst_snap(&snap_a);
     (void)tk_dly_tsk(T_PING_WIN_MS);
-    obst_get_snap(&snap_b);
+    subsystem5_get_obst_snap(&snap_b);
     tm_printf((UB *)"[INFO] S5-U08 %d pings in %d ms (expected %d)\n",
               (INT)(snap_b.pings - snap_a.pings), (INT)T_PING_WIN_MS,
               (INT)T_PINGS);
@@ -92,7 +92,8 @@ EXPORT void subsystem5_test (void)
                    "ultrasonic echo received, range within 2 cm .. 4 m");
     }
 
-    (void)scan_request((uint8_t)SCAN_REQ_STOP, (uint8_t)(T_SCAN_SEQ + 1u), 0);
+    (void)subsystem5_scan_request((uint8_t)SCAN_REQ_STOP,
+                                  (uint8_t)(T_SCAN_SEQ + 1u), 0);
 
     TEST_SUMMARY("subsystem5");
 }

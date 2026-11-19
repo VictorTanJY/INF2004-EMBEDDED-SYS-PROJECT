@@ -132,7 +132,7 @@
 #define OBST_SECOND_LOOK_MM 60 /* back-off before the second scan */
 #define OBST_SCAN_PINGS     3  /* median of this many pings per angle */
 /* 3 Nov guard: an echo within +-10 deg of straight ahead nearer than
-   this (stop distance + 5 cm) forbids CONTINUE (see obst_profile).    */
+   this (stop distance + 5 cm) forbids CONTINUE (see obstacle_core_profile). */
 #define OBST_GUARD_HALF_DEG 10
 #define OBST_GUARD_MM       (MISSION_STOP_MM + 50)
 /* After the bypass: if the straight seek finds no line, sweep +-45 deg on
@@ -142,7 +142,7 @@
 #define OBST_CLEAR_MAX_MM     500 /* nothing seen: this much free    */
 #define OBST_TOO_CLOSE_MM     80  /* < 8 cm: TOO_CLOSE (FR15)        */
 /* 3 Nov bypass: 45 deg turns, slow, turns at the calibration spin rate
-   (where the turn slip is measured, line_slip_gain) and scaled by that
+   (where the turn slip is measured, line_track_slip_gain) and scaled by that
    slip; back in at 45 deg until a line sensor touches the line, then
    OBST_IR_AHEAD_MM on (axle on the line), then turn onto it.            */
 #define OBST_TURN_OUT_DDEG 450 /* bypass turn-out 45.0 deg        */
