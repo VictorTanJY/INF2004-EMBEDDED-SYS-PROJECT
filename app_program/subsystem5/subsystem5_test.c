@@ -19,48 +19,59 @@
 
 /* S5-U08: range_cyc pings every S5_RANGE_PERIOD_MS; count them over this
    window and allow one ping either way (start and end of the window). */
-#define T_PING_WIN_MS   1200u
-#define T_PINGS         (T_PING_WIN_MS / S5_RANGE_PERIOD_MS)
-#define T_SETTLE_MS     600u
-#define T_SCAN_SEQ      0xE0u       /* not used by MissionTask */
-#define T_RANGE_MIN_MM  20u         /* HC-SR04 datasheet: 2 cm .. 4 m */
-#define T_RANGE_MAX_MM  4000u
+#define T_PING_WIN_MS  1200u
+#define T_PINGS        (T_PING_WIN_MS / S5_RANGE_PERIOD_MS)
+#define T_SETTLE_MS    600u
+#define T_SCAN_SEQ     0xE0u /* not used by MissionTask */
+#define T_RANGE_MIN_MM 20u   /* HC-SR04 datasheet: 2 cm .. 4 m */
+#define T_RANGE_MAX_MM 4000u
 
-EXPORT void subsystem5_test(void)
+EXPORT void subsystem5_test (void)
 {
-    T_RMBF          rmbf;
-    T_RFLG          rflg;
-    mission_snap_t  mission;
-    obst_snap_t     snap_a;
-    obst_snap_t     snap_b;
+    T_RMBF         rmbf;
+    T_RFLG         rflg;
+    mission_snap_t mission;
+    obst_snap_t    snap_a;
+    obst_snap_t    snap_b;
 
     TEST_INIT();
 
-    TEST_CHECK("S5-U01", E_OK == tk_ref_mbf(g_mbf_mission, &rmbf), "mbf_mission exists");
-    TEST_CHECK("S5-U02", E_OK == tk_ref_mbf(g_mbf_scan, &rmbf), "mbf_scan exists");
-    TEST_CHECK("S5-U03", E_OK == tk_ref_flg(g_flg_obst, &rflg), "flg_obst exists");
+    TEST_CHECK("S5-U01", E_OK == tk_ref_mbf(g_mbf_mission, &rmbf),
+               "mbf_mission exists");
+    TEST_CHECK("S5-U02", E_OK == tk_ref_mbf(g_mbf_scan, &rmbf),
+               "mbf_scan exists");
+    TEST_CHECK("S5-U03", E_OK == tk_ref_flg(g_flg_obst, &rflg),
+               "flg_obst exists");
 
     mission_get_snap(&mission);
-    TEST_CHECK("S5-U05", (mission.state < (uint8_t)MISSION_ST_COUNT) && (mission.cruise_mm_s > 0u) &&
-                         ('\0' == mission.nav_map[0]),
+    TEST_CHECK("S5-U05",
+               (mission.state < (uint8_t)MISSION_ST_COUNT)
+                   && (mission.cruise_mm_s > 0u)
+                   && ('\0' == mission.nav_map[0]),
                "mission snapshot valid; no barcode map until MQTT sends one");
 
     obst_get_snap(&snap_a);
     (void)tk_dly_tsk(150);
     obst_get_snap(&snap_b);
-    TEST_CHECK("S5-U06", snap_b.t_ms != snap_a.t_ms, "ObstacleTask runs (range_cyc / 100 ms wait)");
-    TEST_CHECK("S5-U07", (200u == obst_echo_to_mm(1160u)) && (200u == obst_median3(300u, 120u, 200u)),
+    TEST_CHECK("S5-U06", snap_b.t_ms != snap_a.t_ms,
+               "ObstacleTask runs (range_cyc / 100 ms wait)");
+    TEST_CHECK("S5-U07",
+               (200u == obst_echo_to_mm(1160u))
+                   && (200u == obst_median3(300u, 120u, 200u)),
                "echo conversion and median on target");
 
     /* ---- S5-U08: ping rate ------------------------------------------ */
     (void)scan_request((uint8_t)SCAN_REQ_MONITOR, T_SCAN_SEQ, 0);
-    (void)tk_dly_tsk(T_SETTLE_MS);          /* servo to 90 deg, first 3 pings */
+    (void)tk_dly_tsk(T_SETTLE_MS); /* servo to 90 deg, first 3 pings */
     obst_get_snap(&snap_a);
     (void)tk_dly_tsk(T_PING_WIN_MS);
     obst_get_snap(&snap_b);
     tm_printf((UB *)"[INFO] S5-U08 %d pings in %d ms (expected %d)\n",
-              (INT)(snap_b.pings - snap_a.pings), (INT)T_PING_WIN_MS, (INT)T_PINGS);
-    TEST_CHECK("S5-U08", ((snap_b.pings - snap_a.pings) + 1u >= T_PINGS) && ((snap_b.pings - snap_a.pings) <= T_PINGS + 1u),
+              (INT)(snap_b.pings - snap_a.pings), (INT)T_PING_WIN_MS,
+              (INT)T_PINGS);
+    TEST_CHECK("S5-U08",
+               ((snap_b.pings - snap_a.pings) + 1u >= T_PINGS)
+                   && ((snap_b.pings - snap_a.pings) <= T_PINGS + 1u),
                "ultrasonic pings every 60 ms");
 
     /* ---- S5-U09: one range against the object in front -------------- */
@@ -71,9 +82,13 @@ EXPORT void subsystem5_test(void)
     }
     else
     {
-        tm_printf((UB *)"[INFO] S5-U09 range %d mm (median of 3); compare with a tape measure\n",
+        tm_printf((UB *)"[INFO] S5-U09 range %d mm (median of 3); compare with "
+                        "a tape measure\n",
                   (INT)snap_b.d_mm);
-        TEST_CHECK("S5-U09", (snap_b.d_mm >= T_RANGE_MIN_MM) && (snap_b.d_mm <= T_RANGE_MAX_MM) && (0u == snap_b.no_echo),
+        TEST_CHECK("S5-U09",
+                   (snap_b.d_mm >= T_RANGE_MIN_MM)
+                       && (snap_b.d_mm <= T_RANGE_MAX_MM)
+                       && (0u == snap_b.no_echo),
                    "ultrasonic echo received, range within 2 cm .. 4 m");
     }
 

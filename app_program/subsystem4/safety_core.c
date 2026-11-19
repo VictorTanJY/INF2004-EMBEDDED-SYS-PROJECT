@@ -5,15 +5,17 @@
 
 #include "safety_core.h"
 
-static uint32_t const g_timeout_ms[SAFETY_HB_COUNT] = { 50u, 50u, 300u, 300u, 100u };
+static uint32_t const g_timeout_ms[SAFETY_HB_COUNT] = {50u, 50u, 300u, 300u,
+                                                       100u};
 
-uint32_t safety_hb_timeout_ms(safety_hb_t task)
+uint32_t safety_hb_timeout_ms (safety_hb_t task)
 {
-    return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_timeout_ms[task] : 0u;
+    return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_timeout_ms[task]
+                                                        : 0u;
 }
 
-void safety_hb_start(safety_hb_state_t * p_st, uint32_t const counts[SAFETY_HB_COUNT],
-                     uint32_t now_ms)
+void safety_hb_start (safety_hb_state_t * p_st,
+                      uint32_t const counts[SAFETY_HB_COUNT], uint32_t now_ms)
 {
     uint8_t kdx;
 
@@ -25,8 +27,9 @@ void safety_hb_start(safety_hb_state_t * p_st, uint32_t const counts[SAFETY_HB_C
     p_st->b_started = true;
 }
 
-uint32_t safety_hb_check(safety_hb_state_t * p_st, uint32_t const counts[SAFETY_HB_COUNT],
-                         uint32_t now_ms)
+uint32_t safety_hb_check (safety_hb_state_t * p_st,
+                          uint32_t const      counts[SAFETY_HB_COUNT],
+                          uint32_t            now_ms)
 {
     uint32_t missed = 0u;
     uint8_t  kdx;
@@ -43,7 +46,8 @@ uint32_t safety_hb_check(safety_hb_state_t * p_st, uint32_t const counts[SAFETY_
             p_st->last_count[kdx]   = counts[kdx];
             p_st->last_seen_ms[kdx] = now_ms;
         }
-        else if ((uint32_t)(now_ms - p_st->last_seen_ms[kdx]) > g_timeout_ms[kdx])
+        else if ((uint32_t)(now_ms - p_st->last_seen_ms[kdx])
+                 > g_timeout_ms[kdx])
         {
             missed |= (1uL << kdx);
         }

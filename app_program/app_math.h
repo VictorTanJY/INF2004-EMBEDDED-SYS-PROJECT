@@ -19,10 +19,10 @@
 
 #include <stdint.h>
 
-#define APP_Q15_ONE         32768
-#define APP_CDEG_90         9000
-#define APP_CDEG_180        18000
-#define APP_CDEG_360        36000
+#define APP_Q15_ONE  32768
+#define APP_CDEG_90  9000
+#define APP_CDEG_180 18000
+#define APP_CDEG_360 36000
 
 /* floor(sqrt(x)) */
 uint32_t app_isqrt32(uint32_t value);

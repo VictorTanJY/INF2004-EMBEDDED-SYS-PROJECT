@@ -26,11 +26,12 @@ typedef struct
 uint32_t safety_hb_timeout_ms(safety_hb_t task);
 
 /* Start (or restart, after an operator reset) the supervision now. */
-void     safety_hb_start(safety_hb_state_t * p_st, uint32_t const counts[SAFETY_HB_COUNT],
-                         uint32_t now_ms);
+void safety_hb_start(safety_hb_state_t * p_st,
+                     uint32_t const counts[SAFETY_HB_COUNT], uint32_t now_ms);
 
 /* Returns a bit mask (bit k = task k) of the tasks past their timeout. */
-uint32_t safety_hb_check(safety_hb_state_t * p_st, uint32_t const counts[SAFETY_HB_COUNT],
-                         uint32_t now_ms);
+uint32_t safety_hb_check(safety_hb_state_t * p_st,
+                         uint32_t const      counts[SAFETY_HB_COUNT],
+                         uint32_t            now_ms);
 
 #endif /* SAFETY_CORE_H */

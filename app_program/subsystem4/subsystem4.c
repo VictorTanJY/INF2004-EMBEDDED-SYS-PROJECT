@@ -20,22 +20,22 @@ EXPORT volatile uint32_t g_safety_latched;
    counter shares a read-modify-write with another; SafetyTask only reads
    and compares for a change (an 8-bit counter cannot come back to the
    same value within the 20 ms check: MotionTask beats twice in it). */
-static volatile uint8_t  g_hb[SAFETY_HB_COUNT];
+static uint8_t volatile g_hb[SAFETY_HB_COUNT];
 /* IMU snapshot stored packed; whole records copied under the lock. */
-static app_lock_t        g_imu_lock;
-static uint32_t          g_imu_snap[IMU_SNAP_WORDS];
-static ID                g_cyc_imu;
+static app_lock_t g_imu_lock;
+static uint32_t   g_imu_snap[IMU_SNAP_WORDS];
+static ID         g_cyc_imu;
 
-static void imu_cyc_handler(void * p_exinf)
+static void imu_cyc_handler (void * p_exinf)
 {
     (void)p_exinf;
     (void)tk_wup_tsk(g_tid_imu);
 }
 
-EXPORT ER subsystem4_init(void)
+EXPORT ER subsystem4_init (void)
 {
-    T_CFLG  cflg = {0};
-    T_CCYC  ccyc = {0};
+    T_CFLG cflg = {0};
+    T_CCYC ccyc = {0};
 
     /* First of all: the 1 us timer and the watchdog need the 1 MHz tick. */
     drv_watchdog_tick_init();
@@ -43,7 +43,8 @@ EXPORT ER subsystem4_init(void)
     {
         imu_snap_t const zero = {0};
 
-        imu_snap_pack(&zero, g_imu_snap);      /* packed zero (offset-binary fields) */
+        imu_snap_pack(&zero,
+                      g_imu_snap); /* packed zero (offset-binary fields) */
     }
 
     /* TA_WMUL: a stray second waiter gets queued instead of E_OBJ.  By
@@ -60,15 +61,16 @@ EXPORT ER subsystem4_init(void)
     ccyc.cychdr = (FP)imu_cyc_handler;
     ccyc.cyctim = S4_IMU_PERIOD_MS;
     ccyc.cycphs = S4_IMU_PERIOD_MS;
-    g_cyc_imu = tk_cre_cyc(&ccyc);
+    g_cyc_imu   = tk_cre_cyc(&ccyc);
     return (g_cyc_imu < E_OK) ? g_cyc_imu : E_OK;
 }
 
-EXPORT ER subsystem4_start(void)
+EXPORT ER subsystem4_start (void)
 {
     ID tid;
 
-    tid = app_start_task((FP)safety_task, S4_PRI_SAFETY, S4_CORE_SAFETY, "safety");
+    tid = app_start_task((FP)safety_task, S4_PRI_SAFETY, S4_CORE_SAFETY,
+                         "safety");
     if (tid < E_OK)
     {
         return tid;
@@ -81,30 +83,30 @@ EXPORT ER subsystem4_start(void)
     return tk_sta_cyc(g_cyc_imu);
 }
 
-EXPORT uint32_t safety_get_latched(void)
+EXPORT uint32_t safety_get_latched (void)
 {
     return g_safety_latched;
 }
 
-EXPORT void safety_request_reset(void)
+EXPORT void safety_request_reset (void)
 {
     (void)tk_set_flg(g_flg_safety, SAFETY_REQ_RESET);
 }
 
-EXPORT void safety_heartbeat(safety_hb_t task)
+EXPORT void safety_heartbeat (safety_hb_t task)
 {
     if ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT)
     {
-        g_hb[task] = (uint8_t)(g_hb[task] + 1u);    /* single writer per byte */
+        g_hb[task] = (uint8_t)(g_hb[task] + 1u); /* single writer per byte */
     }
 }
 
-EXPORT uint32_t safety_heartbeat_count(safety_hb_t task)
+EXPORT uint32_t safety_heartbeat_count (safety_hb_t task)
 {
     return ((uint32_t)task < (uint32_t)SAFETY_HB_COUNT) ? g_hb[task] : 0u;
 }
 
-EXPORT void imu_get_snap(imu_snap_t * p_out)
+EXPORT void imu_get_snap (imu_snap_t * p_out)
 {
     uint32_t words[IMU_SNAP_WORDS];
     uint32_t idx;
@@ -118,7 +120,7 @@ EXPORT void imu_get_snap(imu_snap_t * p_out)
     imu_snap_unpack(words, p_out);
 }
 
-EXPORT void imu_put_snap(imu_snap_t const * p_in)
+EXPORT void imu_put_snap (imu_snap_t const * p_in)
 {
     uint32_t words[IMU_SNAP_WORDS];
     uint32_t idx;

@@ -11,7 +11,7 @@
    GP6 = every MotionTask cycle, GP7 = every LineBarcodeTask block
    (NFR1, NFR2, A2).  0 for normal builds. */
 #ifndef APP_TIMING_PINS
-#define APP_TIMING_PINS     0
+#define APP_TIMING_PINS 0
 #endif
 
 /* 1: bench mode for bring-up (docs/SETUP_AND_TEST.md).  The MQTT "set"
@@ -21,7 +21,7 @@
      bench_speed 50..450 mm/s        MOVE 1000 mm at that speed (step response)
    0 for normal and demo builds. */
 #ifndef APP_BENCH
-#define APP_BENCH           0
+#define APP_BENCH 0
 #endif
 
 #endif /* APP_CONFIG_H */

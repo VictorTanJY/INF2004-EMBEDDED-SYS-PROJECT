@@ -35,42 +35,45 @@
 #include "../subsystem5/subsystem5.h"
 
 /* The frame fields must hold subsystem 5's enums (Change Requirement 1). */
-typedef char s1_check_states_t[((uint32_t)MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
-typedef char s1_check_events_t[((uint32_t)MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1 : -1];
-typedef char s1_check_src_t[(APP_SRC_OBST_MISSION < (1uL << COMMS_SRC_BITS)) ? 1 : -1];
+typedef char s1_check_states_t
+    [((uint32_t)MISSION_ST_COUNT <= (1uL << COMMS_STATE_BITS)) ? 1 : -1];
+typedef char s1_check_events_t
+    [((uint32_t)MISSION_EV_COUNT <= (1uL << COMMS_REC_CODE_BITS)) ? 1 : -1];
+typedef char
+    s1_check_src_t[(APP_SRC_OBST_MISSION < (1uL << COMMS_SRC_BITS)) ? 1 : -1];
 typedef char s1_check_rec_size_t[(sizeof(comms_rec_t) == 8u) ? 1 : -1];
 
-#define COMMS_DRAIN_MAX         8u      /* records per poll                     */
-#define COMMS_TX_BUF_SIZE       COMMS_FRAME_MAX     /* largest frame: 27 B      */
+#define COMMS_DRAIN_MAX   8u /* records per poll                     */
+#define COMMS_TX_BUF_SIZE COMMS_FRAME_MAX /* largest frame: 27 B      */
 
-static T_MQTT_UTK_CFG const g_mqtt_cfg =
-{
-    COMMS_TOPIC_CMD,  1u,               /* subscribe: commands, QoS 1           */
-    COMMS_TOPIC_STATUS,                 /* Last Will on the retained status     */
-    COMMS_WILL_MSG,                     /* header byte alone = offline          */
-    1u,                                 /* will QoS 1                           */
-    1u                                  /* will retained                        */
+static T_MQTT_UTK_CFG const g_mqtt_cfg = {
+    COMMS_TOPIC_CMD,
+    1u,                 /* subscribe: commands, QoS 1           */
+    COMMS_TOPIC_STATUS, /* Last Will on the retained status     */
+    COMMS_WILL_MSG,     /* header byte alone = offline          */
+    1u,                 /* will QoS 1                           */
+    1u                  /* will retained                        */
 };
 
 /* All state is zero-initialised and touched only by the WiFi task. */
-static comms_ring_t g_ring;
-static uint8_t      g_telem_seq;        /* 8 bits on the wire, wraps            */
-static uint8_t      g_event_seq;
-static uint32_t     g_next_telem_ms;
-static uint32_t     g_next_status_ms;
-static bool         gb_online;
-static bool         gb_flag_synced;    /* WIFI_LOSS bit set once at start-up   */
-static comms_dedup_t g_dedup;           /* recently accepted commands (gap 9)   */
-static uint32_t     g_ring_lost;        /* events overwritten while offline     */
-static uint32_t     g_pub_errors;       /* mqtt_publish() refused (ERR_MEM ...) */
-static uint8_t      g_tx[COMMS_TX_BUF_SIZE];
+static comms_ring_t  g_ring;
+static uint8_t       g_telem_seq; /* 8 bits on the wire, wraps            */
+static uint8_t       g_event_seq;
+static uint32_t      g_next_telem_ms;
+static uint32_t      g_next_status_ms;
+static bool          gb_online;
+static bool          gb_flag_synced; /* WIFI_LOSS bit set once at start-up   */
+static comms_dedup_t g_dedup;        /* recently accepted commands (gap 9)   */
+static uint32_t      g_ring_lost;    /* events overwritten while offline     */
+static uint32_t      g_pub_errors;   /* mqtt_publish() refused (ERR_MEM ...) */
+static uint8_t       g_tx[COMMS_TX_BUF_SIZE];
 
-static ID comms_telem_id(void)
+static ID comms_telem_id (void)
 {
     return *(ID volatile *)&g_mbf_telem;
 }
 
-static bool topic_eq(char const * p_a, char const * p_b)
+static bool topic_eq (char const * p_a, char const * p_b)
 {
     while ((*p_a != '\0') && (*p_a == *p_b))
     {
@@ -80,7 +83,7 @@ static bool topic_eq(char const * p_a, char const * p_b)
     return (*p_a == *p_b);
 }
 
-static void comms_set_wifi_loss(bool b_lost)
+static void comms_set_wifi_loss (bool b_lost)
 {
     if (g_flg_safety > 0)
     {
@@ -96,12 +99,13 @@ static void comms_set_wifi_loss(bool b_lost)
     }
 }
 
-static bool comms_publish(char const * p_topic, uint16_t len, uint8_t qos, uint8_t retain)
+static bool comms_publish (char const * p_topic, uint16_t len, uint8_t qos,
+                           uint8_t retain)
 {
     if (0u == len)
     {
-        g_pub_errors++;                 /* did not fit COMMS_TX_BUF_SIZE        */
-        return true;                    /* nothing to retry                     */
+        g_pub_errors++; /* did not fit COMMS_TX_BUF_SIZE        */
+        return true;    /* nothing to retry                     */
     }
     if (mqtt_utk_publish(p_topic, g_tx, len, qos, retain) != 0)
     {
@@ -111,7 +115,7 @@ static bool comms_publish(char const * p_topic, uint16_t len, uint8_t qos, uint8
     return true;
 }
 
-static bool comms_publish_event(comms_rec_t const * p_rec, uint8_t seq)
+static bool comms_publish_event (comms_rec_t const * p_rec, uint8_t seq)
 {
     comms_event_t event;
     uint16_t      len;
@@ -121,10 +125,10 @@ static bool comms_publish_event(comms_rec_t const * p_rec, uint8_t seq)
     return comms_publish(COMMS_TOPIC_EVENT, len, 1u, 0u);
 }
 
-static void comms_publish_status(uint32_t now_ms)
+static void comms_publish_status (uint32_t now_ms)
 {
     uint32_t       drops = comms_telem_drops() + g_ring_lost + g_pub_errors
-                         + mqtt_utk_pub_failures() + mqtt_utk_rx_dropped();
+                           + mqtt_utk_pub_failures() + mqtt_utk_rx_dropped();
     mission_snap_t mission;
     uint16_t       len;
 
@@ -135,7 +139,7 @@ static void comms_publish_status(uint32_t now_ms)
     (void)comms_publish(COMMS_TOPIC_STATUS, len, 1u, 1u);
 }
 
-static void comms_publish_telemetry(uint32_t now_ms)
+static void comms_publish_telemetry (uint32_t now_ms)
 {
     comms_telem_t  telem;
     motion_odom_t  odom;
@@ -180,7 +184,8 @@ static void comms_publish_telemetry(uint32_t now_ms)
 }
 
 /* Due check that tolerates the 32-bit millisecond wrap. */
-static bool comms_due(uint32_t now_ms, uint32_t * p_next_ms, uint32_t period_ms)
+static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
+                       uint32_t period_ms)
 {
     if ((int32_t)(now_ms - *p_next_ms) < 0)
     {
@@ -189,7 +194,7 @@ static bool comms_due(uint32_t now_ms, uint32_t * p_next_ms, uint32_t period_ms)
     *p_next_ms += period_ms;
     if ((int32_t)(now_ms - *p_next_ms) >= 0)
     {
-        *p_next_ms = now_ms + period_ms;    /* fell behind: do not burst */
+        *p_next_ms = now_ms + period_ms; /* fell behind: do not burst */
     }
     return true;
 }
@@ -197,28 +202,28 @@ static bool comms_due(uint32_t now_ms, uint32_t * p_next_ms, uint32_t period_ms)
 /* ---------------------------------------------------------------------
  *  mqtt_utk hooks
  * --------------------------------------------------------------------- */
-const T_MQTT_UTK_CFG *mqtt_utk_app_config(void)
+const T_MQTT_UTK_CFG * mqtt_utk_app_config (void)
 {
     return &g_mqtt_cfg;
 }
 
-void mqtt_utk_app_connected(void)
+void mqtt_utk_app_connected (void)
 {
     uint32_t const now_ms = (uint32_t)app_time_ms();
 
-    gb_online       = true;
+    gb_online        = true;
     g_next_telem_ms  = now_ms;
     g_next_status_ms = now_ms;
     comms_set_wifi_loss(false);
 }
 
-void mqtt_utk_app_disconnected(void)
+void mqtt_utk_app_disconnected (void)
 {
     gb_online = false;
     comms_set_wifi_loss(true);
 }
 
-void mqtt_utk_app_poll(void)
+void mqtt_utk_app_poll (void)
 {
     ID          mbf = comms_telem_id();
     uint32_t    now_ms;
@@ -228,7 +233,7 @@ void mqtt_utk_app_poll(void)
 
     if (mbf <= 0)
     {
-        return;                         /* subsystem1_init() has not run yet */
+        return; /* subsystem1_init() has not run yet */
     }
     now_ms = (uint32_t)app_time_ms();
 
@@ -242,7 +247,7 @@ void mqtt_utk_app_poll(void)
     {
         if (!comms_publish_event(&rec, seq))
         {
-            break;                      /* lwIP full: retry on the next poll */
+            break; /* lwIP full: retry on the next poll */
         }
         comms_ring_pop(&g_ring);
     }
@@ -255,7 +260,8 @@ void mqtt_utk_app_poll(void)
             break;
         }
         g_event_seq++;
-        if (gb_online && (0u == g_ring.count) && comms_publish_event(&rec, g_event_seq))
+        if (gb_online && (0u == g_ring.count)
+            && comms_publish_event(&rec, g_event_seq))
         {
             continue;
         }
@@ -272,15 +278,16 @@ void mqtt_utk_app_poll(void)
     }
 
     /* 4. Status heartbeat, 1 Hz, retained. */
-    if (comms_due(now_ms, &g_next_status_ms, COMMS_STATUS_PERIOD_MS) && gb_online)
+    if (comms_due(now_ms, &g_next_status_ms, COMMS_STATUS_PERIOD_MS)
+        && gb_online)
     {
         comms_publish_status(now_ms);
     }
 }
 
-static comms_err_t comms_execute(comms_cmd_t const * p_cmd)
+static comms_err_t comms_execute (comms_cmd_t const * p_cmd)
 {
-    ER          err;
+    ER           err;
     mission_ev_t event;
 
     switch (p_cmd->cmd)
@@ -302,7 +309,7 @@ static comms_err_t comms_execute(comms_cmd_t const * p_cmd)
             break;
 
         case COMMS_CMD_MAP:
-            event = MISSION_EV_REMOTE_MAP;     /* MissionTask stores the map */
+            event = MISSION_EV_REMOTE_MAP; /* MissionTask stores the map */
             break;
 
         default:
@@ -314,7 +321,7 @@ static comms_err_t comms_execute(comms_cmd_t const * p_cmd)
         return COMMS_ERR_FULL;
     }
     err = mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS,
-                      (uint16_t)p_cmd->param_id, p_cmd->value);
+                       (uint16_t)p_cmd->param_id, p_cmd->value);
     if (err != E_OK)
     {
         return COMMS_ERR_FULL;
@@ -324,7 +331,8 @@ static comms_err_t comms_execute(comms_cmd_t const * p_cmd)
     return COMMS_ERR_NONE;
 }
 
-void mqtt_utk_app_rx(const char *p_topic, const uint8_t *p_data, uint16_t len)
+void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
+                      uint16_t len)
 {
     comms_cmd_t    cmd;
     comms_err_t    err;
@@ -340,9 +348,10 @@ void mqtt_utk_app_rx(const char *p_topic, const uint8_t *p_data, uint16_t len)
     if (COMMS_ERR_NONE == err)
     {
         uint32_t             now_ms = (uint32_t)app_time_ms();
-        comms_dedup_result_t dup    = comms_cmd_repeat_safe(cmd.cmd)
-                                      ? COMMS_DEDUP_NEW
-                                      : comms_dedup_check(&g_dedup, &cmd, now_ms);
+        comms_dedup_result_t dup =
+            comms_cmd_repeat_safe(cmd.cmd)
+                ? COMMS_DEDUP_NEW
+                : comms_dedup_check(&g_dedup, &cmd, now_ms);
 
         if (COMMS_DEDUP_REPEAT == dup)
         {
@@ -355,10 +364,13 @@ void mqtt_utk_app_rx(const char *p_topic, const uint8_t *p_data, uint16_t len)
         else
         {
             mission_get_snap(&mission);
-            err = comms_check_cmd(&cmd, (uint8_t)MISSION_ST_IDLE == mission.state);
+            err = comms_check_cmd(&cmd,
+                                  (uint8_t)MISSION_ST_IDLE == mission.state);
             if (COMMS_ERR_NONE == err)
             {
-                err = comms_check_ready(&cmd, MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
+                err = comms_check_ready(
+                    &cmd,
+                    MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
             }
             if (COMMS_ERR_NONE == err)
             {
@@ -375,7 +387,7 @@ void mqtt_utk_app_rx(const char *p_topic, const uint8_t *p_data, uint16_t len)
     (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
 }
 
-#else  /* !TM_MQTT */
+#else /* !TM_MQTT */
 
 /* MQTT is not built: nothing drains mbf_telem. */
 typedef int s1_comms_service_unused_t;

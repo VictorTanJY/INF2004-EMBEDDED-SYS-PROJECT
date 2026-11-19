@@ -17,32 +17,35 @@
  *  SAFETY_REQ_RESET is not a fault: MissionTask sets it to ask SafetyTask
  *  to clear the latch after an operator reset (if every cause is gone).
  * --------------------------------------------------------------------- */
-#define SAFETY_FLT_LIFT         0x0001u     /* ImuTask: lifted while running (end of run, 14 Nov) */
-#define SAFETY_FLT_TOO_CLOSE    0x0002u     /* ObstacleTask, d < 8 cm         */
-#define SAFETY_FLT_STALL        0x0004u     /* MotionTask                     */
-#define SAFETY_FLT_TILT         0x0008u     /* ImuTask: > 30 deg (overturned) while running */
+#define SAFETY_FLT_LIFT \
+    0x0001u /* ImuTask: lifted while running (end of run, 14 Nov) */
+#define SAFETY_FLT_TOO_CLOSE 0x0002u /* ObstacleTask, d < 8 cm         */
+#define SAFETY_FLT_STALL     0x0004u /* MotionTask                     */
+#define SAFETY_FLT_TILT \
+    0x0008u /* ImuTask: > 30 deg (overturned) while running */
 /* 0x0010 unused: the remote E-stop was removed (14 Nov) */
-#define SAFETY_FLT_HEARTBEAT    0x0020u     /* SafetyTask itself (latched only) */
-#define SAFETY_FLT_ENC_FAULT    0x0040u     /* report-only: MotionTask        */
-#define SAFETY_FLT_IMU_FAULT    0x0080u     /* report-only: ImuTask           */
-#define SAFETY_FLT_NO_ECHO      0x0100u     /* report-only: ObstacleTask      */
-#define SAFETY_FLT_WIFI_LOSS    0x0200u     /* report-only: CommsTask         */
-#define SAFETY_FLT_SELFTEST     0x0400u     /* MissionTask BOOT (latched only) */
-#define SAFETY_REQ_RESET        0x8000u     /* MissionTask -> SafetyTask      */
+#define SAFETY_FLT_HEARTBEAT 0x0020u /* SafetyTask itself (latched only) */
+#define SAFETY_FLT_ENC_FAULT 0x0040u /* report-only: MotionTask        */
+#define SAFETY_FLT_IMU_FAULT 0x0080u /* report-only: ImuTask           */
+#define SAFETY_FLT_NO_ECHO   0x0100u /* report-only: ObstacleTask      */
+#define SAFETY_FLT_WIFI_LOSS 0x0200u /* report-only: CommsTask         */
+#define SAFETY_FLT_SELFTEST  0x0400u /* MissionTask BOOT (latched only) */
+#define SAFETY_REQ_RESET     0x8000u /* MissionTask -> SafetyTask      */
 
-#define SAFETY_BRAKE_MASK       (SAFETY_FLT_LIFT  | SAFETY_FLT_TOO_CLOSE | \
-                                 SAFETY_FLT_STALL | SAFETY_FLT_TILT)
+#define SAFETY_BRAKE_MASK                                      \
+    (SAFETY_FLT_LIFT | SAFETY_FLT_TOO_CLOSE | SAFETY_FLT_STALL \
+     | SAFETY_FLT_TILT)
 
 /* ---------------------------------------------------------------------
  *  IF-07  Heartbeats: monitored tasks and their timeouts (Week 6 Sec. 3).
  * --------------------------------------------------------------------- */
 typedef enum
 {
-    SAFETY_HB_MOTION   = 0,     /* timeout 50 ms  */
-    SAFETY_HB_LINE     = 1,     /* timeout 50 ms  */
-    SAFETY_HB_MISSION  = 2,     /* timeout 300 ms */
-    SAFETY_HB_OBSTACLE = 3,     /* timeout 300 ms */
-    SAFETY_HB_IMU      = 4,     /* timeout 100 ms */
+    SAFETY_HB_MOTION   = 0, /* timeout 50 ms  */
+    SAFETY_HB_LINE     = 1, /* timeout 50 ms  */
+    SAFETY_HB_MISSION  = 2, /* timeout 300 ms */
+    SAFETY_HB_OBSTACLE = 3, /* timeout 300 ms */
+    SAFETY_HB_IMU      = 4, /* timeout 100 ms */
     SAFETY_HB_COUNT    = 5
 } safety_hb_t;
 
@@ -64,33 +67,34 @@ typedef enum
     IMU_MOTION_TURNING      = 2,
     IMU_MOTION_CLIMBING     = 3,
     IMU_MOTION_DESCENDING   = 4,
-    IMU_MOTION_IMPACT       = 5,        /* not produced since 14 Nov (IMU collision detection removed) */
+    IMU_MOTION_IMPACT =
+        5, /* not produced since 14 Nov (IMU collision detection removed) */
     IMU_MOTION_CRUISING     = 6,
-    IMU_MOTION_DECELERATING = 7         /* speed falling (forward or reverse) */
+    IMU_MOTION_DECELERATING = 7 /* speed falling (forward or reverse) */
 } imu_motion_t;
 
 /* imu_snap_t.cal */
-#define IMU_CAL_LEVEL           0x01u       /* level offsets stored           */
-#define IMU_CAL_MAG             0x02u       /* hard-iron offsets stored       */
+#define IMU_CAL_LEVEL 0x01u /* level offsets stored           */
+#define IMU_CAL_MAG   0x02u /* hard-iron offsets stored       */
 
 typedef struct
 {
     uint32_t t_ms;
-    int16_t  pitch_cdeg;        /* pitch, 0.01 deg, + nose up             */
-    int16_t  roll_cdeg;         /* + = right side up (checked on robot)   */
-    int16_t  heading_cdeg;      /* magnetometer, 0..35999                 */
-    int16_t  turn_rate_cdeg_s;  /* encoder yaw rate, + left               */
-    int16_t  accel_mg;          /* |a| - 1 g, mg                          */
-    uint16_t hump_max_mm;       /* highest hump peak of the run           */
-    uint16_t last_hump_mm;      /* peak of the last completed hump        */
-    uint16_t humps;             /* completed humps this run               */
-    uint16_t i2c_errors;        /* since boot                             */
-    uint8_t  hump_state;        /* imu_hump_state_t                       */
-    uint8_t  motion;            /* imu_motion_t                           */
-    uint8_t  b_ok;                /* 1 = readings valid (no IMU_FAULT)      */
-    uint8_t  cal;               /* IMU_CAL_* bits                         */
-    uint8_t  pitch_valid;       /* 1 = fresh, validated pitch (hump mask) */
-    uint8_t  tilt;              /* 1 = beyond 30 deg now (reset refused)  */
+    int16_t  pitch_cdeg;       /* pitch, 0.01 deg, + nose up             */
+    int16_t  roll_cdeg;        /* + = right side up (checked on robot)   */
+    int16_t  heading_cdeg;     /* magnetometer, 0..35999                 */
+    int16_t  turn_rate_cdeg_s; /* encoder yaw rate, + left               */
+    int16_t  accel_mg;         /* |a| - 1 g, mg                          */
+    uint16_t hump_max_mm;      /* highest hump peak of the run           */
+    uint16_t last_hump_mm;     /* peak of the last completed hump        */
+    uint16_t humps;            /* completed humps this run               */
+    uint16_t i2c_errors;       /* since boot                             */
+    uint8_t  hump_state;       /* imu_hump_state_t                       */
+    uint8_t  motion;           /* imu_motion_t                           */
+    uint8_t  b_ok;             /* 1 = readings valid (no IMU_FAULT)      */
+    uint8_t  cal;              /* IMU_CAL_* bits                         */
+    uint8_t  pitch_valid;      /* 1 = fresh, validated pitch (hump mask) */
+    uint8_t  tilt;             /* 1 = beyond 30 deg now (reset refused)  */
     uint8_t  reserved[2];
 } imu_snap_t;
 

@@ -16,11 +16,11 @@
 #include <stdint.h>
 #include "../app.h"
 
-#define DRV_ENC_LEFT        0u      /* PIO0 SM0 */
-#define DRV_ENC_RIGHT       1u      /* PIO0 SM1 */
+#define DRV_ENC_LEFT  0u /* PIO0 SM0 */
+#define DRV_ENC_RIGHT 1u /* PIO0 SM1 */
 
 /* Returns E_OBJ if a PIO0 state machine 0/1 is already running (boot check). */
-IMPORT ER      drv_encoder_init(void);
+IMPORT ER drv_encoder_init(void);
 
 /* Current count (signed, wraps at 2^32).  A few microseconds. */
 IMPORT int32_t drv_encoder_read(uint32_t which);

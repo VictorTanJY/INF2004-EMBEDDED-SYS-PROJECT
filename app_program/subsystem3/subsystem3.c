@@ -12,27 +12,29 @@ EXPORT ID g_tid_line;
 
 /* Stored packed (Change Requirement 1); whole records copied under the
    lock, packing and unpacking done in the writer's / reader's own task. */
-static app_lock_t   g_line_lock;
-static uint32_t     g_line_snap[LINE_SNAP_WORDS];
+static app_lock_t g_line_lock;
+static uint32_t   g_line_snap[LINE_SNAP_WORDS];
 
-EXPORT ER subsystem3_init(void)
+EXPORT ER subsystem3_init (void)
 {
     app_lock_init(&g_line_lock);
     {
         line_snap_t const zero = {0};
 
-        line_snap_pack(&zero, g_line_snap);    /* packed zero (offset-binary fields) */
+        line_snap_pack(&zero,
+                       g_line_snap); /* packed zero (offset-binary fields) */
     }
     return E_OK;
 }
 
-EXPORT ER subsystem3_start(void)
+EXPORT ER subsystem3_start (void)
 {
-    g_tid_line = app_start_task((FP)line_task, S3_PRI_LINE, S3_CORE_LINE, "line");
+    g_tid_line =
+        app_start_task((FP)line_task, S3_PRI_LINE, S3_CORE_LINE, "line");
     return (g_tid_line < E_OK) ? g_tid_line : E_OK;
 }
 
-EXPORT void line_get_snap(line_snap_t * p_out)
+EXPORT void line_get_snap (line_snap_t * p_out)
 {
     uint32_t words[LINE_SNAP_WORDS];
     uint32_t idx;
@@ -46,7 +48,7 @@ EXPORT void line_get_snap(line_snap_t * p_out)
     line_snap_unpack(words, p_out);
 }
 
-EXPORT void line_put_snap(line_snap_t const * p_in)
+EXPORT void line_put_snap (line_snap_t const * p_in)
 {
     uint32_t words[LINE_SNAP_WORDS];
     uint32_t idx;

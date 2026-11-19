@@ -24,75 +24,114 @@
 static int g_pass;
 static int g_fail;
 
-#define CHECK(id, cond) \
-    do { if (cond) { g_pass++; } else { g_fail++; \
-        printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); } } while (0)
+#define CHECK(id, cond)                                                      \
+    do                                                                       \
+    {                                                                        \
+        if (cond)                                                            \
+        {                                                                    \
+            g_pass++;                                                        \
+        }                                                                    \
+        else                                                                 \
+        {                                                                    \
+            g_fail++;                                                        \
+            printf("FAIL %s  (%s:%d)  %s\n", id, __FILE__, __LINE__, #cond); \
+        }                                                                    \
+    } while (0)
 
 typedef struct
 {
-    double vals[2];            /* mm/s  */
-    double pos_um[2];       /* wheel distance */
-    double gain;            /* mm/s per per-mille above the deadband */
-    int    locked[2];
+    double  vals[2];   /* mm/s  */
+    double  pos_um[2]; /* wheel distance */
+    double  gain;      /* mm/s per per-mille above the deadband */
+    int     locked[2];
     int32_t enc_offset;
 } plant_t;
 
 static motion_core_t g_mc;
 static plant_t       g_pl;
 static uint32_t      g_now;
-static int           g_ev[8];       /* counts per motion_ev_code_t */
+static int           g_ev[8]; /* counts per motion_ev_code_t */
 static uint8_t       g_last_seq;
 
 /* Stand-in for subsystem2.c's motion_post (the real one posts to
    mbf_motion): records the last command for the motion_api tests. */
-static struct { int count; uint8_t src; uint8_t seq; uint8_t cmd; int16_t arg0; int16_t arg1; } g_post;
+static struct
+{
+    int     count;
+    uint8_t src;
+    uint8_t seq;
+    uint8_t cmd;
+    int16_t arg0;
+    int16_t arg1;
+} g_post;
 
-int motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0, int16_t arg1)
+int motion_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
+                 int16_t arg1)
 {
     g_post.count++;
-    g_post.src = src; g_post.seq = seq; g_post.cmd = cmd; g_post.arg0 = arg0; g_post.arg1 = arg1;
+    g_post.src  = src;
+    g_post.seq  = seq;
+    g_post.cmd  = cmd;
+    g_post.arg0 = arg0;
+    g_post.arg1 = arg1;
     return 0;
 }
 
-#define POSTED(c, a, b) ((g_post.cmd == (uint8_t)(c)) && (g_post.arg0 == (a)) && (g_post.arg1 == (b)))
+#define POSTED(c, a, b)                                   \
+    ((g_post.cmd == (uint8_t)(c)) && (g_post.arg0 == (a)) \
+     && (g_post.arg1 == (b)))
 
-static void plant_init(double gain)
+static void plant_init (double gain)
 {
     memset(&g_pl, 0, sizeof(g_pl));
     g_pl.gain = gain;
 }
 
-static void plant_step(int16_t duty_l, int16_t duty_r)
+static void plant_step (int16_t duty_l, int16_t duty_r)
 {
-    int16_t const duty[2] = { duty_l, duty_r };
-    int width;
+    int16_t const duty[2] = {duty_l, duty_r};
+    int           width;
 
     for (width = 0; width < 2; width++)
     {
-        double diff  = (double)duty[width];
+        double diff   = (double)duty[width];
         double sum_sq = 0.0;
 
-        if (diff > 100.0)       { sum_sq = (diff - 100.0) * g_pl.gain; }
-        else if (diff < -100.0) { sum_sq = (diff + 100.0) * g_pl.gain; }
-        if ((0 == duty[width]) || g_pl.locked[width]) { sum_sq = 0.0; }     /* brake */
-        g_pl.vals[width] += (sum_sq - g_pl.vals[width]) * (10.0 / ((0 == duty[width]) ? 20.0 : 50.0));
-        if (g_pl.locked[width]) { g_pl.vals[width] = 0.0; }
-        g_pl.pos_um[width] += g_pl.vals[width] * 10.0;                    /* mm/s * 10 ms = um */
+        if (diff > 100.0)
+        {
+            sum_sq = (diff - 100.0) * g_pl.gain;
+        }
+        else if (diff < -100.0)
+        {
+            sum_sq = (diff + 100.0) * g_pl.gain;
+        }
+        if ((0 == duty[width]) || g_pl.locked[width])
+        {
+            sum_sq = 0.0;
+        } /* brake */
+        g_pl.vals[width] += (sum_sq - g_pl.vals[width])
+                            * (10.0 / ((0 == duty[width]) ? 20.0 : 50.0));
+        if (g_pl.locked[width])
+        {
+            g_pl.vals[width] = 0.0;
+        }
+        g_pl.pos_um[width] += g_pl.vals[width] * 10.0; /* mm/s * 10 ms = um */
     }
 }
 
-static int32_t enc_of(int width)
+static int32_t enc_of (int width)
 {
-    double counts = g_pl.pos_um[width] * MOTION_COUNTS_PER_REV / MOTION_WHEEL_CIRC_UM;
-    int32_t cnt = (int32_t)(counts >= 0 ? counts + 0.5 : counts - 0.5);
+    double counts =
+        g_pl.pos_um[width] * MOTION_COUNTS_PER_REV / MOTION_WHEEL_CIRC_UM;
+    int32_t cnt  = (int32_t)(counts >= 0 ? counts + 0.5 : counts - 0.5);
     int32_t sign = (0 == width) ? MOTION_ENC_SIGN_L : MOTION_ENC_SIGN_R;
 
     return (int32_t)((uint32_t)(cnt * sign) + (uint32_t)g_pl.enc_offset);
 }
 
-static void run_ms(uint32_t delay_ms, int b_estop)
+static void run_ms (uint32_t delay_ms, int b_estop)
 {
-    uint32_t elapsed;
+    uint32_t       elapsed;
     motion_event_t event;
 
     for (elapsed = 0; elapsed < delay_ms; elapsed += 10u)
@@ -108,10 +147,11 @@ static void run_ms(uint32_t delay_ms, int b_estop)
     }
 }
 
-static motion_result_t cmd(uint8_t src, uint8_t seq, uint8_t code, int16_t arg0, int16_t arg1)
+static motion_result_t cmd (uint8_t src, uint8_t seq, uint8_t code,
+                            int16_t arg0, int16_t arg1)
 {
-    motion_cmd_t cmd_msg = { src, seq, code, 0u, arg0, arg1 };
-    motion_event_t event;
+    motion_cmd_t    cmd_msg = {src, seq, code, 0u, arg0, arg1};
+    motion_event_t  event;
     motion_result_t result = motion_core_command(&g_mc, &cmd_msg, g_now);
 
     while (motion_core_pop_event(&g_mc, &event))
@@ -122,7 +162,7 @@ static motion_result_t cmd(uint8_t src, uint8_t seq, uint8_t code, int16_t arg0,
     return result;
 }
 
-static void reset_all(double gain)
+static void reset_all (double gain)
 {
     g_now = 1000u;
     plant_init(gain);
@@ -131,10 +171,10 @@ static void reset_all(double gain)
     run_ms(20u, 0);
 }
 
-static uint32_t run_until_event(int code, uint32_t max_ms)
+static uint32_t run_until_event (int code, uint32_t max_ms)
 {
     uint32_t elapsed = 0u;
-    int before = g_ev[code];
+    int      before  = g_ev[code];
 
     while ((g_ev[code] == before) && (elapsed < max_ms))
     {
@@ -145,53 +185,99 @@ static uint32_t run_until_event(int code, uint32_t max_ms)
 }
 
 /* S2-H16: Change Requirement 1, the packed mbf_motion word and odometry */
-static void test_pack_s2(void)
+static void test_pack_s2 (void)
 {
-    motion_cmd_t  cmd;
-    motion_cmd_t  unpacked;
-    motion_odom_t odom;
-    motion_odom_t ret;
-    uint32_t      words[MOTION_ODOM_WORDS];
-    int           b_ok = 1;
-    int           kdx;
-    static int16_t const drive[][2] = { { 0, 0 }, { 450, -2000 }, { -511, 2047 }, { 300, 1500 } };
-    static int16_t const move[][2]  = { { 1000, 200 }, { -4095, 511 }, { 4095, 1 }, { 0, 90 } };
+    motion_cmd_t         cmd;
+    motion_cmd_t         unpacked;
+    motion_odom_t        odom;
+    motion_odom_t        ret;
+    uint32_t             words[MOTION_ODOM_WORDS];
+    int                  b_ok = 1;
+    int                  kdx;
+    static int16_t const drive[][2] = {
+        {0, 0}, {450, -2000}, {-511, 2047}, {300, 1500}};
+    static int16_t const move[][2] = {
+        {1000, 200}, {-4095, 511}, {4095, 1}, {0, 90}};
 
     memset(&cmd, 0, sizeof(cmd));
     for (kdx = 0; kdx < 4; kdx++)
     {
-        cmd.src = 1u; cmd.seq = (uint8_t)(kdx * 9); cmd.cmd = (uint8_t)MOTION_CMD_DRIVE;
-        cmd.arg0 = drive[kdx][0]; cmd.arg1 = drive[kdx][1];
+        cmd.src  = 1u;
+        cmd.seq  = (uint8_t)(kdx * 9);
+        cmd.cmd  = (uint8_t)MOTION_CMD_DRIVE;
+        cmd.arg0 = drive[kdx][0];
+        cmd.arg1 = drive[kdx][1];
         motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
-        if ((unpacked.src != cmd.src) || (unpacked.seq != cmd.seq) || (unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0) || (unpacked.arg1 != cmd.arg1)) { b_ok = 0; }
-        cmd.src = 0u; cmd.cmd = (uint8_t)((kdx & 1) ? MOTION_CMD_TURN : MOTION_CMD_MOVE);
-        cmd.arg0 = move[kdx][0]; cmd.arg1 = move[kdx][1];
+        if ((unpacked.src != cmd.src) || (unpacked.seq != cmd.seq)
+            || (unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0)
+            || (unpacked.arg1 != cmd.arg1))
+        {
+            b_ok = 0;
+        }
+        cmd.src  = 0u;
+        cmd.cmd  = (uint8_t)((kdx & 1) ? MOTION_CMD_TURN : MOTION_CMD_MOVE);
+        cmd.arg0 = move[kdx][0];
+        cmd.arg1 = move[kdx][1];
         motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
-        if ((unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0) || (unpacked.arg1 != cmd.arg1)) { b_ok = 0; }
+        if ((unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0)
+            || (unpacked.arg1 != cmd.arg1))
+        {
+            b_ok = 0;
+        }
     }
     CHECK("S2-H16", b_ok);
-    cmd.cmd = (uint8_t)MOTION_CMD_SET_AUTH; cmd.arg0 = 2; cmd.arg1 = 0; cmd.seq = 31u; cmd.src = 0u;
+    cmd.cmd  = (uint8_t)MOTION_CMD_SET_AUTH;
+    cmd.arg0 = 2;
+    cmd.arg1 = 0;
+    cmd.seq  = 31u;
+    cmd.src  = 0u;
     motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
-    CHECK("S2-H16", MOTION_CMD_SET_AUTH == unpacked.cmd && 2 == unpacked.arg0 && 31u == unpacked.seq);
-    cmd.cmd = (uint8_t)MOTION_CMD_DRIVE; cmd.arg0 = 600; cmd.arg1 = -6000; cmd.seq = 33u;   /* saturate, seq 5 bits */
+    CHECK("S2-H16", MOTION_CMD_SET_AUTH == unpacked.cmd && 2 == unpacked.arg0
+                        && 31u == unpacked.seq);
+    cmd.cmd  = (uint8_t)MOTION_CMD_DRIVE;
+    cmd.arg0 = 600;
+    cmd.arg1 = -6000;
+    cmd.seq  = 33u; /* saturate, seq 5 bits */
     motion_cmd_unpack(motion_cmd_pack(&cmd), &unpacked);
-    CHECK("S2-H16", 511 == unpacked.arg0 && -2048 == unpacked.arg1 && 1u == unpacked.seq);
+    CHECK("S2-H16",
+          511 == unpacked.arg0 && -2048 == unpacked.arg1 && 1u == unpacked.seq);
     CHECK("S2-H16", 0u == motion_seq_next(31u) && 6u == motion_seq_next(5u));
     /* the named API refuses what the word cannot carry */
-    CHECK("S2-H16", MOTION_API_E_PAR == motion_move_forward(0u, 1u, 4096u, 200u) &&
-                    MOTION_API_E_PAR == motion_turn_left(0u, 1u, 900u, 512u));
+    CHECK("S2-H16",
+          MOTION_API_E_PAR == motion_move_forward(0u, 1u, 4096u, 200u)
+              && MOTION_API_E_PAR == motion_turn_left(0u, 1u, 900u, 512u));
 
-    /* odometry: the layout fills MOTION_ODOM_WORDS; values in range come back exactly */
-    CHECK("S2-H16", MOTION_ODOM_BITS == motion_odom_layout_bits() &&
-                    MOTION_ODOM_WORDS == PK_WORDS(MOTION_ODOM_BITS) && sizeof(words) < sizeof(odom));
+    /* odometry: the layout fills MOTION_ODOM_WORDS; values in range come back
+     * exactly */
+    CHECK("S2-H16", MOTION_ODOM_BITS == motion_odom_layout_bits()
+                        && MOTION_ODOM_WORDS == PK_WORDS(MOTION_ODOM_BITS)
+                        && sizeof(words) < sizeof(odom));
     memset(&odom, 0, sizeof(odom));
-    odom.t_ms = 0xDEADBEEFu; odom.enc_l = -123456789; odom.enc_r = 2000000000; odom.dist_mm = -42;
-    odom.x_mm = -8388608; odom.y_mm = 8388607; odom.heading_cdeg = -720000; odom.v_l_mm_s = -511; odom.v_r_mm_s = 450;
-    odom.v_mm_s = -30; odom.yaw_rate_cdeg_s = -32768; odom.duty_l = -1000; odom.duty_r = 1000; odom.rejected = 65535u;
-    odom.state = 4u; odom.phase = 4u; odom.auth = 2u; odom.last_done_seq = 31u; odom.last_done_src = 2u;
-    odom.last_fail_seq = 17u; odom.done_count = 255u; odom.fail_count = 1u; odom.hw_ok = 1u;
+    odom.t_ms            = 0xDEADBEEFu;
+    odom.enc_l           = -123456789;
+    odom.enc_r           = 2000000000;
+    odom.dist_mm         = -42;
+    odom.x_mm            = -8388608;
+    odom.y_mm            = 8388607;
+    odom.heading_cdeg    = -720000;
+    odom.v_l_mm_s        = -511;
+    odom.v_r_mm_s        = 450;
+    odom.v_mm_s          = -30;
+    odom.yaw_rate_cdeg_s = -32768;
+    odom.duty_l          = -1000;
+    odom.duty_r          = 1000;
+    odom.rejected        = 65535u;
+    odom.state           = 4u;
+    odom.phase           = 4u;
+    odom.auth            = 2u;
+    odom.last_done_seq   = 31u;
+    odom.last_done_src   = 2u;
+    odom.last_fail_seq   = 17u;
+    odom.done_count      = 255u;
+    odom.fail_count      = 1u;
+    odom.hw_ok           = 1u;
     motion_odom_pack(&odom, words);
-    memset(&ret, 0x5A, sizeof(ret));                /* every field must be written */
+    memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
     motion_odom_unpack(words, &ret);
     {
         uint32_t words_out[MOTION_ODOM_WORDS];
@@ -199,32 +285,48 @@ static void test_pack_s2(void)
         motion_odom_pack(&ret, words_out);
         CHECK("S2-H16", 0 == memcmp(words, words_out, sizeof(words)));
     }
-    memset(&ret, 0, sizeof(ret));                   /* same padding as o */
+    memset(&ret, 0, sizeof(ret)); /* same padding as o */
     motion_odom_unpack(words, &ret);
     CHECK("S2-H16", 0 == memcmp(&odom, &ret, sizeof(odom)));
-    odom.v_l_mm_s = 32767; odom.duty_r = -32768; odom.x_mm = 100000000;              /* out of range: saturate */
+    odom.v_l_mm_s = 32767;
+    odom.duty_r   = -32768;
+    odom.x_mm     = 100000000; /* out of range: saturate */
     motion_odom_pack(&odom, words);
     motion_odom_unpack(words, &ret);
-    CHECK("S2-H16", 511 == ret.v_l_mm_s && -1024 == ret.duty_r && 8388607 == ret.x_mm);
+    CHECK("S2-H16",
+          511 == ret.v_l_mm_s && -1024 == ret.duty_r && 8388607 == ret.x_mm);
 }
 
-int main(void)
+int main (void)
 {
     motion_odom_t odom;
 
     /* S2-H01: authority rules (Week 6 Section 6.1) */
     reset_all(0.5);
-    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH == cmd(MOTION_SRC_LINE, 1, MOTION_CMD_DRIVE, 200, 0));
-    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH == cmd(MOTION_SRC_LINE, 1, MOTION_CMD_SET_AUTH, MOTION_SRC_LINE, 0));
-    CHECK("S2-H01", MOTION_RES_ACCEPTED == cmd(MOTION_SRC_MISSION, 1, MOTION_CMD_SET_AUTH, MOTION_SRC_LINE, 0));
-    CHECK("S2-H01", MOTION_RES_ACCEPTED == cmd(MOTION_SRC_LINE, 2, MOTION_CMD_DRIVE, 200, 0));
-    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH == cmd(MOTION_SRC_AVOID, 1, MOTION_CMD_STOP, 0, 0));
-    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH == cmd(MOTION_SRC_MISSION, 2, MOTION_CMD_MOVE, 100, 200));
-    CHECK("S2-H01", MOTION_RES_INVALID == cmd(MOTION_SRC_MISSION, 3, MOTION_CMD_SET_AUTH, 7, 0));
+    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH
+                        == cmd(MOTION_SRC_LINE, 1, MOTION_CMD_DRIVE, 200, 0));
+    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH
+                        == cmd(MOTION_SRC_LINE, 1, MOTION_CMD_SET_AUTH,
+                               MOTION_SRC_LINE, 0));
+    CHECK("S2-H01", MOTION_RES_ACCEPTED
+                        == cmd(MOTION_SRC_MISSION, 1, MOTION_CMD_SET_AUTH,
+                               MOTION_SRC_LINE, 0));
+    CHECK("S2-H01", MOTION_RES_ACCEPTED
+                        == cmd(MOTION_SRC_LINE, 2, MOTION_CMD_DRIVE, 200, 0));
+    CHECK("S2-H01", MOTION_RES_REJECTED_AUTH
+                        == cmd(MOTION_SRC_AVOID, 1, MOTION_CMD_STOP, 0, 0));
+    CHECK("S2-H01",
+          MOTION_RES_REJECTED_AUTH
+              == cmd(MOTION_SRC_MISSION, 2, MOTION_CMD_MOVE, 100, 200));
+    CHECK("S2-H01",
+          MOTION_RES_INVALID
+              == cmd(MOTION_SRC_MISSION, 3, MOTION_CMD_SET_AUTH, 7, 0));
     CHECK("S2-H01", 5u == g_mc.rejected);
-    CHECK("S2-H01", MOTION_RES_ACCEPTED == cmd(MOTION_SRC_MISSION, 4, MOTION_CMD_STOP, 0, 0));
+    CHECK("S2-H01", MOTION_RES_ACCEPTED
+                        == cmd(MOTION_SRC_MISSION, 4, MOTION_CMD_STOP, 0, 0));
 
-    /* S2-H02: MOVE 1000 mm at 300 mm/s -> DONE, within 2 % (NFR4 logic) and straight */
+    /* S2-H02: MOVE 1000 mm at 300 mm/s -> DONE, within 2 % (NFR4 logic) and
+     * straight */
     reset_all(0.5);
     (void)cmd(MOTION_SRC_MISSION, 10, MOTION_CMD_MOVE, 1000, 300);
     {
@@ -234,24 +336,29 @@ int main(void)
         CHECK("S2-H02", 1 == g_ev[MOTION_EV_DONE] && 10u == g_last_seq);
         CHECK("S2-H02", abs(odom.dist_mm - 1000) <= 20);
         CHECK("S2-H02", abs(odom.x_mm - 1000) <= 20 && abs(odom.y_mm) <= 30);
-        CHECK("S2-H02", elapsed < 2u * motion_core_expected_ms(1000000, 300) + MOTION_TIMEOUT_MARGIN_MS);
-        CHECK("S2-H02", 10u == odom.last_done_seq && 1u == odom.done_count && MOTION_ST_IDLE_BRAKED == odom.state);
-        printf("MOVE 1000 mm: %d mm in %u ms (x %d, y %d)\n", (int)odom.dist_mm, (unsigned)elapsed,
-               (int)odom.x_mm, (int)odom.y_mm);
+        CHECK("S2-H02", elapsed < 2u * motion_core_expected_ms(1000000, 300)
+                                      + MOTION_TIMEOUT_MARGIN_MS);
+        CHECK("S2-H02", 10u == odom.last_done_seq && 1u == odom.done_count
+                            && MOTION_ST_IDLE_BRAKED == odom.state);
+        printf("MOVE 1000 mm: %d mm in %u ms (x %d, y %d)\n", (int)odom.dist_mm,
+               (unsigned)elapsed, (int)odom.x_mm, (int)odom.y_mm);
     }
 
-    /* S2-H03: TURN +90.0 deg and -180.0 deg -> heading within 1 deg of the model */
+    /* S2-H03: TURN +90.0 deg and -180.0 deg -> heading within 1 deg of the
+     * model */
     reset_all(0.5);
     (void)cmd(MOTION_SRC_MISSION, 20, MOTION_CMD_TURN, 900, 180);
     (void)run_until_event(MOTION_EV_DONE, 10000u);
     motion_core_snapshot(&g_mc, &odom);
-    CHECK("S2-H03", 1 == g_ev[MOTION_EV_DONE] && abs(odom.heading_cdeg - 9000) <= 100);
+    CHECK("S2-H03",
+          1 == g_ev[MOTION_EV_DONE] && abs(odom.heading_cdeg - 9000) <= 100);
     CHECK("S2-H03", abs(odom.dist_mm) <= 5);
     printf("TURN +90: heading %d cdeg\n", (int)odom.heading_cdeg);
     (void)cmd(MOTION_SRC_MISSION, 21, MOTION_CMD_TURN, -1800, 180);
     (void)run_until_event(MOTION_EV_DONE, 10000u);
     motion_core_snapshot(&g_mc, &odom);
-    CHECK("S2-H03", 2 == g_ev[MOTION_EV_DONE] && abs(odom.heading_cdeg - (-9000)) <= 100);
+    CHECK("S2-H03",
+          2 == g_ev[MOTION_EV_DONE] && abs(odom.heading_cdeg - (-9000)) <= 100);
     printf("TURN -180: heading %d cdeg\n", (int)odom.heading_cdeg);
 
     /* S2-H04: DRIVE watchdog: no new DRIVE for 100 ms -> stops on its own */
@@ -262,23 +369,29 @@ int main(void)
 
         for (elapsed = 0; elapsed < 1000u; elapsed += 10u)
         {
-            (void)cmd(MOTION_SRC_LINE, (uint8_t)elapsed, MOTION_CMD_DRIVE, 250, 0);
+            (void)cmd(MOTION_SRC_LINE, (uint8_t)elapsed, MOTION_CMD_DRIVE, 250,
+                      0);
             run_ms(10u, 0);
         }
         motion_core_snapshot(&g_mc, &odom);
-        CHECK("S2-H09", abs(odom.v_mm_s - 250) <= 25);      /* NFR5 logic: +-10 % */
+        CHECK("S2-H09", abs(odom.v_mm_s - 250) <= 25); /* NFR5 logic: +-10 % */
         printf("DRIVE 250 mm/s: measured %d mm/s\n", (int)odom.v_mm_s);
         CHECK("S2-H04", MOTION_ST_VELOCITY_TRACK == g_mc.state);
-        run_ms(80u, 0);                 /* last DRIVE now 90 ms old */
+        run_ms(80u, 0); /* last DRIVE now 90 ms old */
         CHECK("S2-H04", MOTION_ST_VELOCITY_TRACK == g_mc.state);
-        run_ms(20u, 0);                 /* 110 ms old */
+        run_ms(20u, 0); /* 110 ms old */
         CHECK("S2-H04", MOTION_ST_STOPPING == g_mc.state);
         /* S2-H05: ramp at 1 m/s^2 from 250 mm/s: about 250 ms to braked */
         elapsed = 0u;
-        while ((g_mc.state != MOTION_ST_IDLE_BRAKED) && (elapsed < 2000u)) { run_ms(10u, 0); elapsed += 10u; }
+        while ((g_mc.state != MOTION_ST_IDLE_BRAKED) && (elapsed < 2000u))
+        {
+            run_ms(10u, 0);
+            elapsed += 10u;
+        }
         CHECK("S2-H05", (elapsed >= 200u) && (elapsed <= 300u));
         CHECK("S2-H05", 0 == g_mc.duty_l && 0 == g_mc.duty_r);
-        printf("STOP ramp from 250 mm/s: braked after %u ms\n", (unsigned)elapsed);
+        printf("STOP ramp from 250 mm/s: braked after %u ms\n",
+               (unsigned)elapsed);
     }
 
     /* S2-H06: stall: wheel locked while driven -> STALL after 300 ms */
@@ -291,7 +404,8 @@ int main(void)
 
         CHECK("S2-H06", 1 == g_ev[MOTION_EV_STALL]);
         CHECK("S2-H06", (elapsed >= 300u) && (elapsed <= 600u));
-        printf("STALL reported %u ms after the wheel locked\n", (unsigned)elapsed);
+        printf("STALL reported %u ms after the wheel locked\n",
+               (unsigned)elapsed);
     }
 
     /* S2-H07: E-stop latch */
@@ -299,24 +413,34 @@ int main(void)
     (void)cmd(MOTION_SRC_MISSION, 40, MOTION_CMD_MOVE, 1000, 300);
     run_ms(200u, 0);
     run_ms(10u, 1);
-    CHECK("S2-H07", MOTION_ST_ESTOP_LATCHED == g_mc.state && 1 == g_ev[MOTION_EV_FAILED]);
+    CHECK("S2-H07",
+          MOTION_ST_ESTOP_LATCHED == g_mc.state && 1 == g_ev[MOTION_EV_FAILED]);
     CHECK("S2-H07", 0 == g_mc.duty_l && 0 == g_mc.duty_r);
-    CHECK("S2-H07", MOTION_RES_REJECTED_ESTOP == cmd(MOTION_SRC_MISSION, 41, MOTION_CMD_STOP, 0, 0));
-    CHECK("S2-H07", MOTION_RES_REJECTED_AUTH == cmd(MOTION_SRC_LINE, 41, MOTION_CMD_CLEAR_ESTOP, 0, 0));
-    CHECK("S2-H07", MOTION_RES_CLEAR_ESTOP == cmd(MOTION_SRC_MISSION, 42, MOTION_CMD_CLEAR_ESTOP, 0, 0));
+    CHECK("S2-H07", MOTION_RES_REJECTED_ESTOP
+                        == cmd(MOTION_SRC_MISSION, 41, MOTION_CMD_STOP, 0, 0));
+    CHECK("S2-H07",
+          MOTION_RES_REJECTED_AUTH
+              == cmd(MOTION_SRC_LINE, 41, MOTION_CMD_CLEAR_ESTOP, 0, 0));
+    CHECK("S2-H07",
+          MOTION_RES_CLEAR_ESTOP
+              == cmd(MOTION_SRC_MISSION, 42, MOTION_CMD_CLEAR_ESTOP, 0, 0));
     motion_core_estop_cleared(&g_mc);
-    CHECK("S2-H07", MOTION_ST_IDLE_BRAKED == g_mc.state && MOTION_SRC_MISSION == g_mc.auth);
+    CHECK("S2-H07", MOTION_ST_IDLE_BRAKED == g_mc.state
+                        && MOTION_SRC_MISSION == g_mc.auth);
 
     /* S2-H08: manoeuvre timeout -> FAILED (weak motor cannot finish) */
     reset_all(0.03);
     (void)cmd(MOTION_SRC_MISSION, 50, MOTION_CMD_MOVE, 500, 300);
     {
-        uint32_t limit = 2u * motion_core_expected_ms(500000, 300) + MOTION_TIMEOUT_MARGIN_MS;
+        uint32_t limit   = 2u * motion_core_expected_ms(500000, 300)
+                           + MOTION_TIMEOUT_MARGIN_MS;
         uint32_t elapsed = run_until_event(MOTION_EV_FAILED, 20000u);
 
-        CHECK("S2-H08", 1 == g_ev[MOTION_EV_FAILED] && 0 == g_ev[MOTION_EV_DONE]);
+        CHECK("S2-H08",
+              1 == g_ev[MOTION_EV_FAILED] && 0 == g_ev[MOTION_EV_DONE]);
         CHECK("S2-H08", (elapsed >= limit - 20u) && (elapsed <= limit + 20u));
-        CHECK("S2-H08", 50u == g_mc.last_fail_seq && MOTION_ST_IDLE_BRAKED == g_mc.state);
+        CHECK("S2-H08",
+              50u == g_mc.last_fail_seq && MOTION_ST_IDLE_BRAKED == g_mc.state);
     }
 
     /* S2-H10: pose: MOVE 500, TURN +90, MOVE 500 -> (500, 500) */
@@ -329,7 +453,8 @@ int main(void)
     (void)run_until_event(MOTION_EV_DONE, 10000u);
     motion_core_snapshot(&g_mc, &odom);
     CHECK("S2-H10", abs(odom.x_mm - 500) <= 25 && abs(odom.y_mm - 500) <= 25);
-    printf("square leg: x %d y %d heading %d\n", (int)odom.x_mm, (int)odom.y_mm, (int)odom.heading_cdeg);
+    printf("square leg: x %d y %d heading %d\n", (int)odom.x_mm, (int)odom.y_mm,
+           (int)odom.heading_cdeg);
 
     /* S2-H11: encoder counter wrap does not disturb odometry */
     reset_all(0.5);
@@ -339,10 +464,11 @@ int main(void)
     (void)cmd(MOTION_SRC_MISSION, 70, MOTION_CMD_MOVE, 600, 300);
     (void)run_until_event(MOTION_EV_DONE, 10000u);
     motion_core_snapshot(&g_mc, &odom);
-    CHECK("S2-H11", abs(odom.dist_mm - 600) <= 12 && 0 == g_ev[MOTION_EV_ENC_FAULT]);
+    CHECK("S2-H11",
+          abs(odom.dist_mm - 600) <= 12 && 0 == g_ev[MOTION_EV_ENC_FAULT]);
 
     /* S2-H12: an impossible jump is reported as ENC_FAULT, then cleared */
-    g_pl.pos_um[0] += 50000.0;          /* 50 mm in one cycle */
+    g_pl.pos_um[0] += 50000.0; /* 50 mm in one cycle */
     run_ms(20u, 0);
     CHECK("S2-H12", 1 == g_ev[MOTION_EV_ENC_FAULT]);
     run_ms(1100u, 0);
@@ -359,21 +485,32 @@ int main(void)
 
     /* S2-H14: the named API (FR5) posts the right command and signs */
     memset(&g_post, 0, sizeof(g_post));
-    CHECK("S2-H14", 0 == motion_move_forward(MOTION_SRC_MISSION, 7u, 500u, 250u) &&
-                    POSTED(MOTION_CMD_MOVE, 500, 250) && MOTION_SRC_MISSION == g_post.src && 7u == g_post.seq);
-    CHECK("S2-H14", 0 == motion_move_backward(MOTION_SRC_AVOID, 8u, 100u, 250u) &&
-                    POSTED(MOTION_CMD_MOVE, -100, 250) && MOTION_SRC_AVOID == g_post.src);
-    CHECK("S2-H14", 0 == motion_turn_left(MOTION_SRC_MISSION, 9u, 900u, 120u) && POSTED(MOTION_CMD_TURN, 900, 120));
-    CHECK("S2-H14", 0 == motion_turn_right(MOTION_SRC_MISSION, 10u, 1800u, 90u) && POSTED(MOTION_CMD_TURN, -1800, 90));
-    CHECK("S2-H14", 0 == motion_stop(MOTION_SRC_MISSION, 11u) && POSTED(MOTION_CMD_STOP, 0, 0));
-    CHECK("S2-H14", 0 == motion_drive(MOTION_SRC_LINE, 12u, 250, -400) && POSTED(MOTION_CMD_DRIVE, 250, -400) &&
-                    MOTION_SRC_LINE == g_post.src);
+    CHECK("S2-H14", 0 == motion_move_forward(MOTION_SRC_MISSION, 7u, 500u, 250u)
+                        && POSTED(MOTION_CMD_MOVE, 500, 250)
+                        && MOTION_SRC_MISSION == g_post.src
+                        && 7u == g_post.seq);
+    CHECK("S2-H14", 0 == motion_move_backward(MOTION_SRC_AVOID, 8u, 100u, 250u)
+                        && POSTED(MOTION_CMD_MOVE, -100, 250)
+                        && MOTION_SRC_AVOID == g_post.src);
+    CHECK("S2-H14", 0 == motion_turn_left(MOTION_SRC_MISSION, 9u, 900u, 120u)
+                        && POSTED(MOTION_CMD_TURN, 900, 120));
+    CHECK("S2-H14", 0 == motion_turn_right(MOTION_SRC_MISSION, 10u, 1800u, 90u)
+                        && POSTED(MOTION_CMD_TURN, -1800, 90));
+    CHECK("S2-H14", 0 == motion_stop(MOTION_SRC_MISSION, 11u)
+                        && POSTED(MOTION_CMD_STOP, 0, 0));
+    CHECK("S2-H14", 0 == motion_drive(MOTION_SRC_LINE, 12u, 250, -400)
+                        && POSTED(MOTION_CMD_DRIVE, 250, -400)
+                        && MOTION_SRC_LINE == g_post.src);
     /* out of range: refused, nothing posted */
     {
         int const count = g_post.count;
 
-        CHECK("S2-H14", MOTION_API_E_PAR == motion_move_forward(MOTION_SRC_MISSION, 1u, 40000u, 250u));
-        CHECK("S2-H14", MOTION_API_E_PAR == motion_turn_left(MOTION_SRC_MISSION, 1u, 900u, 0u));
+        CHECK("S2-H14",
+              MOTION_API_E_PAR
+                  == motion_move_forward(MOTION_SRC_MISSION, 1u, 40000u, 250u));
+        CHECK("S2-H14",
+              MOTION_API_E_PAR
+                  == motion_turn_left(MOTION_SRC_MISSION, 1u, 900u, 0u));
         CHECK("S2-H14", g_post.count == count);
     }
     /* end to end: what the API posts, MotionTask executes (turn left 90) */

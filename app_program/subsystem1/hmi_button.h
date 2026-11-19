@@ -18,17 +18,17 @@
 typedef enum
 {
     HMI_BTN_EV_NONE  = 0,
-    HMI_BTN_EV_PRESS = 1,       /* debounced press edge                       */
-    HMI_BTN_EV_SHORT = 2,       /* released before the long-press time        */
-    HMI_BTN_EV_LONG  = 3        /* held for the long-press time (sent once)   */
+    HMI_BTN_EV_PRESS = 1, /* debounced press edge                       */
+    HMI_BTN_EV_SHORT = 2, /* released before the long-press time        */
+    HMI_BTN_EV_LONG  = 3  /* held for the long-press time (sent once)   */
 } hmi_btn_ev_t;
 
 typedef struct
 {
-    bool     b_last_raw;        /* previous raw sample (true = pressed)       */
-    bool     b_stable;          /* debounced level                            */
+    bool     b_last_raw; /* previous raw sample (true = pressed)       */
+    bool     b_stable;   /* debounced level                            */
     bool     b_long_sent;
-    uint16_t held_ms;           /* time held since the debounced press        */
+    uint16_t held_ms; /* time held since the debounced press        */
 } hmi_btn_t;
 
 void         hmi_btn_init(hmi_btn_t * p_btn);

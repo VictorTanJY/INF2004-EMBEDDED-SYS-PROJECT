@@ -16,51 +16,52 @@ EXPORT ID g_flg_obst;
 /* Snapshots are stored packed (Change Requirement 1).  The writer packs
    and the readers unpack in their own task; only whole records are copied
    under the lock, so nobody read-modify-writes the shared words. */
-static app_lock_t       g_mission_lock;
-static uint32_t         g_mission_snap[MISSION_SNAP_WORDS];
-static app_lock_t       g_obst_lock;
-static uint32_t         g_obst_snap[OBST_SNAP_WORDS];
-static UW               g_drops;
-static ID               g_cyc_range;
+static app_lock_t g_mission_lock;
+static uint32_t   g_mission_snap[MISSION_SNAP_WORDS];
+static app_lock_t g_obst_lock;
+static uint32_t   g_obst_snap[OBST_SNAP_WORDS];
+static UW         g_drops;
+static ID         g_cyc_range;
 
 /* range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
-static void range_cyc_handler(void * p_exinf)
+static void range_cyc_handler (void * p_exinf)
 {
     (void)p_exinf;
     (void)tk_set_flg(g_flg_obst, OBST_FLG_RANGE);
 }
 
-EXPORT ER subsystem5_init(void)
+EXPORT ER subsystem5_init (void)
 {
-    T_CMBF  cmbf = {0};
-    T_CFLG  cflg = {0};
-    T_CCYC  ccyc = {0};
+    T_CMBF cmbf = {0};
+    T_CFLG cflg = {0};
+    T_CCYC ccyc = {0};
 
     app_lock_init(&g_mission_lock);
     app_lock_init(&g_obst_lock);
     {
         mission_snap_t mission = {0};
-        obst_snap_t    obst = {0};
+        obst_snap_t    obst    = {0};
 
         mission.state       = (uint8_t)MISSION_ST_BOOT;
         mission.pending_nav = (uint8_t)MISSION_NAV_NONE;
-        obst.d_mm        = OBST_RANGE_NONE;
+        obst.d_mm           = OBST_RANGE_NONE;
         mission_snap_pack(&mission, g_mission_snap);
         obst_snap_pack(&obst, g_obst_snap);
     }
 
     /* Messages are one packed word each (CR1); the kernel adds a 4-byte
        header and rounds the message up to 4 bytes (messagebuf.h). */
-    cmbf.mbfatr  = TA_TFIFO;
-    cmbf.bufsz   = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
-    cmbf.maxmsz  = sizeof(uint32_t);
+    cmbf.mbfatr   = TA_TFIFO;
+    cmbf.bufsz    = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
+    cmbf.maxmsz   = sizeof(uint32_t);
     g_mbf_mission = tk_cre_mbf(&cmbf);
     if (g_mbf_mission < E_OK)
     {
         return g_mbf_mission;
     }
 
-    cmbf.bufsz  = S5_MBF_SCAN_DEPTH * (sizeof(INT) + sizeof(INT));   /* 2 B rounded to 4 */
+    cmbf.bufsz =
+        S5_MBF_SCAN_DEPTH * (sizeof(INT) + sizeof(INT)); /* 2 B rounded to 4 */
     cmbf.maxmsz = sizeof(uint16_t);
     g_mbf_scan  = tk_cre_mbf(&cmbf);
     if (g_mbf_scan < E_OK)
@@ -68,7 +69,7 @@ EXPORT ER subsystem5_init(void)
         return g_mbf_scan;
     }
 
-    cflg.flgatr  = TA_TFIFO | TA_WSGL;  /* only ObstacleTask waits */
+    cflg.flgatr  = TA_TFIFO | TA_WSGL; /* only ObstacleTask waits */
     cflg.iflgptn = 0;
     g_flg_obst   = tk_cre_flg(&cflg);
     if (g_flg_obst < E_OK)
@@ -84,7 +85,7 @@ EXPORT ER subsystem5_init(void)
     return (g_cyc_range < E_OK) ? g_cyc_range : E_OK;
 }
 
-EXPORT ER subsystem5_start(void)
+EXPORT ER subsystem5_start (void)
 {
     ID tid;
 
@@ -93,7 +94,8 @@ EXPORT ER subsystem5_start(void)
     {
         return tid;
     }
-    tid = app_start_task((FP)obstacle_task, S5_PRI_OBSTACLE, S5_CORE, "obstacle");
+    tid =
+        app_start_task((FP)obstacle_task, S5_PRI_OBSTACLE, S5_CORE, "obstacle");
     if (tid < E_OK)
     {
         return tid;
@@ -101,7 +103,7 @@ EXPORT ER subsystem5_start(void)
     return tk_sta_cyc(g_cyc_range);
 }
 
-EXPORT ER mission_post(uint8_t type, uint8_t src, uint16_t arg, int32_t data)
+EXPORT ER mission_post (uint8_t type, uint8_t src, uint16_t arg, int32_t data)
 {
     mission_evt_t evt;
     uint32_t      word;
@@ -109,23 +111,23 @@ EXPORT ER mission_post(uint8_t type, uint8_t src, uint16_t arg, int32_t data)
 
     evt.type = type;
     evt.src  = src;
-    evt.arg    = arg;
+    evt.arg  = arg;
     evt.data = data;
-    word = mission_evt_pack(&evt);
-    err = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
+    word     = mission_evt_pack(&evt);
+    err      = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
     if (err != E_OK)
     {
-        app_atomic_inc(&g_drops);       /* senders on both cores */
+        app_atomic_inc(&g_drops); /* senders on both cores */
     }
     return err;
 }
 
-EXPORT uint32_t mission_post_drops(void)
+EXPORT uint32_t mission_post_drops (void)
 {
     return g_drops;
 }
 
-EXPORT ER scan_request(uint8_t type, uint8_t seq, int16_t param)
+EXPORT ER scan_request (uint8_t type, uint8_t seq, int16_t param)
 {
     scan_req_t req;
     uint16_t   word;
@@ -134,13 +136,13 @@ EXPORT ER scan_request(uint8_t type, uint8_t seq, int16_t param)
     req.type  = type;
     req.seq   = seq;
     req.param = param;
-    word = scan_req_pack(&req);
-    err = tk_snd_mbf(g_mbf_scan, &word, sizeof(word), TMO_POL);
+    word      = scan_req_pack(&req);
+    err       = tk_snd_mbf(g_mbf_scan, &word, sizeof(word), TMO_POL);
     (void)tk_set_flg(g_flg_obst, OBST_FLG_REQ);
     return err;
 }
 
-EXPORT void mission_get_snap(mission_snap_t * p_out)
+EXPORT void mission_get_snap (mission_snap_t * p_out)
 {
     uint32_t words[MISSION_SNAP_WORDS];
     uint32_t idx;
@@ -154,7 +156,7 @@ EXPORT void mission_get_snap(mission_snap_t * p_out)
     mission_snap_unpack(words, p_out);
 }
 
-EXPORT void mission_put_snap(mission_snap_t const * p_in)
+EXPORT void mission_put_snap (mission_snap_t const * p_in)
 {
     uint32_t words[MISSION_SNAP_WORDS];
     UINT     sts;
@@ -169,7 +171,7 @@ EXPORT void mission_put_snap(mission_snap_t const * p_in)
     app_unlock(&g_mission_lock, sts);
 }
 
-EXPORT void obst_get_snap(obst_snap_t * p_out)
+EXPORT void obst_get_snap (obst_snap_t * p_out)
 {
     uint32_t words[OBST_SNAP_WORDS];
     uint32_t idx;
@@ -183,7 +185,7 @@ EXPORT void obst_get_snap(obst_snap_t * p_out)
     obst_snap_unpack(words, p_out);
 }
 
-EXPORT void obst_put_snap(obst_snap_t const * p_in)
+EXPORT void obst_put_snap (obst_snap_t const * p_in)
 {
     uint32_t words[OBST_SNAP_WORDS];
     UINT     sts;

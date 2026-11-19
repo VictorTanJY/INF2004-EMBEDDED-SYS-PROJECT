@@ -6,25 +6,26 @@
 #include "app_gpio_irq.h"
 
 /* IO_BANK0 interrupt registers (RP2040 datasheet 2.19.6.1).  Each register
-   covers 8 GPIOs, 4 bits per GPIO: LEVEL_LOW, LEVEL_HIGH, EDGE_LOW, EDGE_HIGH. */
-#define IO_INTR(n)          (IO_BANK0_BASE + 0x0F0u + (4u * (n)))
-#define IO_PROC0_INTE(n)    (IO_BANK0_BASE + 0x100u + (4u * (n)))
-#define IO_PROC0_INTS(n)    (IO_BANK0_BASE + 0x120u + (4u * (n)))
-#define IO_PROC1_INTE(n)    (IO_BANK0_BASE + 0x130u + (4u * (n)))
-#define IO_PROC1_INTS(n)    (IO_BANK0_BASE + 0x150u + (4u * (n)))
-#define IO_INT_REGS         4u
-#define IO_EDGE_BITS        (APP_GPIO_EDGE_FALL | APP_GPIO_EDGE_RISE)
+   covers 8 GPIOs, 4 bits per GPIO: LEVEL_LOW, LEVEL_HIGH, EDGE_LOW, EDGE_HIGH.
+ */
+#define IO_INTR(n)       (IO_BANK0_BASE + 0x0F0u + (4u * (n)))
+#define IO_PROC0_INTE(n) (IO_BANK0_BASE + 0x100u + (4u * (n)))
+#define IO_PROC0_INTS(n) (IO_BANK0_BASE + 0x120u + (4u * (n)))
+#define IO_PROC1_INTE(n) (IO_BANK0_BASE + 0x130u + (4u * (n)))
+#define IO_PROC1_INTS(n) (IO_BANK0_BASE + 0x150u + (4u * (n)))
+#define IO_INT_REGS      4u
+#define IO_EDGE_BITS     (APP_GPIO_EDGE_FALL | APP_GPIO_EDGE_RISE)
 
-static app_gpio_cb_t     g_cb[GPIO_NUM];
-static volatile uint32_t g_count;
-static bool              gb_defined;
+static app_gpio_cb_t g_cb[GPIO_NUM];
+static uint32_t volatile g_count;
+static bool gb_defined;
 
-static uint32_t this_core(void)
+static uint32_t this_core (void)
 {
-    return in_w(SIO_CPUID_ADDR);        /* 0 = core 0, 1 = core 1 */
+    return in_w(SIO_CPUID_ADDR); /* 0 = core 0, 1 = core 1 */
 }
 
-static void gpio_bank0_isr(UINT intno)
+static void gpio_bank0_isr (UINT intno)
 {
     uint32_t const t_us = (uint32_t)app_time_us();
     uint32_t const core = this_core();
@@ -34,7 +35,8 @@ static void gpio_bank0_isr(UINT intno)
     g_count++;
     for (reg = 0u; reg < IO_INT_REGS; reg++)
     {
-        uint32_t ints = in_w((0u == core) ? IO_PROC0_INTS(reg) : IO_PROC1_INTS(reg));
+        uint32_t ints =
+            in_w((0u == core) ? IO_PROC0_INTS(reg) : IO_PROC1_INTS(reg));
 
         while (ints != 0u)
         {
@@ -56,7 +58,7 @@ static void gpio_bank0_isr(UINT intno)
     }
 }
 
-EXPORT ER app_gpio_irq_init(void)
+EXPORT ER app_gpio_irq_init (void)
 {
     T_DINT dint;
     ER     err = E_OK;
@@ -65,26 +67,28 @@ EXPORT ER app_gpio_irq_init(void)
     {
         dint.intatr = TA_HLNG;
         dint.inthdr = (FP)gpio_bank0_isr;
-        err = tk_def_int(APP_GPIO_IRQ_NO, &dint);
-        gb_defined = (E_OK == err);
+        err         = tk_def_int(APP_GPIO_IRQ_NO, &dint);
+        gb_defined  = (E_OK == err);
     }
     return err;
 }
 
-EXPORT ER app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t p_callback)
+EXPORT ER app_gpio_irq_attach (uint32_t pin, uint32_t edges,
+                               app_gpio_cb_t p_callback)
 {
     uint32_t const reg   = pin / 8u;
     uint32_t const shift = (pin % 8u) * 4u;
     UINT           intsts;
 
-    if ((pin >= GPIO_NUM) || (NULL == p_callback) || ((edges & ~IO_EDGE_BITS) != 0u) || !gb_defined)
+    if ((pin >= GPIO_NUM) || (NULL == p_callback)
+        || ((edges & ~IO_EDGE_BITS) != 0u) || !gb_defined)
     {
         return E_PAR;
     }
 
     DI(intsts);
     g_cb[pin] = p_callback;
-    out_w(IO_INTR(reg), IO_EDGE_BITS << shift);             /* drop stale edges */
+    out_w(IO_INTR(reg), IO_EDGE_BITS << shift); /* drop stale edges */
     if (0u == this_core())
     {
         set_w(IO_PROC0_INTE(reg), edges << shift);
@@ -95,11 +99,11 @@ EXPORT ER app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t p_call
     }
     EI(intsts);
 
-    EnableInt(APP_GPIO_IRQ_NO, APP_GPIO_IRQ_LEVEL);         /* this core's NVIC */
+    EnableInt(APP_GPIO_IRQ_NO, APP_GPIO_IRQ_LEVEL); /* this core's NVIC */
     return E_OK;
 }
 
-EXPORT void app_gpio_irq_detach(uint32_t pin)
+EXPORT void app_gpio_irq_detach (uint32_t pin)
 {
     uint32_t const reg   = pin / 8u;
     uint32_t const shift = (pin % 8u) * 4u;
@@ -116,7 +120,7 @@ EXPORT void app_gpio_irq_detach(uint32_t pin)
     EI(intsts);
 }
 
-EXPORT uint32_t app_gpio_irq_count(void)
+EXPORT uint32_t app_gpio_irq_count (void)
 {
     return g_count;
 }

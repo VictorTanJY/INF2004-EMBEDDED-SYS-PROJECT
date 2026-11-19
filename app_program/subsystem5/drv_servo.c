@@ -8,13 +8,13 @@
 #include "mission_cfg.h"
 #include "subsystem5.h"
 
-#define SERVO_SLICE         7u
-#define PWM_CH_CSR(s)       (PWM_BASE + (0x14u * (s)) + 0x00u)
-#define PWM_CH_DIV(s)       (PWM_BASE + (0x14u * (s)) + 0x04u)
-#define PWM_CH_CC(s)        (PWM_BASE + (0x14u * (s)) + 0x0Cu)
-#define PWM_CH_TOP(s)       (PWM_BASE + (0x14u * (s)) + 0x10u)
+#define SERVO_SLICE   7u
+#define PWM_CH_CSR(s) (PWM_BASE + (0x14u * (s)) + 0x00u)
+#define PWM_CH_DIV(s) (PWM_BASE + (0x14u * (s)) + 0x04u)
+#define PWM_CH_CC(s)  (PWM_BASE + (0x14u * (s)) + 0x0Cu)
+#define PWM_CH_TOP(s) (PWM_BASE + (0x14u * (s)) + 0x10u)
 
-EXPORT ER drv_servo_init(void)
+EXPORT ER drv_servo_init (void)
 {
     app_reset_release(RESETS_RESET_PWM);
     out_w(PWM_CH_CSR(SERVO_SLICE), 0u);
@@ -27,7 +27,7 @@ EXPORT ER drv_servo_init(void)
     return (19999u == in_w(PWM_CH_TOP(SERVO_SLICE))) ? E_OK : E_IO;
 }
 
-EXPORT void drv_servo_set_deg(int32_t angle_deg)
+EXPORT void drv_servo_set_deg (int32_t angle_deg)
 {
     int32_t angle = angle_deg;
     int32_t pulse_us;
@@ -43,6 +43,8 @@ EXPORT void drv_servo_set_deg(int32_t angle_deg)
 #if !OBST_SERVO_LEFT_IS_HIGH
     a = 180 - a;
 #endif
-    pulse_us = OBST_SERVO_MIN_US + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
-    out_w(PWM_CH_CC(SERVO_SLICE), (uint32_t)pulse_us << 16);      /* channel B; A (GP14) = 0 */
+    pulse_us = OBST_SERVO_MIN_US
+               + ((angle * (OBST_SERVO_MAX_US - OBST_SERVO_MIN_US)) / 180);
+    out_w(PWM_CH_CC(SERVO_SLICE),
+          (uint32_t)pulse_us << 16); /* channel B; A (GP14) = 0 */
 }

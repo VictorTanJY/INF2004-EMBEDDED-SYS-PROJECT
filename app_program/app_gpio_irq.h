@@ -29,17 +29,18 @@
 #include <stdbool.h>
 #include "app.h"
 
-#define APP_GPIO_EDGE_FALL      0x4u    /* IO_BANK0 INTR EDGE_LOW  */
-#define APP_GPIO_EDGE_RISE      0x8u    /* IO_BANK0 INTR EDGE_HIGH */
+#define APP_GPIO_EDGE_FALL 0x4u /* IO_BANK0 INTR EDGE_LOW  */
+#define APP_GPIO_EDGE_RISE 0x8u /* IO_BANK0 INTR EDGE_HIGH */
 
-#define APP_GPIO_IRQ_NO         13u     /* IO_IRQ_BANK0             */
-#define APP_GPIO_IRQ_LEVEL      1       /* INTPRI_MAX_EXTINT_PRI: echo timestamps */
+#define APP_GPIO_IRQ_NO    13u /* IO_IRQ_BANK0             */
+#define APP_GPIO_IRQ_LEVEL 1   /* INTPRI_MAX_EXTINT_PRI: echo timestamps */
 
 /* events = APP_GPIO_EDGE_* bits that fired; t_us = TIMERAWL at handler entry */
 typedef void (*app_gpio_cb_t)(uint32_t pin, uint32_t events, uint32_t t_us);
 
 IMPORT ER   app_gpio_irq_init(void);
-IMPORT ER   app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t p_callback);
+IMPORT ER   app_gpio_irq_attach(uint32_t pin, uint32_t edges,
+                                app_gpio_cb_t p_callback);
 IMPORT void app_gpio_irq_detach(uint32_t pin);
 
 /* Number of bank-0 interrupts taken since boot (diagnostics). */

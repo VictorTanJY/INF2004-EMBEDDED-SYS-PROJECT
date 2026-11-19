@@ -14,24 +14,25 @@
 #include "../app.h"
 #include "imu_types.h"
 
-#define S4_PRI_SAFETY           5           /* SafetyTask, core 1 (highest app task) */
-#define S4_CORE_SAFETY          APP_CORE1
-#define S4_PRI_IMU              10          /* ImuTask, core 0 */
-#define S4_CORE_IMU             APP_CORE0
+#define S4_PRI_SAFETY  5 /* SafetyTask, core 1 (highest app task) */
+#define S4_CORE_SAFETY APP_CORE1
+#define S4_PRI_IMU     10 /* ImuTask, core 0 */
+#define S4_CORE_IMU    APP_CORE0
 
-#define S4_PIN_IMU_SDA          2u          /* I2C1 */
-#define S4_PIN_IMU_SCL          3u
-#define S4_PIN_IMU_INT1         19u         /* not used since 14 Nov (IMU collision detection removed) */
+#define S4_PIN_IMU_SDA 2u /* I2C1 */
+#define S4_PIN_IMU_SCL 3u
+#define S4_PIN_IMU_INT1 \
+    19u /* not used since 14 Nov (IMU collision detection removed) */
 
-#define S4_SAFETY_PERIOD_MS     20          /* SafetyTask wait timeout */
-#define S4_IMU_PERIOD_MS        10          /* imu_cyc */
+#define S4_SAFETY_PERIOD_MS 20 /* SafetyTask wait timeout */
+#define S4_IMU_PERIOD_MS    10 /* imu_cyc */
 
 /* ---------------------------------------------------------------------
  *  IF-05  flg_safety (owned by S4).  Setters use tk_set_flg().  Only
  *  SafetyTask waits on it (TWF_ORW | TWF_BITCLR on SAFETY_BRAKE_MASK |
  *  SAFETY_REQ_RESET); every other task reads it with tk_ref_flg().
  * --------------------------------------------------------------------- */
-IMPORT ID g_flg_safety;         /* flg_safety in the design documents */
+IMPORT ID g_flg_safety; /* flg_safety in the design documents */
 
 /* Latched faults (SAFETY_FLT_* bits), written only by SafetyTask. */
 IMPORT uint32_t safety_get_latched(void);
@@ -53,8 +54,8 @@ IMPORT uint32_t safety_heartbeat_count(safety_hb_t task);
 /* ---------------------------------------------------------------------
  *  IF-08  IMU snapshot (written by ImuTask).
  * --------------------------------------------------------------------- */
-IMPORT void imu_get_snap(imu_snap_t * p_out);           /* any task       */
-IMPORT void imu_put_snap(imu_snap_t const * p_in);      /* ImuTask only   */
+IMPORT void imu_get_snap(imu_snap_t * p_out);      /* any task       */
+IMPORT void imu_put_snap(imu_snap_t const * p_in); /* ImuTask only   */
 
 /* Boot self-test: the 1 us timer really ticks at 1 MHz (NFR8). */
 IMPORT bool safety_timer_tick_ok(void);

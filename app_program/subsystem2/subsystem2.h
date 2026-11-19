@@ -16,35 +16,38 @@
 #include "motion_types.h"
 
 /* Task placement (TEAM.md section 4) */
-#define S2_PRI_MOTION           6           /* MotionTask, core 1 */
-#define S2_CORE_MOTION          APP_CORE1
-#define S2_PERIOD_MS            10          /* motion_cyc period */
+#define S2_PRI_MOTION  6 /* MotionTask, core 1 */
+#define S2_CORE_MOTION APP_CORE1
+#define S2_PERIOD_MS   10 /* motion_cyc period */
 
 /* Pins (TEAM.md section 2) */
-#define S2_PIN_MOT_L_A          8u          /* PWM4 A */
-#define S2_PIN_MOT_L_B          9u          /* PWM4 B */
-#define S2_PIN_MOT_R_A          10u         /* PWM5 A */
-#define S2_PIN_MOT_R_B          11u         /* PWM5 B */
-#define S2_PIN_ENC_L_A          4u          /* PIO0 SM0, B = A + 1 */
-#define S2_PIN_ENC_R_A          16u         /* PIO0 SM1, B = A + 1 */
-#define S2_PIN_TIMING           6u          /* spare GP6: toggled every cycle when
-                                               built with APP_TIMING_PINS=1 (NFR1) */
+#define S2_PIN_MOT_L_A 8u  /* PWM4 A */
+#define S2_PIN_MOT_L_B 9u  /* PWM4 B */
+#define S2_PIN_MOT_R_A 10u /* PWM5 A */
+#define S2_PIN_MOT_R_B 11u /* PWM5 B */
+#define S2_PIN_ENC_L_A 4u  /* PIO0 SM0, B = A + 1 */
+#define S2_PIN_ENC_R_A 16u /* PIO0 SM1, B = A + 1 */
+#define S2_PIN_TIMING                         \
+    6u /* spare GP6: toggled every cycle when \
+          built with APP_TIMING_PINS=1 (NFR1) */
 
 /* ---------------------------------------------------------------------
  *  IF-01  mbf_motion: motion commands to MotionTask (owned by S2).
  *  Senders: MissionTask (S5), LineBarcodeTask (S3), ObstacleTask (S5).
  *  Always sent with TMO_POL; MotionTask drains it every 10 ms cycle.
  * --------------------------------------------------------------------- */
-#define S2_MBF_MOTION_DEPTH     8u  /* commands; 8 B each in the buffer (4 B word + header) */
+#define S2_MBF_MOTION_DEPTH \
+    8u /* commands; 8 B each in the buffer (4 B word + header) */
 
-IMPORT ID g_mbf_motion;         /* mbf_motion in the design documents */
+IMPORT ID g_mbf_motion; /* mbf_motion in the design documents */
 
 /* Post a command without waiting.  Returns E_OK, or E_TMOUT when the
    buffer is full (the command is dropped; the caller decides). */
 IMPORT ER motion_send(motion_cmd_t const * p_cmd);
 
 /* Helper for senders: fills and posts one command. */
-IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0, int16_t arg1);
+IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
+                      int16_t arg1);
 
 /* The named API (FR5): motion_move_forward / _backward, motion_turn_left /
    _right, motion_stop, motion_drive.  Use these; motion_post stays for
@@ -54,7 +57,7 @@ IMPORT ER motion_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0, int16
 /* ---------------------------------------------------------------------
  *  IF-02  Odometry snapshot (written by MotionTask, read by everyone).
  * --------------------------------------------------------------------- */
-IMPORT void motion_get_odom(motion_odom_t * p_out);     /* any task      */
+IMPORT void motion_get_odom(motion_odom_t * p_out);      /* any task      */
 IMPORT void motion_put_odom(motion_odom_t const * p_in); /* MotionTask only */
 
 /* ---------------------------------------------------------------------
@@ -75,7 +78,7 @@ typedef struct
 {
     uint32_t per_min_us;
     uint32_t per_max_us;
-    uint32_t exec_max_us;       /* wake-up to end of the cycle's work */
+    uint32_t exec_max_us; /* wake-up to end of the cycle's work */
     uint32_t cycles;
 } motion_test_timing_t;
 
@@ -88,6 +91,6 @@ IMPORT volatile uint32_t g_estop_test_us;
 
 /* Private to subsystem 2 */
 IMPORT void motion_task(INT stacd, void * p_exinf);
-IMPORT bool motion_estop_clear_reconnect(void);   /* MotionTask only */
+IMPORT bool motion_estop_clear_reconnect(void); /* MotionTask only */
 
 #endif /* SUBSYSTEM2_H */

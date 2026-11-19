@@ -13,9 +13,9 @@
 #include <stdbool.h>
 #include "../app.h"
 
-IMPORT ER   drv_us_init(void);
+IMPORT ER drv_us_init(void);
 /* Enable echo_isr on the CALLING core (ObstacleTask, core 1). */
-IMPORT ER   drv_us_attach(void);
+IMPORT ER drv_us_attach(void);
 /* 10 us trigger pulse (busy wait). */
 IMPORT void drv_us_trigger(void);
 /* true once per completed echo; *p_width_us = high time. */

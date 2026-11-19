@@ -31,22 +31,23 @@
 #include "../subsystem2/subsystem2.h"
 #include "../subsystem5/subsystem5.h"
 
-#define SAFETY_WD_TIMEOUT_MS    200u
-#define SAFETY_TOO_CLOSE_MM     80u
-#define SAFETY_LOG_HB_MISSED    41u     /* comms_rec_t code: data = missed-task mask */
+#define SAFETY_WD_TIMEOUT_MS 200u
+#define SAFETY_TOO_CLOSE_MM  80u
+#define SAFETY_LOG_HB_MISSED 41u /* comms_rec_t code: data = missed-task mask \
+                                  */
 
-IMPORT volatile uint32_t g_safety_latched;   /* subsystem4.c */
+IMPORT volatile uint32_t g_safety_latched; /* subsystem4.c */
 
-static volatile bool gb_tick_ok;
-static volatile bool gb_tick_checked;
-EXPORT volatile UW   g_safety_tick_us;  /* measured us per 100 ms of kernel time */
+static bool volatile gb_tick_ok;
+static bool volatile gb_tick_checked;
+EXPORT volatile UW g_safety_tick_us; /* measured us per 100 ms of kernel time */
 
-EXPORT bool safety_timer_tick_ok(void)
+EXPORT bool safety_timer_tick_ok (void)
 {
     return gb_tick_checked && gb_tick_ok;
 }
 
-static void read_heartbeats(uint32_t counts[SAFETY_HB_COUNT])
+static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
 {
     uint8_t kdx;
 
@@ -56,7 +57,7 @@ static void read_heartbeats(uint32_t counts[SAFETY_HB_COUNT])
     }
 }
 
-static void latch(uint32_t bits, uint32_t now_ms)
+static void latch (uint32_t bits, uint32_t now_ms)
 {
     uint32_t const fresh = bits & ~g_safety_latched;
 
@@ -64,15 +65,16 @@ static void latch(uint32_t bits, uint32_t now_ms)
     g_safety_latched |= bits;
     if (fresh != 0u)
     {
-        (void)mission_post((uint8_t)MISSION_EV_FAULT, (uint8_t)APP_SRC_SAFETY_IMU, 0u,
+        (void)mission_post((uint8_t)MISSION_EV_FAULT,
+                           (uint8_t)APP_SRC_SAFETY_IMU, 0u,
                            (int32_t)g_safety_latched);
-        (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT, (uint8_t)APP_SRC_SAFETY_IMU, 0u,
-                               (int32_t)fresh);
+        (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT,
+                               (uint8_t)APP_SRC_SAFETY_IMU, 0u, (int32_t)fresh);
     }
 }
 
 /* Causes that are still present right now (for an operator reset). */
-static uint32_t live_causes(safety_hb_state_t * p_hb, uint32_t now_ms)
+static uint32_t live_causes (safety_hb_state_t * p_hb, uint32_t now_ms)
 {
     imu_snap_t  imu;
     obst_snap_t obst;
@@ -110,57 +112,61 @@ static uint32_t live_causes(safety_hb_state_t * p_hb, uint32_t now_ms)
    SysTick is off, it is run free (no interrupt) for the check and then
    switched off again.  Core 0's SysTick, the kernel tick, is never
    touched: there it is already running and is only read.            */
-#define CHK_SYST_CSR        0xE000E010u
-#define CHK_SYST_RVR        0xE000E014u
-#define CHK_SYST_CVR        0xE000E018u
-#define CHK_SYST_ENABLE     0x1u
-#define CHK_SYST_CLK_CPU    0x4u        /* CLKSOURCE = processor clock */
-#define CHK_SYS_COUNTS      250000u     /* 2 ms at 125 MHz */
+#define CHK_SYST_CSR     0xE000E010u
+#define CHK_SYST_RVR     0xE000E014u
+#define CHK_SYST_CVR     0xE000E018u
+#define CHK_SYST_ENABLE  0x1u
+#define CHK_SYST_CLK_CPU 0x4u    /* CLKSOURCE = processor clock */
+#define CHK_SYS_COUNTS   250000u /* 2 ms at 125 MHz */
 
-static void check_timer_tick(void)
+static void check_timer_tick (void)
 {
-    UW       reload;
-    UW       prev;
-    UW       acc = 0u;
-    UW       us0;
-    UW       delta_us;
-    UW       guard = 0u;
-    UINT     intsts;
-    bool     b_borrowed = false;
+    UW   reload;
+    UW   prev;
+    UW   acc = 0u;
+    UW   us0;
+    UW   delta_us;
+    UW   guard = 0u;
+    UINT intsts;
+    bool b_borrowed = false;
 
     DI(intsts);
     if (0u == (in_w(CHK_SYST_CSR) & CHK_SYST_ENABLE))
     {
         out_w(CHK_SYST_RVR, 0x00FFFFFFu);
-        out_w(CHK_SYST_CVR, 0u);                        /* any write clears it */
-        out_w(CHK_SYST_CSR, CHK_SYST_CLK_CPU | CHK_SYST_ENABLE);   /* TICKINT off */
+        out_w(CHK_SYST_CVR, 0u); /* any write clears it */
+        out_w(CHK_SYST_CSR,
+              CHK_SYST_CLK_CPU | CHK_SYST_ENABLE); /* TICKINT off */
         b_borrowed = true;
     }
     reload = (in_w(CHK_SYST_RVR) & 0x00FFFFFFu) + 1u;
     prev   = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
-    us0  = app_time_us();
+    us0    = app_time_us();
     while ((acc < CHK_SYS_COUNTS) && (guard < 1000000u))
     {
         UW const cur = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
 
-        acc += (prev >= cur) ? (prev - cur) : ((prev + reload) - cur);   /* down counter */
+        acc += (prev >= cur) ? (prev - cur)
+                             : ((prev + reload) - cur); /* down counter */
         prev = cur;
         guard++;
     }
     delta_us = app_time_us() - us0;
     if (b_borrowed)
     {
-        out_w(CHK_SYST_CSR, 0u);                        /* back to the kernel's state */
+        out_w(CHK_SYST_CSR, 0u); /* back to the kernel's state */
         out_w(CHK_SYST_CVR, 0u);
     }
     EI(intsts);
 
-    g_safety_tick_us = (UW)(((UD)delta_us * 100000u) / 2000u);   /* scaled to us per 100 ms */
-    gb_tick_ok      = (acc >= CHK_SYS_COUNTS) && (delta_us > 1900u) && (delta_us < 2100u);
+    g_safety_tick_us =
+        (UW)(((UD)delta_us * 100000u) / 2000u); /* scaled to us per 100 ms */
+    gb_tick_ok =
+        (acc >= CHK_SYS_COUNTS) && (delta_us > 1900u) && (delta_us < 2100u);
     gb_tick_checked = true;
 }
 
-EXPORT void safety_task(INT stacd, void * p_exinf)
+EXPORT void safety_task (INT stacd, void * p_exinf)
 {
     safety_hb_state_t hb_state = {0};
     uint32_t          counts[SAFETY_HB_COUNT];
@@ -172,7 +178,8 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
     check_timer_tick();
     if (drv_watchdog_caused_reboot())
     {
-        (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU, 42u, 1);
+        (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                               (uint8_t)APP_SRC_SAFETY_IMU, 42u, 1);
     }
     drv_watchdog_enable(SAFETY_WD_TIMEOUT_MS);
 
@@ -186,15 +193,14 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
         uint32_t now_ms;
         uint32_t missed;
 
-        err = tk_wai_flg(g_flg_safety,
-                        SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
-                        TWF_ORW | TWF_BITCLR, &ptn, S4_SAFETY_PERIOD_MS);
+        err = tk_wai_flg(g_flg_safety, SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
+                         TWF_ORW | TWF_BITCLR, &ptn, S4_SAFETY_PERIOD_MS);
         drv_watchdog_feed();
         now_ms = (uint32_t)app_time_ms();
 
         if ((E_OK == err) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
         {
-            motor_estop();                          /* NFR8: brake first */
+            motor_estop(); /* NFR8: brake first */
             latch(ptn & SAFETY_BRAKE_MASK, now_ms);
         }
 
@@ -207,7 +213,8 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
             if (missed != missed_logged)
             {
                 missed_logged = missed;
-                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_SAFETY_IMU,
+                (void)comms_telem_post((uint8_t)COMMS_KIND_LOG,
+                                       (uint8_t)APP_SRC_SAFETY_IMU,
                                        SAFETY_LOG_HB_MISSED, (int32_t)missed);
             }
         }
@@ -222,13 +229,15 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
                 missed_logged    = 0u;
                 read_heartbeats(counts);
                 safety_hb_start(&hb_state, counts, now_ms);
-                (void)mission_post((uint8_t)MISSION_EV_SAFETY_OK, (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
+                (void)mission_post((uint8_t)MISSION_EV_SAFETY_OK,
+                                   (uint8_t)APP_SRC_SAFETY_IMU, 0u, 0);
             }
             else
             {
                 /* still present: stay latched and say why */
                 g_safety_latched |= live;
-                (void)mission_post((uint8_t)MISSION_EV_FAULT, (uint8_t)APP_SRC_SAFETY_IMU, 1u,
+                (void)mission_post((uint8_t)MISSION_EV_FAULT,
+                                   (uint8_t)APP_SRC_SAFETY_IMU, 1u,
                                    (int32_t)g_safety_latched);
             }
         }

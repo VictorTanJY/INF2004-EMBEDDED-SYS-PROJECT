@@ -6,7 +6,7 @@
 
 #include "hmi_button.h"
 
-void hmi_btn_init(hmi_btn_t * p_btn)
+void hmi_btn_init (hmi_btn_t * p_btn)
 {
     p_btn->b_last_raw  = false;
     p_btn->b_stable    = false;
@@ -14,10 +14,10 @@ void hmi_btn_init(hmi_btn_t * p_btn)
     p_btn->held_ms     = 0u;
 }
 
-hmi_btn_ev_t hmi_btn_update(hmi_btn_t * p_btn, bool b_pressed_raw,
-                            uint16_t dt_ms, uint16_t long_ms)
+hmi_btn_ev_t hmi_btn_update (hmi_btn_t * p_btn, bool b_pressed_raw,
+                             uint16_t dt_ms, uint16_t long_ms)
 {
-    hmi_btn_ev_t event       = HMI_BTN_EV_NONE;
+    hmi_btn_ev_t event    = HMI_BTN_EV_NONE;
     bool         b_agrees = (b_pressed_raw == p_btn->b_last_raw);
 
     p_btn->b_last_raw = b_pressed_raw;
@@ -29,7 +29,7 @@ hmi_btn_ev_t hmi_btn_update(hmi_btn_t * p_btn, bool b_pressed_raw,
         {
             p_btn->held_ms     = 0u;
             p_btn->b_long_sent = false;
-            event = HMI_BTN_EV_PRESS;
+            event              = HMI_BTN_EV_PRESS;
         }
         else if (!p_btn->b_long_sent)
         {
@@ -49,7 +49,7 @@ hmi_btn_ev_t hmi_btn_update(hmi_btn_t * p_btn, bool b_pressed_raw,
         if (!p_btn->b_long_sent && (p_btn->held_ms >= long_ms))
         {
             p_btn->b_long_sent = true;
-            event = HMI_BTN_EV_LONG;
+            event              = HMI_BTN_EV_LONG;
         }
     }
     else

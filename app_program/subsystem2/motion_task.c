@@ -21,7 +21,8 @@
 #include "../subsystem4/subsystem4.h"
 #include "../subsystem5/subsystem5.h"
 
-#define MOTION_WAKE_TIMEOUT_MS  30      /* still runs (and heartbeats) if motion_cyc stops */
+#define MOTION_WAKE_TIMEOUT_MS \
+    30 /* still runs (and heartbeats) if motion_cyc stops */
 
 static motion_core_t g_core;
 
@@ -31,14 +32,14 @@ static motion_core_t g_core;
    indivisible load on the M0+.  The test asks for a restart through
    g_tt_restart (a byte it sets and MotionTask clears), so the counters
    have a single writer and no read-modify-write is shared. */
-static volatile uint32_t g_tt_per_min_us;
-static volatile uint32_t g_tt_per_max_us;
-static volatile uint32_t g_tt_exec_max_us;
-static volatile uint32_t g_tt_cycles;
-static volatile uint8_t  g_tt_restart = 1u;
-static uint32_t          g_tt_prev_us;
+static uint32_t volatile g_tt_per_min_us;
+static uint32_t volatile g_tt_per_max_us;
+static uint32_t volatile g_tt_exec_max_us;
+static uint32_t volatile g_tt_cycles;
+static uint8_t volatile g_tt_restart = 1u;
+static uint32_t g_tt_prev_us;
 
-static void tt_wake(uint32_t now_us)
+static void tt_wake (uint32_t now_us)
 {
     if (g_tt_restart != 0u)
     {
@@ -65,7 +66,7 @@ static void tt_wake(uint32_t now_us)
     g_tt_prev_us = now_us;
 }
 
-static void tt_done(uint32_t wake_us)
+static void tt_done (uint32_t wake_us)
 {
     uint32_t const exec = (uint32_t)app_time_us() - wake_us;
 
@@ -75,12 +76,12 @@ static void tt_done(uint32_t wake_us)
     }
 }
 
-EXPORT void motion_test_timing_restart(void)
+EXPORT void motion_test_timing_restart (void)
 {
     g_tt_restart = 1u;
 }
 
-EXPORT void motion_test_timing(motion_test_timing_t * p_out)
+EXPORT void motion_test_timing (motion_test_timing_t * p_out)
 {
     p_out->per_min_us  = g_tt_per_min_us;
     p_out->per_max_us  = g_tt_per_max_us;
@@ -89,7 +90,7 @@ EXPORT void motion_test_timing(motion_test_timing_t * p_out)
 }
 #endif /* APP_TEST */
 
-static void timing_pin_init(void)
+static void timing_pin_init (void)
 {
 #if APP_TIMING_PINS
     out_w(GPIO_OUT_CLR, 1uL << S2_PIN_TIMING);
@@ -98,7 +99,7 @@ static void timing_pin_init(void)
 #endif
 }
 
-static void timing_pin_toggle(void)
+static void timing_pin_toggle (void)
 {
 #if APP_TIMING_PINS
     out_w(GPIO_OUT_XOR, 1uL << S2_PIN_TIMING);
@@ -106,7 +107,7 @@ static void timing_pin_toggle(void)
 }
 
 /* Step 4: check the latch and write, as one indivisible step on core 1. */
-static void write_pwm(int16_t duty_l, int16_t duty_r)
+static void write_pwm (int16_t duty_l, int16_t duty_r)
 {
     UINT intsts;
 
@@ -118,7 +119,7 @@ static void write_pwm(int16_t duty_l, int16_t duty_r)
     EI(intsts);
 }
 
-static void report_events(void)
+static void report_events (void)
 {
     motion_event_t event;
 
@@ -127,13 +128,15 @@ static void report_events(void)
         switch (event.code)
         {
             case MOTION_EV_DONE:
-                (void)mission_post((uint8_t)MISSION_EV_MOTION_DONE, (uint8_t)APP_SRC_MOTION,
-                                   (uint16_t)event.seq, (int32_t)event.src);
+                (void)mission_post((uint8_t)MISSION_EV_MOTION_DONE,
+                                   (uint8_t)APP_SRC_MOTION, (uint16_t)event.seq,
+                                   (int32_t)event.src);
                 break;
 
             case MOTION_EV_FAILED:
-                (void)mission_post((uint8_t)MISSION_EV_MOTION_FAILED, (uint8_t)APP_SRC_MOTION,
-                                   (uint16_t)event.seq, (int32_t)event.src);
+                (void)mission_post((uint8_t)MISSION_EV_MOTION_FAILED,
+                                   (uint8_t)APP_SRC_MOTION, (uint16_t)event.seq,
+                                   (int32_t)event.src);
                 break;
 
             case MOTION_EV_STALL:
@@ -142,8 +145,9 @@ static void report_events(void)
 
             case MOTION_EV_ENC_FAULT:
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
-                (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT, (uint8_t)APP_SRC_MOTION,
-                                       0u, (int32_t)SAFETY_FLT_ENC_FAULT);
+                (void)comms_telem_post((uint8_t)COMMS_KIND_FAULT,
+                                       (uint8_t)APP_SRC_MOTION, 0u,
+                                       (int32_t)SAFETY_FLT_ENC_FAULT);
                 break;
 
             case MOTION_EV_ENC_OK:
@@ -156,11 +160,11 @@ static void report_events(void)
     }
 }
 
-EXPORT void motion_task(INT stacd, void * p_exinf)
+EXPORT void motion_task (INT stacd, void * p_exinf)
 {
     motion_odom_t odom = {0};
     motion_cmd_t  cmd;
-    uint32_t      cmd_word;                 /* mbf_motion: one packed word (CR1) */
+    uint32_t      cmd_word; /* mbf_motion: one packed word (CR1) */
     bool          b_hw_ok;
     UINT          intsts;
 
@@ -202,10 +206,12 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
         enc_l  = drv_encoder_read(DRV_ENC_LEFT);
         enc_r  = drv_encoder_read(DRV_ENC_RIGHT);
 
-        while ((INT)sizeof(cmd_word) == tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL))
+        while ((INT)sizeof(cmd_word)
+               == tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL))
         {
             motion_cmd_unpack(cmd_word, &cmd);
-            motion_result_t const res = motion_core_command(&g_core, &cmd, now_ms);
+            motion_result_t const res =
+                motion_core_command(&g_core, &cmd, now_ms);
 
             if (MOTION_RES_CLEAR_ESTOP == res)
             {

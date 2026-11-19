@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include "../app.h"
 
-IMPORT ER   drv_servo_init(void);
+IMPORT ER drv_servo_init(void);
 /* 0..180 deg, 90 = straight ahead, larger = further left (mission_cfg.h) */
 IMPORT void drv_servo_set_deg(int32_t angle_deg);
 

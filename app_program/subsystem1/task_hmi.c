@@ -19,19 +19,19 @@
 #include "hmi_button.h"
 #include "../subsystem5/subsystem5.h"
 
-static void hmi_pin_init(UW pin)
+static void hmi_pin_init (UW pin)
 {
     (void)gpio_set_pin(pin, GPIO_MODE_IN);
     clr_w(GPIO(pin), GPIO_PDE);
     set_w(GPIO(pin), GPIO_PUE);
 }
 
-static bool hmi_pressed(UW pin)
+static bool hmi_pressed (UW pin)
 {
     return (S1_BTN_PRESSED_LEVEL == gpio_get_val(pin));
 }
 
-static void hmi_report(mission_ev_t event)
+static void hmi_report (mission_ev_t event)
 {
     /* Both sends use TMO_POL; a full mbf_mission is reported, not waited on. */
     if (mission_post((uint8_t)event, (uint8_t)APP_SRC_COMMS, 0u, 0) != E_OK)
@@ -43,7 +43,7 @@ static void hmi_report(mission_ev_t event)
                            (uint16_t)event, 0);
 }
 
-EXPORT void hmi_task(INT stacd, void * p_exinf)
+EXPORT void hmi_task (INT stacd, void * p_exinf)
 {
     hmi_btn_t btn_start;
     hmi_btn_t btn_mode;
@@ -63,14 +63,16 @@ EXPORT void hmi_task(INT stacd, void * p_exinf)
         (void)tk_dly_tsk(HMI_PERIOD_MS);
 
         event = hmi_btn_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
-                            (uint16_t)HMI_PERIOD_MS, (uint16_t)HMI_LONG_PRESS_MS);
+                               (uint16_t)HMI_PERIOD_MS,
+                               (uint16_t)HMI_LONG_PRESS_MS);
         if (HMI_BTN_EV_PRESS == event)
         {
             hmi_report(MISSION_EV_BTN_START_STOP);
         }
 
         event = hmi_btn_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
-                            (uint16_t)HMI_PERIOD_MS, (uint16_t)HMI_LONG_PRESS_MS);
+                               (uint16_t)HMI_PERIOD_MS,
+                               (uint16_t)HMI_LONG_PRESS_MS);
         if (HMI_BTN_EV_SHORT == event)
         {
             hmi_report(MISSION_EV_BTN_CALIBRATE);

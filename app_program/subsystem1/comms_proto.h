@@ -52,46 +52,47 @@
  * --------------------------------------------------------------------- */
 typedef enum
 {
-    COMMS_KIND_EVENT = 1,       /* code = mission_ev_t, data = its data   */
-    COMMS_KIND_FAULT = 2,       /* code = 0, data = SAFETY_FLT_* bits     */
-    COMMS_KIND_STATE = 3,       /* code = new mission_state_t             */
-    COMMS_KIND_LOG   = 4        /* code, data: free use by the sender     */
+    COMMS_KIND_EVENT = 1, /* code = mission_ev_t, data = its data   */
+    COMMS_KIND_FAULT = 2, /* code = 0, data = SAFETY_FLT_* bits     */
+    COMMS_KIND_STATE = 3, /* code = new mission_state_t             */
+    COMMS_KIND_LOG   = 4  /* code, data: free use by the sender     */
 } comms_kind_t;
 
-#define COMMS_REC_KIND_SHIFT    0u
-#define COMMS_REC_KIND_BITS     2u
-#define COMMS_REC_SRC_SHIFT     2u
-#define COMMS_REC_SRC_BITS      3u
-#define COMMS_REC_CODE_SHIFT    5u
-#define COMMS_REC_CODE_BITS     7u
-#define COMMS_REC_T_SHIFT       12u
-#define COMMS_REC_T_BITS        20u
+#define COMMS_REC_KIND_SHIFT 0u
+#define COMMS_REC_KIND_BITS  2u
+#define COMMS_REC_SRC_SHIFT  2u
+#define COMMS_REC_SRC_BITS   3u
+#define COMMS_REC_CODE_SHIFT 5u
+#define COMMS_REC_CODE_BITS  7u
+#define COMMS_REC_T_SHIFT    12u
+#define COMMS_REC_T_BITS     20u
 
 typedef struct
 {
-    uint32_t hdr;               /* kind, src, code, time: see above       */
+    uint32_t hdr; /* kind, src, code, time: see above       */
     int32_t  data;
 } comms_rec_t;
 
 /* Unpacked view of a record (task-local, never shared). */
 typedef struct
 {
-    uint8_t  kind;              /* comms_kind_t                           */
-    uint8_t  src;               /* APP_SRC_* (subsystem number)           */
+    uint8_t  kind; /* comms_kind_t                           */
+    uint8_t  src;  /* APP_SRC_* (subsystem number)           */
     uint16_t code;
     int32_t  data;
     uint32_t t_ms;
 } comms_event_t;
 
-void comms_rec_pack(comms_rec_t * p_rec, uint8_t kind, uint8_t src, uint16_t code,
-                    int32_t data, uint32_t now_ms);
-void comms_rec_unpack(comms_rec_t const * p_rec, uint32_t now_ms, comms_event_t * p_ev);
+void comms_rec_pack(comms_rec_t * p_rec, uint8_t kind, uint8_t src,
+                    uint16_t code, int32_t data, uint32_t now_ms);
+void comms_rec_unpack(comms_rec_t const * p_rec, uint32_t now_ms,
+                      comms_event_t * p_ev);
 
 /* ---------------------------------------------------------------------
  *  Frames
  * --------------------------------------------------------------------- */
-#define COMMS_FRAME_VERSION     1u
-#define COMMS_FRAME_MAX         32u     /* largest frame: telemetry, 27 B */
+#define COMMS_FRAME_VERSION 1u
+#define COMMS_FRAME_MAX     32u /* largest frame: telemetry, 27 B */
 
 typedef enum
 {
@@ -103,53 +104,55 @@ typedef enum
 } comms_frame_type_t;
 
 /* Last Will on the status topic: the status header byte alone (0x23). */
-#define COMMS_WILL_MSG          "\x23"
+#define COMMS_WILL_MSG "\x23"
 
 /* Code 39 data symbols, index 1..43 (0 = none). */
-#define COMMS_SYMBOL_COUNT      43u
+#define COMMS_SYMBOL_COUNT 43u
 uint8_t comms_symbol_index(char chr);     /* 0 if c is not a data symbol */
-char    comms_symbol_char(uint8_t index); /* '\0' for 0 or out of range */
+char    comms_symbol_char(uint8_t index); /* NUL for 0 or out of range */
 
 /* ---------------------------------------------------------------------
  *  Telemetry (built by CommsTask from the status snapshots).
  * --------------------------------------------------------------------- */
-#define COMMS_D_NONE    0xFFFFu     /* no obstacle range */
+#define COMMS_D_NONE 0xFFFFu /* no obstacle range */
 
 typedef struct
 {
     uint32_t seq;
     uint32_t t_ms;
-    uint8_t  state;             /* mission_state_t                        */
+    uint8_t  state; /* mission_state_t                        */
     bool     b_line_lost;
-    char     barcode;           /* 0 = none yet                           */
-    char     nav;               /* latched barcode command char, 0 = none */
-    bool     b_obst_valid;      /* profile fields valid                   */
+    char     barcode;      /* 0 = none yet                           */
+    char     nav;          /* latched barcode command char, 0 = none */
+    bool     b_obst_valid; /* profile fields valid                   */
     int16_t  v_l_mm_s;
     int16_t  v_r_mm_s;
     int32_t  enc_l;
     int32_t  enc_r;
     int32_t  dist_mm;
     int16_t  line_err;
-    uint16_t line_bc;           /* barcode sensor, 0..1000 (1000 = black) */
+    uint16_t line_bc; /* barcode sensor, 0..1000 (1000 = black) */
     int16_t  pitch_cdeg;
-    int16_t  roll_cdeg;         /* + = right side up (one-wheel humps)    */
+    int16_t  roll_cdeg; /* + = right side up (one-wheel humps)    */
     uint16_t hump_max_mm;
-    uint16_t obst_d_mm;         /* COMMS_D_NONE = nothing in range        */
+    uint16_t obst_d_mm; /* COMMS_D_NONE = nothing in range        */
     uint16_t obst_w_mm;
     uint16_t clr_l_mm;
     uint16_t clr_r_mm;
 } comms_telem_t;
 
 /* Each builder returns the frame length in bytes, 0 if cap is too small. */
-uint16_t comms_build_telemetry(comms_telem_t const * p_t, uint8_t * p_buf, uint16_t cap);
-uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p_buf, uint16_t cap);
+uint16_t comms_build_telemetry(comms_telem_t const * p_t, uint8_t * p_buf,
+                               uint16_t cap);
+uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq,
+                           uint8_t * p_buf, uint16_t cap);
 /* p_map: the 4 mapped characters (left, right, straight, U-turn) or NULL. */
 uint16_t comms_build_status(uint32_t uptime_s, int32_t rssi, uint32_t drops,
                             char const * p_map, uint8_t * p_buf, uint16_t cap);
 
 /* Field widths the other subsystems' enums must fit (checked at build). */
-#define COMMS_STATE_BITS        4u      /* mission_state_t                */
-#define COMMS_SRC_BITS          3u      /* APP_SRC_*                      */
+#define COMMS_STATE_BITS 4u /* mission_state_t                */
+#define COMMS_SRC_BITS   3u /* APP_SRC_*                      */
 
 /* ---------------------------------------------------------------------
  *  Remote commands.
@@ -158,56 +161,59 @@ typedef enum
 {
     COMMS_CMD_NONE  = 0,
     COMMS_CMD_START = 1,
-    COMMS_CMD_STOP  = 2,        /* 3 unused: the remote E-stop was removed (14 Nov) */
+    COMMS_CMD_STOP  = 2, /* 3 unused: the remote E-stop was removed (14 Nov) */
     COMMS_CMD_RESET = 4,
     COMMS_CMD_SET   = 5,
-    COMMS_CMD_MAP   = 6         /* value = 4 packed chars: left, right, straight, U-turn */
+    COMMS_CMD_MAP =
+        6 /* value = 4 packed chars: left, right, straight, U-turn */
 } comms_cmd_code_t;
 
 typedef enum
 {
     COMMS_ERR_NONE      = 0,
-    COMMS_ERR_BAD_FRAME = 1,    /* wrong header, or wrong length for the command */
-    COMMS_ERR_NO_ID     = 2,    /* frame too short to hold an id           */
-    COMMS_ERR_BAD_CMD   = 3,    /* unknown command code                    */
-    COMMS_ERR_BAD_PARAM = 4,    /* set: parameter index not whitelisted    */
-    COMMS_ERR_RANGE     = 5,    /* set: value out of the parameter's range */
-    COMMS_ERR_BUSY      = 6,    /* start/set outside IDLE (FR14)           */
-    COMMS_ERR_FULL      = 7,    /* mbf_mission full                        */
-    COMMS_ERR_REUSED    = 8,    /* id seen recently with a different command */
-    COMMS_ERR_NOT_CAL   = 9,    /* start before a valid calibration        */
-    COMMS_ERR_BAD_MAP   = 10,   /* map: a movement missing, not one Code 39
-                                   character, '*', or a character used twice */
-    COMMS_ERR_COUNT     = 11
+    COMMS_ERR_BAD_FRAME = 1, /* wrong header, or wrong length for the command */
+    COMMS_ERR_NO_ID     = 2, /* frame too short to hold an id           */
+    COMMS_ERR_BAD_CMD   = 3, /* unknown command code                    */
+    COMMS_ERR_BAD_PARAM = 4, /* set: parameter index not whitelisted    */
+    COMMS_ERR_RANGE     = 5, /* set: value out of the parameter's range */
+    COMMS_ERR_BUSY      = 6, /* start/set outside IDLE (FR14)           */
+    COMMS_ERR_FULL      = 7, /* mbf_mission full                        */
+    COMMS_ERR_REUSED    = 8, /* id seen recently with a different command */
+    COMMS_ERR_NOT_CAL   = 9, /* start before a valid calibration        */
+    COMMS_ERR_BAD_MAP   = 10, /* map: a movement missing, not one Code 39
+                                 character, '*', or a character used twice */
+    COMMS_ERR_COUNT = 11
 } comms_err_t;
 
-#define COMMS_ID_BITS           8u      /* command id, wraps (see dedup)  */
-#define COMMS_CMD_BITS          3u
-#define COMMS_PARAM_BITS        4u      /* index into the whitelist       */
-#define COMMS_VALUE_BITS        16u     /* set value, offset-binary       */
-#define COMMS_ERR_BITS          4u
+#define COMMS_ID_BITS    8u /* command id, wraps (see dedup)  */
+#define COMMS_CMD_BITS   3u
+#define COMMS_PARAM_BITS 4u  /* index into the whitelist       */
+#define COMMS_VALUE_BITS 16u /* set value, offset-binary       */
+#define COMMS_ERR_BITS   4u
 
 /* Unpacked command (task-local). */
 typedef struct
 {
-    uint8_t  cmd_id;
-    bool     b_has_id;
-    uint8_t  cmd;               /* comms_cmd_code_t                       */
-    uint8_t  param_id;          /* set only: comms_param_t.id             */
-    int32_t  value;             /* set: value; map: 4 packed chars        */
+    uint8_t cmd_id;
+    bool    b_has_id;
+    uint8_t cmd;      /* comms_cmd_code_t                       */
+    uint8_t param_id; /* set only: comms_param_t.id             */
+    int32_t value;    /* set: value; map: 4 packed chars        */
 } comms_cmd_t;
 
 /* Parse one binary command frame (len is authoritative). */
-comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd);
+comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len,
+                            comms_cmd_t * p_cmd);
 
-/* State rule (FR14): START, SET and MAP only in IDLE.  b_idle = mission IDLE. */
+/* State rule (FR14): START, SET and MAP only in IDLE.  b_idle = mission IDLE.
+ */
 comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle);
 
 /* START also needs a valid calibration (Week 6 Section 5). */
 comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated);
 
 /* A character the map may use: any Code 39 data character (not '*'). */
-bool        comms_map_char_ok(char chr);
+bool comms_map_char_ok(char chr);
 
 uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
                          uint8_t * p_buf, uint16_t cap);
@@ -223,11 +229,11 @@ typedef struct
 } comms_param_t;
 
 #if APP_BENCH
-#define COMMS_PARAM_COUNT       9u      /* + bench_move/turn/speed/servo (ids 101-104) */
+#define COMMS_PARAM_COUNT 9u /* + bench_move/turn/speed/servo (ids 101-104) */
 #else
-#define COMMS_PARAM_COUNT       5u
+#define COMMS_PARAM_COUNT 5u
 #endif
-comms_param_t const * comms_param_by_index(uint8_t index);  /* frame index */
+comms_param_t const * comms_param_by_index(uint8_t index); /* frame index */
 comms_param_t const * comms_param_by_id(uint8_t param_id);
 
 /* ---------------------------------------------------------------------
@@ -243,8 +249,8 @@ comms_param_t const * comms_param_by_id(uint8_t param_id);
  *  wrap; the laptop counts them up, so an id comes back only after 256
  *  further commands, far outside the 60 s window.
  * --------------------------------------------------------------------- */
-#define COMMS_DEDUP_LEN         8u
-#define COMMS_DEDUP_WINDOW_MS   60000u
+#define COMMS_DEDUP_LEN       8u
+#define COMMS_DEDUP_WINDOW_MS 60000u
 
 typedef struct
 {
@@ -258,41 +264,44 @@ typedef struct
 typedef struct
 {
     comms_dedup_entry_t entries[COMMS_DEDUP_LEN];
-    uint8_t             next;       /* slot to overwrite next          */
+    uint8_t             next; /* slot to overwrite next          */
     uint8_t             count;
 } comms_dedup_t;
 
 typedef enum
 {
-    COMMS_DEDUP_NEW      = 0,       /* not seen: execute               */
-    COMMS_DEDUP_REPEAT   = 1,       /* same command again: ack only    */
-    COMMS_DEDUP_CONFLICT = 2        /* id reused for another command   */
+    COMMS_DEDUP_NEW      = 0, /* not seen: execute               */
+    COMMS_DEDUP_REPEAT   = 1, /* same command again: ack only    */
+    COMMS_DEDUP_CONFLICT = 2  /* id reused for another command   */
 } comms_dedup_result_t;
 
 void                 comms_dedup_init(comms_dedup_t * p_dd);
 bool                 comms_cmd_repeat_safe(uint8_t cmd);
 comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
-                                       comms_cmd_t const * p_cmd, uint32_t now_ms);
-void                 comms_dedup_add(comms_dedup_t * p_dd,
-                                     comms_cmd_t const * p_cmd, uint32_t now_ms);
+                                       comms_cmd_t const *   p_cmd,
+                                       uint32_t              now_ms);
+void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd,
+                     uint32_t now_ms);
 
 /* ---------------------------------------------------------------------
  *  Offline event ring: the last COMMS_RING_LEN events, re-published in
  *  order after a reconnection (Week 6 Section 6.5 BACKOFF).
  * --------------------------------------------------------------------- */
-#define COMMS_RING_LEN          16u
+#define COMMS_RING_LEN 16u
 
 typedef struct
 {
-    comms_rec_t rec[COMMS_RING_LEN];    /* packed, 8 B each              */
-    uint8_t     seq[COMMS_RING_LEN];    /* event seq (8 bits on the wire) */
-    uint8_t     head;           /* index of the oldest entry */
+    comms_rec_t rec[COMMS_RING_LEN]; /* packed, 8 B each              */
+    uint8_t     seq[COMMS_RING_LEN]; /* event seq (8 bits on the wire) */
+    uint8_t     head;                /* index of the oldest entry */
     uint8_t     count;
 } comms_ring_t;
 
 void comms_ring_init(comms_ring_t * p_ring);
-bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint8_t seq); /* true = oldest overwritten */
-bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint8_t * p_seq);
+bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec,
+                     uint8_t seq); /* true = oldest overwritten */
+bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec,
+                     uint8_t * p_seq);
 void comms_ring_pop(comms_ring_t * p_ring);
 
 #endif /* COMMS_PROTO_H */

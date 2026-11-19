@@ -21,12 +21,12 @@
    The firmware itself is integer / fixed point (Cortex-M0+, no FPU). */
 typedef float float32_t;
 
-static inline int32_t app_abs_i32(int32_t value)
+static inline int32_t app_abs_i32 (int32_t value)
 {
     return (value < 0) ? -value : value;
 }
 
-static inline int32_t app_clamp_i32(int32_t value, int32_t low, int32_t high)
+static inline int32_t app_clamp_i32 (int32_t value, int32_t low, int32_t high)
 {
     int32_t result = value;
 
@@ -41,18 +41,18 @@ static inline int32_t app_clamp_i32(int32_t value, int32_t low, int32_t high)
     return result;
 }
 
-static inline int32_t app_min_i32(int32_t lhs, int32_t rhs)
+static inline int32_t app_min_i32 (int32_t lhs, int32_t rhs)
 {
     return (lhs < rhs) ? lhs : rhs;
 }
 
-static inline int32_t app_max_i32(int32_t lhs, int32_t rhs)
+static inline int32_t app_max_i32 (int32_t lhs, int32_t rhs)
 {
     return (lhs > rhs) ? lhs : rhs;
 }
 
 /* Time comparisons that survive the 32-bit millisecond wrap. */
-static inline uint32_t app_elapsed_ms(uint32_t now_ms, uint32_t since_ms)
+static inline uint32_t app_elapsed_ms (uint32_t now_ms, uint32_t since_ms)
 {
     return (uint32_t)(now_ms - since_ms);
 }

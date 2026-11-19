@@ -12,22 +12,23 @@
 #include "motion_cfg.h"
 #include "subsystem2.h"
 
-#define PWM_CH_CSR(s)       (PWM_BASE + (0x14u * (s)) + 0x00u)
-#define PWM_CH_DIV(s)       (PWM_BASE + (0x14u * (s)) + 0x04u)
-#define PWM_CH_CTR(s)       (PWM_BASE + (0x14u * (s)) + 0x08u)
-#define PWM_CH_CC(s)        (PWM_BASE + (0x14u * (s)) + 0x0Cu)
-#define PWM_CH_TOP(s)       (PWM_BASE + (0x14u * (s)) + 0x10u)
-#define PWM_DIV_INT_1       (1u << 4)
+#define PWM_CH_CSR(s) (PWM_BASE + (0x14u * (s)) + 0x00u)
+#define PWM_CH_DIV(s) (PWM_BASE + (0x14u * (s)) + 0x04u)
+#define PWM_CH_CTR(s) (PWM_BASE + (0x14u * (s)) + 0x08u)
+#define PWM_CH_CC(s)  (PWM_BASE + (0x14u * (s)) + 0x0Cu)
+#define PWM_CH_TOP(s) (PWM_BASE + (0x14u * (s)) + 0x10u)
+#define PWM_DIV_INT_1 (1u << 4)
 
-#define SLICE_L             4u              /* GP8 = 4A, GP9 = 4B   */
-#define SLICE_R             5u              /* GP10 = 5A, GP11 = 5B */
+#define SLICE_L 4u /* GP8 = 4A, GP9 = 4B   */
+#define SLICE_R 5u /* GP10 = 5A, GP11 = 5B */
 
-#define MOTOR_PIN_MASK      ((1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B) | \
-                             (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B))
+#define MOTOR_PIN_MASK                                 \
+    ((1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B) \
+     | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B))
 
-static uint32_t cc_for(int32_t duty, int32_t sign)
+static uint32_t cc_for (int32_t duty, int32_t sign)
 {
-    int32_t  drive  = duty * sign;
+    int32_t  drive = duty * sign;
     uint32_t mag;
 
     if (drive > MOTION_DUTY_MAX)
@@ -45,10 +46,11 @@ static uint32_t cc_for(int32_t duty, int32_t sign)
     return (drive >= 0) ? mag : (mag << 16);
 }
 
-EXPORT ER drv_motor_init(void)
+EXPORT ER drv_motor_init (void)
 {
-    uint32_t const pins[4] = { S2_PIN_MOT_L_A, S2_PIN_MOT_L_B, S2_PIN_MOT_R_A, S2_PIN_MOT_R_B };
-    uint32_t const slices[2] = { SLICE_L, SLICE_R };
+    uint32_t const pins[4]   = {S2_PIN_MOT_L_A, S2_PIN_MOT_L_B, S2_PIN_MOT_R_A,
+                                S2_PIN_MOT_R_B};
+    uint32_t const slices[2] = {SLICE_L, SLICE_R};
     UINT           intsts;
     uint32_t       idx;
 
@@ -79,7 +81,7 @@ EXPORT ER drv_motor_init(void)
     return (MOTION_PWM_TOP == in_w(PWM_CH_TOP(SLICE_L))) ? E_OK : E_IO;
 }
 
-EXPORT void drv_motor_connect(void)
+EXPORT void drv_motor_connect (void)
 {
     out_w(GPIO_CTRL(S2_PIN_MOT_L_A), GPIO_CTRL_FUNCSEL_PWM);
     out_w(GPIO_CTRL(S2_PIN_MOT_L_B), GPIO_CTRL_FUNCSEL_PWM);
@@ -87,7 +89,7 @@ EXPORT void drv_motor_connect(void)
     out_w(GPIO_CTRL(S2_PIN_MOT_R_B), GPIO_CTRL_FUNCSEL_PWM);
 }
 
-EXPORT void drv_motor_write(int16_t duty_l, int16_t duty_r)
+EXPORT void drv_motor_write (int16_t duty_l, int16_t duty_r)
 {
     out_w(PWM_CH_CC(SLICE_L), cc_for(duty_l, MOTION_MOT_SIGN_L));
     out_w(PWM_CH_CC(SLICE_R), cc_for(duty_r, MOTION_MOT_SIGN_R));

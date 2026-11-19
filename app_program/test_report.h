@@ -3,7 +3,7 @@
  *	Minimal on-target test helpers.
  *
  *	Every check prints ONE line in a fixed format, so a saved console log
- *	can be searched for results ("grep '\[TEST\]' log.txt"):
+ *	can be searched for results ("grep -F '[TEST]' log.txt"):
  *
  *	    [TEST] S1-U01 PASS  ADC reads in range
  *	    [TEST] S1-U02 FAIL  queue rejects overflow   (task_x.c:57)
@@ -28,29 +28,33 @@
 
 #include <tm/tmonitor.h>
 
-#define TEST_INIT()	INT test_pass_ = 0, test_fail_ = 0, test_skip_ = 0
+#define TEST_INIT() INT test_pass_ = 0, test_fail_ = 0, test_skip_ = 0
 
-#define TEST_CHECK(id, cond, desc)					\
-	do {								\
-		if (cond) {						\
-			test_pass_++;					\
-			tm_printf((UB*)"[TEST] %s PASS  %s\n", (id), (desc)); \
-		} else {						\
-			test_fail_++;					\
-			tm_printf((UB*)"[TEST] %s FAIL  %s   (%s:%d)\n",	\
-				  (id), (desc), __FILE__, __LINE__);	\
-		}							\
-	} while (0)
+#define TEST_CHECK(id, cond, desc)                                          \
+    do                                                                      \
+    {                                                                       \
+        if (cond)                                                           \
+        {                                                                   \
+            test_pass_++;                                                   \
+            tm_printf((UB *)"[TEST] %s PASS  %s\n", (id), (desc));          \
+        }                                                                   \
+        else                                                                \
+        {                                                                   \
+            test_fail_++;                                                   \
+            tm_printf((UB *)"[TEST] %s FAIL  %s   (%s:%d)\n", (id), (desc), \
+                      __FILE__, __LINE__);                                  \
+        }                                                                   \
+    } while (0)
 
-#define TEST_SKIP(id, desc, why)					\
-	do {								\
-		test_skip_++;						\
-		tm_printf((UB*)"[TEST] %s SKIP  %s   (%s)\n",		\
-			  (id), (desc), (why));				\
-	} while (0)
+#define TEST_SKIP(id, desc, why)                                             \
+    do                                                                       \
+    {                                                                        \
+        test_skip_++;                                                        \
+        tm_printf((UB *)"[TEST] %s SKIP  %s   (%s)\n", (id), (desc), (why)); \
+    } while (0)
 
-#define TEST_SUMMARY(name)						\
-	tm_printf((UB*)"[TEST] %s SUMMARY %d passed, %d failed, %d skipped\n", \
-		  (name), test_pass_, test_fail_, test_skip_)
+#define TEST_SUMMARY(name)                                                  \
+    tm_printf((UB *)"[TEST] %s SUMMARY %d passed, %d failed, %d skipped\n", \
+              (name), test_pass_, test_fail_, test_skip_)
 
 #endif /* TEST_REPORT_H */

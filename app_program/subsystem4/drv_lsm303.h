@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include "../app.h"
 
-#define DRV_LSM303_ADDR     0x1Du   /* SA0 ("DRDY" pin) high: board default */
+#define DRV_LSM303_ADDR 0x1Du /* SA0 ("DRDY" pin) high: board default */
 
 /* E_OBJ for an unexpected identity; bus/configuration errors propagate. */
 IMPORT ER drv_lsm303_init(void);

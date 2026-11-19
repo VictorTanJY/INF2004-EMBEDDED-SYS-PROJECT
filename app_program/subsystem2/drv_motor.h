@@ -12,8 +12,9 @@
 #include "../app.h"
 
 /* Pins driven LOW (brake) as SIO outputs, PWM configured with duty 0 but
-   NOT yet connected to the pins.  Safe to call while the E-stop latch is set. */
-IMPORT ER   drv_motor_init(void);
+   NOT yet connected to the pins.  Safe to call while the E-stop latch is set.
+ */
+IMPORT ER drv_motor_init(void);
 
 /* Route GP8-GP11 to PWM (duty is whatever was last written, 0 after init).
    Call only with interrupts disabled and the E-stop latch clear. */

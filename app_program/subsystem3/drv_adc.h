@@ -17,7 +17,7 @@
 #include "../app.h"
 #include "line_cfg.h"
 
-#define DRV_ADC_BLOCK_LEN   (LINE_SAMPLES_PER_BLOCK * LINE_CH_COUNT)   /* 30 */
+#define DRV_ADC_BLOCK_LEN (LINE_SAMPLES_PER_BLOCK * LINE_CH_COUNT) /* 30 */
 
 /* Release ADC / DMA from reset and configure them (not started). */
 IMPORT ER drv_adc_init(void);
@@ -30,7 +30,8 @@ IMPORT ER drv_adc_start(ID task);
    *p_seq = block number; a gap means blocks were missed (NFR2).
    Copies under DI/EI so the ISR cannot switch buffers mid-copy.
    Returns false if no block has completed yet. */
-IMPORT bool drv_adc_get_block(uint16_t p_out[DRV_ADC_BLOCK_LEN], uint32_t * p_seq);
+IMPORT bool drv_adc_get_block(uint16_t   p_out[DRV_ADC_BLOCK_LEN],
+                              uint32_t * p_seq);
 
 /* ADC FIFO overflow / conversion errors seen (diagnostics). */
 IMPORT uint32_t drv_adc_errors(void);

@@ -12,51 +12,51 @@
 #include "comms_proto.h"
 #include "../app_pack.h"
 
-typedef char comms_check_symbols_t[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
+typedef char
+    comms_check_symbols_t[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
 
 /* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
-static comms_param_t const g_params[COMMS_PARAM_COUNT] =
-{
-    { "speed_mm_s",  1u, 150, 350 },  /* cruise speed, NFR11 (Buddy 2/3)       */
-    { "slow_cm",     2u,  25,  60 },  /* slow-down range, FR9, default 40 (B5) */
-    { "stop_cm",     3u,  15,  40 },  /* stop range, FR9/NFR6, default 20 (B5) */
-    { "lost_mm",     4u,  55, 150 },  /* line-lost length, FR2, default 80 (B3) */
-    { "junction_mm", 5u,  10,  40 }   /* junction length, FR2, default 12 (B3) */
+static comms_param_t const g_params[COMMS_PARAM_COUNT] = {
+    {"speed_mm_s", 1u, 150, 350}, /* cruise speed, NFR11 (Buddy 2/3)       */
+    {"slow_cm", 2u, 25, 60},      /* slow-down range, FR9, default 40 (B5) */
+    {"stop_cm", 3u, 15, 40},      /* stop range, FR9/NFR6, default 20 (B5) */
+    {"lost_mm", 4u, 55, 150},     /* line-lost length, FR2, default 80 (B3) */
+    {"junction_mm", 5u, 10, 40}   /* junction length, FR2, default 12 (B3) */
 #if APP_BENCH
     ,
-    { "bench_move",  101u, -2000, 2000 },     /* app_config.h: bring-up only */
-    { "bench_turn",  102u, -3600, 3600 },
-    { "bench_speed", 103u,    50,  450 }
+    {"bench_move", 101u, -2000, 2000}, /* app_config.h: bring-up only */
+    {"bench_turn", 102u, -3600, 3600},
+    {"bench_speed", 103u, 50, 450}
 #endif
 };
 
 
-#define NONE_D_CM       511u        /* telemetry d: nothing in range      */
-#define NONE_W_MM       1023u       /* telemetry w: no profile            */
-#define NONE_CLR_CM     127u        /* telemetry clr_l / clr_r: no profile */
-#define T10_BITS        24u         /* frame time, 10 ms units (46.6 h)   */
+#define NONE_D_CM   511u  /* telemetry d: nothing in range      */
+#define NONE_W_MM   1023u /* telemetry w: no profile            */
+#define NONE_CLR_CM 127u  /* telemetry clr_l / clr_r: no profile */
+#define T10_BITS    24u   /* frame time, 10 ms units (46.6 h)   */
 
 /* ---------------------------------------------------------------------
  *  Helpers
  * --------------------------------------------------------------------- */
-uint8_t comms_symbol_index(char chr)
+uint8_t comms_symbol_index (char chr)
 {
     return pk_sym_index(chr);
 }
 
-char comms_symbol_char(uint8_t index)
+char comms_symbol_char (uint8_t index)
 {
     return pk_sym_char(index);
 }
 
-static void put_header(pk_writer_t * p_w, comms_frame_type_t type)
+static void put_header (pk_writer_t * p_w, comms_frame_type_t type)
 {
     pk_put(p_w, (uint32_t)type, 5u);
     pk_put(p_w, COMMS_FRAME_VERSION, 3u);
 }
 
 /* centi-degrees -> tenths of a degree, rounded half away from zero. */
-static int32_t cdeg_to_tenths(int16_t cdeg)
+static int32_t cdeg_to_tenths (int16_t cdeg)
 {
     int32_t value = (int32_t)cdeg;
 
@@ -64,7 +64,8 @@ static int32_t cdeg_to_tenths(int16_t cdeg)
 }
 
 /* mm -> cm, rounded; none_code if absent or too large for the field. */
-static uint32_t mm_to_cm_field(uint16_t value_mm, bool b_valid, uint32_t none_code)
+static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
+                                uint32_t none_code)
 {
     uint32_t value_cm;
 
@@ -79,29 +80,40 @@ static uint32_t mm_to_cm_field(uint16_t value_mm, bool b_valid, uint32_t none_co
 /* ---------------------------------------------------------------------
  *  Telemetry record (mbf_telem)
  * --------------------------------------------------------------------- */
-void comms_rec_pack(comms_rec_t * p_rec, uint8_t kind, uint8_t src, uint16_t code,
-                    int32_t data, uint32_t now_ms)
+void comms_rec_pack (comms_rec_t * p_rec, uint8_t kind, uint8_t src,
+                     uint16_t code, int32_t data, uint32_t now_ms)
 {
-    uint32_t word = 0u;
-    uint32_t const kind_idx = ((kind >= 1u) && (kind <= 4u)) ? (uint32_t)(kind - 1u) : 3u;   /* unknown -> LOG */
+    uint32_t       word     = 0u;
+    uint32_t const kind_idx = ((kind >= 1u) && (kind <= 4u))
+                                  ? (uint32_t)(kind - 1u)
+                                  : 3u; /* unknown -> LOG */
 
     word = pk_set(word, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS, kind_idx);
-    word = pk_set(word, COMMS_REC_SRC_SHIFT,  COMMS_REC_SRC_BITS,  pk_sat_u(src, COMMS_REC_SRC_BITS));
-    word = pk_set(word, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS, pk_sat_u(code, COMMS_REC_CODE_BITS));
-    word = pk_set(word, COMMS_REC_T_SHIFT,    COMMS_REC_T_BITS,    (now_ms / 10u) & pk_mask(COMMS_REC_T_BITS));
+    word = pk_set(word, COMMS_REC_SRC_SHIFT, COMMS_REC_SRC_BITS,
+                  pk_sat_u(src, COMMS_REC_SRC_BITS));
+    word = pk_set(word, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS,
+                  pk_sat_u(code, COMMS_REC_CODE_BITS));
+    word = pk_set(word, COMMS_REC_T_SHIFT, COMMS_REC_T_BITS,
+                  (now_ms / 10u) & pk_mask(COMMS_REC_T_BITS));
     p_rec->hdr  = word;
     p_rec->data = data;
 }
 
-void comms_rec_unpack(comms_rec_t const * p_rec, uint32_t now_ms, comms_event_t * p_ev)
+void comms_rec_unpack (comms_rec_t const * p_rec, uint32_t now_ms,
+                       comms_event_t * p_ev)
 {
     uint32_t const now10 = now_ms / 10u;
-    uint32_t const t10   = pk_get(p_rec->hdr, COMMS_REC_T_SHIFT, COMMS_REC_T_BITS);
+    uint32_t const t10 =
+        pk_get(p_rec->hdr, COMMS_REC_T_SHIFT, COMMS_REC_T_BITS);
     uint32_t const age10 = (now10 - t10) & pk_mask(COMMS_REC_T_BITS);
 
-    p_ev->kind = (uint8_t)(pk_get(p_rec->hdr, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS) + 1u);
-    p_ev->src  = (uint8_t)pk_get(p_rec->hdr, COMMS_REC_SRC_SHIFT, COMMS_REC_SRC_BITS);
-    p_ev->code = (uint16_t)pk_get(p_rec->hdr, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS);
+    p_ev->kind =
+        (uint8_t)(pk_get(p_rec->hdr, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS)
+                  + 1u);
+    p_ev->src =
+        (uint8_t)pk_get(p_rec->hdr, COMMS_REC_SRC_SHIFT, COMMS_REC_SRC_BITS);
+    p_ev->code =
+        (uint16_t)pk_get(p_rec->hdr, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS);
     p_ev->data = p_rec->data;
     p_ev->t_ms = (now10 - age10) * 10u;
 }
@@ -109,7 +121,8 @@ void comms_rec_unpack(comms_rec_t const * p_rec, uint32_t now_ms, comms_event_t 
 /* ---------------------------------------------------------------------
  *  Builders
  * --------------------------------------------------------------------- */
-uint16_t comms_build_telemetry(comms_telem_t const * p_t, uint8_t * p_buf, uint16_t cap)
+uint16_t comms_build_telemetry (comms_telem_t const * p_t, uint8_t * p_buf,
+                                uint16_t cap)
 {
     pk_writer_t writer;
     bool const  b_prof = p_t->b_obst_valid;
@@ -133,14 +146,18 @@ uint16_t comms_build_telemetry(comms_telem_t const * p_t, uint8_t * p_buf, uint1
     pk_put(&writer, pk_off_s(cdeg_to_tenths(p_t->roll_cdeg), 12u), 12u);
     pk_put(&writer, pk_sat_u(p_t->hump_max_mm, 8u), 8u);
     pk_put(&writer, mm_to_cm_field(p_t->obst_d_mm, true, NONE_D_CM), 9u);
-    pk_put(&writer, b_prof ? ((p_t->obst_w_mm >= NONE_W_MM) ? (NONE_W_MM - 1u) : p_t->obst_w_mm)
-                      : NONE_W_MM, 10u);
+    pk_put(&writer,
+           b_prof ? ((p_t->obst_w_mm >= NONE_W_MM) ? (NONE_W_MM - 1u)
+                                                   : p_t->obst_w_mm)
+                  : NONE_W_MM,
+           10u);
     pk_put(&writer, mm_to_cm_field(p_t->clr_l_mm, b_prof, NONE_CLR_CM), 7u);
     pk_put(&writer, mm_to_cm_field(p_t->clr_r_mm, b_prof, NONE_CLR_CM), 7u);
     return pk_writer_len(&writer);
 }
 
-uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p_buf, uint16_t cap)
+uint16_t comms_build_event (comms_event_t const * p_ev, uint32_t seq,
+                            uint8_t * p_buf, uint16_t cap)
 {
     pk_writer_t   writer;
     int32_t const data = p_ev->data;
@@ -172,19 +189,24 @@ uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p
     put_header(&writer, COMMS_FT_EVENT);
     pk_put(&writer, seq, 8u);
     pk_put(&writer, p_ev->t_ms / 10u, T10_BITS);
-    pk_put(&writer, ((p_ev->kind >= 1u) && (p_ev->kind <= 4u)) ? (uint32_t)(p_ev->kind - 1u) : 3u, 2u);
+    pk_put(&writer,
+           ((p_ev->kind >= 1u) && (p_ev->kind <= 4u))
+               ? (uint32_t)(p_ev->kind - 1u)
+               : 3u,
+           2u);
     pk_put(&writer, pk_sat_u(p_ev->src, COMMS_SRC_BITS), COMMS_SRC_BITS);
-    pk_put(&writer, pk_sat_u(p_ev->code, COMMS_REC_CODE_BITS), COMMS_REC_CODE_BITS);
+    pk_put(&writer, pk_sat_u(p_ev->code, COMMS_REC_CODE_BITS),
+           COMMS_REC_CODE_BITS);
     pk_put(&writer, dlen, 2u);
     if (width > 0u)
     {
-        pk_put(&writer, (uint32_t)data, width);     /* two's complement, low bits */
+        pk_put(&writer, (uint32_t)data, width); /* two's complement, low bits */
     }
     return pk_writer_len(&writer);
 }
 
-uint16_t comms_build_status(uint32_t uptime_s, int32_t rssi, uint32_t drops,
-                            char const * p_map, uint8_t * p_buf, uint16_t cap)
+uint16_t comms_build_status (uint32_t uptime_s, int32_t rssi, uint32_t drops,
+                             char const * p_map, uint8_t * p_buf, uint16_t cap)
 {
     pk_writer_t writer;
     uint32_t    neg_rssi = (rssi < 0) ? (uint32_t)(-(int64_t)rssi) : 0u;
@@ -207,8 +229,8 @@ uint16_t comms_build_status(uint32_t uptime_s, int32_t rssi, uint32_t drops,
     return pk_writer_len(&writer);
 }
 
-uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
-                         uint8_t * p_buf, uint16_t cap)
+uint16_t comms_build_ack (comms_cmd_t const * p_cmd, comms_err_t err,
+                          uint8_t * p_buf, uint16_t cap)
 {
     pk_writer_t writer;
 
@@ -223,12 +245,12 @@ uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
 /* ---------------------------------------------------------------------
  *  Command parser
  * --------------------------------------------------------------------- */
-comms_param_t const * comms_param_by_index(uint8_t index)
+comms_param_t const * comms_param_by_index (uint8_t index)
 {
     return (index < COMMS_PARAM_COUNT) ? &g_params[index] : NULL;
 }
 
-comms_param_t const * comms_param_by_id(uint8_t param_id)
+comms_param_t const * comms_param_by_id (uint8_t param_id)
 {
     uint8_t idx;
 
@@ -242,13 +264,14 @@ comms_param_t const * comms_param_by_id(uint8_t param_id)
     return NULL;
 }
 
-comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd)
+comms_err_t comms_parse_cmd (uint8_t const * p_data, uint16_t len,
+                             comms_cmd_t * p_cmd)
 {
     pk_reader_t reader;
     uint32_t    type;
     uint32_t    version;
 
-    p_cmd->cmd_id       = 0u;
+    p_cmd->cmd_id   = 0u;
     p_cmd->b_has_id = false;
     p_cmd->cmd      = (uint8_t)COMMS_CMD_NONE;
     p_cmd->param_id = 0u;
@@ -257,7 +280,8 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
     pk_reader_init(&reader, p_data, len);
     type    = pk_take(&reader, 5u);
     version = pk_take(&reader, 3u);
-    if (reader.b_short || (type != (uint32_t)COMMS_FT_CMD) || (version != COMMS_FRAME_VERSION))
+    if (reader.b_short || (type != (uint32_t)COMMS_FT_CMD)
+        || (version != COMMS_FRAME_VERSION))
     {
         return COMMS_ERR_BAD_FRAME;
     }
@@ -293,9 +317,10 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
             {
                 return COMMS_ERR_BAD_FRAME;
             }
-            index         = pk_take(&reader, COMMS_PARAM_BITS);
-            p_cmd->value  = pk_unoff_s(pk_take(&reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
-            p_param       = comms_param_by_index((uint8_t)index);
+            index        = pk_take(&reader, COMMS_PARAM_BITS);
+            p_cmd->value = pk_unoff_s(pk_take(&reader, COMMS_VALUE_BITS),
+                                      COMMS_VALUE_BITS);
+            p_param      = comms_param_by_index((uint8_t)index);
             if (NULL == p_param)
             {
                 return COMMS_ERR_BAD_PARAM;
@@ -345,12 +370,12 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
     return COMMS_ERR_NONE;
 }
 
-bool comms_map_char_ok(char chr)
+bool comms_map_char_ok (char chr)
 {
     return (pk_sym_index(chr) != 0u);
 }
 
-comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)
+comms_err_t comms_check_ready (comms_cmd_t const * p_cmd, bool b_calibrated)
 {
     if (((uint8_t)COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
     {
@@ -359,11 +384,12 @@ comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)
     return COMMS_ERR_NONE;
 }
 
-comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle)
+comms_err_t comms_check_cmd (comms_cmd_t const * p_cmd, bool b_idle)
 {
-    if ((((uint8_t)COMMS_CMD_START == p_cmd->cmd) ||
-         ((uint8_t)COMMS_CMD_SET == p_cmd->cmd) ||
-         ((uint8_t)COMMS_CMD_MAP == p_cmd->cmd)) && !b_idle)
+    if ((((uint8_t)COMMS_CMD_START == p_cmd->cmd)
+         || ((uint8_t)COMMS_CMD_SET == p_cmd->cmd)
+         || ((uint8_t)COMMS_CMD_MAP == p_cmd->cmd))
+        && !b_idle)
     {
         return COMMS_ERR_BUSY;
     }
@@ -373,19 +399,20 @@ comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle)
 /* ---------------------------------------------------------------------
  *  Duplicate suppression
  * --------------------------------------------------------------------- */
-void comms_dedup_init(comms_dedup_t * p_dd)
+void comms_dedup_init (comms_dedup_t * p_dd)
 {
     p_dd->next  = 0u;
     p_dd->count = 0u;
 }
 
-bool comms_cmd_repeat_safe(uint8_t cmd)
+bool comms_cmd_repeat_safe (uint8_t cmd)
 {
     return ((uint8_t)COMMS_CMD_STOP == cmd);
 }
 
-comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
-                                       comms_cmd_t const * p_cmd, uint32_t now_ms)
+comms_dedup_result_t comms_dedup_check (comms_dedup_t const * p_dd,
+                                        comms_cmd_t const *   p_cmd,
+                                        uint32_t              now_ms)
 {
     uint8_t idx;
 
@@ -394,10 +421,11 @@ comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
         comms_dedup_entry_t const * p_e = &p_dd->entries[idx];
 
         /* Unsigned difference: correct across the 32-bit ms wrap. */
-        if ((p_e->cmd_id == p_cmd->cmd_id) && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
+        if ((p_e->cmd_id == p_cmd->cmd_id)
+            && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
         {
-            if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id) &&
-                (p_e->value == p_cmd->value))
+            if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id)
+                && (p_e->value == p_cmd->value))
             {
                 return COMMS_DEDUP_REPEAT;
             }
@@ -407,11 +435,12 @@ comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
     return COMMS_DEDUP_NEW;
 }
 
-void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd, uint32_t now_ms)
+void comms_dedup_add (comms_dedup_t * p_dd, comms_cmd_t const * p_cmd,
+                      uint32_t now_ms)
 {
     comms_dedup_entry_t * p_e = &p_dd->entries[p_dd->next];
 
-    p_e->cmd_id       = p_cmd->cmd_id;
+    p_e->cmd_id   = p_cmd->cmd_id;
     p_e->t_ms     = now_ms;
     p_e->cmd      = p_cmd->cmd;
     p_e->param_id = p_cmd->param_id;
@@ -426,20 +455,22 @@ void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd, uint32_t n
 /* ---------------------------------------------------------------------
  *  Offline event ring
  * --------------------------------------------------------------------- */
-void comms_ring_init(comms_ring_t * p_ring)
+void comms_ring_init (comms_ring_t * p_ring)
 {
     p_ring->head  = 0u;
     p_ring->count = 0u;
 }
 
-bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint8_t seq)
+bool comms_ring_push (comms_ring_t * p_ring, comms_rec_t const * p_rec,
+                      uint8_t seq)
 {
     bool    b_overwrote = false;
     uint8_t idx;
 
     if (COMMS_RING_LEN == p_ring->count)
     {
-        p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);  /* drop oldest */
+        p_ring->head =
+            (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN); /* drop oldest */
         p_ring->count--;
         b_overwrote = true;
     }
@@ -450,7 +481,8 @@ bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint8_t s
     return b_overwrote;
 }
 
-bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint8_t * p_seq)
+bool comms_ring_peek (comms_ring_t const * p_ring, comms_rec_t * p_rec,
+                      uint8_t * p_seq)
 {
     if (0u == p_ring->count)
     {
@@ -461,7 +493,7 @@ bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint8_t *
     return true;
 }
 
-void comms_ring_pop(comms_ring_t * p_ring)
+void comms_ring_pop (comms_ring_t * p_ring)
 {
     if (p_ring->count > 0u)
     {
