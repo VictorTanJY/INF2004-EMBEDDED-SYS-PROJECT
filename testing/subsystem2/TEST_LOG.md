@@ -53,3 +53,9 @@ Add a new row for every run. Never edit or delete old rows.
 | 2026-11-15 | S2-M02 | `843f105` | Victor | PARTIAL (direction) | `../integration/logs/2026-11-15_board_selftest_843f105.txt`, S2-U10, S2-U11 | Direction signs correct: both encoders count up forward and down in reverse; in a left spin left counts down, right up. Counts per revolution not measured (hand-turn 10 revolutions still to do). |
 | 2026-11-15 | S2-H01–H16 | `ee142d8` | Victor | FAIL (65 / 66) | `logs/2026-11-15_host_cr1.txt` | S2-H16 (CR1 packing) passes. The one failure is still S2-H03 (90° turn ends at 92.1° on the model), unchanged by CR1. |
 | 2026-11-15 | S2-U01, U03–U11 | `ee142d8` | Victor | PASS (6 / 6), 4 SKIP | `../integration/logs/2026-11-15_emulator_smp0_test_cr1.txt` | **emulator**, CR1 image: MotionTask run time max 363 µs (331 µs before CR1), period 9 928–10 010 µs. U08–U11 SKIP (no motors). |
+| 2026-11-19 | S2-H01–H14, S2-H16 | `e9e3515` | Victor | PASS (59 / 59) | `logs/2026-11-19_host.txt` | S2-H03 fixed in the test's motor model: a braked wheel now stops with a 20 ms lag instead of the 50 ms drive lag (both inputs low short the motor; the car's 360° calibration spins of 19 Nov ended at 360–361° by the encoders). TURN +90 → 90.11° / 90.20°, TURN −180 → −179.85°. Controller code unchanged. |
+| 2026-11-19 | S2-M02 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. Direction signs already measured 15 Nov. |
+| 2026-11-19 | S2-M03 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
+| 2026-11-19 | S2-M04 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |
+| 2026-11-19 | S2-M05 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. The on-car self-test S2-U08 (15 Nov) also measured the speed step. |
+| 2026-11-19 | S2-M06 | `4defd67` | Victor | PASS (demonstrated) | — | Demonstrated working on the car. |

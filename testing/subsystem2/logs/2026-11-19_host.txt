@@ -1,0 +1,9 @@
+# host tests, 2026-11-19, commit e9e3515: make -C testing/subsystem2/host
+MOVE 1000 mm: 999 mm in 3790 ms (x 999, y 0)
+TURN +90: heading 9020 cdeg
+TURN -180: heading -8985 cdeg
+DRIVE 250 mm/s: measured 236 mm/s
+STOP ramp from 250 mm/s: braked after 240 ms
+STALL reported 350 ms after the wheel locked
+square leg: x 498 y 499 heading 9011
+host tests: 59 passed, 0 failed
