@@ -22,7 +22,7 @@ IMPORT uint32_t safety_task_latched(void);
 
 #if APP_TEST
 /* Measured length of 100 ms of kernel time, us (S4-U02). */
-IMPORT UW safety_task_tick_us(void);
+IMPORT uint32_t safety_task_tick_us(void);
 #endif
 
 #endif /* SAFETY_TASK_H */

@@ -66,7 +66,7 @@ EXPORT ER drv_ultrasonic_attach (void)
 
 EXPORT void drv_ultrasonic_trigger (void)
 {
-    UW t_start;
+    uint32_t t_start;
 
 #if !US_PINS_FREE
     (void)t_start;
@@ -76,7 +76,7 @@ EXPORT void drv_ultrasonic_trigger (void)
     g_echo  = 0u;
     out_w(APP_REGS_GPIO_OUT_SET, 1uL << S5_PIN_US_TRIG);
     t_start = app_time_us();
-    while ((UW)(app_time_us() - t_start) < US_TRIG_PULSE_US)
+    while ((uint32_t)(app_time_us() - t_start) < US_TRIG_PULSE_US)
     {
         ; /* >= 10 us (datasheet) */
     }

@@ -54,7 +54,8 @@ static void check_er(ER err, char const * p_what);
  * Create and start one task (declared in app.h for every subsystem).
  *   prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or 0 for "any core".
  */
-EXPORT ID app_main_start_task (FP entry, PRI pri, UW prc, char const * p_name)
+EXPORT ID app_main_start_task (FP entry, PRI pri, uint32_t prc,
+                               char const * p_name)
 {
     T_CTSK ctsk = {0};
     ID     tid;

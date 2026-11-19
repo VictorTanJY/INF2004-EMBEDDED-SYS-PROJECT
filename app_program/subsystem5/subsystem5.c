@@ -20,7 +20,7 @@ static app_lock_t g_mission_lock;
 static uint32_t   g_mission_snap[MISSION_SNAP_WORDS];
 static app_lock_t g_obst_lock;
 static uint32_t   g_obst_snap[OBST_SNAP_WORDS];
-static UW         g_drops;
+static uint32_t   g_drops;
 static ID         g_cyc_range;
 
 static void range_cyc_handler(void * p_exinf);

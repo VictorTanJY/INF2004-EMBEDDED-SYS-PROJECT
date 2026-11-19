@@ -32,35 +32,43 @@
 #define MOTION_API_MAX_DDEG 4095
 #define MOTION_API_MAX_RATE 511 /* mm/s or deg/s (9-bit field)          */
 
-/* Posts one raw command (subsystem2.c on the robot).  The return type is
-   int, not int32_t, because it is the kernel's error type ER (= int). */
-int subsystem2_post(uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
-                    int16_t arg1);
+/* Result of every function here: 0 (E_OK), E_TMOUT or MOTION_API_E_PAR.
+   NOTE: plain int on purpose: it must be the same type as the kernel's
+   error code ER (typedef INT ER, INT = int), which subsystem2_post()
+   returns on the robot; int32_t is long int on the Arm compiler. */
+typedef int motion_api_err_t;
+
+/* Posts one raw command (subsystem2.c on the robot). */
+motion_api_err_t subsystem2_post(uint8_t src, uint8_t seq, uint8_t cmd,
+                                 int16_t arg0, int16_t arg1);
 
 /* moveForward(distance): drive distance_mm forward at speed_mm_s, then brake.
  */
-int motion_api_move_forward(uint8_t src, uint8_t seq, uint16_t distance_mm,
-                            uint16_t speed_mm_s);
+motion_api_err_t motion_api_move_forward(uint8_t src, uint8_t seq,
+                                         uint16_t distance_mm,
+                                         uint16_t speed_mm_s);
 
 /* moveBackward(distance): the same, reversing. */
-int motion_api_move_backward(uint8_t src, uint8_t seq, uint16_t distance_mm,
-                             uint16_t speed_mm_s);
+motion_api_err_t motion_api_move_backward(uint8_t src, uint8_t seq,
+                                          uint16_t distance_mm,
+                                          uint16_t speed_mm_s);
 
 /* turnLeft(angle) / turnRight(angle): spin in place by angle_ddeg tenths of
    a degree (900 = 90.0 deg) at rate_deg_s. */
-int motion_api_turn_left(uint8_t src, uint8_t seq, uint16_t angle_ddeg,
-                         uint16_t rate_deg_s);
-int motion_api_turn_right(uint8_t src, uint8_t seq, uint16_t angle_ddeg,
-                          uint16_t rate_deg_s);
+motion_api_err_t motion_api_turn_left(uint8_t src, uint8_t seq,
+                                      uint16_t angle_ddeg, uint16_t rate_deg_s);
+motion_api_err_t motion_api_turn_right(uint8_t src, uint8_t seq,
+                                       uint16_t angle_ddeg,
+                                       uint16_t rate_deg_s);
 
 /* stop(): cancel any move, ramp down (MOTION_STOP_DECEL), then brake. */
-int motion_api_stop(uint8_t src, uint8_t seq);
+motion_api_err_t motion_api_stop(uint8_t src, uint8_t seq);
 
 /* drive(v, omega): continuous closed-loop driving for the line follower and
    the bypass: v_mm_s forward (+) / back (-), omega_mrad_s turn rate
    (+ left).  Must be refreshed at least every 100 ms, or MotionTask stops. */
-int motion_api_drive(uint8_t src, uint8_t seq, int16_t v_mm_s,
-                     int16_t omega_mrad_s);
+motion_api_err_t motion_api_drive(uint8_t src, uint8_t seq, int16_t v_mm_s,
+                                  int16_t omega_mrad_s);
 
 #endif /* MOTION_API_H */
 

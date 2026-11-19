@@ -65,7 +65,8 @@ static uint32_t volatile g_safety_latched;
 
 static bool volatile gb_tick_ok;
 static bool volatile gb_tick_checked;
-static volatile UW g_safety_tick_us; /* measured us per 100 ms of kernel time */
+static uint32_t volatile g_safety_tick_us; /* measured us per 100 ms of kernel
+                                              time */
 
 static void     read_heartbeats(uint32_t counts[SAFETY_HB_COUNT]);
 static void     latch(uint32_t bits, uint32_t now_ms);
@@ -163,7 +164,7 @@ EXPORT uint32_t safety_task_latched (void)
 
 #if APP_TEST
 
-EXPORT UW safety_task_tick_us (void)
+EXPORT uint32_t safety_task_tick_us (void)
 {
     return g_safety_tick_us;
 }
@@ -224,14 +225,14 @@ static uint32_t live_causes (safety_core_hb_state_t * p_hb, uint32_t now_ms)
 
 static void check_timer_tick (void)
 {
-    UW   reload;
-    UW   prev;
-    UW   acc = 0u;
-    UW   us0;
-    UW   delta_us;
-    UW   guard = 0u;
-    UINT intsts;
-    bool b_borrowed = false;
+    uint32_t reload;
+    uint32_t prev;
+    uint32_t acc = 0u;
+    uint32_t us0;
+    uint32_t delta_us;
+    uint32_t guard = 0u;
+    UINT     intsts;
+    bool     b_borrowed = false;
 
     DI(intsts);
     if (0u == (in_w(CHK_SYST_CSR) & CHK_SYST_ENABLE))
@@ -247,7 +248,7 @@ static void check_timer_tick (void)
     us0    = app_time_us();
     while ((acc < CHK_SYS_COUNTS) && (guard < CHK_GUARD_SPINS))
     {
-        UW const cur = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
+        uint32_t const cur = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
 
         acc += (prev >= cur) ? (prev - cur)
                              : ((prev + reload) - cur); /* down counter */
@@ -262,8 +263,8 @@ static void check_timer_tick (void)
     }
     EI(intsts);
 
-    g_safety_tick_us =
-        (UW)(((UD)delta_us * 100000u) / 2000u); /* scaled to us per 100 ms */
+    g_safety_tick_us = (uint32_t)(((uint64_t)delta_us * 100000u)
+                                  / 2000u); /* scaled to us per 100 ms */
     gb_tick_ok =
         (acc >= CHK_SYS_COUNTS) && (delta_us > 1900u) && (delta_us < 2100u);
     gb_tick_checked = true;

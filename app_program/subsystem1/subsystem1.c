@@ -14,7 +14,7 @@
 
 static ID g_mbf_telem;
 
-static UW g_telem_drops;
+static uint32_t g_telem_drops;
 
 EXPORT ER subsystem1_init (void)
 {

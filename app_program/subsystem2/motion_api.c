@@ -6,50 +6,55 @@
 
 #include "motion_api.h"
 
-static int post_signed(uint8_t src, uint8_t seq, uint8_t cmd, int32_t sign,
-                       uint16_t amount, uint16_t limit, uint16_t rate);
+static motion_api_err_t post_signed(uint8_t src, uint8_t seq, uint8_t cmd,
+                                    int32_t sign, uint16_t amount,
+                                    uint16_t limit, uint16_t rate);
 
-int motion_api_move_forward (uint8_t src, uint8_t seq, uint16_t distance_mm,
-                             uint16_t speed_mm_s)
+motion_api_err_t motion_api_move_forward (uint8_t src, uint8_t seq,
+                                          uint16_t distance_mm,
+                                          uint16_t speed_mm_s)
 {
     return post_signed(src, seq, MOTION_CMD_MOVE, 1, distance_mm,
                        (uint16_t)MOTION_API_MAX_MM, speed_mm_s);
 }
 
-int motion_api_move_backward (uint8_t src, uint8_t seq, uint16_t distance_mm,
-                              uint16_t speed_mm_s)
+motion_api_err_t motion_api_move_backward (uint8_t src, uint8_t seq,
+                                           uint16_t distance_mm,
+                                           uint16_t speed_mm_s)
 {
     return post_signed(src, seq, MOTION_CMD_MOVE, -1, distance_mm,
                        (uint16_t)MOTION_API_MAX_MM, speed_mm_s);
 }
 
-int motion_api_turn_left (uint8_t src, uint8_t seq, uint16_t angle_ddeg,
-                          uint16_t rate_deg_s)
+motion_api_err_t motion_api_turn_left (uint8_t src, uint8_t seq,
+                                       uint16_t angle_ddeg, uint16_t rate_deg_s)
 {
     return post_signed(src, seq, MOTION_CMD_TURN, 1, angle_ddeg,
                        (uint16_t)MOTION_API_MAX_DDEG, rate_deg_s);
 }
 
-int motion_api_turn_right (uint8_t src, uint8_t seq, uint16_t angle_ddeg,
-                           uint16_t rate_deg_s)
+motion_api_err_t motion_api_turn_right (uint8_t src, uint8_t seq,
+                                        uint16_t angle_ddeg,
+                                        uint16_t rate_deg_s)
 {
     return post_signed(src, seq, MOTION_CMD_TURN, -1, angle_ddeg,
                        (uint16_t)MOTION_API_MAX_DDEG, rate_deg_s);
 }
 
-int motion_api_stop (uint8_t src, uint8_t seq)
+motion_api_err_t motion_api_stop (uint8_t src, uint8_t seq)
 {
     return subsystem2_post(src, seq, MOTION_CMD_STOP, 0, 0);
 }
 
-int motion_api_drive (uint8_t src, uint8_t seq, int16_t v_mm_s,
-                      int16_t omega_mrad_s)
+motion_api_err_t motion_api_drive (uint8_t src, uint8_t seq, int16_t v_mm_s,
+                                   int16_t omega_mrad_s)
 {
     return subsystem2_post(src, seq, MOTION_CMD_DRIVE, v_mm_s, omega_mrad_s);
 }
 
-static int post_signed (uint8_t src, uint8_t seq, uint8_t cmd, int32_t sign,
-                        uint16_t amount, uint16_t limit, uint16_t rate)
+static motion_api_err_t post_signed (uint8_t src, uint8_t seq, uint8_t cmd,
+                                     int32_t sign, uint16_t amount,
+                                     uint16_t limit, uint16_t rate)
 {
     /* amount 0 is allowed: MotionTask completes it at once (MOTION_DONE). */
     if ((amount > limit) || (0u == rate)

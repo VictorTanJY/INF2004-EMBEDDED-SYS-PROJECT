@@ -128,9 +128,9 @@ EXPORT void subsystem2_put_odom (motion_types_odom_t const * p_in)
 
 EXPORT void subsystem2_motor_estop (void)
 {
-    UW const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
-                    | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
-    UINT     intsts;
+    uint32_t const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
+                          | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
+    UINT           intsts;
 
     DI(intsts);
     g_estop_latch = 1u;

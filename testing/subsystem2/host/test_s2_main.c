@@ -80,8 +80,8 @@ static void                 test_pack_s2(void);
 static void check_result(char const * p_id, bool b_ok, char const * p_file,
                          int32_t line);
 
-int32_t subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd, int16_t arg0,
-                         int16_t arg1)
+motion_api_err_t subsystem2_post (uint8_t src, uint8_t seq, uint8_t cmd,
+                                  int16_t arg0, int16_t arg1)
 {
     g_post.count++;
     g_post.src  = src;

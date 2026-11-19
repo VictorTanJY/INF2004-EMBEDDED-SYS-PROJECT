@@ -85,12 +85,12 @@ Inline void app_unlock (app_lock_t * p_lock, UINT intsts)
 }
 
 /* Atomic increment of a shared 32-bit counter (writers on both cores). */
-Inline void app_atomic_inc (UW * p_count)
+Inline void app_atomic_inc (uint32_t * p_count)
 {
     (void)atomic_inc(p_count);
 }
 #else
-typedef UW app_lock_t;
+typedef uint32_t app_lock_t;
 
 Inline void app_lock_init (app_lock_t * p_lock)
 {
@@ -112,7 +112,7 @@ Inline void app_unlock (app_lock_t * p_lock, UINT intsts)
     EI(intsts);
 }
 
-Inline void app_atomic_inc (UW * p_count)
+Inline void app_atomic_inc (uint32_t * p_count)
 {
     UINT intsts;
 
@@ -128,28 +128,28 @@ Inline void app_atomic_inc (UW * p_count)
    plus a TRON-epoch offset, so its low word starts near 3.36e9 at boot
    and a deadline initialised to 0 looks 2^31 ms in the future (first
    hardware run: telemetry never published). */
-Inline UW app_time_ms (void)
+Inline uint32_t app_time_ms (void)
 {
     SYSTIM tim;
 
     (void)tk_get_otm(&tim);
-    return (UW)tim.lo;
+    return (uint32_t)tim.lo;
 }
 
 /* RP2040 1 us system timer, low 32 bits (wraps every 71.6 min).  Correct
    only after the watchdog tick is set to 12 cycles (drv_watchdog, S4):
    from a cold power-on it otherwise runs 42.7 x slow. */
-Inline UW app_time_us (void)
+Inline uint32_t app_time_us (void)
 {
     return in_w(TIMER_TIMERAWL);
 }
 
 /* 64-bit microseconds, read without a lock (high word re-checked). */
-Inline UD app_time_us64 (void)
+Inline uint64_t app_time_us64 (void)
 {
-    UW hi0;
-    UW low;
-    UW hi1;
+    uint32_t hi0;
+    uint32_t low;
+    uint32_t hi1;
 
     do
     {
@@ -157,19 +157,19 @@ Inline UD app_time_us64 (void)
         low = in_w(TIMER_TIMERAWL);
         hi1 = in_w(TIMER_TIMERAWH);
     } while (hi0 != hi1);
-    return ((UD)hi0 << 32) | low;
+    return ((uint64_t)hi0 << 32) | low;
 }
 
 /* Milliseconds from the 1 us timer (32 bits, wraps after 49.7 days):
    used by the 10 ms loops, which need better than the 10 ms tick. */
-Inline UW app_time_ms_hw (void)
+Inline uint32_t app_time_ms_hw (void)
 {
-    return (UW)(app_time_us64() / 1000u);
+    return (uint32_t)(app_time_us64() / 1000u);
 }
 
 /* Take peripheral blocks out of reset.  Never ASSERT a reset here: PWM,
    PIO0 and DMA are shared between subsystems (and with the radio). */
-Inline void app_reset_release (UW mask)
+Inline void app_reset_release (uint32_t mask)
 {
     clr_w(RESETS_RESET, mask);
     while ((in_w(RESETS_RESET_DONE) & mask) != mask)

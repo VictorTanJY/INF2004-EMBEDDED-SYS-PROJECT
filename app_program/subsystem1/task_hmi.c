@@ -20,8 +20,8 @@
 #include "hmi_button.h"
 #include "../subsystem5/subsystem5.h"
 
-static void hmi_pin_init(UW pin);
-static bool hmi_pressed(UW pin);
+static void hmi_pin_init(uint32_t pin);
+static bool hmi_pressed(uint32_t pin);
 static void hmi_report(mission_types_ev_t event);
 
 EXPORT void task_hmi_thread (INT stacd, void * p_exinf)
@@ -69,14 +69,14 @@ EXPORT void task_hmi_thread (INT stacd, void * p_exinf)
     }
 }
 
-static void hmi_pin_init (UW pin)
+static void hmi_pin_init (uint32_t pin)
 {
     (void)gpio_set_pin(pin, GPIO_MODE_IN);
     clr_w(app_regs_pad(pin), APP_REGS_PAD_PDE);
     set_w(app_regs_pad(pin), APP_REGS_PAD_PUE);
 }
 
-static bool hmi_pressed (UW pin)
+static bool hmi_pressed (uint32_t pin)
 {
     return (S1_BTN_PRESSED_LEVEL == gpio_get_val(pin));
 }

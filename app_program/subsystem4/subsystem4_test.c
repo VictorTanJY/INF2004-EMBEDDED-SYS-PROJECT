@@ -170,8 +170,8 @@ EXPORT void subsystem4_test_run (void)
 
 static bool brake_pins_low (void)
 {
-    UW const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
-                    | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
+    uint32_t const mask = (1uL << S2_PIN_MOT_L_A) | (1uL << S2_PIN_MOT_L_B)
+                          | (1uL << S2_PIN_MOT_R_A) | (1uL << S2_PIN_MOT_R_B);
 
     return (0u == (in_w(SIO_GPIO_OUT) & mask))
            && (APP_REGS_FUNCSEL_SIO
