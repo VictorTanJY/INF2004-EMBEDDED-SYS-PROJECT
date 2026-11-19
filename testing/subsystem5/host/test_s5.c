@@ -980,9 +980,6 @@ static void test_bench(void)
     CHECK("S5-H14", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_TURN)].p0 == -900);
     ev(MISSION_EV_REMOTE_SET, 103u, 300);
     CHECK("S5-H14", g_out.act[find(MISSION_ACT_MOTION, MOTION_CMD_MOVE)].p1 == 300);
-    ev(MISSION_EV_REMOTE_SET, 104u, 45);
-    CHECK("S5-H14", find(MISSION_ACT_SCAN, SCAN_REQ_BENCH_SERVO) >= 0 &&
-                    g_out.act[find(MISSION_ACT_SCAN, SCAN_REQ_BENCH_SERVO)].p0 == 45);
     CHECK("S5-H14", g_mc.snap.cruise_mm_s == MISSION_CRUISE_MM_S);     /* not a run parameter */
     printf("bench mode checks run\n");
 #else
@@ -1025,7 +1022,7 @@ static void test_pack_s5(void)
     mission_evt_unpack(mission_evt_pack(&e), &d);
     CHECK("S5-H26", d.type == MISSION_EV_REMOTE_MAP && d.data == e.data && d.src == 1u);
     CHECK("S5-H26", (uint32_t)MISSION_EV_COUNT <= 32u);
-    q.type = (uint8_t)SCAN_REQ_BENCH_SERVO; q.seq = 37u; q.param = 180;
+    q.type = (uint8_t)SCAN_REQ_STOP; q.seq = 37u; q.param = 180;
     scan_req_unpack(scan_req_pack(&q), &qd);
     CHECK("S5-H26", qd.type == q.type && qd.seq == 5u && qd.param == 180);
 

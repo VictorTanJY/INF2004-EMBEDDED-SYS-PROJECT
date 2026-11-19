@@ -19,7 +19,6 @@
      bench_move  -2000..2000 mm      MOVE at 200 mm/s
      bench_turn  -3600..3600 0.1 deg TURN at 90 deg/s
      bench_speed 50..450 mm/s        MOVE 1000 mm at that speed (step response)
-     bench_servo 0..180 deg          servo to that angle and range continuously
    0 for normal and demo builds. */
 #ifndef APP_BENCH
 #define APP_BENCH           0

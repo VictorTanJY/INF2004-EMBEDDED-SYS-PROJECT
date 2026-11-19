@@ -157,8 +157,7 @@ typedef enum
     SCAN_REQ_BYPASS_LEFT  = 3,
     SCAN_REQ_BYPASS_RIGHT = 4,
     SCAN_REQ_RECOVER      = 5,  /* seek and align with the original line   */
-    SCAN_REQ_STOP         = 6,  /* stop everything, servo to 90 deg        */
-    SCAN_REQ_BENCH_SERVO  = 7   /* APP_BENCH: servo to param deg, keep ranging */
+    SCAN_REQ_STOP         = 6   /* stop everything, servo to 90 deg        */
 } scan_req_code_t;
 
 typedef struct

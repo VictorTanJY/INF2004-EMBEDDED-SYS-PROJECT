@@ -65,7 +65,7 @@ static comms_err_t parse(uint8_t id, uint8_t cmd, int index, int32_t value, char
 static int param_index(char const * p_name)
 {
     static char const * const names[] = { "speed_mm_s", "slow_cm", "stop_cm", "lost_mm", "junction_mm",
-                                          "bench_move", "bench_turn", "bench_speed", "bench_servo" };
+                                          "bench_move", "bench_turn", "bench_speed" };
     int i;
 
     for (i = 0; i < 9; i++)
@@ -533,7 +533,7 @@ static void test_map(void)
 #if APP_BENCH
     CHECK("S1-H20", parse(7u, COMMS_CMD_SET, param_index("bench_turn"), -900, NULL, &cmd) == COMMS_ERR_NONE &&
                     cmd.param_id == 102u && cmd.value == -900);
-    CHECK("S1-H20", parse(7u, COMMS_CMD_SET, param_index("bench_servo"), 181, NULL, &cmd) == COMMS_ERR_RANGE);
+    CHECK("S1-H20", parse(7u, COMMS_CMD_SET, param_index("bench_turn"), 3601, NULL, &cmd) == COMMS_ERR_RANGE);
 #else
     CHECK("S1-H20", parse(7u, COMMS_CMD_SET, param_index("bench_turn"), -900, NULL, &cmd) == COMMS_ERR_BAD_PARAM);
 #endif

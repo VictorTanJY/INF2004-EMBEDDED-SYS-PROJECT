@@ -22,7 +22,7 @@ ERRORS = ('', 'bad_frame', 'no_id', 'bad_cmd', 'bad_param', 'range', 'busy', 'fu
           'not_calibrated', 'bad_map')
 # "set" parameters, in the firmware whitelist order (frame index = position).
 PARAMS = ('speed_mm_s', 'slow_cm', 'stop_cm', 'lost_mm', 'junction_mm',
-          'bench_move', 'bench_turn', 'bench_speed', 'bench_servo')
+          'bench_move', 'bench_turn', 'bench_speed')
 COMMANDS = {'start': 1, 'stop': 2, 'reset': 4, 'set': 5, 'map': 6}
 MAP_KEYS = ('left', 'right', 'straight', 'uturn')
 EV_BARCODE = 8

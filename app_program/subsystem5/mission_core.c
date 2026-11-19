@@ -363,7 +363,6 @@ static void apply_param(mission_core_t * p_mc, uint16_t id, int32_t value, missi
         case 101u: motion(p_mc, p_out, (uint8_t)MOTION_CMD_MOVE, (int16_t)value, 200);  return;
         case 102u: motion(p_mc, p_out, (uint8_t)MOTION_CMD_TURN, (int16_t)value, 90);   return;
         case 103u: motion(p_mc, p_out, (uint8_t)MOTION_CMD_MOVE, 1000, (int16_t)value); return;
-        case 104u: scan(p_out, (uint8_t)SCAN_REQ_BENCH_SERVO, (int16_t)value);          return;
 #endif
         default: return;
     }

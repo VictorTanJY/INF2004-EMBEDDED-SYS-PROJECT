@@ -805,14 +805,6 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
             break;
 
-        case SCAN_REQ_BENCH_SERVO:      /* APP_BENCH: range at any angle */
-            goto_state((uint8_t)OBST_ST_MONITOR);
-            servo_to(app_clamp_i32(p_req->param, 0, 180), now_ms);
-            g_o.win_n       = 0u;
-            g_o.b_slow_sent = true;     /* no SLOW_DOWN / OBSTACLE while benching */
-            g_o.b_obst_sent = true;
-            break;
-
         case SCAN_REQ_RECOVER:
             goto_state((uint8_t)OBST_ST_SEEK_LINE);
             servo_to(OBST_SERVO_CENTRE_DEG, now_ms);

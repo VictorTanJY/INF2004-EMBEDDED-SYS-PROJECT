@@ -23,7 +23,7 @@ BYPASS_STATES = ('OBSTACLE_HANDLING', 'AVOIDING', 'LINE_RECOVERY')
 MAP_CHARS = set('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%')
 MAP_KEYS = ('left', 'right', 'straight', 'uturn')
 # Bench moves: only accepted by firmware built with APP_BENCH=1, in IDLE.
-BENCH = {'bench_move': (-2000, 2000), 'bench_turn': (-3600, 3600), 'bench_servo': (0, 180)}
+BENCH = {'bench_move': (-2000, 2000), 'bench_turn': (-3600, 3600)}
 
 DATA = {'broker': False, 'host': '127.0.0.1', 'telemetry': None, 'status': None, 'received': 0,
         'events': [], 'commands': [], 'history': [], 'bypass': None, 'error': '', 'revision': 0, '_prev_sample': None}

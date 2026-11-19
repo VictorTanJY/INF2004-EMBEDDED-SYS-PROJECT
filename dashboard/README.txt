@@ -25,8 +25,8 @@ Controls (all over MQTT, each command waits for the robot's ack):
 - Barcode map: type the four characters the instructor gives for left,
   right, straight and U-turn, then Send map. IDLE only; the robot forgets
   the map on reboot, so send it after every power-up.
-- Manual moves (forward/back 200 mm, left/right 90 deg, U-turn 180 deg,
-  scan servo left/centre/right): only firmware built with APP_BENCH 1
+- Manual moves (forward/back 200 mm, left/right 90 deg, U-turn 180 deg):
+  only firmware built with APP_BENCH 1
   accepts them, in IDLE; otherwise the ack says bad_param.
 
 Readings:

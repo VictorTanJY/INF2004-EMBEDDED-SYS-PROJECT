@@ -26,8 +26,7 @@ static comms_param_t const k_params[COMMS_PARAM_COUNT] =
     ,
     { "bench_move",  101u, -2000, 2000 },     /* app_config.h: bring-up only */
     { "bench_turn",  102u, -3600, 3600 },
-    { "bench_speed", 103u,    50,  450 },
-    { "bench_servo", 104u,     0,  180 }
+    { "bench_speed", 103u,    50,  450 }
 #endif
 };
 

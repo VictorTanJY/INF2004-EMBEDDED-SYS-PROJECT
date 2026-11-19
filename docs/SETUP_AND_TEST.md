@@ -258,7 +258,7 @@ picocar/is23/cmd -f cmd.bin`. Ids are 0–255; use a new one each time.
 | stop | `cmd 3 stop` |
 | reset after a fault | `cmd 5 reset` |
 | run parameter (IDLE) | `cmd 6 set speed_mm_s 200`: also `slow_cm`, `stop_cm`, `lost_mm`, `junction_mm` |
-| bench (APP_BENCH=1, IDLE) | `cmd 7 set bench_move 300`: also `bench_turn` (0.1 deg), `bench_speed` (mm/s), `bench_servo` (deg) |
+| bench (APP_BENCH=1, IDLE) | `cmd 7 set bench_move 300`: also `bench_turn` (0.1 deg), `bench_speed` (mm/s) |
 
 ---
 
@@ -347,7 +347,7 @@ close, 4 stall, 8 overturned, 32 heartbeat). There is no remote E-stop
 (removed 14 Nov): MQTT `stop` ramps the robot down to IDLE.
 
 **E7. Power (S4-M09, retired 20 Nov; A10, optional check):** scope V+ and 3V3 while starting the motors
-with the servo sweeping (`bench_servo`): no resets.
+with the servo sweeping during an obstacle scan: no resets.
 
 Hump height (S4-M04) needs line following: it is step F8.
 
@@ -432,11 +432,12 @@ noise allows it. The model under-reads by ~10 %: correct it once measured.
 **G1.** Normal image (USB console, not a UART build). Check the HC-SR04P's
 echo output is 3.3 V (A11), then plug it into Grove 1 (GP0 trigger, GP1 echo).
 
-**G2. Servo (S5-M01):** `bench_servo` 0, 90, 180 with a protractor; adjust
+**G2. Servo (S5-M01):** the servo centres at 90 deg in IDLE and sweeps during an
+obstacle scan; check the angles with a protractor; adjust
 `OBST_SERVO_MIN_US` / `_MAX_US`; if 180 looks right instead of left, set
 `OBST_SERVO_LEFT_IS_HIGH 0` (`subsystem5/mission_cfg.h`).
 
-**G3. Range (S5-M02, A11):** `bench_servo` 90; a box at 10 / 30 / 100 cm:
+**G3. Range (S5-M02, A11):** car IDLE (servo centred at 90 deg); a box at 10 / 30 / 100 cm:
 telemetry `obstacle.d_cm` within ±1 cm, steady. `NO_ECHO` (report-only
 fault bit 256) means no echo at all: wiring or supply.
 

@@ -86,19 +86,13 @@
   </article>
 
   <article class="card pad">
-    <div class="card-top"><h2>Manual moves</h2><span class="small-label">BENCH · APP_BENCH=1 ONLY</span></div>
-    <p class="card-note">One move per press, closed-loop on the encoders. Only firmware built with <code>APP_BENCH 1</code> accepts these, and only in IDLE: otherwise the ack says <code>bad_param</code>. Keep the wheels clear.</p>
+    <div class="card-top"><h2>Manual moves</h2></div>
     <div class="bench-grid">
       <span></span><button class="button secondary" data-bench="bench_move" data-value="200">↑ Forward 200 mm</button><span></span>
       <button class="button secondary" data-bench="bench_turn" data-value="900">↰ Left 90°</button>
       <button class="button secondary" data-bench="bench_turn" data-value="1800">↶ U-turn 180°</button>
       <button class="button secondary" data-bench="bench_turn" data-value="-900">↱ Right 90°</button>
       <span></span><button class="button secondary" data-bench="bench_move" data-value="-200">↓ Back 200 mm</button><span></span>
-    </div>
-    <div class="servo-row"><span>Scan servo</span>
-      <button class="button secondary" data-bench="bench_servo" data-value="180">Left</button>
-      <button class="button secondary" data-bench="bench_servo" data-value="90">Centre</button>
-      <button class="button secondary" data-bench="bench_servo" data-value="0">Right</button>
     </div>
   </article>
 </section>
@@ -129,7 +123,6 @@
       <div><dt>Last bypass time (OBSTACLE → back on line)</dt><dd id="bypassTime">—</dd></div>
       <div><dt>Bypass result</dt><dd id="bypassResult">—</dd></div>
     </dl>
-    <p class="card-note">Grade bands from the brief: width error A ≤ 10 %, B ≤ 20 %, C ≤ 30 %; bypass time A &lt; 3 s, B &lt; 5 s, C &lt; 7 s.</p>
   </article>
 
   <article class="card pad">
