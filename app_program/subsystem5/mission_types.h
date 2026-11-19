@@ -32,17 +32,16 @@ typedef uint8_t mission_types_state_t; /* one of the constants below */
  * --------------------------------------------------------------------- */
 typedef uint8_t mission_types_ev_t; /* one of the constants below */
 #define MISSION_EV_NONE 0u
-#define MISSION_EV_BTN_START_STOP \
-    1u /* HmiTask: GP20 press (start or stop by state) */
-#define MISSION_EV_BTN_CALIBRATE 2u /* HmiTask: GP21 short press */
-#define MISSION_EV_BTN_RESET     3u /* HmiTask: GP21 long press */
-#define MISSION_EV_REMOTE_START  4u /* CommsTask */
-#define MISSION_EV_REMOTE_STOP   5u
-#define MISSION_EV_REMOTE_RESET  6u
-#define MISSION_EV_REMOTE_SET    7u /* a = param id, data = value */
-#define MISSION_EV_BARCODE                             \
-    8u /* data = decoded character (any valid Code 39) \
-        */
+/* HmiTask: GP20 press (start or stop by state) */
+#define MISSION_EV_BTN_START_STOP 1u
+#define MISSION_EV_BTN_CALIBRATE  2u /* HmiTask: GP21 short press */
+#define MISSION_EV_BTN_RESET      3u /* HmiTask: GP21 long press */
+#define MISSION_EV_REMOTE_START   4u /* CommsTask */
+#define MISSION_EV_REMOTE_STOP    5u
+#define MISSION_EV_REMOTE_RESET   6u
+#define MISSION_EV_REMOTE_SET     7u /* a = param id, data = value */
+/* data = decoded character (any valid Code 39) */
+#define MISSION_EV_BARCODE       8u
 #define MISSION_EV_JUNCTION      9u
 #define MISSION_EV_LINE_LOST     10u
 #define MISSION_EV_LINE_FOUND    11u
@@ -50,8 +49,8 @@ typedef uint8_t mission_types_ev_t; /* one of the constants below */
 #define MISSION_EV_MOTION_FAILED 13u /* a = seq */
 #define MISSION_EV_OBSTACLE      14u /* data = distance [mm] */
 #define MISSION_EV_SLOW_DOWN     15u /* data = distance [mm] */
-#define MISSION_EV_PROFILE_DONE \
-    16u /* a = mission_types_obst_plan_t, data = width [mm] */
+/* a = mission_types_obst_plan_t, data = width [mm] */
+#define MISSION_EV_PROFILE_DONE    16u
 #define MISSION_EV_CONTINUE        17u
 #define MISSION_EV_BYPASS_DONE     18u
 #define MISSION_EV_RECOVERY_DONE   19u
@@ -59,18 +58,16 @@ typedef uint8_t mission_types_ev_t; /* one of the constants below */
 #define MISSION_EV_BLOCKED_TIMEOUT 21u
 #define MISSION_EV_HUMP_START      22u
 #define MISSION_EV_HUMP_END        23u /* data = peak [mm] */
-#define MISSION_EV_MOTION_CLASS \
-    24u                      /* data = imu_types_motion_t (telemetry only) */
-#define MISSION_EV_FAULT 25u /* data = SAFETY_FLT_* bits */
-#define MISSION_EV_CAL_DONE \
-    26u /* a = source subsystem, data = 1 ok / 0 failed */
-#define MISSION_EV_REMOTE_MAP                       \
-    27u /* data = 4 packed chars, see MISSION_NAV_* \
-         */
-#define MISSION_EV_SAFETY_OK                        \
-    28u /* SafetyTask cleared its latch after RESET \
-         */
-#define MISSION_EV_COUNT 29u
+/* data = imu_types_motion_t (telemetry only) */
+#define MISSION_EV_MOTION_CLASS 24u
+#define MISSION_EV_FAULT        25u /* data = SAFETY_FLT_* bits */
+/* a = source subsystem, data = 1 ok / 0 failed */
+#define MISSION_EV_CAL_DONE 26u
+/* data = 4 packed chars, see MISSION_NAV_* */
+#define MISSION_EV_REMOTE_MAP 27u
+/* SafetyTask cleared its latch after RESET */
+#define MISSION_EV_SAFETY_OK 28u
+#define MISSION_EV_COUNT     29u
 
 typedef struct
 {
@@ -103,13 +100,12 @@ typedef uint8_t mission_types_nav_t; /* one of the constants below */
 typedef uint8_t mission_types_cause_t; /* one of the constants below */
 #define MISSION_CAUSE_NONE   0u
 #define MISSION_CAUSE_SAFETY 1u /* see mission_types_snap_t.fault_bits */
-#define MISSION_CAUSE_SELFTEST \
-    2u /* BOOT: a subsystem's hardware did not start */
+/* BOOT: a subsystem's hardware did not start */
+#define MISSION_CAUSE_SELFTEST  2u
 #define MISSION_CAUSE_BLOCKED   3u /* BLOCKED_TIMEOUT: no path for 10 s */
 #define MISSION_CAUSE_LINE_LOST 4u /* LINE_SEARCH exhausted */
-#define MISSION_CAUSE_MBF_OVERFLOW                                      \
-    5u                           /* an event to mbf_mission was dropped \
-                                  */
+/* an event to mbf_mission was dropped */
+#define MISSION_CAUSE_MBF_OVERFLOW 5u
 #define MISSION_CAUSE_TIMEOUT 6u /* a state exceeded its supervision time */
 
 /* mission_types_snap_t.calibrated */

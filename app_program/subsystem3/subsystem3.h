@@ -30,7 +30,6 @@ subsystem3_put_snap(line_types_snap_t const * p_in); /* LineBarcodeTask only */
 
 /* Private to subsystem 3 */
 #include "line_task.h"
-IMPORT ID g_tid_line;
 
 /* Called by usermain() in this order: every subsystem's _init() first,
    then every subsystem's _start(), so every kernel object exists before

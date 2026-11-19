@@ -150,9 +150,9 @@ typedef uint8_t app_pack_kind_t; /* one of the constants below */
 #define PK_U 0u                  /* unsigned, saturates at the field maximum */
 #define PK_S 1u /* signed, offset-binary, saturates at both ends */
 #define PK_W 2u /* counter / time: low bits, wraps (32 = whole) */
-#define PK_UN                                                               \
-    3u /* unsigned with a "none" value: the C type's maximum (0xFF, 0xFFFF, \
-          ...) <-> the field's all-ones; other values saturate one below it */
+/* unsigned with a "none" value: the C type's maximum (0xFF, 0xFFFF, ...) <->
+   the field's all-ones; other values saturate one below it */
+#define PK_UN  3u
 #define PK_SYM 4u /* char: Code 39 symbol index, 6 bits */
 
 typedef struct

@@ -9,9 +9,9 @@
 #include "mission_core.h"
 #include "obstacle_core.h"
 
-EXPORT ID g_mbf_mission;
-EXPORT ID g_mbf_scan;
-EXPORT ID g_flg_obst;
+static ID g_mbf_mission;
+static ID g_mbf_scan;
+static ID g_flg_obst;
 
 /* Snapshots are stored packed (Change Requirement 1).  The writer packs
    and the readers unpack in their own task; only whole records are copied
@@ -197,6 +197,20 @@ EXPORT void subsystem5_put_obst_snap (mission_types_obst_snap_t const * p_in)
     app_unlock(&g_obst_lock, sts);
 }
 
+EXPORT ID subsystem5_mbf_mission (void)
+{
+    return g_mbf_mission;
+}
+
+EXPORT ID subsystem5_mbf_scan (void)
+{
+    return g_mbf_scan;
+}
+
+EXPORT ID subsystem5_flg_obst (void)
+{
+    return g_flg_obst;
+}
 
 /* range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
 static void range_cyc_handler (void * p_exinf)

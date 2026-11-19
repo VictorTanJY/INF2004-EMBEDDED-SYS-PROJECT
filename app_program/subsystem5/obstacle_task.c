@@ -278,7 +278,7 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
         uint32_t now_ms;
         uint32_t width;
 
-        (void)tk_wai_flg(g_flg_obst,
+        (void)tk_wai_flg(subsystem5_flg_obst(),
                          OBST_FLG_RANGE | OBST_FLG_ECHO | OBST_FLG_REQ,
                          TWF_ORW | TWF_BITCLR, &ptn, OBST_WAIT_TIMEOUT_MS);
         subsystem4_heartbeat(SAFETY_HB_OBSTACLE);
@@ -288,7 +288,7 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
         if ((ptn & OBST_FLG_REQ) != 0u)
         {
             while ((INT)sizeof(req_word)
-                   == tk_rcv_mbf(g_mbf_scan, &req_word, TMO_POL))
+                   == tk_rcv_mbf(subsystem5_mbf_scan(), &req_word, TMO_POL))
             {
                 mission_core_scan_req_unpack(req_word, &req);
                 handle_request(&req, now_ms, &odom);
@@ -301,7 +301,8 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
             if (g_o.b_no_echo_set)
             {
                 g_o.b_no_echo_set = false;
-                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_NO_ECHO);
+                (void)tk_clr_flg(subsystem4_flg_safety(),
+                                 ~(UINT)SAFETY_FLT_NO_ECHO);
             }
             handle_range(obstacle_core_echo_to_mm(width), now_ms, &odom);
         }
@@ -319,7 +320,8 @@ EXPORT void obstacle_task_thread (INT stacd, void * p_exinf)
                 if ((g_o.no_echo >= OBST_NO_ECHO_PINGS) && !g_o.b_no_echo_set)
                 {
                     g_o.b_no_echo_set = true;
-                    (void)tk_set_flg(g_flg_safety, SAFETY_FLT_NO_ECHO);
+                    (void)tk_set_flg(subsystem4_flg_safety(),
+                                     SAFETY_FLT_NO_ECHO);
                 }
                 handle_range(OBST_RANGE_NONE, now_ms, &odom);
             }
@@ -1078,7 +1080,7 @@ static void handle_range (uint16_t range, uint32_t now_ms,
                     <= 30))
             {
                 g_o.b_too_close = true;
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_TOO_CLOSE);
+                (void)tk_set_flg(subsystem4_flg_safety(), SAFETY_FLT_TOO_CLOSE);
             }
             else if (g_o.b_too_close
                      && ((OBST_RANGE_NONE == g_o.d_mm)

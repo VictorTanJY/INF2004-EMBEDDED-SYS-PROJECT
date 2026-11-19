@@ -8,8 +8,6 @@
 #include "subsystem3.h"
 #include "line_track.h"
 
-EXPORT ID g_tid_line;
-
 /* Stored packed (Change Requirement 1); whole records copied under the
    lock, packing and unpacking done in the writer's / reader's own task. */
 static app_lock_t g_line_lock;
@@ -29,9 +27,10 @@ EXPORT ER subsystem3_init (void)
 
 EXPORT ER subsystem3_start (void)
 {
-    g_tid_line = app_main_start_task((FP)line_task_thread, S3_PRI_LINE,
-                                     S3_CORE_LINE, "line");
-    return (g_tid_line < E_OK) ? g_tid_line : E_OK;
+    ID const tid = app_main_start_task((FP)line_task_thread, S3_PRI_LINE,
+                                       S3_CORE_LINE, "line");
+
+    return (tid < E_OK) ? tid : E_OK;
 }
 
 EXPORT void subsystem3_get_snap (line_types_snap_t * p_out)

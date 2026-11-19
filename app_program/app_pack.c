@@ -9,10 +9,12 @@
 #include "app_pack.h"
 
 /* Code 39 data characters; a symbol index is the position here + 1. */
-static char const g_symbols[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%";
+#define PK_SYMBOLS "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%"
 
 typedef uint8_t
-    pk_check_sym_t[(PK_SYM_COUNT == (sizeof(g_symbols) - 1u)) ? 1 : -1];
+    pk_check_sym_t[(PK_SYM_COUNT == (sizeof(PK_SYMBOLS) - 1u)) ? 1 : -1];
+
+static char const g_symbols[] = PK_SYMBOLS;
 
 static void     pk_word_put(uint32_t * p_w, uint32_t * p_pos, uint32_t value,
                             uint8_t width);

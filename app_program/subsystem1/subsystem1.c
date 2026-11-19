@@ -7,12 +7,12 @@
  *  (cyw43_utk_task), started by the kernel before usermain().  Its MQTT
  *  client (lib/liblwip/.../mqtt_utk.c) calls the hooks in
  *  comms_service.c.  Because that task may already be running, the
- *  service does nothing until g_mbf_telem holds a valid ID.
+ *  service does nothing until subsystem1_mbf_telem() returns a valid ID.
  */
 
 #include "subsystem1.h"
 
-EXPORT ID g_mbf_telem;
+static ID g_mbf_telem;
 
 static UW g_telem_drops;
 
@@ -67,6 +67,11 @@ EXPORT bool subsystem1_telem_post (uint8_t kind, uint8_t src, uint16_t code,
 EXPORT uint32_t subsystem1_telem_drops (void)
 {
     return (uint32_t)g_telem_drops;
+}
+
+EXPORT ID subsystem1_mbf_telem (void)
+{
+    return g_mbf_telem;
 }
 
 /*** end of file ***/

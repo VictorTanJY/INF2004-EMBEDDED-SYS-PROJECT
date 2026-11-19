@@ -38,7 +38,8 @@
 /* commands; 8 B each in the buffer (4 B word + header) */
 #define S2_MBF_MOTION_DEPTH 8u
 
-IMPORT ID g_mbf_motion; /* mbf_motion in the design documents */
+/* ID of mbf_motion (design documents). */
+IMPORT ID subsystem2_mbf_motion(void);
 
 /* Post a command without waiting.  Returns E_OK, or E_TMOUT when the
    buffer is full (the command is dropped; the caller decides). */
@@ -72,8 +73,10 @@ IMPORT void subsystem2_motor_estop(void);
 IMPORT bool subsystem2_estop_latched(void);
 
 #if APP_TEST
-/* Time of the last subsystem2_motor_estop() call, us (app_time_us); S4-U07. */
-IMPORT volatile uint32_t g_estop_test_us;
+/* Time of the last subsystem2_motor_estop() call, us (app_time_us), or 0
+   after subsystem2_estop_test_clear(); S4-U07. */
+IMPORT uint32_t subsystem2_estop_test_us(void);
+IMPORT void     subsystem2_estop_test_clear(void);
 #endif
 
 /* Private to subsystem 2 */

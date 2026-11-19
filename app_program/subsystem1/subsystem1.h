@@ -41,7 +41,8 @@
 #define S1_MBF_TELEM_RECORDS 64u
 #define S1_MBF_TELEM_BYTES   (S1_MBF_TELEM_RECORDS * (4u + 8u))
 
-IMPORT ID g_mbf_telem; /* mbf_telem in the design documents */
+/* ID of mbf_telem (design documents); 0 until subsystem1_init() has run. */
+IMPORT ID subsystem1_mbf_telem(void);
 
 /* Post one record (tasks only, not ISRs).  true = queued, false = dropped. */
 IMPORT bool subsystem1_telem_post(uint8_t kind, uint8_t src, uint16_t code,

@@ -10,11 +10,8 @@
 #include "imu_core.h"
 #include "drv_watchdog.h"
 
-EXPORT ID g_flg_safety;
-EXPORT ID g_tid_imu;
-
-/* Written only by SafetyTask (one writer, aligned word: indivisible). */
-EXPORT volatile uint32_t g_safety_latched;
+static ID g_flg_safety;
+static ID g_tid_imu;
 
 /* Heartbeat counters: one byte per task (Change Requirement 1).  Each
    task stores only its own byte (STRB, indivisible on the M0+), so no
@@ -84,7 +81,7 @@ EXPORT ER subsystem4_start (void)
 
 EXPORT uint32_t subsystem4_get_latched (void)
 {
-    return g_safety_latched;
+    return safety_task_latched();
 }
 
 EXPORT void subsystem4_request_reset (void)
@@ -134,6 +131,10 @@ EXPORT void subsystem4_put_imu_snap (imu_types_snap_t const * p_in)
     app_unlock(&g_imu_lock, sts);
 }
 
+EXPORT ID subsystem4_flg_safety (void)
+{
+    return g_flg_safety;
+}
 
 static void imu_cyc_handler (void * p_exinf)
 {

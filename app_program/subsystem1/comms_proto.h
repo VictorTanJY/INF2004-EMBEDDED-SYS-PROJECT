@@ -42,8 +42,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../app_config.h"
-#define COMMS_MAP_CHARS \
-    4u /* one per navigation: left, right, straight, U-turn */
+/* one per navigation: left, right, straight, U-turn */
+#define COMMS_MAP_CHARS 4u
 
 /* ---------------------------------------------------------------------
  *  Telemetry record posted by any task to mbf_telem (IF-12).  8 bytes:
@@ -159,13 +159,12 @@ uint16_t comms_proto_build_status(uint32_t uptime_s, int32_t rssi,
 typedef uint8_t comms_proto_cmd_code_t; /* one of the constants below */
 #define COMMS_CMD_NONE  0u
 #define COMMS_CMD_START 1u
-#define COMMS_CMD_STOP                                     \
-    2u /* 3 unused: the remote E-stop was removed (14 Nov) \
-        */
+/* 3 unused: the remote E-stop was removed (14 Nov) */
+#define COMMS_CMD_STOP  2u
 #define COMMS_CMD_RESET 4u
 #define COMMS_CMD_SET   5u
-#define COMMS_CMD_MAP \
-    6u /* value = 4 packed chars: left, right, straight, U-turn */
+/* value = 4 packed chars: left, right, straight, U-turn */
+#define COMMS_CMD_MAP 6u
 
 typedef enum
 {

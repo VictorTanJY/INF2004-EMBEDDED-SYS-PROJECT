@@ -60,11 +60,12 @@
 #define CHK_SYST_CLK_CPU 0x4u    /* CLKSOURCE = processor clock */
 #define CHK_SYS_COUNTS   250000u /* 2 ms at 125 MHz */
 
-IMPORT volatile uint32_t g_safety_latched; /* subsystem4.c */
+/* Written only by SafetyTask (one writer, aligned word: indivisible). */
+static uint32_t volatile g_safety_latched;
 
 static bool volatile gb_tick_ok;
 static bool volatile gb_tick_checked;
-EXPORT volatile UW g_safety_tick_us; /* measured us per 100 ms of kernel time */
+static volatile UW g_safety_tick_us; /* measured us per 100 ms of kernel time */
 
 static void     read_heartbeats(uint32_t counts[SAFETY_HB_COUNT]);
 static void     latch(uint32_t bits, uint32_t now_ms);
@@ -103,7 +104,8 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
         uint32_t now_ms;
         uint32_t missed;
 
-        err = tk_wai_flg(g_flg_safety, SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
+        err = tk_wai_flg(subsystem4_flg_safety(),
+                         SAFETY_BRAKE_MASK | SAFETY_REQ_RESET,
                          TWF_ORW | TWF_BITCLR, &ptn, S4_SAFETY_PERIOD_MS);
         drv_watchdog_feed();
         now_ms = (uint32_t)app_time_ms();
@@ -154,6 +156,19 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
     }
 }
 
+EXPORT uint32_t safety_task_latched (void)
+{
+    return g_safety_latched;
+}
+
+#if APP_TEST
+
+EXPORT UW safety_task_tick_us (void)
+{
+    return g_safety_tick_us;
+}
+
+#endif
 
 static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
 {

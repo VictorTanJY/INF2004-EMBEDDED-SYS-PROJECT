@@ -116,7 +116,7 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
         enc_r  = drv_encoder_read(DRV_ENC_RIGHT);
 
         while ((INT)sizeof(cmd_word)
-               == tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL))
+               == tk_rcv_mbf(subsystem2_mbf_motion(), &cmd_word, TMO_POL))
         {
             motion_core_cmd_unpack(cmd_word, &cmd);
             motion_core_result_t const res =
@@ -239,18 +239,19 @@ static void report_events (void)
             break;
 
             case MOTION_EV_STALL:
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_STALL);
+                (void)tk_set_flg(subsystem4_flg_safety(), SAFETY_FLT_STALL);
             break;
 
             case MOTION_EV_ENC_FAULT:
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_ENC_FAULT);
+                (void)tk_set_flg(subsystem4_flg_safety(), SAFETY_FLT_ENC_FAULT);
                 (void)subsystem1_telem_post(COMMS_KIND_FAULT,
                                             (uint8_t)APP_SRC_MOTION, 0u,
                                             (int32_t)SAFETY_FLT_ENC_FAULT);
             break;
 
             case MOTION_EV_ENC_OK:
-                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_ENC_FAULT);
+                (void)tk_clr_flg(subsystem4_flg_safety(),
+                                 ~(UINT)SAFETY_FLT_ENC_FAULT);
             break;
 
             default:

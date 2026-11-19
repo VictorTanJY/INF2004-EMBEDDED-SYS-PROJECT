@@ -13,7 +13,8 @@
 #include "motion_task.h"
 #include "subsystem2.h"
 #include "motion_cfg.h"
-#include "../subsystem5/subsystem5.h" /* subsystem5_get_mission_snap: wait for IDLE */
+/* subsystem5_get_mission_snap: wait for IDLE */
+#include "../subsystem5/subsystem5.h"
 #include "../test_report.h"
 
 #if APP_TEST
@@ -63,7 +64,8 @@ EXPORT void subsystem2_test_run (void)
 
     test_report_t report = {0, 0, 0};
 
-    TEST_CHECK(&report, "S2-U01", E_OK == tk_ref_mbf(g_mbf_motion, &rmbf),
+    TEST_CHECK(&report, "S2-U01",
+               E_OK == tk_ref_mbf(subsystem2_mbf_motion(), &rmbf),
                "mbf_motion exists");
 
     subsystem2_get_odom(&snap_a);

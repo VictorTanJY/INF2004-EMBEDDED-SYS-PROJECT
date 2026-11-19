@@ -32,7 +32,8 @@
  *  SafetyTask waits on it (TWF_ORW | TWF_BITCLR on SAFETY_BRAKE_MASK |
  *  SAFETY_REQ_RESET); every other task reads it with tk_ref_flg().
  * --------------------------------------------------------------------- */
-IMPORT ID g_flg_safety; /* flg_safety in the design documents */
+/* ID of flg_safety (design documents); 0 until subsystem4_init() has run. */
+IMPORT ID subsystem4_flg_safety(void);
 
 /* Latched faults (SAFETY_FLT_* bits), written only by SafetyTask. */
 IMPORT uint32_t subsystem4_get_latched(void);
@@ -62,7 +63,6 @@ subsystem4_put_imu_snap(imu_types_snap_t const * p_in); /* ImuTask only   */
 /* Private to subsystem 4 */
 #include "safety_task.h"
 #include "imu_task.h"
-IMPORT ID g_tid_imu;
 
 /* Called by usermain() in this order: every subsystem's _init() first,
    then every subsystem's _start(), so every kernel object exists before

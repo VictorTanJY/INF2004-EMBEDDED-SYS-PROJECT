@@ -149,16 +149,14 @@ typedef uint8_t obstacle_core_step_kind_t; /* one of the constants below */
 #define OBST_STEP_MOVE 1u                  /* value = mm (+ forward) */
 #define OBST_STEP_TURN 2u                  /* value = 0.1 deg (+ left) */
 #define OBST_STEP_PASS 3u /* drive on, servo watching the obstacle */
-#define OBST_STEP_JOIN                                                      \
-    4u /* drive on until a line sensor sees the line; value = give up after \
-          this, mm */
-#define OBST_STEP_LINESCAN                                                 \
-    5u /* spin slowly until the line is centred under the sensors; value = \
-          most 0.1 deg (+ left) */
-#define OBST_STEP_OUT                                                        \
-    6u /* 7 Nov: step out at the turned heading, the servo looking along the \
-          line at the face, until clear of it (obst_out_*); value = planned  \
-          leg, mm */
+/* drive on until a line sensor sees the line; value = give up after this, mm */
+#define OBST_STEP_JOIN 4u
+/* spin slowly until the line is centred under the sensors; value = most 0.1
+   deg (+ left) */
+#define OBST_STEP_LINESCAN 5u
+/* 7 Nov: step out at the turned heading, the servo looking along the line at
+   the face, until clear of it (obst_out_*); value = planned leg, mm */
+#define OBST_STEP_OUT 6u
 
 typedef struct
 {

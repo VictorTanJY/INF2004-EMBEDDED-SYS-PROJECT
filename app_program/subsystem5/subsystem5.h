@@ -30,7 +30,8 @@
  * --------------------------------------------------------------------- */
 #define S5_MBF_MISSION_DEPTH 16u /* events (Week 6: 16 deep) */
 
-IMPORT ID g_mbf_mission; /* mbf_mission in the design documents */
+/* ID of mbf_mission (design documents); 0 until subsystem5_init() has run. */
+IMPORT ID subsystem5_mbf_mission(void);
 
 /* Post an event without waiting.  E_OK, or E_TMOUT when full (dropped and
    counted; MissionTask treats a drop as a fault, Week 6 8.3). */
@@ -48,8 +49,8 @@ IMPORT uint32_t subsystem5_mission_drops(void);
 #define OBST_FLG_ECHO  0x02u /* echo_isr               */
 #define OBST_FLG_REQ   0x04u /* MissionTask request    */
 
-IMPORT ID g_mbf_scan; /* mbf_scan */
-IMPORT ID g_flg_obst; /* flg_obst */
+IMPORT ID subsystem5_mbf_scan(void); /* ID of mbf_scan */
+IMPORT ID subsystem5_flg_obst(void); /* ID of flg_obst */
 
 IMPORT ER subsystem5_scan_request(uint8_t type, uint8_t seq, int16_t param);
 

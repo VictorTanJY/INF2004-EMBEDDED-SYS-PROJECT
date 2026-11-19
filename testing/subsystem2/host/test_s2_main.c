@@ -43,6 +43,17 @@ typedef struct
     int32_t   enc_offset;
 } plant_t;
 
+/* The last command passed to the subsystem2_post stand-in. */
+typedef struct
+{
+    int32_t count;
+    uint8_t src;
+    uint8_t seq;
+    uint8_t cmd;
+    int16_t arg0;
+    int16_t arg1;
+} post_rec_t;
+
 static int32_t g_pass;
 static int32_t g_fail;
 
@@ -54,15 +65,7 @@ static uint8_t       g_last_seq;
 
 /* Stand-in for subsystem2.c's subsystem2_post (the real one posts to
    mbf_motion): records the last command for the motion_api tests. */
-static struct
-{
-    int32_t count;
-    uint8_t src;
-    uint8_t seq;
-    uint8_t cmd;
-    int16_t arg0;
-    int16_t arg1;
-} g_post;
+static post_rec_t g_post;
 
 static bool                 posted(uint8_t cmd, int32_t arg0, int32_t arg1);
 static void                 plant_init(float64_t gain);

@@ -67,7 +67,8 @@ def main(pptx):
             '    int32_t          slide;',
             '} vectors_slides_vec_t;',
             '',
-            'extern vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT];',
+            '/* Test vector number vec_idx (vec_idx < SLIDE_VEC_COUNT). */',
+            'vectors_slides_vec_t const * vectors_slides_get(uint32_t vec_idx);',
             '',
             '#endif /* VECTORS_SLIDES_H */',
             '',
@@ -78,9 +79,12 @@ def main(pptx):
             [banner, '#include "vectors_slides.h"', '',
              '/* Element widths in um at on-screen slide size (slide = 338.67 mm). */']
             + arrays
-            + ['', 'vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT] = {']
+            + ['', 'static vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT] = {']
             + ['    {%s, \'%c\', %d},' % item for item in names]
-            + ['};', '', '/*** end of file ***/', '']))
+            + ['};', '',
+               'vectors_slides_vec_t const * vectors_slides_get (uint32_t vec_idx)',
+               '{', '    return &g_slides[vec_idx];', '}', '',
+               '/*** end of file ***/', '']))
 
 if __name__ == '__main__':
     main(sys.argv[1])

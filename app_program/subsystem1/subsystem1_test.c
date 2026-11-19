@@ -54,7 +54,7 @@ EXPORT void subsystem1_test_run (void)
 
     /* S1-U01: mbf_telem exists and accepts a record without blocking. */
     TEST_CHECK(&report, "S1-U01",
-               (E_OK == tk_ref_mbf(g_mbf_telem, &rmbf))
+               (E_OK == tk_ref_mbf(subsystem1_mbf_telem(), &rmbf))
                    && subsystem1_telem_post(COMMS_KIND_LOG,
                                             (uint8_t)APP_SRC_COMMS, 1u, 42),
                "mbf_telem accepts a record with TMO_POL");

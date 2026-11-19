@@ -117,7 +117,7 @@ static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
         }
         g_echo  = ECHO_DONE | width;
         gb_rise = false;
-        (void)tk_set_flg(g_flg_obst, OBST_FLG_ECHO);
+        (void)tk_set_flg(subsystem5_flg_obst(), OBST_FLG_ECHO);
     }
 }
 

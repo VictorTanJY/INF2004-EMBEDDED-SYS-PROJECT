@@ -135,7 +135,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                                   & 1u)
                                  << 1)));
 
-                (void)tk_set_flg(g_flg_safety, SAFETY_FLT_IMU_FAULT);
+                (void)tk_set_flg(subsystem4_flg_safety(), SAFETY_FLT_IMU_FAULT);
 
                 (void)subsystem1_telem_post(COMMS_KIND_FAULT,
                                             (uint8_t)APP_SRC_SAFETY_IMU, 0u,
@@ -168,7 +168,8 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
                 (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
                                             112u, 1);
 
-                (void)tk_clr_flg(g_flg_safety, ~(UINT)SAFETY_FLT_IMU_FAULT);
+                (void)tk_clr_flg(subsystem4_flg_safety(),
+                                 ~(UINT)SAFETY_FLT_IMU_FAULT);
             }
 
             /* ---- Odometry ---- */
@@ -436,7 +437,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             subsystem4_put_imu_snap(&snap);
             if (safety_bits != 0u)
             {
-                (void)tk_set_flg(g_flg_safety, safety_bits);
+                (void)tk_set_flg(subsystem4_flg_safety(), safety_bits);
             }
         }
     }

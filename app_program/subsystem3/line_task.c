@@ -31,9 +31,8 @@
 #define LOG_ELEMS_PER_WORD 3u /* 8-bit widths in one LOG word */
 
 #define LINE_WAKE_TIMEOUT_MS 30 /* still heartbeats if the DMA stops */
-#define LINE_LOG_BC_REJECT                            \
-    31u /* comms_proto_rec_t code for a rejected read \
-         */
+/* comms_proto_rec_t code for a rejected read */
+#define LINE_LOG_BC_REJECT 31u
 
 /* 32/33/34 = L/R/barcode: max << 16 | min raw */
 #define LINE_LOG_CAL_LEVELS 32u
@@ -111,7 +110,8 @@ EXPORT void line_task_thread (INT stacd, void * p_exinf)
     line_track_init(&g_trk);
     line_barcode_init(&g_bc);
     b_hw_ok = (E_OK == drv_adc_init());
-    /* tk_get_tid(): on SMP this task may run before g_tid_line is stored */
+    /* tk_get_tid(): on SMP this task may run before subsystem3_start()
+       has its ID */
     b_hw_ok = b_hw_ok && (E_OK == drv_adc_start(tk_get_tid()));
 
     for (;;)

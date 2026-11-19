@@ -329,7 +329,8 @@ static void test_capture (void)
 
                 for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                 {
-                    widths[kdx] = (g_slides[step].p_w[kdx] * 297u) / 339u;
+                    widths[kdx] =
+                        (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
                 }
                 if (diff)
                 {
@@ -338,7 +339,7 @@ static void test_capture (void)
                 memset(&out, 0, sizeof(out));
                 CHECK("S3-H05",
                       (BC_VALID == run_pass(widths, 29, speeds[value], 0, &out))
-                          && (out.chr == g_slides[step].chr));
+                          && (out.chr == vectors_slides_get(step)->chr));
             }
         }
     }
@@ -358,7 +359,9 @@ static void test_capture (void)
                 for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                 {
                     widths[kdx] =
-                        (uint32_t)((((float64_t)g_slides[step].p_w[kdx] * 297.0)
+                        (uint32_t)((((float64_t)vectors_slides_get(step)
+                                         ->p_w[kdx]
+                                     * 297.0)
                                     / 338.67)
                                    * (1.0 + (0.10 * rndu())));
                 }
@@ -369,7 +372,8 @@ static void test_capture (void)
                 memset(&out, 0, sizeof(out));
                 result = run_pass(widths, 29, speeds[value], 120, &out);
                 total++;
-                if ((BC_VALID == result) && (out.chr == g_slides[step].chr))
+                if ((BC_VALID == result)
+                    && (out.chr == vectors_slides_get(step)->chr))
                 {
                     good++;
                 }
@@ -421,7 +425,8 @@ static void test_capture (void)
                         for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             widths[kdx] =
-                                (g_slides[step].p_w[kdx] * 297u) / 339u;
+                                (vectors_slides_get(step)->p_w[kdx] * 297u)
+                                / 339u;
                         }
                         if (diff)
                         {
@@ -432,7 +437,7 @@ static void test_capture (void)
                                           (diff ? 60 : 0), &out);
                         blur_total++;
                         if ((BC_VALID == result)
-                            && (out.chr == g_slides[step].chr))
+                            && (out.chr == vectors_slides_get(step)->chr))
                         {
                             blur_good++;
                         }
@@ -459,14 +464,16 @@ static void test_capture (void)
 
             for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
             {
-                widths[kdx] = (g_slides[step].p_w[kdx] * 297u) / 339u;
+                widths[kdx] =
+                    (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
             }
             line_barcode_result_t result;
 
             memset(&out, 0, sizeof(out));
             result = run_pass(widths, 29, 150u, 0, &out);
             weak_total++;
-            if ((BC_VALID == result) && (out.chr == g_slides[step].chr))
+            if ((BC_VALID == result)
+                && (out.chr == vectors_slides_get(step)->chr))
             {
                 weak_good++;
             }
@@ -517,7 +524,7 @@ static void test_capture (void)
 
                     for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                     {
-                        widths[kdx] = g_slides[step].p_w[kdx];
+                        widths[kdx] = vectors_slides_get(step)->p_w[kdx];
                     }
                     if (diff)
                     {
@@ -528,7 +535,7 @@ static void test_capture (void)
                         == code39_decode_one_repair(cut ? widths : &widths[2],
                                                     27, 15, &chr, &b_rev))
                     {
-                        if (chr == g_slides[step].chr)
+                        if (chr == vectors_slides_get(step)->chr)
                         {
                             good++;
                         }
@@ -608,7 +615,8 @@ static void test_capture (void)
                         for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             widths[kdx] =
-                                (g_slides[step].p_w[kdx] * 297u) / 339u;
+                                (vectors_slides_get(step)->p_w[kdx] * 297u)
+                                / 339u;
                         }
                         if (diff)
                         {
@@ -618,7 +626,7 @@ static void test_capture (void)
                         result = run_pass(widths, 29, 90u, 0, &out);
                         total++;
                         if ((BC_VALID == result)
-                            && (out.chr == g_slides[step].chr))
+                            && (out.chr == vectors_slides_get(step)->chr))
                         {
                             good++;
                         }
@@ -665,7 +673,7 @@ static void test_capture (void)
         {
             for (step = 0; step < N_SLIDES; step++)
             {
-                if ('Z' == g_slides[step].chr)
+                if ('Z' == vectors_slides_get(step)->chr)
                 {
                     for (diff = 0; diff < T_DIRECTIONS; diff++)
                     {
@@ -681,14 +689,15 @@ static void test_capture (void)
                          */
                         for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
-                            wmin = (g_slides[step].p_w[kdx] < wmin)
-                                       ? g_slides[step].p_w[kdx]
+                            wmin = (vectors_slides_get(step)->p_w[kdx] < wmin)
+                                       ? vectors_slides_get(step)->p_w[kdx]
                                        : wmin;
                         }
                         for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                         {
                             widths[kdx] =
-                                (g_slides[step].p_w[kdx] * 3000u) / wmin;
+                                (vectors_slides_get(step)->p_w[kdx] * 3000u)
+                                / wmin;
                         }
                         g_thin_um = 6000u; /* bars under 6 mm are the faint
                                               narrow ones */
@@ -712,7 +721,7 @@ static void test_capture (void)
                             printf(
                                 "  Z slide %d dir %d noise %d: result %d, %u "
                                 "elements, %u mm\n",
-                                g_slides[step].slide, diff, noise,
+                                vectors_slides_get(step)->slide, diff, noise,
                                 (int32_t)result, (uint32_t)out.elements,
                                 (uint32_t)(out.length_um / 1000u));
                         }
@@ -972,15 +981,16 @@ static void test_slides (void)
         {
             for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
             {
-                widths[kdx] = (uint32_t)(g_slides[step].p_w[kdx] * scale);
+                widths[kdx] =
+                    (uint32_t)(vectors_slides_get(step)->p_w[kdx] * scale);
             }
             CHECK("S3-H02",
                   (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
-                      && (chr == g_slides[step].chr) && !b_rev);
+                      && (chr == vectors_slides_get(step)->chr) && !b_rev);
             reverse(widths, 29);
             CHECK("S3-H02",
                   (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
-                      && (chr == g_slides[step].chr) && b_rev);
+                      && (chr == vectors_slides_get(step)->chr) && b_rev);
             if (scale < 1.0)
             {
                 break;
@@ -1563,13 +1573,14 @@ static void test_best (void)
 
                 for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
                 {
-                    wmin = (g_slides[step2].p_w[kdx] < wmin)
-                               ? g_slides[step2].p_w[kdx]
+                    wmin = (vectors_slides_get(step2)->p_w[kdx] < wmin)
+                               ? vectors_slides_get(step2)->p_w[kdx]
                                : wmin;
                 }
                 for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
                 {
-                    widths[kdx] = (g_slides[step2].p_w[kdx] * 3000u) / wmin;
+                    widths[kdx] =
+                        (vectors_slides_get(step2)->p_w[kdx] * 3000u) / wmin;
                 }
                 if (diff2)
                 {
@@ -1583,7 +1594,8 @@ static void test_best (void)
                 memset(&out, 0, sizeof(out));
                 result2 = run_pass(accel, 31, 150u, 0, &out);
                 elapsed2++;
-                if ((BC_VALID == result2) && (out.chr == g_slides[step2].chr))
+                if ((BC_VALID == result2)
+                    && (out.chr == vectors_slides_get(step2)->chr))
                 {
                     gap2++;
                     pos3 += (4u == g_last_pass) ? 1 : 0;
@@ -1596,8 +1608,9 @@ static void test_best (void)
                 {
                     printf("  speck slide %d dir %d: result %d reason %d, %u "
                            "elements\n",
-                           g_slides[step2].slide, diff2, (int32_t)result2,
-                           (int32_t)out.reason, (uint32_t)out.elements);
+                           vectors_slides_get(step2)->slide, diff2,
+                           (int32_t)result2, (int32_t)out.reason,
+                           (uint32_t)out.elements);
                 }
             }
         }

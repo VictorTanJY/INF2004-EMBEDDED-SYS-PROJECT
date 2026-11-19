@@ -14,7 +14,8 @@ typedef struct
     int32_t          slide;
 } vectors_slides_vec_t;
 
-extern vectors_slides_vec_t const g_slides[SLIDE_VEC_COUNT];
+/* Test vector number vec_idx (vec_idx < SLIDE_VEC_COUNT). */
+vectors_slides_vec_t const * vectors_slides_get(uint32_t vec_idx);
 
 #endif /* VECTORS_SLIDES_H */
 

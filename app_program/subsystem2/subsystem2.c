@@ -12,7 +12,7 @@
 #include "motion_core.h"
 #include "../subsystem4/subsystem4.h"
 
-EXPORT ID g_mbf_motion;
+static ID g_mbf_motion;
 
 static app_lock_t g_odom_lock;
 static uint32_t g_odom[MOTION_ODOM_WORDS]; /* packed (CR1), under g_odom_lock */
@@ -26,7 +26,7 @@ static uint8_t volatile g_estop_latch;
 
 #if APP_TEST
 
-EXPORT volatile uint32_t g_estop_test_us; /* written here only (core 1) */
+static uint32_t volatile g_estop_test_us; /* written on core 1 only */
 
 #endif
 
@@ -174,6 +174,24 @@ EXPORT bool subsystem2_estop_reconnect (void)
     return b_ok;
 }
 
+EXPORT ID subsystem2_mbf_motion (void)
+{
+    return g_mbf_motion;
+}
+
+#if APP_TEST
+
+EXPORT uint32_t subsystem2_estop_test_us (void)
+{
+    return g_estop_test_us;
+}
+
+EXPORT void subsystem2_estop_test_clear (void)
+{
+    g_estop_test_us = 0u;
+}
+
+#endif
 
 /* motion_cyc: every 10 ms, in core 0's tick interrupt; wakes MotionTask. */
 static void motion_cyc_handler (void * p_exinf)

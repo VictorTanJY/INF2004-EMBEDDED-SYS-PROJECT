@@ -37,11 +37,14 @@ EXPORT void subsystem5_test_run (void)
 
     test_report_t report = {0, 0, 0};
 
-    TEST_CHECK(&report, "S5-U01", E_OK == tk_ref_mbf(g_mbf_mission, &rmbf),
+    TEST_CHECK(&report, "S5-U01",
+               E_OK == tk_ref_mbf(subsystem5_mbf_mission(), &rmbf),
                "mbf_mission exists");
-    TEST_CHECK(&report, "S5-U02", E_OK == tk_ref_mbf(g_mbf_scan, &rmbf),
+    TEST_CHECK(&report, "S5-U02",
+               E_OK == tk_ref_mbf(subsystem5_mbf_scan(), &rmbf),
                "mbf_scan exists");
-    TEST_CHECK(&report, "S5-U03", E_OK == tk_ref_flg(g_flg_obst, &rflg),
+    TEST_CHECK(&report, "S5-U03",
+               E_OK == tk_ref_flg(subsystem5_flg_obst(), &rflg),
                "flg_obst exists");
 
     subsystem5_get_mission_snap(&mission);

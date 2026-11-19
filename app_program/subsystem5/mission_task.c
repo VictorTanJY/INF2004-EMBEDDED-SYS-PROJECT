@@ -49,7 +49,8 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
 
     for (;;)
     {
-        INT msg_len = tk_rcv_mbf(g_mbf_mission, &ev_word, S5_MISSION_TICK_MS);
+        INT msg_len =
+            tk_rcv_mbf(subsystem5_mbf_mission(), &ev_word, S5_MISSION_TICK_MS);
         uint32_t now_ms;
 
         subsystem4_heartbeat(SAFETY_HB_MISSION);

@@ -13,8 +13,10 @@
 #include "subsystem4_test.h"
 #include "safety_task.h"
 #include "subsystem4.h"
-#include "../subsystem2/subsystem2.h" /* subsystem2_motor_estop timestamp, odometry */
-#include "../subsystem5/subsystem5.h" /* subsystem5_mission_post / subsystem5_get_mission_snap */
+/* subsystem2_motor_estop timestamp, odometry */
+#include "../subsystem2/subsystem2.h"
+/* subsystem5_mission_post / subsystem5_get_mission_snap */
+#include "../subsystem5/subsystem5.h"
 #include "../test_report.h"
 
 #define T_RESET_WAIT_MS 8000u /* MissionTask reaches IDLE well within */
@@ -34,7 +36,6 @@
 
 #if APP_TEST
 
-IMPORT volatile UW g_safety_tick_us; /* safety_task.c */
 
 #endif
 
@@ -54,7 +55,8 @@ EXPORT void subsystem4_test_run (void)
 
     test_report_t report = {0, 0, 0};
 
-    TEST_CHECK(&report, "S4-U01", E_OK == tk_ref_flg(g_flg_safety, &rflg),
+    TEST_CHECK(&report, "S4-U01",
+               E_OK == tk_ref_flg(subsystem4_flg_safety(), &rflg),
                "flg_safety exists");
 
     before = subsystem4_heartbeat_count(SAFETY_HB_MOTION);
@@ -72,7 +74,7 @@ EXPORT void subsystem4_test_run (void)
     TEST_CHECK(&report, "S4-U05", safety_task_timer_tick_ok(),
                "1 us timer ticks at 1 MHz (watchdog tick = 12)");
     tm_printf((UB *)"[INFO] timer: %d us per 100 ms of CPU clock\n",
-              (INT)g_safety_tick_us);
+              (INT)safety_task_tick_us());
     TEST_CHECK(&report, "S4-U06", (in_w(WD_CTRL_REG) & (1uL << 30)) != 0u,
                "watchdog enabled and being fed");
 
@@ -112,18 +114,18 @@ EXPORT void subsystem4_test_run (void)
         uint8_t              pre;
 
         subsystem5_get_mission_snap(&mission);
-        pre             = mission.state;
-        g_estop_test_us = 0u;
-        t_start         = (uint32_t)app_time_us();
-        (void)tk_set_flg(g_flg_safety, T_FAULT_BIT);
+        pre = mission.state;
+        subsystem2_estop_test_clear();
+        t_start = (uint32_t)app_time_us();
+        (void)tk_set_flg(subsystem4_flg_safety(), T_FAULT_BIT);
         (void)tk_dly_tsk(50);
-        lat = g_estop_test_us - t_start;
+        lat = subsystem2_estop_test_us() - t_start;
         subsystem2_get_odom(&odom);
         tm_printf((UB *)"[INFO] S4-U08 fault flag -> motor_estop() %d us "
                         "(limit %d us)\n",
                   (INT)lat, (INT)T_NFR8_US);
         TEST_CHECK(&report, "S4-U08",
-                   (g_estop_test_us != 0u) && (lat <= T_NFR8_US)
+                   (subsystem2_estop_test_us() != 0u) && (lat <= T_NFR8_US)
                        && subsystem2_estop_latched() && brake_pins_low()
                        && ((subsystem4_get_latched() & T_FAULT_BIT) != 0u),
                    "fault flag brakes both motors within 20 ms (GP8-11 SIO, "
