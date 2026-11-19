@@ -164,7 +164,9 @@ static void test_table(void)
     for (idx = 0u; idx < sizeof(g_data_chars) - 1u; idx++)
     {
         uint16_t pos = code39_pattern(g_data_chars[idx]);
-        int wide = 0, wide_sp = 0, val_b;
+        int wide = 0;
+        int wide_sp = 0;
+        int val_b;
 
         for (val_b = 0; val_b < 9; val_b++)
         {
@@ -209,9 +211,12 @@ static void test_slides(void)
 static void test_synthetic(void)
 {
     uint32_t const narrows[3] = { 3000u, 5100u, 6900u };
-    int b_ok = 1, wrong = 0;
+    int b_ok = 1;
+    int wrong = 0;
     size_t idx;
-    int val_a, ret, diff;
+    int val_a;
+    int ret;
+    int diff;
 
     for (idx = 0u; idx < sizeof(g_data_chars) - 1u; idx++)
     {
@@ -246,7 +251,8 @@ static void test_rejects(void)
     uint16_t n_elems;
     char chr;
     bool b_rev;
-    int  idx, wrong = 0;
+    int idx;
+    int wrong = 0;
 
     /* a wide bar printed narrow: rejected, never a different character */
     for (idx = 0; idx < (int)(sizeof(g_data_chars) - 1u); idx++)
@@ -274,7 +280,8 @@ static void test_rejects(void)
         /* "*AB*": valid Code 39 but two data characters */
         uint32_t words_out[40];
         char const seq[4] = { '*', 'A', 'B', '*' };
-        int kdx, elem;
+        int kdx;
+        int elem;
         n_elems = 0u;
         for (kdx = 0; kdx < 4; kdx++)
         {
@@ -289,8 +296,13 @@ static void test_rejects(void)
 static void test_capture(void)
 {
     uint32_t const speeds[2] = { 150u, 300u };      /* NFR3 speeds, mm/s */
-    int step, value, diff, pass;
-    int good = 0, total = 0, wrong = 0;
+    int step;
+    int value;
+    int diff;
+    int pass;
+    int good = 0;
+    int total = 0;
+    int wrong = 0;
 
     /* every slide, both speeds, both directions, clean */
     for (step = 0; step < N_SLIDES; step++)
@@ -349,8 +361,12 @@ static void test_capture(void)
     {
         uint32_t const spots[2] = { 3500u, 4000u };
         int setpoint;
-        int blur_good = 0, blur_total = 0, blur_wrong = 0;
-        int weak_good = 0, weak_total = 0, weak_wrong = 0;
+        int blur_good = 0;
+        int blur_total = 0;
+        int blur_wrong = 0;
+        int weak_good = 0;
+        int weak_total = 0;
+        int weak_wrong = 0;
 
         for (setpoint = 0; setpoint < 2; setpoint++)
         {
@@ -407,7 +423,9 @@ static void test_capture(void)
        elements: the profile's second try decodes more than the swing
        reading alone, never a wrong letter. */
     {
-        int good = 0, total = 0, wrong = 0;
+        int good = 0;
+        int total = 0;
+        int wrong = 0;
         int kdx;
 
         for (step = 0; step < N_SLIDES; step++)
@@ -463,7 +481,8 @@ static void test_capture(void)
 
         {
             uint32_t const spots[2] = { 5000u, 6000u };
-            int setpoint, pass2 = 0;
+            int setpoint;
+            int pass2 = 0;
 
             good = 0; total = 0; wrong = 0;
             for (setpoint = 0; setpoint < 2; setpoint++)
@@ -502,7 +521,11 @@ static void test_capture(void)
        With the 40 mm end the whole code is kept and the darkness record
        (low threshold) finds the faint bars. */
     {
-        int step, diff, good = 0, total = 0, wrong = 0;
+        int step;
+        int diff;
+        int good = 0;
+        int total = 0;
+        int wrong = 0;
         int noise;
 
         g_spot_um = 1500u;  g_white = 20u;  g_black = 690u;  g_thin_black = 240u;
@@ -555,7 +578,11 @@ static void test_capture(void)
             1400u, 2600u, 3000u, 8600u, 3400u, 2400u, 10000u, 2000u, 2400u, 1000u, 9600u, 2400u, 2600u,
             2000u, 10000u, 3000u, 2400u, 3400u, 3600u, 9600u, 2400u, 3600u, 8200u, 3600u, 2400u,
             9600u, 3000u, 3400u, 8600u, 3400u, 9000u, 3400u, 3400u };
-        int diff, noise, good = 0, total = 0, wrong = 0;
+        int diff;
+        int noise;
+        int good = 0;
+        int total = 0;
+        int wrong = 0;
 
         g_spot_um = 1000u;  g_white = 25u;  g_black = 1000u;
         for (noise = 0; noise <= 30; noise += 30)
@@ -889,11 +916,15 @@ static bool thin_triplet(uint32_t const * p_w, uint16_t at_idx, uint32_t narrow)
 static void test_best(void)
 {
     size_t cnt;
-    int    good = 0, total = 0, wrong = 0, kind;
+    int good = 0;
+    int total = 0;
+    int wrong = 0;
+    int kind;
 
     for (kind = 0; kind < 4; kind++)
     {
-        int kgood = 0, ktotal = 0;
+        int kgood = 0;
+        int ktotal = 0;
 
         for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
@@ -905,7 +936,9 @@ static void test_best(void)
 
                 for (diff = 0; diff < 2; diff++)
                 {
-                    uint32_t widths[29], accel[40], buf[40];
+                    uint32_t widths[29];
+                    uint32_t accel[40];
+                    uint32_t buf[40];
                     uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths), elem, mid;
                     char     chr;
                     bool     b_rev;
@@ -959,7 +992,10 @@ static void test_best(void)
 
     /* random widths and heavier damage: never accepted as a wrong letter */
     {
-        int ret, accepted = 0, bad = 0, tries = 0;
+        int ret;
+        int accepted = 0;
+        int bad = 0;
+        int tries = 0;
 
         for (ret = 0; ret < 20000; ret++)
         {
@@ -976,7 +1012,9 @@ static void test_best(void)
         {
             for (ret = 0; ret < 40; ret++)
             {
-                uint32_t widths[29], accel[60], buf[60];
+                uint32_t widths[29];
+                uint32_t accel[60];
+                uint32_t buf[60];
                 uint16_t n_elems = make_code(g_data_chars[cnt], 3000u, 2.5, 0.08, widths), mid, proj, elem;
                 char     chr;
                 bool     b_rev;
@@ -1003,7 +1041,12 @@ static void test_best(void)
 
     /* the slide samples through the whole capture with a speck in a wide bar */
     {
-        int step2, diff2, gap2 = 0, elapsed2 = 0, w2n = 0, pos3 = 0;
+        int step2;
+        int diff2;
+        int gap2 = 0;
+        int elapsed2 = 0;
+        int w2n = 0;
+        int pos3 = 0;
 
         g_spot_um = 300u;               /* sharp enough that the speck reads as a gap */
 
@@ -1011,8 +1054,11 @@ static void test_best(void)
         {
             for (diff2 = 0; diff2 < 2; diff2++)
             {
-                uint32_t widths[29], accel[31], wmin = 0xFFFFFFFFu;
-                uint16_t kdx, at_idx = 0u;
+                uint32_t widths[29];
+                uint32_t accel[31];
+                uint32_t wmin = 0xFFFFFFFFu;
+                uint16_t kdx;
+                uint16_t at_idx = 0u;
                 bc_out_t out;
                 bc_result_t result2;
 
@@ -1048,7 +1094,14 @@ static void test_light_print(void)
     uint32_t const thin[3]   = { 300u, 230u, 170u };   /* 3 mm bars: rise under BC_DELTA */
     int theta;
     uint32_t const speeds[3] = { 90u, 150u, 250u };
-    int setpoint, value, diff, good = 0, total = 0, wrong = 0, by_adapt = 0, before = 0;
+    int setpoint;
+    int value;
+    int diff;
+    int good = 0;
+    int total = 0;
+    int wrong = 0;
+    int by_adapt = 0;
+    int before = 0;
     size_t cnt;
 
     g_white = 7u;  g_black = 715u;  g_thin_um = 6000u;

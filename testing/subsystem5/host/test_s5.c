@@ -281,7 +281,8 @@ static uint16_t edge_ping(double diff, double omega, double coef, double phi_deg
 {
     double const phase = phi_deg * M_PI / 180.0;
     double const sum_x = OBST_US_AHEAD_MM * sin(phase), sum_y = OBST_US_AHEAD_MM * cos(phase);
-    double best = 1e9, x_val;
+    double best = 1e9;
+    double x_val;
 
     for (x_val = coef - (omega / 2.0); x_val <= coef + (omega / 2.0); x_val += 1.0)
     {
@@ -312,7 +313,8 @@ static void edge_sim(double diff, double omega, double coef, obst_profile_t * p_
         int32_t       phi  = 0;
         unsigned      miss = 0u;
 
-        int32_t       low = 0, high = 0;
+        int32_t low = 0;
+        int32_t high = 0;
         bool          b_past = false;
         unsigned      iter;
 
@@ -377,13 +379,15 @@ static int32_t out_sim(double diff, double omega, double coef, int32_t sign, int
     {
         double const accel_x = time_s * sin(theta), accel_y = time_s * cos(theta);
         double const sum_x = accel_x + (shaft * sin(theta)), sum_y = accel_y + (shaft * cos(theta)) + OBST_SERVO_ARM_MM;
-        double       best = 1e9, x_val;
+        double best = 1e9;
+        double x_val;
         uint16_t     ret;
 
         if (obst_out_done(&out_state, (int32_t)accel_x)) { return (int32_t)accel_x; }
         for (x_val = low; x_val <= high; x_val += 1.0)
         {
-            double const delta_x = x_val - sum_x, delta_y = face - sum_y;
+            double const delta_x = x_val - sum_x;
+            double const delta_y = face - sum_y;
             double const radius2 = sqrt((delta_x * delta_x) + (delta_y * delta_y));
 
             if ((delta_y > 0.0) && (fabs(atan2(delta_x, delta_y)) <= (fmax(beam_deg, 0.2) * M_PI / 180.0)) && (radius2 < best)) { best = radius2; }
@@ -443,7 +447,8 @@ static void test_obstacle(void)
     obst_profile_t prof;
     obst_step_t steps[OBST_BYPASS_MAX_STEPS];
     double worst = 0.0;
-    int width, cnt;
+    int width;
+    int cnt;
 
     /* S5-H09: helpers */
     CHECK("S5-H09", obst_median3(300, 120, 200) == 200 && obst_median3(OBST_RANGE_NONE, 100, 90) == 100);
@@ -652,7 +657,8 @@ static void test_obstacle(void)
         static double const widths[3] = { 100.0, 150.0, 200.0 };
         static double const dists[3] = { 150.0, 250.0, 326.0 };
         double worst_w = 0.0;
-        int    val_a, val_b2;
+        int val_a;
+        int val_b2;
 
         for (val_a = 0; val_a < 3; val_a++)
         {
@@ -697,8 +703,11 @@ static void test_obstacle(void)
         static double const runs[3] = { 15.0, 20.0, 25.0 };
         double const th_deg = OBST_PROBE_DDEG / 10.0;
         int32_t const theta = OBST_PROBE_DDEG * 10;
-        double worst = 0.0, worst_off = 0.0;
-        int val_a2, val_b3, cnt4;
+        double worst = 0.0;
+        double worst_off = 0.0;
+        int val_a2;
+        int val_b3;
+        int cnt4;
 
         for (val_a2 = 0; val_a2 < 3; val_a2++)
         {
@@ -706,13 +715,16 @@ static void test_obstacle(void)
             {
                 for (cnt4 = 0; cnt4 < 3; cnt4++)
                 {
-                    double const omega = widths[val_a2], coef = cos_vals[val_b3], run = runs[cnt4];
+                    double const omega = widths[val_a2];
+                    double const coef = cos_vals[val_b3];
+                    double const run = runs[cnt4];
                     int32_t const face = OBST_US_AHEAD_MM + OBST_PROBE_FACE_MM;
                     double const step = (OBST_PROBE_SPEED_MM_S * 60.0) / 1000.0;
                     obst_probe_t probe;
                     double diff = 0.0;
                     int pass;
-                    int32_t left, ret;
+                    int32_t left;
+                    int32_t ret;
                     double elem;
 
                     obst_probe_start(&probe);
@@ -850,8 +862,12 @@ static void test_obstacle(void)
        behind); JOIN ends where the line sensors reach the line (y = 0). */
     {
         box_t box = { 200.0, 150.0, 0.0 };
-        uint8_t count, idx;
-        double x_val = -OBST_US_AHEAD_MM, y_val = 0.0, height = 0.0, max_lat = 0.0;
+        uint8_t count;
+        uint8_t idx;
+        double x_val = -OBST_US_AHEAD_MM;
+        double y_val = 0.0;
+        double height = 0.0;
+        double max_lat = 0.0;
         bool b_joined = false;
 
         scan_box(&box, 1, &prof);

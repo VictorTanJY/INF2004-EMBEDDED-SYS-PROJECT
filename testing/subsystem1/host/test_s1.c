@@ -462,7 +462,9 @@ static void test_button(void)
 static void test_dedup(void)
 {
     comms_dedup_t dedup;
-    comms_cmd_t   cmd_a, cmd_b, stop;
+    comms_cmd_t cmd_a;
+    comms_cmd_t cmd_b;
+    comms_cmd_t stop;
     unsigned      idx;
 
     comms_dedup_init(&dedup);

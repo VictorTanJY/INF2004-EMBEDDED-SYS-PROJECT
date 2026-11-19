@@ -164,7 +164,8 @@ int main(void)
 
         for (idx = 0; idx < 3; idx++)
         {
-            int start_idx, end_idx;
+            int start_idx;
+            int end_idx;
             int peak = run_hump(heights[idx], 300.0, &start_idx, &end_idx);
             double tol = fmax(5.0, 0.2 * heights[idx]);
 
@@ -179,7 +180,8 @@ int main(void)
        +5 deg climb threshold, so it is NOT detected.  If the course has humps
        this low, lower IMU_HUMP_ON_CDEG once A8 has measured the pitch noise. */
     {
-        int start_idx, end_idx;
+        int start_idx;
+        int end_idx;
         (void)run_hump(10.0, 300.0, &start_idx, &end_idx);
         CHECK("S4-H01b", start_idx == 0 && end_idx == 0);
         printf("hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - known limit\n");
@@ -189,13 +191,15 @@ int main(void)
        sides, reported within NFR7 (+-20 % or +-5 mm) */
     {
         double const heights[3] = { 10.0, 20.0, 30.0 };
-        int idx, side;
+        int idx;
+        int side;
 
         for (side = -1; side <= 1; side += 2)
         {
             for (idx = 0; idx < 3; idx++)
             {
-                int start_idx, end_idx;
+                int start_idx;
+                int end_idx;
                 int peak = run_side_hump(heights[idx], 300.0, side, &start_idx, &end_idx);
                 double tol = fmax(5.0, 0.2 * heights[idx]);
 
@@ -343,7 +347,8 @@ int main(void)
        run keeps its real humps only; a real hump while all black briefly
        (a crossing line) is kept. */
     {
-        int step0, elem0;
+        int step0;
+        int elem0;
         uint16_t real_max;
 
         (void)run_hump(20.0, 150.0, &step0, &elem0);              /* one real hump */
