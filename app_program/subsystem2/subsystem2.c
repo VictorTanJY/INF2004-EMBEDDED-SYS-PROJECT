@@ -163,7 +163,7 @@ EXPORT bool motion_estop_clear_reconnect(void)
     UINT intsts;
 
     DI(intsts);
-    if ((g_estop_latch != 0u) && (safety_get_latched() == 0u))
+    if ((g_estop_latch != 0u) && (0u == safety_get_latched()))
     {
         drv_motor_write(0, 0);
         drv_motor_connect();

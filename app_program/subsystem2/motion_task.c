@@ -168,8 +168,8 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
     (void)p_exinf;
 
     timing_pin_init();
-    b_hw_ok = (drv_motor_init() == E_OK);
-    b_hw_ok = (drv_encoder_init() == E_OK) && b_hw_ok;
+    b_hw_ok = (E_OK == drv_motor_init());
+    b_hw_ok = (E_OK == drv_encoder_init()) && b_hw_ok;
 
     /* Connect PWM (duty 0) unless SafetyTask already latched the brake. */
     DI(intsts);
@@ -202,12 +202,12 @@ EXPORT void motion_task(INT stacd, void * p_exinf)
         enc_l  = drv_encoder_read(DRV_ENC_LEFT);
         enc_r  = drv_encoder_read(DRV_ENC_RIGHT);
 
-        while (tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL) == (INT)sizeof(cmd_word))
+        while ((INT)sizeof(cmd_word) == tk_rcv_mbf(g_mbf_motion, &cmd_word, TMO_POL))
         {
             motion_cmd_unpack(cmd_word, &cmd);
             motion_result_t const res = motion_core_command(&g_core, &cmd, now_ms);
 
-            if (res == MOTION_RES_CLEAR_ESTOP)
+            if (MOTION_RES_CLEAR_ESTOP == res)
             {
                 if (motion_estop_clear_reconnect())
                 {

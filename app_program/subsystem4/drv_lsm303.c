@@ -132,7 +132,7 @@ EXPORT ER drv_lsm303_init(void)
 {
     ER err = init_once();
 
-    if ((err != E_OK) && ((g_diag >> 24) == 5u))
+    if ((err != E_OK) && (5u == (g_diag >> 24)))
     {
         err = init_once();               /* stuck: reboot and try once more */
     }

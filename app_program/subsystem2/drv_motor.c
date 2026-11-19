@@ -76,7 +76,7 @@ EXPORT ER drv_motor_init(void)
     }
 
     /* Read back: the block really left reset and took the settings. */
-    return (in_w(PWM_CH_TOP(SLICE_L)) == MOTION_PWM_TOP) ? E_OK : E_IO;
+    return (MOTION_PWM_TOP == in_w(PWM_CH_TOP(SLICE_L))) ? E_OK : E_IO;
 }
 
 EXPORT void drv_motor_connect(void)

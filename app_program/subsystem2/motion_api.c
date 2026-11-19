@@ -10,7 +10,7 @@ static int post_signed(uint8_t src, uint8_t seq, uint8_t cmd, int32_t sign,
                        uint16_t amount, uint16_t limit, uint16_t rate)
 {
     /* amount 0 is allowed: MotionTask completes it at once (MOTION_DONE). */
-    if ((amount > limit) || (rate == 0u) || (rate > (uint16_t)MOTION_API_MAX_RATE))
+    if ((amount > limit) || (0u == rate) || (rate > (uint16_t)MOTION_API_MAX_RATE))
     {
         return MOTION_API_E_PAR;
     }

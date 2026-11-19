@@ -64,7 +64,7 @@ static ER set_target(uint8_t addr7)
 /* Wait for the STOP of the transfer, then check for an abort (NACK). */
 static ER finish(uint32_t t_start)
 {
-    while ((in_w(IC_RAW_INTR_STAT) & (INTR_STOP_DET | INTR_TX_ABRT)) == 0u)
+    while (0u == (in_w(IC_RAW_INTR_STAT) & (INTR_STOP_DET | INTR_TX_ABRT)))
     {
         if (timed_out(t_start))
         {
@@ -95,7 +95,7 @@ static ER scl_release(void)
 {
     uint32_t const t_start = (uint32_t)app_time_us();
     out_w(GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
-    while ((in_w(GPIO_IN) & (1uL << S4_PIN_IMU_SCL)) == 0u)
+    while (0u == (in_w(GPIO_IN) & (1uL << S4_PIN_IMU_SCL)))
     {
         if ((uint32_t)((uint32_t)app_time_us() - t_start) >= 100u)
             return E_TMOUT;
@@ -117,16 +117,16 @@ static ER clear_bus(void)
     out_w(GPIO(S4_PIN_IMU_SDA), GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
     out_w(GPIO(S4_PIN_IMU_SCL), GPIO_IE | GPIO_DRIVE_4MA | GPIO_PUE | GPIO_SHEMITT);
     err = scl_release();
-    if (err == E_OK && ((in_w(GPIO_IN) & sda) == 0u))
+    if (E_OK == err && (0u == (in_w(GPIO_IN) & sda)))
     {
-        for (idx = 0u; idx < 9u && ((in_w(GPIO_IN) & sda) == 0u); idx++)
+        for (idx = 0u; idx < 9u && (0u == (in_w(GPIO_IN) & sda)); idx++)
         {
             out_w(GPIO_OE_SET, scl);
             recovery_delay();
             err = scl_release();
             if (err != E_OK) break;
         }
-        if (err == E_OK)
+        if (E_OK == err)
         {
             /* STOP: SDA rises while SCL is HIGH. */
             out_w(GPIO_OE_SET, scl);
@@ -138,7 +138,7 @@ static ER clear_bus(void)
         }
     }
     out_w(GPIO_OE_CLR, sda | scl);
-    if (err == E_OK && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
+    if (E_OK == err && ((in_w(GPIO_IN) & (sda | scl)) != (sda | scl)))
         err = E_IO;
     return err;
 }
@@ -166,7 +166,7 @@ EXPORT ER drv_i2c1_init(void)
     out_w(IC_FS_SPKLEN, 11u);
     out_w(IC_SDA_HOLD, 38u);
     if (bus_er != E_OK) return bus_er;
-    return (in_w(IC_FS_SCL_LCNT) == 750u) ? E_OK : E_IO;
+    return (750u == in_w(IC_FS_SCL_LCNT)) ? E_OK : E_IO;
 }
 
 EXPORT ER drv_i2c1_write_reg(uint8_t addr7, uint8_t reg, uint8_t value)
@@ -190,7 +190,7 @@ EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n_b
     ER             err;
     uint8_t        idx;
 
-    if ((p_buf == 0) || (addr7 > 0x7Fu) || (n_bytes == 0u) || (n_bytes > 16u))
+    if ((0 == p_buf) || (addr7 > 0x7Fu) || (0u == n_bytes) || (n_bytes > 16u))
     {
         return E_PAR;
     }
@@ -205,7 +205,7 @@ EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n_b
     {
         uint32_t cmd = CMD_READ;
 
-        if (idx == 0u)
+        if (0u == idx)
         {
             cmd |= CMD_RESTART;
         }
@@ -222,7 +222,7 @@ EXPORT ER drv_i2c1_read(uint8_t addr7, uint8_t reg, uint8_t * p_buf, uint8_t n_b
     }
     for (idx = 0u; idx < n_bytes; idx++)
     {
-        while (in_w(IC_RXFLR) == 0u)
+        while (0u == in_w(IC_RXFLR))
         {
             if (timed_out(t_start))
             {

@@ -109,11 +109,11 @@ EXPORT ER drv_adc_init(void)
     }
 
     out_w(ADC_CS, ADC_CS_EN);
-    for (spin = 0u; (spin < 100000u) && ((in_w(ADC_CS) & ADC_CS_READY) == 0u); spin++)
+    for (spin = 0u; (spin < 100000u) && (0u == (in_w(ADC_CS) & ADC_CS_READY)); spin++)
     {
         ;
     }
-    if ((in_w(ADC_CS) & ADC_CS_READY) == 0u)
+    if (0u == (in_w(ADC_CS) & ADC_CS_READY))
     {
         return E_IO;                                /* clk_adc not running? */
     }
@@ -169,7 +169,7 @@ EXPORT bool drv_adc_get_block(uint16_t p_out[DRV_ADC_BLOCK_LEN], uint32_t * p_se
     which  = g_ready;
     *p_seq = g_seq;
     EI(intsts);
-    if (*p_seq == 0u)
+    if (0u == *p_seq)
     {
         return false;
     }

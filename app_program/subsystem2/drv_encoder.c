@@ -98,7 +98,7 @@ EXPORT ER drv_encoder_init(void)
 
 EXPORT int32_t drv_encoder_read(uint32_t which)
 {
-    uint32_t const sm_idx    = (which == DRV_ENC_RIGHT) ? 1u : 0u;
+    uint32_t const sm_idx    = (DRV_ENC_RIGHT == which) ? 1u : 0u;
     uint32_t       n_words     = (in_w(PIO_FLEVEL) >> ((sm_idx * 8u) + 4u)) & 0xFu;
     uint32_t       value = g_last[sm_idx];
     uint32_t       spin;
@@ -111,7 +111,7 @@ EXPORT int32_t drv_encoder_read(uint32_t which)
     }
     for (spin = 0u; spin < READ_SPIN_MAX; spin++)
     {
-        if ((in_w(PIO_FSTAT) & PIO_FSTAT_RXEMPTY(sm_idx)) == 0u)
+        if (0u == (in_w(PIO_FSTAT) & PIO_FSTAT_RXEMPTY(sm_idx)))
         {
             value = in_w(PIO_RXF(sm_idx));
             break;

@@ -38,7 +38,7 @@ static uint16_t bits_of(char const * p_bits)
 
     for (idx = 0u; idx < 9u; idx++)
     {
-        pattern = (uint16_t)((pattern << 1) | ((p_bits[idx] == '1') ? 1u : 0u));
+        pattern = (uint16_t)((pattern << 1) | (('1' == p_bits[idx]) ? 1u : 0u));
     }
     return pattern;
 }
@@ -93,7 +93,7 @@ static uint32_t kth_widest(uint32_t const * p_w, uint8_t first, uint8_t rank, ui
 
         for (idx = first; idx < 9u; idx += 2u)
         {
-            if (((used & (1u << idx)) == 0u) && (!b_any || (p_w[idx] > best)))
+            if ((0u == (used & (1u << idx))) && (!b_any || (p_w[idx] > best)))
             {
                 best   = p_w[idx];
                 *p_idx = idx;
@@ -156,7 +156,7 @@ static code39_result_t classify(uint32_t const * p_w, uint16_t n_elems, uint16_t
         uint32_t const bar_w1 = kth_widest(widths, 0u, 0u, &ib1);
         uint32_t const bar_w5 = kth_widest(widths, 0u, 4u, &ib5);
 
-        if ((space_w4 == 0u) || (((uint64_t)space_w3 * 10u) < ((uint64_t)space_w4 * ratio_min_x10)) ||
+        if ((0u == space_w4) || (((uint64_t)space_w3 * 10u) < ((uint64_t)space_w4 * ratio_min_x10)) ||
             (((uint64_t)bar_w1 * 10u) >= ((uint64_t)bar_w5 * ratio_min_x10)))
         {
             return CODE39_ERR_RATIO;
@@ -190,11 +190,11 @@ static code39_result_t decode_dir(uint32_t const * p_w, uint16_t n_elems, uint16
             return result;
         }
         chr = code39_char(pattern);
-        if (chr == '\0')
+        if ('\0' == chr)
         {
             return CODE39_ERR_PATTERN;
         }
-        if ((char_idx == 0u) || (char_idx == (chars - 1u)))
+        if ((0u == char_idx) || (char_idx == (chars - 1u)))
         {
             if (chr != '*')
             {
@@ -203,7 +203,7 @@ static code39_result_t decode_dir(uint32_t const * p_w, uint16_t n_elems, uint16
         }
         else
         {
-            if (chr == '*')
+            if ('*' == chr)
             {
                 return CODE39_ERR_PATTERN;  /* '*' only frames the code */
             }
@@ -237,19 +237,19 @@ code39_result_t code39_decode(uint32_t const * p_widths, uint16_t n_elems, uint1
     }
 
     fwd = decode_dir(p_widths, n_elems, ratio_min_x10, false, p_text);
-    if (fwd == CODE39_OK)
+    if (CODE39_OK == fwd)
     {
         return CODE39_OK;
     }
     rev = decode_dir(p_widths, n_elems, ratio_min_x10, true, p_text);
-    if (rev == CODE39_OK)
+    if (CODE39_OK == rev)
     {
         *pb_reversed = true;
         return CODE39_OK;
     }
     p_text[0] = '\0';
     /* Report the forward reason unless only the framing was wrong. */
-    return (fwd == CODE39_ERR_START_STOP) ? rev : fwd;
+    return (CODE39_ERR_START_STOP == fwd) ? rev : fwd;
 }
 
 code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n_elems, uint16_t ratio_min_x10,
@@ -263,7 +263,7 @@ code39_result_t code39_decode_one(uint32_t const * p_widths, uint16_t n_elems, u
     {
         return result;
     }
-    if ((text[0] == '\0') || (text[1] != '\0'))
+    if (('\0' == text[0]) || (text[1] != '\0'))
     {
         return CODE39_ERR_LENGTH;
     }
@@ -290,7 +290,7 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n_e
     uint16_t        idx;
     uint8_t         kdx;
 
-    if ((result == CODE39_OK) || (result == CODE39_NOT_BARCODE) || ((n_elems + 2u) > (CODE39_MAX_CHARS * 10u)) ||
+    if ((CODE39_OK == result) || (CODE39_NOT_BARCODE == result) || ((n_elems + 2u) > (CODE39_MAX_CHARS * 10u)) ||
         (((n_elems + 3u) % 10u) != 0u))
     {
         return result;
@@ -303,8 +303,8 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n_e
     for (kdx = 0u; kdx < 4u; kdx++)
     {
         bool const     b_front = (kdx < 2u);
-        uint32_t const add_first = (kdx == 0u) ? narrow : ((kdx == 3u) ? widest : narrow);   /* first added */
-        uint32_t const add_second = (kdx == 0u) ? widest : narrow;                          /* second added */
+        uint32_t const add_first = (0u == kdx) ? narrow : ((3u == kdx) ? widest : narrow);   /* first added */
+        uint32_t const add_second = (0u == kdx) ? widest : narrow;                          /* second added */
         char           chr;
         bool           b_rev;
         uint16_t       out_n = 0u;
@@ -320,10 +320,10 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n_e
         }
         if (!b_front)
         {
-            widths[out_n++] = (kdx == 2u) ? narrow : widest;       /* k 2: space n, bar n; k 3: space W, bar n */
+            widths[out_n++] = (2u == kdx) ? narrow : widest;       /* k 2: space n, bar n; k 3: space W, bar n */
             widths[out_n++] = narrow;
         }
-        if (code39_decode_one(widths, out_n, ratio_min_x10, &chr, &b_rev) == CODE39_OK)
+        if (CODE39_OK == code39_decode_one(widths, out_n, ratio_min_x10, &chr, &b_rev))
         {
             if ((got != '\0') && (chr != got))
             {
@@ -334,7 +334,7 @@ code39_result_t code39_decode_one_repair(uint32_t const * p_widths, uint16_t n_e
             b_got_rev = b_rev;
         }
     }
-    if (got == '\0')
+    if ('\0' == got)
     {
         *p_char = '\0';
         return result;
@@ -389,7 +389,7 @@ static uint32_t median_of(uint32_t * p_v, uint16_t n_elems)
         }
         p_v[jdx] = value;
     }
-    return (n_elems == 0u) ? 0u : p_v[n_elems / 2u];
+    return (0u == n_elems) ? 0u : p_v[n_elems / 2u];
 }
 
 /* This read's widths of narrow and wide bars and spaces: the median
@@ -584,13 +584,13 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_ele
     {
         return CODE39_NOT_BARCODE;
     }
-    if ((n_elems < BEST_N_MIN) || (n_elems > BEST_N_MAX) || ((n_elems % 2u) == 0u))
+    if ((n_elems < BEST_N_MIN) || (n_elems > BEST_N_MAX) || (0u == (n_elems % 2u)))
     {
         return CODE39_ERR_COUNT;        /* a read starts and ends with a bar */
     }
     best_levels(p_widths, n_elems, levels);
     nar = (levels[0] + levels[2]) / 2u;
-    if ((nar == 0u) || (levels[1] <= levels[0]) || (levels[3] <= levels[2]))
+    if ((0u == nar) || (levels[1] <= levels[0]) || (levels[3] <= levels[2]))
     {
         return CODE39_ERR_RATIO;
     }
@@ -604,7 +604,7 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_ele
         uint16_t const pat = bits_of(g_code39_table[entry].p_bits);
         uint8_t        kdx;
 
-        if (g_code39_table[entry].chr == '*')
+        if ('*' == g_code39_table[entry].chr)
         {
             continue;
         }
@@ -613,7 +613,7 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_ele
         {
             uint8_t const  char_idx   = (uint8_t)(kdx / 10u);
             uint8_t const  pos = (uint8_t)(kdx % 10u);
-            uint16_t const pattern   = (char_idx == 1u) ? pat : star;
+            uint16_t const pattern   = (1u == char_idx) ? pat : star;
             bool const     b_w = (pos < 9u) && (((pattern >> (8u - pos)) & 1u) != 0u);
 
             expect[kdx]  = levels[(((kdx % 2u) != 0u) ? 2u : 0u) + (b_w ? 1u : 0u)];
@@ -623,7 +623,7 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_ele
         {
             uint32_t cost;
 
-            if (dir == 1u)
+            if (1u == dir)
             {
                 for (kdx = 0u; kdx < (BEST_T / 2u); kdx++)
                 {
@@ -648,7 +648,7 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_ele
                 }
                 best_cost     = cost;
                 ch1    = g_code39_table[entry].chr;
-                b_rev1 = (dir == 1u);
+                b_rev1 = (1u == dir);
             }
             else if ((cost < next_cost) && (g_code39_table[entry].chr != ch1))
             {
@@ -656,7 +656,7 @@ code39_result_t code39_decode_one_best(uint32_t const * p_widths, uint16_t n_ele
             }
         }
     }
-    if ((ch1 == '\0') || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T)) ||
+    if (('\0' == ch1) || (best_cost > ((uint32_t)BEST_ELEM_MAX * BEST_T)) ||
         (((uint64_t)next_cost * 10u) < ((uint64_t)best_cost * BEST_MARGIN_X10)))
     {
         return CODE39_ERR_PATTERN;

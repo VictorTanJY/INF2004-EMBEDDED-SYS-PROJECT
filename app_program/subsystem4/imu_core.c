@@ -92,7 +92,7 @@ void imu_cal_level_sample(imu_core_t * p_ic, int32_t const acc_mg[3])
 {
     uint8_t kdx;
 
-    if (p_ic->lvl_n == 0xFFFFu)
+    if (0xFFFFu == p_ic->lvl_n)
     {
         return;
     }
@@ -332,7 +332,7 @@ static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um)
     int32_t const roll_abs  = app_abs_i32(p_ic->roll_cdeg);
     uint8_t       events = 0u;
 
-    if (p_ic->side_state == 0u)
+    if (0u == p_ic->side_state)
     {
         if ((roll_abs > IMU_SIDE_ON_CDEG) && (app_abs_i32(p_ic->accel_mm_s2) < IMU_ACC_GATE_MM_S2))
         {
@@ -391,7 +391,7 @@ static uint8_t lift_step(imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s, uint3
     uint8_t       events     = 0u;
     int32_t const base   = (p_ic->lvl_up_mg > 0) ? p_ic->lvl_up_mg : 1000;
     int32_t const rise   = up_mg - base;
-    bool const    b_flat = (p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && (p_ic->side_state == 0u);
+    bool const    b_flat = ((uint8_t)IMU_HUMP_FLAT == p_ic->hump_state) && (0u == p_ic->side_state);
 
     if (b_flat && (rise > IMU_LIFT_RISE_MG))
     {
@@ -444,19 +444,19 @@ static uint8_t classify(imu_core_t const * p_ic, int32_t v_mm_s, int32_t yaw_cde
        is accelerating, slowing down while reversing is decelerating. */
     int32_t const a_speed = (v_mm_s < 0) ? -p_ic->accel_mm_s2 : p_ic->accel_mm_s2;
 
-    if (p_ic->side_state == 1u)
+    if (1u == p_ic->side_state)
     {
         return (uint8_t)IMU_MOTION_CLIMBING;
     }
-    if (p_ic->side_state == 2u)
+    if (2u == p_ic->side_state)
     {
         return (uint8_t)IMU_MOTION_DESCENDING;
     }
-    if (p_ic->hump_state == (uint8_t)IMU_HUMP_CLIMBING)
+    if ((uint8_t)IMU_HUMP_CLIMBING == p_ic->hump_state)
     {
         return (uint8_t)IMU_MOTION_CLIMBING;
     }
-    if (p_ic->hump_state == (uint8_t)IMU_HUMP_DESCENDING)
+    if ((uint8_t)IMU_HUMP_DESCENDING == p_ic->hump_state)
     {
         return (uint8_t)IMU_MOTION_DESCENDING;
     }
@@ -492,7 +492,7 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
     uint8_t kdx;
     uint8_t cls;
 
-    if (dt_ms == 0u)
+    if (0u == dt_ms)
     {
         dt_ms = 10u;
     }
@@ -591,7 +591,7 @@ uint8_t imu_core_step(imu_core_t * p_ic, int32_t const acc_mg[3], int16_t const 
     if (ds_um > 0)
     {
         events |= hump_step(p_ic, (uint32_t)ds_um);
-        if ((p_ic->hump_state == (uint8_t)IMU_HUMP_FLAT) && ((events & IMU_EV_HUMP_START) == 0u))
+        if (((uint8_t)IMU_HUMP_FLAT == p_ic->hump_state) && (0u == (events & IMU_EV_HUMP_START)))
         {
             events |= side_step(p_ic, (uint32_t)ds_um);
         }

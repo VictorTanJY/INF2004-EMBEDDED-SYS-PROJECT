@@ -46,18 +46,18 @@ static void test_pack(void)
         if ((width >= 8u) && ((pk_wrap_diff(2u, pk_mask(width) - 1u, width) != 4) || (pk_wrap_diff(pk_mask(width) - 1u, 2u, width) != -4))) { b_ok = 0; }
     }
     CHECK("SH-H05", b_ok);
-    CHECK("SH-H05", pk_off_s(INT32_MIN, 32u) == 0u && pk_off_s(INT32_MAX, 32u) == 0xFFFFFFFFu);
-    CHECK("SH-H05", pk_unoff_s(0u, 32u) == INT32_MIN && pk_unoff_s(0xFFFFFFFFu, 32u) == INT32_MAX);
+    CHECK("SH-H05", 0u == pk_off_s(INT32_MIN, 32u) && 0xFFFFFFFFu == pk_off_s(INT32_MAX, 32u));
+    CHECK("SH-H05", INT32_MIN == pk_unoff_s(0u, 32u) && INT32_MAX == pk_unoff_s(0xFFFFFFFFu, 32u));
 
     /* fields in a word: set one without touching its neighbours */
     {
         uint32_t bit_width = 0xFFFFFFFFu;
 
         bit_width = pk_set(bit_width, 5u, 7u, 0u);
-        CHECK("SH-H05", bit_width == 0xFFFFF01Fu && pk_get(bit_width, 5u, 7u) == 0u && pk_get(bit_width, 0u, 5u) == 0x1Fu);
+        CHECK("SH-H05", 0xFFFFF01Fu == bit_width && 0u == pk_get(bit_width, 5u, 7u) && 0x1Fu == pk_get(bit_width, 0u, 5u));
         bit_width = pk_set(bit_width, 5u, 7u, 0x55u);
-        CHECK("SH-H05", pk_get(bit_width, 5u, 7u) == 0x55u && pk_get(bit_width, 12u, 20u) == 0xFFFFFu);
-        CHECK("SH-H05", pk_set(0u, 0u, 32u, 0x12345678u) == 0x12345678u && pk_get(0x80000000u, 31u, 1u) == 1u);
+        CHECK("SH-H05", 0x55u == pk_get(bit_width, 5u, 7u) && 0xFFFFFu == pk_get(bit_width, 12u, 20u));
+        CHECK("SH-H05", 0x12345678u == pk_set(0u, 0u, 32u, 0x12345678u) && 1u == pk_get(0x80000000u, 31u, 1u));
     }
 
     /* streams: random widths and values round-trip; overflow is reported */
@@ -89,7 +89,7 @@ static void test_pack(void)
         CHECK("SH-H05", ret && !reader.b_short && count > 10u);
         pk_put(&writer, 0xFFFFFFFFu, 32u);
         pk_put(&writer, 0u, 33u);
-        CHECK("SH-H05", writer.b_overflow && pk_writer_len(&writer) == 0u);
+        CHECK("SH-H05", writer.b_overflow && 0u == pk_writer_len(&writer));
     }
 }
 
@@ -136,10 +136,10 @@ int main(void)
             }
         }
         CHECK("SH-H02", worst_atan <= 1.0);
-        CHECK("SH-H02", app_atan2_cdeg(0, 0) == 0);
-        CHECK("SH-H02", app_atan2_cdeg(1, 0) == 9000);
-        CHECK("SH-H02", app_atan2_cdeg(0, -1) == 18000);
-        CHECK("SH-H02", app_atan2_cdeg(-1, 0) == -9000);
+        CHECK("SH-H02", 0 == app_atan2_cdeg(0, 0));
+        CHECK("SH-H02", 9000 == app_atan2_cdeg(1, 0));
+        CHECK("SH-H02", 18000 == app_atan2_cdeg(0, -1));
+        CHECK("SH-H02", -9000 == app_atan2_cdeg(-1, 0));
         CHECK("SH-H02", abs(app_atan2_cdeg(2147483647, -2147483647 - 1) - 13500) <= 10);
     }
 
@@ -159,16 +159,16 @@ int main(void)
             break;
         }
     }
-    CHECK("SH-H03", app_isqrt32(0xFFFFFFFFu) == 65535u);
-    CHECK("SH-H03", app_isqrt64(0xFFFFFFFFFFFFFFFFull) == 0xFFFFFFFFu);
+    CHECK("SH-H03", 65535u == app_isqrt32(0xFFFFFFFFu));
+    CHECK("SH-H03", 0xFFFFFFFFu == app_isqrt64(0xFFFFFFFFFFFFFFFFull));
 
     /* SH-H04: wrap and Q15 multiply */
-    CHECK("SH-H04", app_wrap_cdeg(18000) == -18000);
-    CHECK("SH-H04", app_wrap_cdeg(-18001) == 17999);
-    CHECK("SH-H04", app_wrap_cdeg(72000 + 4500) == 4500);
-    CHECK("SH-H04", app_mul_q15(2000000000, 16384) == 1000000000);
+    CHECK("SH-H04", -18000 == app_wrap_cdeg(18000));
+    CHECK("SH-H04", 17999 == app_wrap_cdeg(-18001));
+    CHECK("SH-H04", 4500 == app_wrap_cdeg(72000 + 4500));
+    CHECK("SH-H04", 1000000000 == app_mul_q15(2000000000, 16384));
 
     printf("worst sin/cos error %d LSB, worst atan2 error %.1f cdeg\n", worst_sin, worst_atan);
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (g_fail == 0) ? 0 : 1;
+    return (0 == g_fail) ? 0 : 1;
 }

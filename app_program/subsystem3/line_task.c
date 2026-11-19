@@ -80,7 +80,7 @@ static void bc_reject_detail(bc_capture_t const * p_bc)
         w_min = (width < w_min) ? width : w_min;
         w_max = (width > w_max) ? width : w_max;
     }
-    if (p_bc->n_elems == 0u)
+    if (0u == p_bc->n_elems)
     {
         w_min = 0u;
     }
@@ -119,14 +119,14 @@ static void bc_widths_log(bc_capture_t const * p_bc)
 
         for (kdx = 0u; (kdx < n_elems) && (kdx < LINE_LOG_ELEM_MAX); kdx += 3u)
         {
-            uint32_t data = ((uint32_t)((reading == 0u) ? 0u : 3u) << 30) | ((uint32_t)kdx << 24);
+            uint32_t data = ((uint32_t)((0u == reading) ? 0u : 3u) << 30) | ((uint32_t)kdx << 24);
             uint8_t  jdx;
 
             for (jdx = 0u; jdx < 3u; jdx++)
             {
                 uint32_t const elem = ((kdx + jdx) < n_elems) ? ((widths[kdx + jdx] + 100u) / 200u) : 0u;    /* 0.2 mm */
 
-                data |= ((elem > 255u) ? 255u : ((elem == 0u) && ((kdx + jdx) < n_elems) ? 1u : elem)) << (8u * (2u - jdx));
+                data |= ((elem > 255u) ? 255u : ((0u == elem) && ((kdx + jdx) < n_elems) ? 1u : elem)) << (8u * (2u - jdx));
             }
             (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_ELEM,
                                    (int32_t)data);
@@ -193,9 +193,9 @@ EXPORT void line_task(INT stacd, void * p_exinf)
     timing_pin_init();
     line_track_init(&g_trk);
     bc_init(&g_bc);
-    b_hw_ok = (drv_adc_init() == E_OK);
+    b_hw_ok = (E_OK == drv_adc_init());
     /* tk_get_tid(): on SMP this task may run before g_tid_line is stored */
-    b_hw_ok = b_hw_ok && (drv_adc_start(tk_get_tid()) == E_OK);
+    b_hw_ok = b_hw_ok && (E_OK == drv_adc_start(tk_get_tid()));
 
     for (;;)
     {
@@ -228,7 +228,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         mission_get_snap(&mission);
 
         /* ---- 2. calibration (360 deg spin) -------------------------- */
-        if (mission.cal_phase == (uint8_t)MISSION_CAL_PH_SPIN)
+        if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
         {
             uint32_t cross_left = 0u;
             uint32_t cross_right = 0u;
@@ -248,7 +248,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             line_slip_sample(&g_slip, odom.heading_cdeg, (uint16_t)(cross_left / LINE_SAMPLES_PER_BLOCK),
                              (uint16_t)(cross_right / LINE_SAMPLES_PER_BLOCK));
         }
-        else if (b_cal_active && (mission.cal_phase == (uint8_t)MISSION_CAL_PH_FINISH))
+        else if (b_cal_active && ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase))
         {
             bool const b_ok = line_cal_finish(&g_cal);
             uint8_t    chan;
@@ -277,7 +277,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             (void)mission_post((uint8_t)MISSION_EV_CAL_DONE, (uint8_t)APP_SRC_LINE,
                                (uint16_t)APP_SRC_LINE, b_ok ? 1 : 0);
         }
-        else if (mission.cal_phase == (uint8_t)MISSION_CAL_PH_NONE)
+        else if ((uint8_t)MISSION_CAL_PH_NONE == mission.cal_phase)
         {
             b_cal_active = false;       /* calibration aborted */
         }
@@ -303,15 +303,15 @@ EXPORT void line_task(INT stacd, void * p_exinf)
             {
                 continue;
             }
-            b_was_capturing = (g_bc.state == (uint8_t)LINE_BC_CAPTURING);
+            b_was_capturing = ((uint8_t)LINE_BC_CAPTURING == g_bc.state);
             t0_us = b_was_capturing ? (uint32_t)app_time_us() : 0u;
             result = bc_sample(&g_bc, line_cal_norm(&g_cal, LINE_CH_BC, p_s[LINE_CH_BC]), step_um, &out);
-            if (b_was_capturing && ((result == BC_VALID) || (result == BC_REJECT)))
+            if (b_was_capturing && ((BC_VALID == result) || (BC_REJECT == result)))
             {
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE, LINE_LOG_BC_DECODE_US,
                                        (int32_t)((uint32_t)app_time_us() - t0_us));
             }
-            if (result == BC_VALID)
+            if (BC_VALID == result)
             {
                 snap.barcode_ok++;
                 snap.last_barcode = out.chr;
@@ -319,7 +319,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                                    out.b_reversed ? 1u : 0u, (int32_t)out.chr);
                 bc_levels_log(&g_bc);
             }
-            else if (result == BC_REJECT)
+            else if (BC_REJECT == result)
             {
                 /* BARCODE_ERR: telemetry only, never a command (FR3) */
                 snap.barcode_err++;
@@ -330,7 +330,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
                 bc_levels_log(&g_bc);
                 bc_widths_log(&g_bc);
             }
-            else if (b_was_capturing && (g_bc.state == (uint8_t)LINE_BC_ARMED) && (g_bc.n_elems >= 2u))
+            else if (b_was_capturing && ((uint8_t)LINE_BC_ARMED == g_bc.state) && (g_bc.n_elems >= 2u))
             {
                 /* dropped silently by the decoder (< 9 elements): say so */
                 (void)comms_telem_post((uint8_t)COMMS_KIND_LOG, (uint8_t)APP_SRC_LINE,
@@ -399,15 +399,15 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         }
 
         /* ---- 5. steering command ------------------------------------ */
-        if ((odom.auth == (uint8_t)MOTION_SRC_LINE) &&
-            (mission.state == (uint8_t)MISSION_ST_LINE_FOLLOW) && g_cal.b_valid)
+        if (((uint8_t)MOTION_SRC_LINE == odom.auth) &&
+            ((uint8_t)MISSION_ST_LINE_FOLLOW == mission.state) && g_cal.b_valid)
         {
             int32_t omega = g_trk.omega;
 
             /* 7 Nov reading mode: steady steering while a code is read, so
                the side barcode IR crosses the bars on a straight path; not
                on curves (the line well off centre) */
-            if ((g_bc.state == (uint8_t)LINE_BC_CAPTURING) && (app_abs_i32(g_trk.err) <= LINE_BC_HOLD_ERR))
+            if (((uint8_t)LINE_BC_CAPTURING == g_bc.state) && (app_abs_i32(g_trk.err) <= LINE_BC_HOLD_ERR))
             {
                 omega = app_clamp_i32(omega, -LINE_BC_OMEGA_MAX, LINE_BC_OMEGA_MAX);
             }
@@ -427,7 +427,7 @@ EXPORT void line_task(INT stacd, void * p_exinf)
         snap.flags        = (uint8_t)((g_cal.b_valid ? LINE_FLAG_CALIBRATED : 0u) |
                                       (g_trk.b_lost ? LINE_FLAG_LOST : 0u) |
                                       (g_trk.b_junction ? LINE_FLAG_JUNCTION : 0u) |
-                                      ((odom.auth == (uint8_t)MOTION_SRC_LINE) ? LINE_FLAG_HAS_AUTH : 0u) |
+                                      (((uint8_t)MOTION_SRC_LINE == odom.auth) ? LINE_FLAG_HAS_AUTH : 0u) |
                                       ((!g_trk.b_white_l || !g_trk.b_white_r) ? LINE_FLAG_ON_LINE : 0u) |
                                       LINE_FLAG_HW_OK |
                                       ((g_trk.both_white_um > 0u) ? LINE_FLAG_GAP : 0u));

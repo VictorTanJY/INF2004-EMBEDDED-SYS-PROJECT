@@ -151,14 +151,14 @@ static uint32_t pk_member_u(void const *p_rec, pk_field_t const *p_f)
 	uint8_t const *p_byte = (uint8_t const *)p_rec + p_f->offset;
 	uint32_t value = 0u;
 
-	if (p_f->size == 1u)
+	if (1u == p_f->size)
 	{
 		uint8_t byte;
 
 		(void)memcpy(&byte, p_byte, 1u);
 		value = byte;
 	}
-	else if (p_f->size == 2u)
+	else if (2u == p_f->size)
 	{
 		uint16_t half;
 
@@ -176,11 +176,11 @@ static int32_t pk_member_s(void const *p_rec, pk_field_t const *p_f)
 {
 	uint32_t const raw = pk_member_u(p_rec, p_f);
 
-	if (p_f->size == 1u)
+	if (1u == p_f->size)
 	{
 		return (int32_t)(int8_t)(uint8_t)raw;
 	}
-	if (p_f->size == 2u)
+	if (2u == p_f->size)
 	{
 		return (int32_t)(int16_t)(uint16_t)raw;
 	}
@@ -191,13 +191,13 @@ static void pk_member_set(void *p_rec, pk_field_t const *p_f, uint32_t value)
 {
 	uint8_t *p_byte = (uint8_t *)p_rec + p_f->offset;
 
-	if (p_f->size == 1u)
+	if (1u == p_f->size)
 	{
 		uint8_t const byte = (uint8_t)value;
 
 		(void)memcpy(p_byte, &byte, 1u);
 	}
-	else if (p_f->size == 2u)
+	else if (2u == p_f->size)
 	{
 		uint16_t const half = (uint16_t)value;
 

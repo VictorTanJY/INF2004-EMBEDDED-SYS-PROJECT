@@ -82,7 +82,7 @@ int32_t app_atan2_cdeg(int32_t y_val, int32_t x_val)
     uint32_t abs_y = (y_val < 0) ? (0u - (uint32_t)y_val) : (uint32_t)y_val;
     int32_t  angle;
 
-    if ((abs_x == 0u) && (abs_y == 0u))
+    if ((0u == abs_x) && (0u == abs_y))
     {
         return 0;
     }

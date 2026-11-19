@@ -59,7 +59,7 @@ static uint16_t level_at(uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
     {
         if ((x_um >= pos) && (x_um < (pos + p_w[elem])))
         {
-            return ((elem % 2u) == 0u) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
+            return (0u == (elem % 2u)) ? (uint16_t)T_BLACK : (uint16_t)T_WHITE;
         }
         pos += p_w[elem];
     }
@@ -102,7 +102,7 @@ EXPORT void subsystem3_test(void)
             elem_widths[n_elems++] = 3000u;
         }
     }
-    TEST_CHECK("S3-U04", (code39_decode_one(elem_widths, n_elems, 15u, &chr, &b_rev) == CODE39_OK) && (chr == 'F'),
+    TEST_CHECK("S3-U04", (CODE39_OK == code39_decode_one(elem_widths, n_elems, 15u, &chr, &b_rev)) && ('F' == chr),
                "Code 39 *F* decodes on target");
 
     /* ---- S3-U05: no ADC block lost in 1 s; live readings (NFR2) ---- */
@@ -146,7 +146,7 @@ EXPORT void subsystem3_test(void)
             if (result != BC_NONE)
             {
                 results++;
-                if (found == BC_NONE)
+                if (BC_NONE == found)
                 {
                     found  = result;
                     out_ok = out;
@@ -156,7 +156,7 @@ EXPORT void subsystem3_test(void)
         tm_printf((UB *)"[INFO] S3-U07 result %d char '%c' pass %d; worst sample %d us, mean %d us over %d samples\n",
                   (INT)found, (INT)((out_ok.chr != '\0') ? out_ok.chr : '?'), (INT)g_t_bc.pass,
                   (INT)worst_us, (INT)(total_us / samples), (INT)samples);
-        TEST_CHECK("S3-U07", (found == BC_VALID) && (out_ok.chr == 'A') && (results == 1u) &&
+        TEST_CHECK("S3-U07", (BC_VALID == found) && ('A' == out_ok.chr) && (1u == results) &&
                              (worst_us < T_BLOCK_US),
                    "barcode *A* decodes once through bc_sample; slowest call fits a 10 ms block");
     }

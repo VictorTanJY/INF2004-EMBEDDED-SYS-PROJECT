@@ -34,7 +34,7 @@ uint16_t obst_median3(uint16_t val_a, uint16_t val_b, uint16_t val_c)
 
 uint16_t obst_echo_to_mm(uint32_t width_us)
 {
-    if ((width_us == 0u) || (width_us >= OBST_ECHO_MAX_US))
+    if ((0u == width_us) || (width_us >= OBST_ECHO_MAX_US))
     {
         return OBST_RANGE_NONE;
     }
@@ -170,7 +170,7 @@ static void profile_core(obst_point_t const * p_fine, uint8_t n_fine,
             nearest = idx;
         }
     }
-    if (r_min == OBST_RANGE_NONE)
+    if (OBST_RANGE_NONE == r_min)
     {
         /* nothing in the path: the nearest echo anywhere (may be CONTINUE) */
         for (idx = 0u; idx < n_fine; idx++)
@@ -182,7 +182,7 @@ static void profile_core(obst_point_t const * p_fine, uint8_t n_fine,
             }
         }
     }
-    if (r_min == OBST_RANGE_NONE)
+    if (OBST_RANGE_NONE == r_min)
     {
         return;                         /* nothing in front: CONTINUE */
     }
@@ -330,7 +330,7 @@ static void force_ahead(obst_point_t const * p_fine, uint8_t n_fine,
     p_out->b_sure        = false;
     p_out->closest_mm    = range;
     p_out->nearest_angle = OBST_SERVO_CENTRE_DEG;
-    if (p_out->w_mm == 0u)
+    if (0u == p_out->w_mm)
     {
         p_out->left_lat_mm  = 0;
         p_out->right_lat_mm = 0;
@@ -364,7 +364,7 @@ void obst_profile(obst_point_t const * p_fine, uint8_t n_fine,
             r_ahead = p_point->r_mm;
         }
     }
-    if ((r_ahead < OBST_GUARD_MM) && (p_out->plan == (uint8_t)OBST_PLAN_CONTINUE))
+    if ((r_ahead < OBST_GUARD_MM) && ((uint8_t)OBST_PLAN_CONTINUE == p_out->plan))
     {
         force_ahead(p_fine, n_fine, p_coarse, n_coarse, r_ahead, p_out);
     }
@@ -433,7 +433,7 @@ static void start_refine(obst_scan_t * p_s, bool b_right)
     }
     p_s->r_min = r_min;
     p_s->iter  = 0u;
-    if (r_min == OBST_RANGE_NONE)
+    if (OBST_RANGE_NONE == r_min)
     {
         p_s->phase = (uint8_t)OBST_SCAN_DONE;
         return;
@@ -486,7 +486,7 @@ int16_t obst_scan_angle(obst_scan_t const * p_s)
 
 bool obst_scan_done(obst_scan_t const * p_s)
 {
-    return (p_s->phase == (uint8_t)OBST_SCAN_DONE);
+    return ((uint8_t)OBST_SCAN_DONE == p_s->phase);
 }
 
 void obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm)
@@ -515,7 +515,7 @@ void obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm)
                         centre = p_s->coarse[idx].angle_deg;
                     }
                 }
-                if (best == OBST_RANGE_NONE)
+                if (OBST_RANGE_NONE == best)
                 {
                     p_s->phase = (uint8_t)OBST_SCAN_DONE;   /* nothing near: CONTINUE */
                 }
@@ -560,7 +560,7 @@ void obst_scan_feed(obst_scan_t * p_s, uint16_t r_mm)
             p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
             if ((p_s->iter >= OBST_REFINE_ITERS) || (p_s->angle == p_s->hit) || (p_s->angle == p_s->miss))
             {
-                if (p_s->phase == (uint8_t)OBST_SCAN_REFINE_R)
+                if ((uint8_t)OBST_SCAN_REFINE_R == p_s->phase)
                 {
                     start_refine(p_s, false);
                 }
@@ -711,11 +711,11 @@ void obst_edge_plan_min(obst_profile_t * p_prof, bool b_has_l, int32_t min_l, bo
 {
     int32_t const extra = OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
 
-    if ((p_prof->plan == (uint8_t)OBST_PLAN_LEFT) && b_has_l)
+    if (((uint8_t)OBST_PLAN_LEFT == p_prof->plan) && b_has_l)
     {
         p_prof->deviation_mm = (int16_t)app_max_i32(min_l + extra, extra);
     }
-    else if ((p_prof->plan == (uint8_t)OBST_PLAN_RIGHT) && b_has_r)
+    else if (((uint8_t)OBST_PLAN_RIGHT == p_prof->plan) && b_has_r)
     {
         p_prof->deviation_mm = (int16_t)-app_max_i32(-min_r + extra, extra);
     }
@@ -728,7 +728,7 @@ void obst_edge_plan_min(obst_profile_t * p_prof, bool b_has_l, int32_t min_l, bo
 /* ---- bypass ----------------------------------------------------------- */
 uint8_t obst_bypass_plan(obst_profile_t const * p_prof, uint8_t side, obst_step_t * p_steps)
 {
-    int32_t const sign     = (side == (uint8_t)OBST_PLAN_LEFT) ? 1 : -1;
+    int32_t const sign     = ((uint8_t)OBST_PLAN_LEFT == side) ? 1 : -1;
     int32_t const dev   = app_abs_i32(p_prof->deviation_mm);
     int32_t const sin_q = app_sin_q15(OBST_TURN_OUT_DDEG * 10);
     int32_t const cos_q = app_cos_q15(OBST_TURN_OUT_DDEG * 10);
@@ -850,7 +850,7 @@ bool obst_out_blocked(int32_t face_mm, int32_t axle_fwd_mm, int32_t theta_cdeg)
 
 uint16_t obst_probe_face(uint16_t r_mm, uint16_t expect_mm)
 {
-    if ((r_mm == OBST_RANGE_NONE) ||
+    if ((OBST_RANGE_NONE == r_mm) ||
         (app_abs_i32((int32_t)r_mm - (int32_t)expect_mm) > OBST_PROBE_FACE_TOL_MM))
     {
         return expect_mm;
@@ -950,10 +950,10 @@ bool obst_hump_mask(obst_mask_t * p_m, bool b_pitch_valid, int32_t pitch_cdeg,
         p_m->start_ms = 0u;             /* re-arm for the next hump */
         return false;
     }
-    if (!p_m->b_active && (p_m->start_ms == 0u))
+    if (!p_m->b_active && (0u == p_m->start_ms))
     {
         p_m->b_active      = true;
-        p_m->start_ms      = (now_ms == 0u) ? 1u : now_ms;
+        p_m->start_ms      = (0u == now_ms) ? 1u : now_ms;
         p_m->start_dist_mm = dist_mm;
     }
     if (p_m->b_active &&

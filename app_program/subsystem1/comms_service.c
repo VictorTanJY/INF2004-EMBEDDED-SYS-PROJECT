@@ -98,7 +98,7 @@ static void comms_set_wifi_loss(bool b_lost)
 
 static bool comms_publish(char const * p_topic, uint16_t len, uint8_t qos, uint8_t retain)
 {
-    if (len == 0u)
+    if (0u == len)
     {
         g_pub_errors++;                 /* did not fit COMMS_TX_BUF_SIZE        */
         return true;                    /* nothing to retry                     */
@@ -255,7 +255,7 @@ void mqtt_utk_app_poll(void)
             break;
         }
         g_event_seq++;
-        if (gb_online && (g_ring.count == 0u) && comms_publish_event(&rec, g_event_seq))
+        if (gb_online && (0u == g_ring.count) && comms_publish_event(&rec, g_event_seq))
         {
             continue;
         }
@@ -337,34 +337,34 @@ void mqtt_utk_app_rx(const char *p_topic, const uint8_t *p_data, uint16_t len)
     }
 
     err = comms_parse_cmd(p_data, len, &cmd);
-    if (err == COMMS_ERR_NONE)
+    if (COMMS_ERR_NONE == err)
     {
         uint32_t             now_ms = (uint32_t)app_time_ms();
         comms_dedup_result_t dup    = comms_cmd_repeat_safe(cmd.cmd)
                                       ? COMMS_DEDUP_NEW
                                       : comms_dedup_check(&g_dedup, &cmd, now_ms);
 
-        if (dup == COMMS_DEDUP_REPEAT)
+        if (COMMS_DEDUP_REPEAT == dup)
         {
             /* QoS 1 redelivery: acknowledge again, never execute twice. */
         }
-        else if (dup == COMMS_DEDUP_CONFLICT)
+        else if (COMMS_DEDUP_CONFLICT == dup)
         {
             err = COMMS_ERR_REUSED;
         }
         else
         {
             mission_get_snap(&mission);
-            err = comms_check_cmd(&cmd, mission.state == (uint8_t)MISSION_ST_IDLE);
-            if (err == COMMS_ERR_NONE)
+            err = comms_check_cmd(&cmd, (uint8_t)MISSION_ST_IDLE == mission.state);
+            if (COMMS_ERR_NONE == err)
             {
-                err = comms_check_ready(&cmd, (mission.calibrated & MISSION_CAL_ALL) == MISSION_CAL_ALL);
+                err = comms_check_ready(&cmd, MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
             }
-            if (err == COMMS_ERR_NONE)
+            if (COMMS_ERR_NONE == err)
             {
                 err = comms_execute(&cmd);
             }
-            if ((err == COMMS_ERR_NONE) && !comms_cmd_repeat_safe(cmd.cmd))
+            if ((COMMS_ERR_NONE == err) && !comms_cmd_repeat_safe(cmd.cmd))
             {
                 comms_dedup_add(&g_dedup, &cmd, now_ms);
             }

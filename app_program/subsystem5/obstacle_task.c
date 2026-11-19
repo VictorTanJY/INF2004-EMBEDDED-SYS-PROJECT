@@ -282,7 +282,7 @@ static void send_step(uint8_t kind, int16_t value, motion_odom_t const * p_odom)
     g_o.seq = motion_seq_next(g_o.seq);           /* 5-bit seq (CR1) */
     g_o.wait_fail_count = p_odom->fail_count;
     g_o.b_wait_motion   = true;
-    if (kind == (uint8_t)OBST_STEP_TURN)
+    if ((uint8_t)OBST_STEP_TURN == kind)
     {
         if (value >= 0)
         {
@@ -331,7 +331,7 @@ static uint16_t scan_median(void)
             n_pings++;
         }
     }
-    return (n_pings == 0u) ? OBST_RANGE_NONE : sorted[(n_pings - 1u) / 2u];
+    return (0u == n_pings) ? OBST_RANGE_NONE : sorted[(n_pings - 1u) / 2u];
 }
 
 /* One ping result at a scan angle: true once OBST_SCAN_PINGS are in
@@ -369,7 +369,7 @@ static void send_turn(int16_t ddeg, uint16_t rate_deg_s, motion_odom_t const * p
 /* 1 = done, -1 = failed, 0 = still running */
 static int motion_result(motion_odom_t const * p_odom)
 {
-    if ((p_odom->last_done_seq == g_o.seq) && (p_odom->last_done_src == (uint8_t)MOTION_SRC_AVOID))
+    if ((p_odom->last_done_seq == g_o.seq) && ((uint8_t)MOTION_SRC_AVOID == p_odom->last_done_src))
     {
         g_o.b_wait_motion = false;
         return 1;
@@ -437,8 +437,8 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
         g_o.back_mm += OBST_SECOND_LOOK_MM;
         send_step((uint8_t)OBST_STEP_MOVE, -OBST_SECOND_LOOK_MM, p_odom);
     }
-    else if ((g_prof.plan == (uint8_t)OBST_PLAN_LEFT) || (g_prof.plan == (uint8_t)OBST_PLAN_RIGHT) ||
-             ((OBST_SINGLE_SWEEP != 0) && g_prof.b_valid && (g_prof.plan == (uint8_t)OBST_PLAN_BLOCKED)))
+    else if (((uint8_t)OBST_PLAN_LEFT == g_prof.plan) || ((uint8_t)OBST_PLAN_RIGHT == g_prof.plan) ||
+             ((OBST_SINGLE_SWEEP != 0) && g_prof.b_valid && ((uint8_t)OBST_PLAN_BLOCKED == g_prof.plan)))
     {
         /* 9 Nov: with one sweep a "blocked" plan (no side clear enough by
            this scan's clearances) does not back off and sweep again: the
@@ -496,7 +496,7 @@ static void plan(uint32_t now_ms, motion_odom_t const * p_odom)
     else if (g_prof.plan != (uint8_t)OBST_PLAN_BLOCKED)
     {
         g_o.b_blocked = false;
-        if (g_prof.plan == (uint8_t)OBST_PLAN_CONTINUE)
+        if ((uint8_t)OBST_PLAN_CONTINUE == g_prof.plan)
         {
             g_o.ignore_until_mm = p_odom->dist_mm + OBST_CONTINUE_IGNORE_MM;
         }
@@ -603,13 +603,13 @@ static void probe_slot(uint32_t now_ms, motion_odom_t const * p_odom)
             {
                 int const res = motion_result(p_odom);
 
-                if ((res != 0) && (g_o.probe_ph == PB_MOVE))
+                if ((res != 0) && (PB_MOVE == g_o.probe_ph))
                 {
                     g_o.b_pb_moved = true;
                     g_o.sw_n       = 0u;
                     g_o.probe_ph      = PB_FACE;       /* measure the face again */
                 }
-                else if ((res != 0) && (g_o.probe_ph == PB_TURN))
+                else if ((res != 0) && (PB_TURN == g_o.probe_ph))
                 {
                     g_o.probe_ph = PB_SERVO;
                     servo_to(obst_out_servo_deg(probe_theta(p_odom), 1), now_ms);
@@ -623,11 +623,11 @@ static void probe_slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     /* moving */
                 }
             }
-            else if ((g_o.probe_ph == PB_TURN) && (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+            else if ((PB_TURN == g_o.probe_ph) && ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state))
             {
                 send_step((uint8_t)OBST_STEP_TURN, slip_ddeg((int16_t)OBST_PROBE_DDEG), p_odom);
             }
-            else if ((g_o.probe_ph == PB_UNTURN) && (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+            else if ((PB_UNTURN == g_o.probe_ph) && ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state))
             {
                 int32_t const dh_cdeg = app_wrap_cdeg(g_o.edge_h0 - p_odom->heading_cdeg);
 
@@ -660,7 +660,7 @@ static void probe_slot(uint32_t now_ms, motion_odom_t const * p_odom)
 
         case PB_LEFT:
         case PB_RIGHT:
-            drive((g_o.probe_ph == PB_LEFT) ? OBST_PROBE_SPEED_MM_S : -OBST_PROBE_SPEED_MM_S, g_o.probe_h1, p_odom);
+            drive((PB_LEFT == g_o.probe_ph) ? OBST_PROBE_SPEED_MM_S : -OBST_PROBE_SPEED_MM_S, g_o.probe_h1, p_odom);
             ping();
             break;
 
@@ -686,7 +686,7 @@ static void probe_range(uint16_t range, uint32_t now_ms, motion_odom_t const * p
     int32_t const lat  = (int32_t)(((int64_t)done * app_sin_q15(theta)) / 32768);
     int32_t const fwd  = (int32_t)(((int64_t)done * app_cos_q15(theta)) / 32768);
 
-    if (g_o.probe_ph == PB_FACE)
+    if (PB_FACE == g_o.probe_ph)
     {
         uint16_t range_min;
 
@@ -720,7 +720,7 @@ static void probe_range(uint16_t range, uint32_t now_ms, motion_odom_t const * p
     {
         g_o.b_pb_seen = true;
     }
-    if (g_o.probe_ph == PB_LEFT)
+    if (PB_LEFT == g_o.probe_ph)
     {
         /* past the left edge (or never on the face), or as far as any
            obstacle could reach, or too close to the face */
@@ -772,12 +772,12 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
 
         case SCAN_REQ_BYPASS_LEFT:
         case SCAN_REQ_BYPASS_RIGHT:
-            g_o.side    = (p_req->type == (uint8_t)SCAN_REQ_BYPASS_LEFT) ? (uint8_t)OBST_PLAN_LEFT
+            g_o.side    = ((uint8_t)SCAN_REQ_BYPASS_LEFT == p_req->type) ? (uint8_t)OBST_PLAN_LEFT
                                                                          : (uint8_t)OBST_PLAN_RIGHT;
             if (g_prof.plan != g_o.side)
             {
                 /* deviation from the profile is signed by the planned side */
-                g_prof.deviation_mm = (int16_t)((g_o.side == (uint8_t)OBST_PLAN_LEFT) ?
+                g_prof.deviation_mm = (int16_t)(((uint8_t)OBST_PLAN_LEFT == g_o.side) ?
                     (g_prof.left_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM) :
                     -(-g_prof.right_lat_mm + OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM));
                 g_prof.plan = g_o.side;
@@ -794,7 +794,7 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
 
                 for (kdx = 0u; kdx < g_o.n_steps; kdx++)
                 {
-                    if (g_steps[kdx].kind == (uint8_t)OBST_STEP_PASS)
+                    if ((uint8_t)OBST_STEP_PASS == g_steps[kdx].kind)
                     {
                         log_ev(OBST_LOG_PLAN, (int32_t)(((uint32_t)(uint16_t)g_prof.deviation_mm << 16) |
                                                         (uint16_t)g_steps[kdx].value));
@@ -812,9 +812,9 @@ static void handle_request(scan_req_t const * p_req, uint32_t now_ms, motion_odo
             break;
 
         default:                        /* STOP */
-            if ((g_o.state == (uint8_t)OBST_ST_BYPASS) || (g_o.state == (uint8_t)OBST_ST_SEEK_LINE) ||
-                (g_o.state == (uint8_t)OBST_ST_SEEK_SWEEP) || (g_o.state == (uint8_t)OBST_ST_EDGE_SCAN) ||
-                (g_o.state == (uint8_t)OBST_ST_WIDTH_PROBE))
+            if (((uint8_t)OBST_ST_BYPASS == g_o.state) || ((uint8_t)OBST_ST_SEEK_LINE == g_o.state) ||
+                ((uint8_t)OBST_ST_SEEK_SWEEP == g_o.state) || ((uint8_t)OBST_ST_EDGE_SCAN == g_o.state) ||
+                ((uint8_t)OBST_ST_WIDTH_PROBE == g_o.state))
             {
                 stop_motion();
             }
@@ -849,7 +849,7 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
                 g_o.b_too_close = true;
                 (void)tk_set_flg(g_flg_safety, SAFETY_FLT_TOO_CLOSE);
             }
-            else if (g_o.b_too_close && ((g_o.d_mm == OBST_RANGE_NONE) || (g_o.d_mm > OBST_TOO_CLOSE_RESET_MM)))
+            else if (g_o.b_too_close && ((OBST_RANGE_NONE == g_o.d_mm) || (g_o.d_mm > OBST_TOO_CLOSE_RESET_MM)))
             {
                 g_o.b_too_close = false;
             }
@@ -862,9 +862,9 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
             mission_get_snap(&mission);
             b_masked = obst_hump_mask(&g_o.mask, (imu.pitch_valid != 0u) && (imu.b_ok != 0u),
                                       imu.pitch_cdeg, p_odom->dist_mm, now_ms);
-            if (b_masked || (g_o.d_mm == OBST_RANGE_NONE))
+            if (b_masked || (OBST_RANGE_NONE == g_o.d_mm))
             {
-                if (g_o.b_slow_sent && (g_o.d_mm == OBST_RANGE_NONE))
+                if (g_o.b_slow_sent && (OBST_RANGE_NONE == g_o.d_mm))
                 {
                     g_o.b_slow_sent = false;
                     post((uint8_t)MISSION_EV_SLOW_DOWN, 0u, -1);    /* clear */
@@ -903,7 +903,7 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
         {
             uint16_t range_min;
 
-            if ((g_o.edge_ph == EDGE_PH_PING) && scan_sample(range, &range_min))
+            if ((EDGE_PH_PING == g_o.edge_ph) && scan_sample(range, &range_min))
             {
                 uint8_t const side_idx   = (g_o.edge_side > 0) ? 0u : 1u;
                 int32_t const phi = (app_wrap_cdeg(p_odom->heading_cdeg - g_o.edge_h0) * OBST_GAIN_UNIT) / turn_gain();
@@ -925,9 +925,9 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
                     break;
                 }
                 g_o.edge_deg[side_idx] = (uint8_t)app_min_i32(app_abs_i32(phi) / 100, 255);
-                if ((side_idx == 0u) && (g_o.edge_first_l == 0u))
+                if ((0u == side_idx) && (0u == g_o.edge_first_l))
                 {
-                    g_o.edge_first_l = (range_min == OBST_RANGE_NONE) ? 0xFFFFu : range_min;
+                    g_o.edge_first_l = (OBST_RANGE_NONE == range_min) ? 0xFFFFu : range_min;
                 }
                 if (obst_edge_on_face(phi, range_min, g_o.edge_face) && !obst_edge_past_max(lat, g_o.edge_side))
                 {
@@ -951,7 +951,7 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
                            that side's edge is not known. */
                         b_past = true;
                     }
-                    if ((g_o.edge_miss == 0u) || (g_o.edge_ref > 0u))
+                    if ((0u == g_o.edge_miss) || (g_o.edge_ref > 0u))
                     {
                         g_o.edge_hi = phi;  /* first miss (refine: the nearer one) */
                     }
@@ -980,7 +980,7 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
                 {
                     g_o.edge_ph = EDGE_PH_TURN;
                 }
-                if (g_o.edge_ph == EDGE_PH_TURN)
+                if (EDGE_PH_TURN == g_o.edge_ph)
                 {
                     int32_t step = g_o.edge_side * OBST_EDGE_STEP_DDEG;
 
@@ -1012,7 +1012,7 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
                 break;                      /* more pings at this angle */
             }
             obst_scan_feed(&g_scan, range_min);
-            g_o.state = (g_scan.phase == (uint8_t)OBST_SCAN_COARSE) ? (uint8_t)OBST_ST_COARSE_SCAN
+            g_o.state = ((uint8_t)OBST_SCAN_COARSE == g_scan.phase) ? (uint8_t)OBST_ST_COARSE_SCAN
                                                                      : (uint8_t)OBST_ST_FINE_SCAN;
             if (obst_scan_done(&g_scan))
             {
@@ -1026,17 +1026,17 @@ static void handle_range(uint16_t range, uint32_t now_ms, motion_odom_t const * 
         }
 
         case OBST_ST_BYPASS:
-            if ((g_o.step_i < g_o.n_steps) && (g_steps[g_o.step_i].kind == (uint8_t)OBST_STEP_OUT) &&
+            if ((g_o.step_i < g_o.n_steps) && ((uint8_t)OBST_STEP_OUT == g_steps[g_o.step_i].kind) &&
                 g_o.b_wait_motion && servo_settled(now_ms))
             {
-                int32_t const sign    = (g_o.side == (uint8_t)OBST_PLAN_LEFT) ? 1 : -1;
+                int32_t const sign    = ((uint8_t)OBST_PLAN_LEFT == g_o.side) ? 1 : -1;
                 int32_t const theta   = out_theta(p_odom, sign);
                 int32_t const done = p_odom->dist_mm - g_o.phase_start_mm;
 
                 obst_out_ping(&g_o.out, (int32_t)(((int64_t)done * app_sin_q15(theta)) / 32768),
                               (int32_t)(((int64_t)done * app_cos_q15(theta)) / 32768), theta, range, g_o.out_face_mm);
             }
-            else if ((g_o.step_i < g_o.n_steps) && (g_steps[g_o.step_i].kind == (uint8_t)OBST_STEP_PASS) &&
+            else if ((g_o.step_i < g_o.n_steps) && ((uint8_t)OBST_STEP_PASS == g_steps[g_o.step_i].kind) &&
                 (range != OBST_RANGE_NONE) &&
                 ((int32_t)range < (app_abs_i32(g_prof.deviation_mm) + 150)))
             {
@@ -1074,7 +1074,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 case EDGE_PH_TURN:
                     if (!g_o.b_wait_motion)
                     {
-                        if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                        if ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state)
                         {
                             send_turn(slip_ddeg(g_o.edge_step), OBST_EDGE_TURN_DEG_S, p_odom);
                         }
@@ -1108,7 +1108,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 default:                    /* EDGE_PH_RETURN: back to where it stopped */
                     if (!g_o.b_wait_motion)
                     {
-                        if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                        if ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state)
                         {
                             int32_t const dh_cdeg = app_wrap_cdeg(g_o.edge_h0 - p_odom->heading_cdeg);
 
@@ -1185,9 +1185,9 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 goto_state((uint8_t)OBST_ST_IDLE);
                 break;
             }
-            if (p_st->kind == (uint8_t)OBST_STEP_OUT)
+            if ((uint8_t)OBST_STEP_OUT == p_st->kind)
             {
-                int32_t const sign   = (g_o.side == (uint8_t)OBST_PLAN_LEFT) ? 1 : -1;
+                int32_t const sign   = ((uint8_t)OBST_PLAN_LEFT == g_o.side) ? 1 : -1;
                 int32_t const theta  = out_theta(p_odom, sign);
                 int32_t       done_mm;
                 int32_t       lat;
@@ -1197,7 +1197,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     /* start OUT: the sensor looks along the line at the face */
                     int32_t back = 0;
 
-                    if ((g_steps[0].kind == (uint8_t)OBST_STEP_MOVE) && (g_steps[0].value < 0))
+                    if (((uint8_t)OBST_STEP_MOVE == g_steps[0].kind) && (g_steps[0].value < 0))
                     {
                         back = -g_steps[0].value;
                     }
@@ -1225,11 +1225,11 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                                                    (uint32_t)app_clamp_i32(lat, 0, 0xFFFF)));
                     for (kdx = (uint8_t)(g_o.step_i + 1u); kdx < g_o.n_steps; kdx++)
                     {
-                        if (g_steps[kdx].kind == (uint8_t)OBST_STEP_PASS)
+                        if ((uint8_t)OBST_STEP_PASS == g_steps[kdx].kind)
                         {
                             g_steps[kdx].value = (int16_t)app_max_i32((int32_t)g_steps[kdx].value - extra_fwd, 0);
                         }
-                        else if (g_steps[kdx].kind == (uint8_t)OBST_STEP_JOIN)
+                        else if ((uint8_t)OBST_STEP_JOIN == g_steps[kdx].kind)
                         {
                             g_steps[kdx].value = (int16_t)app_min_i32(((done_mm * OBST_JOIN_MAX_PERMILLE) / 1000) +
                                                                     OBST_JOIN_EXTRA_MM, 0x7FFF);
@@ -1251,7 +1251,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     }
                 }
             }
-            else if (p_st->kind == (uint8_t)OBST_STEP_PASS)
+            else if ((uint8_t)OBST_STEP_PASS == p_st->kind)
             {
                 int32_t     done_mm;
 
@@ -1262,7 +1262,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     g_o.b_seen         = false;
                     g_o.phase_start_mm = p_odom->dist_mm;
                     g_o.last_seen_mm   = p_odom->dist_mm;
-                    servo_to((g_o.side == (uint8_t)OBST_PLAN_LEFT) ? (OBST_SERVO_CENTRE_DEG - OBST_SIDE_SERVO_DEG)
+                    servo_to(((uint8_t)OBST_PLAN_LEFT == g_o.side) ? (OBST_SERVO_CENTRE_DEG - OBST_SIDE_SERVO_DEG)
                                                                    : (OBST_SERVO_CENTRE_DEG + OBST_SIDE_SERVO_DEG),
                              now_ms);
                 }
@@ -1294,7 +1294,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     }
                 }
             }
-            else if (p_st->kind == (uint8_t)OBST_STEP_JOIN)
+            else if ((uint8_t)OBST_STEP_JOIN == p_st->kind)
             {
                 line_snap_t line;
                 int32_t     done_mm;
@@ -1320,7 +1320,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     drive(OBST_BYPASS_SPEED_MM_S, g_o.join_h, p_odom);
                 }
             }
-            else if (p_st->kind == (uint8_t)OBST_STEP_LINESCAN)
+            else if ((uint8_t)OBST_STEP_LINESCAN == p_st->kind)
             {
                 /* 6 Nov: spin toward value's side
                    noting the heading where each line sensor goes on to
@@ -1334,7 +1334,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 uint8_t       idx;
 
                 line_get_snap(&line);
-                if (g_o.scan_ph == LS_PH_ALIGN)
+                if (LS_PH_ALIGN == g_o.scan_ph)
                 {
                     if (!g_o.b_wait_motion)
                     {
@@ -1353,7 +1353,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                                 g_o.scan_ph   = LS_PH_SWEEP;
                                 g_o.step_i++;
                             }
-                            else if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                            else if ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state)
                             {
                                 g_o.b_scan_turned = true;
                                 send_step((uint8_t)OBST_STEP_TURN, (int16_t)(delta / 10), p_odom);
@@ -1371,11 +1371,11 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 }
                 else if (!g_o.b_wait_motion)
                 {
-                    if ((g_o.scan_pass < 2u) && (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+                    if ((g_o.scan_pass < 2u) && ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state))
                     {
                         int16_t amount;
 
-                        if (g_o.scan_pass == 0u)
+                        if (0u == g_o.scan_pass)
                         {
                             g_o.scan_h0     = p_odom->heading_cdeg;
                             amount          = slip_ddeg(p_st->value);
@@ -1424,19 +1424,19 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                 {
                     for (idx = 0u; idx < 2u; idx++)
                     {
-                        bool const b_on = ((line.sens & ((idx == 0u) ? LINE_SENS_L : LINE_SENS_R)) != 0u);
+                        bool const b_on = ((line.sens & ((0u == idx) ? LINE_SENS_L : LINE_SENS_R)) != 0u);
 
-                        if (b_on && !g_o.b_ls_prev[idx] && (g_o.ls_seen[idx] == 0u))
+                        if (b_on && !g_o.b_ls_prev[idx] && (0u == g_o.ls_seen[idx]))
                         {
                             g_o.ls_on[idx]   = rel;
                             g_o.ls_seen[idx] = 1u;
-                            if (g_o.ls_part_q == 0u)
+                            if (0u == g_o.ls_part_q)
                             {
                                 g_o.ls_part_q = 1u;         /* went on: a fallback */
                                 g_o.ls_part_h = rel;
                             }
                         }
-                        else if (!b_on && g_o.b_ls_prev[idx] && (g_o.ls_seen[idx] == 1u))
+                        else if (!b_on && g_o.b_ls_prev[idx] && (1u == g_o.ls_seen[idx]))
                         {
                             g_o.ls_off[idx]  = rel;
                             g_o.ls_seen[idx] = 2u;
@@ -1452,7 +1452,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                         }
                         g_o.b_ls_prev[idx] = b_on;
                     }
-                    if ((g_o.ls_seen[0] == 2u) && (g_o.ls_seen[1] == 2u))
+                    if ((2u == g_o.ls_seen[0]) && (2u == g_o.ls_seen[1]))
                     {
                         g_o.scan_target   = (g_o.ls_on[0] + g_o.ls_off[0] + g_o.ls_on[1] + g_o.ls_off[1]) / 4;
                         stop_motion();
@@ -1473,9 +1473,9 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             }
             else if (!g_o.b_wait_motion)
             {
-                if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                if ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state)
                 {
-                    send_step(p_st->kind, (p_st->kind == (uint8_t)OBST_STEP_TURN) ? slip_ddeg(p_st->value)
+                    send_step(p_st->kind, ((uint8_t)OBST_STEP_TURN == p_st->kind) ? slip_ddeg(p_st->value)
                                                                                   : p_st->value, p_odom);
                 }
             }
@@ -1543,7 +1543,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             {
                 if (g_o.sweep_i < 3u)
                 {
-                    if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)
+                    if ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state)
                     {
                         send_turn(slip_ddeg(k_sweep[g_o.sweep_i]), OBST_SWEEP_TURN_DEG_S, p_odom);
                     }
@@ -1571,7 +1571,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
             int32_t const dh_cdeg = app_wrap_cdeg(g_o.h0_cdeg - p_odom->heading_cdeg);
 
             if (!g_o.b_wait_motion && g_o.b_have_pose && (app_abs_i32(dh_cdeg) > OBST_ALIGN_TOL_CDEG) &&
-                (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+                ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state))
             {
                 send_step((uint8_t)OBST_STEP_TURN, (int16_t)(dh_cdeg / 10), p_odom);
             }
@@ -1585,7 +1585,7 @@ static void slot(uint32_t now_ms, motion_odom_t const * p_odom)
                     goto_state((uint8_t)OBST_ST_IDLE);
                 }
             }
-            else if (p_odom->state == (uint8_t)MOTION_ST_IDLE_BRAKED)    /* braked and aligned */
+            else if ((uint8_t)MOTION_ST_IDLE_BRAKED == p_odom->state)    /* braked and aligned */
             {
                 g_o.b_have_pose = false;
                 post((uint8_t)MISSION_EV_RECOVERY_DONE, 0u, 0);
@@ -1634,7 +1634,7 @@ EXPORT void obstacle_task(INT stacd, void * p_exinf)
 
         if ((ptn & OBST_FLG_REQ) != 0u)
         {
-            while (tk_rcv_mbf(g_mbf_scan, &req_word, TMO_POL) == (INT)sizeof(req_word))
+            while ((INT)sizeof(req_word) == tk_rcv_mbf(g_mbf_scan, &req_word, TMO_POL))
             {
                 scan_req_unpack(req_word, &req);
                 handle_request(&req, now_ms, &odom);

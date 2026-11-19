@@ -129,7 +129,7 @@ static void check_timer_tick(void)
     bool     b_borrowed = false;
 
     DI(intsts);
-    if ((in_w(CHK_SYST_CSR) & CHK_SYST_ENABLE) == 0u)
+    if (0u == (in_w(CHK_SYST_CSR) & CHK_SYST_ENABLE))
     {
         out_w(CHK_SYST_RVR, 0x00FFFFFFu);
         out_w(CHK_SYST_CVR, 0u);                        /* any write clears it */
@@ -192,7 +192,7 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
         drv_watchdog_feed();
         now_ms = (uint32_t)app_time_ms();
 
-        if ((err == E_OK) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
+        if ((E_OK == err) && ((ptn & SAFETY_BRAKE_MASK) != 0u))
         {
             motor_estop();                          /* NFR8: brake first */
             latch(ptn & SAFETY_BRAKE_MASK, now_ms);
@@ -212,11 +212,11 @@ EXPORT void safety_task(INT stacd, void * p_exinf)
             }
         }
 
-        if ((err == E_OK) && ((ptn & SAFETY_REQ_RESET) != 0u))
+        if ((E_OK == err) && ((ptn & SAFETY_REQ_RESET) != 0u))
         {
             uint32_t const live = live_causes(&hb_state, now_ms);
 
-            if (live == 0u)
+            if (0u == live)
             {
                 g_safety_latched = 0u;
                 missed_logged    = 0u;

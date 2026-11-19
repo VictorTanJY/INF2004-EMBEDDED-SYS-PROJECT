@@ -24,7 +24,7 @@ EXPORT ER drv_servo_init(void)
     out_w(PWM_CH_CSR(SERVO_SLICE), PWM_CH_CSR_EN);
     clr_w(GPIO(S5_PIN_SERVO), GPIO_OD);
     out_w(GPIO_CTRL(S5_PIN_SERVO), GPIO_CTRL_FUNCSEL_PWM);
-    return (in_w(PWM_CH_TOP(SERVO_SLICE)) == 19999u) ? E_OK : E_IO;
+    return (19999u == in_w(PWM_CH_TOP(SERVO_SLICE))) ? E_OK : E_IO;
 }
 
 EXPORT void drv_servo_set_deg(int32_t angle_deg)

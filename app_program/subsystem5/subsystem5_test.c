@@ -36,20 +36,20 @@ EXPORT void subsystem5_test(void)
 
     TEST_INIT();
 
-    TEST_CHECK("S5-U01", tk_ref_mbf(g_mbf_mission, &rmbf) == E_OK, "mbf_mission exists");
-    TEST_CHECK("S5-U02", tk_ref_mbf(g_mbf_scan, &rmbf) == E_OK, "mbf_scan exists");
-    TEST_CHECK("S5-U03", tk_ref_flg(g_flg_obst, &rflg) == E_OK, "flg_obst exists");
+    TEST_CHECK("S5-U01", E_OK == tk_ref_mbf(g_mbf_mission, &rmbf), "mbf_mission exists");
+    TEST_CHECK("S5-U02", E_OK == tk_ref_mbf(g_mbf_scan, &rmbf), "mbf_scan exists");
+    TEST_CHECK("S5-U03", E_OK == tk_ref_flg(g_flg_obst, &rflg), "flg_obst exists");
 
     mission_get_snap(&mission);
     TEST_CHECK("S5-U05", (mission.state < (uint8_t)MISSION_ST_COUNT) && (mission.cruise_mm_s > 0u) &&
-                         (mission.nav_map[0] == '\0'),
+                         ('\0' == mission.nav_map[0]),
                "mission snapshot valid; no barcode map until MQTT sends one");
 
     obst_get_snap(&snap_a);
     (void)tk_dly_tsk(150);
     obst_get_snap(&snap_b);
     TEST_CHECK("S5-U06", snap_b.t_ms != snap_a.t_ms, "ObstacleTask runs (range_cyc / 100 ms wait)");
-    TEST_CHECK("S5-U07", (obst_echo_to_mm(1160u) == 200u) && (obst_median3(300u, 120u, 200u) == 200u),
+    TEST_CHECK("S5-U07", (200u == obst_echo_to_mm(1160u)) && (200u == obst_median3(300u, 120u, 200u)),
                "echo conversion and median on target");
 
     /* ---- S5-U08: ping rate ------------------------------------------ */
@@ -64,7 +64,7 @@ EXPORT void subsystem5_test(void)
                "ultrasonic pings every 60 ms");
 
     /* ---- S5-U09: one range against the object in front -------------- */
-    if (snap_b.d_mm == OBST_RANGE_NONE)
+    if (OBST_RANGE_NONE == snap_b.d_mm)
     {
         TEST_SKIP("S5-U09", "ultrasonic range to the object in front",
                   "no echo: put a wall 30-100 cm ahead, or emulator");
@@ -73,7 +73,7 @@ EXPORT void subsystem5_test(void)
     {
         tm_printf((UB *)"[INFO] S5-U09 range %d mm (median of 3); compare with a tape measure\n",
                   (INT)snap_b.d_mm);
-        TEST_CHECK("S5-U09", (snap_b.d_mm >= T_RANGE_MIN_MM) && (snap_b.d_mm <= T_RANGE_MAX_MM) && (snap_b.no_echo == 0u),
+        TEST_CHECK("S5-U09", (snap_b.d_mm >= T_RANGE_MIN_MM) && (snap_b.d_mm <= T_RANGE_MAX_MM) && (0u == snap_b.no_echo),
                    "ultrasonic echo received, range within 2 cm .. 4 m");
     }
 

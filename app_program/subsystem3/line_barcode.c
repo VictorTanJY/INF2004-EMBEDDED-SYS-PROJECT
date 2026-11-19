@@ -176,7 +176,7 @@ uint16_t bc_prof_swing(uint16_t const * p_prof, uint16_t n_bins, uint16_t delta,
     bool     b_black = false;
     bool     b_bar_seen = false;
 
-    if (n_bins == 0u)
+    if (0u == n_bins)
     {
         return 0u;
     }
@@ -235,7 +235,7 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t kdx, uint32_t * p_w
     uint16_t span;
     uint16_t thr;
 
-    if (p_bc->prof_n == 0u)
+    if (0u == p_bc->prof_n)
     {
         return 0u;
     }
@@ -247,7 +247,7 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t kdx, uint32_t * p_w
     span = (uint16_t)(dark - white);
     if (kdx >= 3u)
     {
-        uint32_t const pct   = (kdx == 3u) ? BC_ADAPT_PCT : ((kdx == 4u) ? BC_ADAPT_PCT2 : BC_ADAPT_PCT3);
+        uint32_t const pct   = (3u == kdx) ? BC_ADAPT_PCT : ((4u == kdx) ? BC_ADAPT_PCT2 : BC_ADAPT_PCT3);
         uint32_t const noise = (p_bc->q_hi > p_bc->q_lo) ? (uint32_t)(p_bc->q_hi - p_bc->q_lo) : 0u;
         uint32_t       delta = ((uint32_t)span * pct) / 100u;
 
@@ -259,7 +259,7 @@ static uint16_t prof_read(bc_capture_t const * p_bc, uint8_t kdx, uint32_t * p_w
         }
         return bc_prof_swing(p_bc->prof, p_bc->prof_n, (uint16_t)delta, p_w, (uint16_t)BC_MAX_ELEMENTS);
     }
-    thr  = (uint16_t)(white + ((kdx == 1u) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
+    thr  = (uint16_t)(white + ((1u == kdx) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
     return bc_prof_elements(p_bc->prof, p_bc->prof_n, thr, (uint16_t)(span / 16u),
                             p_w, (uint16_t)BC_MAX_ELEMENTS);
 }
@@ -281,7 +281,7 @@ static uint16_t trim_specks(uint32_t const * p_w, uint16_t n_elems, uint16_t * p
     uint32_t        med;
 
     *p_first = 0u;
-    if ((n_elems < 11u) || ((n_elems % 2u) == 0u))
+    if ((n_elems < 11u) || (0u == (n_elems % 2u)))
     {
         return n_elems;                       /* a read starts and ends with a bar */
     }
@@ -323,7 +323,7 @@ static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n_elems, char
         uint16_t const n_read = trim_specks(p_w, n_elems, &first);
 
         if ((n_read != n_elems) &&
-            (code39_decode_one_repair(&p_w[first], n_read, BC_RATIO_MIN_X10, p_ch, pb_rev) == CODE39_OK))
+            (CODE39_OK == code39_decode_one_repair(&p_w[first], n_read, BC_RATIO_MIN_X10, p_ch, pb_rev)))
         {
             *pb_trim = true;
             result = CODE39_OK;
@@ -370,7 +370,7 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
         char           chr;
         bool           b_rev;
 
-        if ((n_read > 0u) && (decode_exact(read_widths, n_read, &chr, &b_rev, &b_trim) == CODE39_OK))
+        if ((n_read > 0u) && (CODE39_OK == decode_exact(read_widths, n_read, &chr, &b_rev, &b_trim)))
         {
             p_out->chr         = chr;
             p_out->b_reversed = b_rev;
@@ -405,7 +405,7 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
             char           chr;
             bool           b_rev;
 
-            if (code39_decode_one_best(&read_widths[first], n_trim, &chr, &b_rev) == CODE39_OK)
+            if (CODE39_OK == code39_decode_one_best(&read_widths[first], n_trim, &chr, &b_rev))
             {
                 p_out->chr         = chr;
                 p_out->b_reversed = b_rev;
@@ -415,7 +415,7 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
             }
         }
     }
-    if (result == CODE39_NOT_BARCODE)
+    if (CODE39_NOT_BARCODE == result)
     {
         /* A crossing line or a speck: not a barcode, not an error.  The
            white that ended it already counts as the next quiet zone. */
@@ -423,7 +423,7 @@ static bc_result_t finish(bc_capture_t * p_bc, bc_out_t * p_out)
         return BC_NONE;
     }
     start_cooldown(p_bc);
-    if (result == CODE39_OK)
+    if (CODE39_OK == result)
     {
         return BC_VALID;
     }
@@ -435,7 +435,7 @@ uint16_t bc_reading(bc_capture_t const * p_bc, uint8_t reading, uint32_t * p_wid
 {
     uint16_t kdx;
 
-    if (reading == 0u)
+    if (0u == reading)
     {
         for (kdx = 0u; (kdx < p_bc->n_elems) && (kdx <= BC_MAX_ELEMENTS); kdx++)
         {

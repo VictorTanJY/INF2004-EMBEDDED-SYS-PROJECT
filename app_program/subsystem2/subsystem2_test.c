@@ -55,7 +55,7 @@ static bool wait_idle(uint32_t max_ms)
     for (elapsed = 0u; elapsed < max_ms; elapsed += 50u)
     {
         mission_get_snap(&mission);
-        if ((mission.state == (uint8_t)MISSION_ST_IDLE) && !motion_estop_latched())
+        if (((uint8_t)MISSION_ST_IDLE == mission.state) && !motion_estop_latched())
         {
             return true;
         }
@@ -74,7 +74,7 @@ static bool wait_done(motion_odom_t const * p_start, uint32_t max_ms, motion_odo
         (void)tk_dly_tsk(20);
         motion_get_odom(p_end);
         if ((p_end->done_count != p_start->done_count) &&
-            (p_end->state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+            ((uint8_t)MOTION_ST_IDLE_BRAKED == p_end->state))
         {
             return true;
         }
@@ -91,23 +91,23 @@ EXPORT void subsystem2_test(void)
 
     TEST_INIT();
 
-    TEST_CHECK("S2-U01", tk_ref_mbf(g_mbf_motion, &rmbf) == E_OK, "mbf_motion exists");
+    TEST_CHECK("S2-U01", E_OK == tk_ref_mbf(g_mbf_motion, &rmbf), "mbf_motion exists");
 
     motion_get_odom(&snap_a);
     (void)tk_dly_tsk(50);
     motion_get_odom(&snap_b);
     TEST_CHECK("S2-U03", snap_b.t_ms != snap_a.t_ms, "MotionTask publishes odometry every cycle");
-    TEST_CHECK("S2-U04", (snap_b.hw_ok == 1u) && (in_w(PWM_TOP_SLICE4) == MOTION_PWM_TOP) &&
-                         ((in_w(PIO0_CTRL_REG) & 0x3u) == 0x3u),
+    TEST_CHECK("S2-U04", (1u == snap_b.hw_ok) && (MOTION_PWM_TOP == in_w(PWM_TOP_SLICE4)) &&
+                         (0x3u == (in_w(PIO0_CTRL_REG) & 0x3u)),
                "PWM 20 kHz configured, PIO0 SM0/SM1 counting");
-    TEST_CHECK("S2-U05", (snap_b.state == (uint8_t)MOTION_ST_IDLE_BRAKED) && (snap_b.duty_l == 0) &&
-                         (snap_b.duty_r == 0),
+    TEST_CHECK("S2-U05", ((uint8_t)MOTION_ST_IDLE_BRAKED == snap_b.state) && (0 == snap_b.duty_l) &&
+                         (0 == snap_b.duty_r),
                "boots braked (duty 0/0)");
 
     (void)motion_drive((uint8_t)MOTION_SRC_LINE, 1u, 100, 0);
     (void)tk_dly_tsk(30);
     motion_get_odom(&snap_a);
-    TEST_CHECK("S2-U06", (snap_a.rejected > snap_b.rejected) && (snap_a.state == (uint8_t)MOTION_ST_IDLE_BRAKED),
+    TEST_CHECK("S2-U06", (snap_a.rejected > snap_b.rejected) && ((uint8_t)MOTION_ST_IDLE_BRAKED == snap_a.state),
                "DRIVE without LINE authority rejected");
 
     /* ---- S2-U07: loop period and run time over 1 s (NFR1) ---------- */
@@ -192,7 +192,7 @@ EXPORT void subsystem2_test(void)
                 b_turn = false;
                 break;
             }
-            if ((odom.done_count != odom_start.done_count) && (odom.state == (uint8_t)MOTION_ST_IDLE_BRAKED))
+            if ((odom.done_count != odom_start.done_count) && ((uint8_t)MOTION_ST_IDLE_BRAKED == odom.state))
             {
                 b_done = true;
                 break;

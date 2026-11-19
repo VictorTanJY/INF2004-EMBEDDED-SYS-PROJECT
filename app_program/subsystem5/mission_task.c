@@ -95,7 +95,7 @@ static void run_actions(mission_out_t const * p_out)
                 break;
 
             case MISSION_ACT_LOG:
-                if (p_a->cmd == MISSION_LOG_SUMMARY)
+                if (MISSION_LOG_SUMMARY == p_a->cmd)
                 {
                     imu_snap_t imu;
 
@@ -144,7 +144,7 @@ EXPORT void mission_task(INT stacd, void * p_exinf)
         now_ms = (uint32_t)app_time_ms();
 
         out.n_acts = 0u;
-        if (msg_len == (INT)sizeof(ev_word))
+        if ((INT)sizeof(ev_word) == msg_len)
         {
             mission_evt_unpack(ev_word, &event);
             /* the laptop's event log: every event MissionTask decides on */

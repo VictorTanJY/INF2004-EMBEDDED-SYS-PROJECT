@@ -28,7 +28,7 @@ static void hmi_pin_init(UW pin)
 
 static bool hmi_pressed(UW pin)
 {
-    return (gpio_get_val(pin) == S1_BTN_PRESSED_LEVEL);
+    return (S1_BTN_PRESSED_LEVEL == gpio_get_val(pin));
 }
 
 static void hmi_report(mission_ev_t event)
@@ -64,18 +64,18 @@ EXPORT void hmi_task(INT stacd, void * p_exinf)
 
         event = hmi_btn_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
                             (uint16_t)HMI_PERIOD_MS, (uint16_t)HMI_LONG_PRESS_MS);
-        if (event == HMI_BTN_EV_PRESS)
+        if (HMI_BTN_EV_PRESS == event)
         {
             hmi_report(MISSION_EV_BTN_START_STOP);
         }
 
         event = hmi_btn_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
                             (uint16_t)HMI_PERIOD_MS, (uint16_t)HMI_LONG_PRESS_MS);
-        if (event == HMI_BTN_EV_SHORT)
+        if (HMI_BTN_EV_SHORT == event)
         {
             hmi_report(MISSION_EV_BTN_CALIBRATE);
         }
-        else if (event == HMI_BTN_EV_LONG)
+        else if (HMI_BTN_EV_LONG == event)
         {
             hmi_report(MISSION_EV_BTN_RESET);
         }

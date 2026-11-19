@@ -131,7 +131,7 @@ static void test_pack_s4(void)
     imu_snap_t ret;
     uint32_t   words[IMU_SNAP_WORDS];
 
-    CHECK("S4-H11", imu_snap_layout_bits() == IMU_SNAP_BITS && PK_WORDS(IMU_SNAP_BITS) == IMU_SNAP_WORDS &&
+    CHECK("S4-H11", IMU_SNAP_BITS == imu_snap_layout_bits() && IMU_SNAP_WORDS == PK_WORDS(IMU_SNAP_BITS) &&
                     sizeof(words) < sizeof(snap));
     memset(&snap, 0, sizeof(snap));
     snap.t_ms = 99u; snap.pitch_cdeg = -9000; snap.roll_cdeg = 18000; snap.heading_cdeg = 35999; snap.turn_rate_cdeg_s = -32768;
@@ -144,15 +144,15 @@ static void test_pack_s4(void)
         uint32_t words_out[IMU_SNAP_WORDS];
 
         imu_snap_pack(&ret, words_out);
-        CHECK("S4-H11", memcmp(words, words_out, sizeof(words)) == 0);
+        CHECK("S4-H11", 0 == memcmp(words, words_out, sizeof(words)));
     }
     memset(&ret, 0, sizeof(ret));                   /* same padding as s */
     imu_snap_unpack(words, &ret);
-    CHECK("S4-H11", memcmp(&snap, &ret, sizeof(snap)) == 0);
+    CHECK("S4-H11", 0 == memcmp(&snap, &ret, sizeof(snap)));
     snap.humps = 300u; snap.hump_max_mm = 5000u;                                   /* saturate */
     imu_snap_pack(&snap, words);
     imu_snap_unpack(words, &ret);
-    CHECK("S4-H11", ret.humps == 255u && ret.hump_max_mm == 1023u);
+    CHECK("S4-H11", 255u == ret.humps && 1023u == ret.hump_max_mm);
 }
 
 int main(void)
@@ -170,10 +170,10 @@ int main(void)
             double tol = fmax(5.0, 0.2 * heights[idx]);
 
             printf("hump %.0f mm x 300 mm: reported %d mm\n", heights[idx], peak);
-            CHECK("S4-H01", start_idx == 1 && end_idx == 1);
+            CHECK("S4-H01", 1 == start_idx && 1 == end_idx);
             CHECK("S4-H01", fabs(peak - heights[idx]) <= tol);
         }
-        CHECK("S4-H01", g_ic.hump_max_mm == g_ic.last_hump_mm && g_ic.humps == 1u);
+        CHECK("S4-H01", g_ic.hump_max_mm == g_ic.last_hump_mm && 1u == g_ic.humps);
     }
     /* S4-H01b: known limit of the Week 6 threshold.  A 10 mm x 300 mm hump
        tilts this chassis (L = IMU_WHEELBASE_MM) to only ~4.8 deg, below the
@@ -183,7 +183,7 @@ int main(void)
         int start_idx;
         int end_idx;
         (void)run_hump(10.0, 300.0, &start_idx, &end_idx);
-        CHECK("S4-H01b", start_idx == 0 && end_idx == 0);
+        CHECK("S4-H01b", 0 == start_idx && 0 == end_idx);
         printf("hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - known limit\n");
     }
 
@@ -204,7 +204,7 @@ int main(void)
                 double tol = fmax(5.0, 0.2 * heights[idx]);
 
                 if (side > 0) { printf("one-wheel hump %.0f mm x 300 mm: reported %d mm\n", heights[idx], peak); }
-                CHECK("S4-H10", start_idx == 1 && end_idx == 1 && g_ic.humps == 1u);
+                CHECK("S4-H10", 1 == start_idx && 1 == end_idx && 1u == g_ic.humps);
                 CHECK("S4-H10", fabs(peak - heights[idx]) <= tol);
             }
         }
@@ -216,7 +216,7 @@ int main(void)
         g_now = 0u;
         g_ev = 0u;
         for (kdx = 0; kdx < 200; kdx++) { step(0.0, 10.0, 0.0, 0, 0, 0); }
-        CHECK("S4-H10b", (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) == 0u && g_ic.humps == 0u);
+        CHECK("S4-H10b", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) && 0u == g_ic.humps);
     }
     /* S4-H10c: a short sideways jolt while driving (6 deg for 10 mm): no hump */
     {
@@ -227,7 +227,7 @@ int main(void)
         for (kdx = 0; kdx < 100; kdx++) { step(0.0, 0.0, 0.0, 100, 1000, 0); }
         for (kdx = 0; kdx < 10; kdx++)  { step(0.0, 6.0, 0.0, 100, 1000, 0); }
         for (kdx = 0; kdx < 100; kdx++) { step(0.0, 0.0, 0.0, 100, 1000, 0); }
-        CHECK("S4-H10c", (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) == 0u && g_ic.humps == 0u);
+        CHECK("S4-H10c", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) && 0u == g_ic.humps);
     }
 
     /* S4-H02: hard acceleration and braking on flat ground: no hump */
@@ -240,12 +240,12 @@ int main(void)
         g_ev = 0u;
         for (kdx = 0; kdx < 400; kdx++)
         {
-            double val_a = ((kdx / 50) % 2 == 0) ? 1500.0 : -1500.0;  /* +-1.5 m/s^2 */
+            double val_a = (0 == (kdx / 50) % 2) ? 1500.0 : -1500.0;  /* +-1.5 m/s^2 */
             value += (int32_t)(val_a / 100.0);
             if (value < 0) { value = 0; val_a = 0.0; }
             step(0.0, 0.0, val_a, value, value * 10, 0);
         }
-        CHECK("S4-H02", (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)) == 0u);
+        CHECK("S4-H02", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)));
         CHECK("S4-H02", abs(g_ic.pitch_cdeg) < 300);
     }
 
@@ -257,7 +257,7 @@ int main(void)
         g_now = 0u;
         g_ev = 0u;
         for (kdx = 0; kdx < 300; kdx++) { step(8.0, 0.0, 0.0, 300, 3000, 0); }
-        CHECK("S4-H03", (g_ev & IMU_EV_RAMP) != 0u && (g_ev & IMU_EV_HUMP_END) == 0u);
+        CHECK("S4-H03", (g_ev & IMU_EV_RAMP) != 0u && 0u == (g_ev & IMU_EV_HUMP_END));
     }
 
     /* S4-H04: tilt on above 30 deg held for IMU_TILT_HOLD_MS, off below
@@ -266,7 +266,7 @@ int main(void)
     g_now = 0u;
     g_ev = 0u;
     { int kdx; for (kdx = 0; kdx < 10; kdx++) { step(35.0, 0.0, 0.0, 0, 0, 0); } }
-    CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) == 0u && !g_ic.b_tilt);     /* 100 ms: not yet */
+    CHECK("S4-H04", 0u == (g_ev & IMU_EV_TILT_ON) && !g_ic.b_tilt);     /* 100 ms: not yet */
     { int kdx; for (kdx = 0; kdx < 20; kdx++) { step(35.0, 0.0, 0.0, 0, 0, 0); } }
     CHECK("S4-H04", (g_ev & IMU_EV_TILT_ON) != 0u && g_ic.b_tilt);
     g_ev = 0u;
@@ -286,7 +286,7 @@ int main(void)
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step(0.0, 0.0, 0.0, (kdx < 2) ? 200 * (kdx + 1) : 400, 4000, 0); } }
     { int kdx; for (kdx = 0; kdx < 15; kdx++) { step(40.0, 0.0, 0.0, 400, 4000, 0); } }
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step(0.0, 0.0, 0.0, 400, 4000, 0); } }
-    CHECK("S4-H04b", (g_ev & IMU_EV_TILT_ON) == 0u && !g_ic.b_tilt);
+    CHECK("S4-H04b", 0u == (g_ev & IMU_EV_TILT_ON) && !g_ic.b_tilt);
 
     /* S4-H05 (14 Nov): lift.  IMU collision detection is removed; a lift
        is the up axis IMU_LIFT_RISE_MG above level (filtered) for
@@ -295,14 +295,14 @@ int main(void)
     g_now = 0u;
     g_ev = 0u;
     { int kdx; for (kdx = 0; kdx < 20; kdx++) { step_up(0, 200, 2000); } }
-    CHECK("S4-H05", (g_ev & IMU_EV_LIFT) == 0u);
+    CHECK("S4-H05", 0u == (g_ev & IMU_EV_LIFT));
     { int kdx; for (kdx = 0; kdx < 15; kdx++) { step_up(400, 0, 0); } }     /* hand lifts it: +0.4 g, 150 ms */
     CHECK("S4-H05", (g_ev & IMU_EV_LIFT) != 0u && g_ic.lift_rise_mg > IMU_LIFT_RISE_MG);
     printf("lift: rise %d mg\n", (int)g_ic.lift_rise_mg);
     /* held still in the air: no second event; set down and lifted again: a new one */
     g_ev = 0u;
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step_up(0, 0, 0); } }
-    CHECK("S4-H05", (g_ev & IMU_EV_LIFT) == 0u && !g_ic.b_lift);
+    CHECK("S4-H05", 0u == (g_ev & IMU_EV_LIFT) && !g_ic.b_lift);
     { int kdx; for (kdx = 0; kdx < 15; kdx++) { step_up(400, 0, 0); } }
     CHECK("S4-H05", (g_ev & IMU_EV_LIFT) != 0u);
 
@@ -318,7 +318,7 @@ int main(void)
     { int kdx; for (kdx = 0; kdx < 10; kdx++) { step_up(0, 200, 2000); } }
     { int kdx; for (kdx = 0; kdx < 20; kdx++) { step_up(200, 200, 2000); } }
     { int kdx; for (kdx = 0; kdx < 10; kdx++) { step_up(0, 200, 2000); } }
-    CHECK("S4-H05b", (g_ev & IMU_EV_LIFT) == 0u);
+    CHECK("S4-H05b", 0u == (g_ev & IMU_EV_LIFT));
     /* ...and the largest rise while driving (filtered) is reported for tuning (LOG 78) */
     CHECK("S4-H05b", (g_ev & IMU_EV_RISE_MAX) != 0u && g_ic.rise_max_mg >= 400);   /* the two +1 g samples */
     printf("largest rise while driving: %d mg\n", (int)g_ic.rise_max_mg);
@@ -330,7 +330,7 @@ int main(void)
     { int kdx; for (kdx = 0; kdx < 10; kdx++) { step_up(0, 200, 2000); } }
     g_ic.hump_state = (uint8_t)IMU_HUMP_CLIMBING;
     { int kdx; for (kdx = 0; kdx < 15; kdx++) { step_up(400, 200, 2000); } }
-    CHECK("S4-H05c", (g_ev & IMU_EV_LIFT) == 0u);
+    CHECK("S4-H05c", 0u == (g_ev & IMU_EV_LIFT));
 
     /* S4-H05d: the base is the level calibration's up-axis mean (the
        robot read ~890 mg level on 8-9 Nov, not 1000) */
@@ -353,7 +353,7 @@ int main(void)
 
         (void)run_hump(20.0, 150.0, &step0, &elem0);              /* one real hump */
         real_max = g_ic.hump_max_mm;
-        CHECK("S4-H05e", real_max >= 10u && g_ic.humps == 1u);
+        CHECK("S4-H05e", real_max >= 10u && 1u == g_ic.humps);
         imu_core_hump_save(&g_ic);                           /* all IR black */
         g_ev = 0u;
         { int kdx; for (kdx = 0; kdx < 60; kdx++) { step(10.0, 0.0, 0.0, 300, 3000, 0); } }   /* nose up in the air */
@@ -363,8 +363,8 @@ int main(void)
                (unsigned)g_ic.hump_max_mm, (unsigned)real_max);
         CHECK("S4-H05e", (g_ev & IMU_EV_HUMP_END) != 0u && g_ic.hump_max_mm > real_max);   /* the bug */
         imu_core_hump_restore(&g_ic);                        /* lift confirmed */
-        CHECK("S4-H05e", g_ic.hump_max_mm == real_max && g_ic.humps == 1u &&
-                         g_ic.hump_state == (uint8_t)IMU_HUMP_FLAT);
+        CHECK("S4-H05e", g_ic.hump_max_mm == real_max && 1u == g_ic.humps &&
+                         (uint8_t)IMU_HUMP_FLAT == g_ic.hump_state);
 
         imu_core_hump_save(&g_ic);                           /* crossing line */
         g_ic.hump_max_mm = (uint16_t)(real_max + 5u);        /* a hump measured meanwhile */
@@ -394,13 +394,13 @@ int main(void)
             imu_cal_level_sample(&g_ic, accel);
         }
         CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
-        CHECK("S4-H06", g_ic.lvl_n == 100u && g_ic.lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG);   /* LOG 57/58 */
+        CHECK("S4-H06", 100u == g_ic.lvl_n && g_ic.lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG);   /* LOG 57/58 */
         /* stuck accelerometer (2 Nov: full scale, no noise): refused */
         imu_cal_level_start(&g_ic);
         accel[0] = -3997;  accel[1] = 0;  accel[2] = -3997;
         for (kdx = 0; kdx < 100; kdx++) { imu_cal_level_sample(&g_ic, accel); }
         CHECK("S4-H06", !imu_cal_level_finish(&g_ic));
-        CHECK("S4-H06", g_ic.lvl_spread_mg == 0 && g_ic.lvl_up_mg > IMU_LEVEL_UP_MAX_MG);   /* LOG 58/59 */
+        CHECK("S4-H06", 0 == g_ic.lvl_spread_mg && g_ic.lvl_up_mg > IMU_LEVEL_UP_MAX_MG);   /* LOG 58/59 */
     }
 
     /* S4-H07: hard-iron offsets and heading after a 360 deg spin */
@@ -436,23 +436,23 @@ int main(void)
     imu_core_init(&g_ic);
     g_now = 0u;
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step(0.0, 0.0, 0.0, 0, 0, 0); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_STATIONARY);
+    CHECK("S4-H08", IMU_MOTION_STATIONARY == g_ic.motion);
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step(0.0, 0.0, 0.0, 100, 1000, 6000); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_TURNING);
+    CHECK("S4-H08", IMU_MOTION_TURNING == g_ic.motion);
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step(0.0, 0.0, 0.0, 250, 2500, 0); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_CRUISING);
+    CHECK("S4-H08", IMU_MOTION_CRUISING == g_ic.motion);
     /* speed up then slow down, forward: 1000 mm/s^2 each way */
     { int kdx; for (kdx = 0; kdx < 20; kdx++) { step(0.0, 0.0, 0.0, 250 + (10 * kdx), 2600, 0); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_ACCELERATING);
+    CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     { int kdx; for (kdx = 0; kdx < 20; kdx++) { step(0.0, 0.0, 0.0, 440 - (10 * kdx), 2600, 0); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_DECELERATING);
+    CHECK("S4-H08", IMU_MOTION_DECELERATING == g_ic.motion);
     /* the same in reverse: speeding up backwards is accelerating (the
        class may change at most every IMU_CLASS_HOLD_MS, so run > 200 ms) */
     imu_core_init(&g_ic);
     { int kdx; for (kdx = 0; kdx < 40; kdx++) { step(0.0, 0.0, 0.0, -20 - (10 * kdx), -1000, 0); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_ACCELERATING);
+    CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     { int kdx; for (kdx = 0; kdx < 30; kdx++) { step(0.0, 0.0, 0.0, -410 + (10 * kdx), -1000, 0); } }
-    CHECK("S4-H08", g_ic.motion == IMU_MOTION_DECELERATING);
+    CHECK("S4-H08", IMU_MOTION_DECELERATING == g_ic.motion);
 
     /* S4-H09: heartbeats: each task times out after its own limit */
     {
@@ -462,26 +462,26 @@ int main(void)
         uint32_t mid = 0u;
 
         memset(&hb_state, 0, sizeof(hb_state));
-        CHECK("S4-H09", safety_hb_check(&hb_state, coefs, 1000u) == 0u);     /* starts supervision */
+        CHECK("S4-H09", 0u == safety_hb_check(&hb_state, coefs, 1000u));     /* starts supervision */
         for (elapsed = 1000u; elapsed <= 1320u; elapsed += 20u)
         {
             coefs[SAFETY_HB_MISSION]++;     /* only Mission keeps running */
             mid = safety_hb_check(&hb_state, coefs, elapsed);
-            if (elapsed == 1040u) { CHECK("S4-H09", mid == 0u); }
-            if (elapsed == 1060u) { CHECK("S4-H09", mid == ((1u << SAFETY_HB_MOTION) | (1u << SAFETY_HB_LINE))); }
-            if (elapsed == 1120u) { CHECK("S4-H09", (mid & (1u << SAFETY_HB_IMU)) != 0u); }
+            if (1040u == elapsed) { CHECK("S4-H09", 0u == mid); }
+            if (1060u == elapsed) { CHECK("S4-H09", ((1u << SAFETY_HB_MOTION) | (1u << SAFETY_HB_LINE)) == mid); }
+            if (1120u == elapsed) { CHECK("S4-H09", (mid & (1u << SAFETY_HB_IMU)) != 0u); }
         }
-        CHECK("S4-H09", (mid & (1u << SAFETY_HB_MISSION)) == 0u);
+        CHECK("S4-H09", 0u == (mid & (1u << SAFETY_HB_MISSION)));
         CHECK("S4-H09", (mid & (1u << SAFETY_HB_OBSTACLE)) != 0u);    /* > 300 ms */
         safety_hb_start(&hb_state, coefs, 1320u);
-        CHECK("S4-H09", safety_hb_check(&hb_state, coefs, 1360u) == 0u);
-        CHECK("S4-H09", safety_hb_timeout_ms(SAFETY_HB_IMU) == 100u);
+        CHECK("S4-H09", 0u == safety_hb_check(&hb_state, coefs, 1360u));
+        CHECK("S4-H09", 100u == safety_hb_timeout_ms(SAFETY_HB_IMU));
         /* the 32-bit millisecond wrap does not trigger a timeout */
         safety_hb_start(&hb_state, coefs, 0xFFFFFFF0u);
-        CHECK("S4-H09", safety_hb_check(&hb_state, coefs, 0x00000010u) == 0u);
+        CHECK("S4-H09", 0u == safety_hb_check(&hb_state, coefs, 0x00000010u));
     }
 
     test_pack_s4();
     printf("host tests: %d passed, %d failed\n", g_pass, g_fail);
-    return (g_fail == 0) ? 0 : 1;
+    return (0 == g_fail) ? 0 : 1;
 }

@@ -109,7 +109,7 @@ static void start_maneuver(motion_core_t * p_mc, motion_cmd_t const * p_cmd,
     p_mc->m_timeout_ms = (2u * motion_core_expected_ms(target_um, vmax)) + MOTION_TIMEOUT_MARGIN_MS;
 
     /* A straight MOVE continues smoothly from the current forward speed. */
-    speed_start = (p_cmd->cmd == (uint8_t)MOTION_CMD_MOVE) ? (p_mc->sp_v * dir) : 0;
+    speed_start = ((uint8_t)MOTION_CMD_MOVE == p_cmd->cmd) ? (p_mc->sp_v * dir) : 0;
     p_mc->m_prof_v = app_clamp_i32(speed_start, 0, vmax);
     p_mc->phase    = (uint8_t)MOTION_PH_ACCEL;
     p_mc->state    = (uint8_t)MOTION_ST_MANEUVER;
@@ -140,17 +140,17 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
         return MOTION_RES_INVALID;
     }
 
-    if (p_cmd->cmd == (uint8_t)MOTION_CMD_CLEAR_ESTOP)
+    if ((uint8_t)MOTION_CMD_CLEAR_ESTOP == p_cmd->cmd)
     {
         if (p_cmd->src != (uint8_t)MOTION_SRC_MISSION)
         {
             p_mc->rejected++;
             return MOTION_RES_REJECTED_AUTH;
         }
-        return (p_mc->state == (uint8_t)MOTION_ST_ESTOP_LATCHED) ? MOTION_RES_CLEAR_ESTOP
+        return ((uint8_t)MOTION_ST_ESTOP_LATCHED == p_mc->state) ? MOTION_RES_CLEAR_ESTOP
                                                                  : MOTION_RES_ACCEPTED;
     }
-    if (p_mc->state == (uint8_t)MOTION_ST_ESTOP_LATCHED)
+    if ((uint8_t)MOTION_ST_ESTOP_LATCHED == p_mc->state)
     {
         p_mc->rejected++;
         return MOTION_RES_REJECTED_ESTOP;
@@ -221,7 +221,7 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
                 int32_t vmax;
 
                 end_maneuver(p_mc, false);
-                if (p_cmd->cmd == (uint8_t)MOTION_CMD_MOVE)
+                if ((uint8_t)MOTION_CMD_MOVE == p_cmd->cmd)
                 {
                     target = (int64_t)app_abs_i32(p_cmd->arg0) * 1000;
                     vmax   = app_min_i32(p_cmd->arg1, MOTION_V_MAX_MM_S);
@@ -234,7 +234,7 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
                     vmax   = app_clamp_i32(vmax, MOTION_PROFILE_V_MIN, MOTION_V_MAX_MM_S);
                 }
                 start_maneuver(p_mc, p_cmd, target, vmax, dir, now_ms);
-                if (target == 0)
+                if (0 == target)
                 {
                     end_maneuver(p_mc, true);   /* nothing to do */
                 }
@@ -246,7 +246,7 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
             break;
     }
 
-    if ((res == MOTION_RES_REJECTED_AUTH) || (res == MOTION_RES_INVALID))
+    if ((MOTION_RES_REJECTED_AUTH == res) || (MOTION_RES_INVALID == res))
     {
         p_mc->rejected++;
     }
@@ -255,7 +255,7 @@ motion_result_t motion_core_command(motion_core_t * p_mc, motion_cmd_t const * p
 
 void motion_core_estop_cleared(motion_core_t * p_mc)
 {
-    if (p_mc->state == (uint8_t)MOTION_ST_ESTOP_LATCHED)
+    if ((uint8_t)MOTION_ST_ESTOP_LATCHED == p_mc->state)
     {
         brake(p_mc);
         p_mc->state = (uint8_t)MOTION_ST_IDLE_BRAKED;
@@ -412,7 +412,7 @@ static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms, uint32_t dt_ms)
 {
     int64_t const rel_l = p_mc->dist_l_um - p_mc->m_start_l_um;
     int64_t const rel_r = p_mc->dist_r_um - p_mc->m_start_r_um;
-    bool const    b_move = (p_mc->m_cmd == (uint8_t)MOTION_CMD_MOVE);
+    bool const    b_move = ((uint8_t)MOTION_CMD_MOVE == p_mc->m_cmd);
     int64_t       progress;
     int64_t       remaining;
     int64_t       tol;
@@ -420,7 +420,7 @@ static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms, uint32_t dt_ms)
     int32_t       v_dec;
     int32_t       speed;
 
-    if (p_mc->phase == (uint8_t)MOTION_PH_SETTLE)
+    if ((uint8_t)MOTION_PH_SETTLE == p_mc->phase)
     {
         brake(p_mc);
         if (app_elapsed_ms(now_ms, p_mc->m_settle_ms) >= MOTION_SETTLE_MS)
@@ -491,7 +491,7 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
     uint32_t dt_ms = app_elapsed_ms(now_ms, p_mc->prev_ms);
     bool     b_drive = true;
 
-    if ((dt_ms == 0u) || (dt_ms > 100u))
+    if ((0u == dt_ms) || (dt_ms > 100u))
     {
         dt_ms = DT_DEFAULT_MS;          /* first call or a long gap */
     }
@@ -511,7 +511,7 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
         p_mc->phase = (uint8_t)MOTION_PH_NONE;
     }
 
-    if ((p_mc->state == (uint8_t)MOTION_ST_VELOCITY_TRACK) &&
+    if (((uint8_t)MOTION_ST_VELOCITY_TRACK == p_mc->state) &&
         (app_elapsed_ms(now_ms, p_mc->last_drive_ms) > MOTION_DRIVE_TIMEOUT_MS))
     {
         p_mc->state = (uint8_t)MOTION_ST_STOPPING;     /* line follower went quiet */
@@ -532,7 +532,7 @@ void motion_core_step(motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
             p_mc->sp_v = ramp(p_mc->sp_v, 0, dv_step);
             p_mc->sp_w = ramp(p_mc->sp_w, 0, dw_step);
-            if ((p_mc->sp_v == 0) && (p_mc->sp_w == 0))
+            if ((0 == p_mc->sp_v) && (0 == p_mc->sp_w))
             {
                 brake(p_mc);
                 p_mc->state = (uint8_t)MOTION_ST_IDLE_BRAKED;
@@ -592,7 +592,7 @@ bool motion_core_pop_event(motion_core_t * p_mc, motion_event_t * p_ev)
 {
     uint8_t idx;
 
-    if (p_mc->ev_count == 0u)
+    if (0u == p_mc->ev_count)
     {
         return false;
     }
@@ -621,15 +621,15 @@ bool motion_core_pop_event(motion_core_t * p_mc, motion_event_t * p_ev)
 
 static uint8_t p0_bits(uint8_t cmd)
 {
-    if (cmd == (uint8_t)MOTION_CMD_DRIVE)
+    if ((uint8_t)MOTION_CMD_DRIVE == cmd)
     {
         return DRIVE_V_BITS;
     }
-    if ((cmd == (uint8_t)MOTION_CMD_MOVE) || (cmd == (uint8_t)MOTION_CMD_TURN))
+    if (((uint8_t)MOTION_CMD_MOVE == cmd) || ((uint8_t)MOTION_CMD_TURN == cmd))
     {
         return AMOUNT_BITS;
     }
-    return (cmd == (uint8_t)MOTION_CMD_SET_AUTH) ? CMD_SRC_BITS : 0u;
+    return ((uint8_t)MOTION_CMD_SET_AUTH == cmd) ? CMD_SRC_BITS : 0u;
 }
 
 uint32_t motion_cmd_pack(motion_cmd_t const * p_cmd)
@@ -641,12 +641,12 @@ uint32_t motion_cmd_pack(motion_cmd_t const * p_cmd)
     word = pk_set(word, CMD_SRC_SHIFT, CMD_SRC_BITS, pk_sat_u(p_cmd->src, CMD_SRC_BITS));
     word = pk_set(word, CMD_CMD_SHIFT, CMD_CMD_BITS, pk_sat_u(cmd, CMD_CMD_BITS));
     word = pk_set(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS, (uint32_t)p_cmd->seq & MOTION_SEQ_MASK);
-    if (cmd == (uint8_t)MOTION_CMD_DRIVE)
+    if ((uint8_t)MOTION_CMD_DRIVE == cmd)
     {
         word = pk_set(word, CMD_P0_SHIFT, DRIVE_V_BITS, pk_off_s(p_cmd->arg0, DRIVE_V_BITS));
         word = pk_set(word, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS, pk_off_s(p_cmd->arg1, DRIVE_W_BITS));
     }
-    else if (arg0_bits == AMOUNT_BITS)
+    else if (AMOUNT_BITS == arg0_bits)
     {
         word = pk_set(word, CMD_P0_SHIFT, AMOUNT_BITS, pk_off_s(p_cmd->arg0, AMOUNT_BITS));
         word = pk_set(word, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS,
@@ -674,12 +674,12 @@ void motion_cmd_unpack(uint32_t word, motion_cmd_t * p_cmd)
     p_cmd->reserved = 0u;
     p_cmd->arg0       = 0;
     p_cmd->arg1       = 0;
-    if (cmd == (uint8_t)MOTION_CMD_DRIVE)
+    if ((uint8_t)MOTION_CMD_DRIVE == cmd)
     {
         p_cmd->arg0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, DRIVE_V_BITS), DRIVE_V_BITS);
         p_cmd->arg1 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT + DRIVE_V_BITS, DRIVE_W_BITS), DRIVE_W_BITS);
     }
-    else if (arg0_bits == AMOUNT_BITS)
+    else if (AMOUNT_BITS == arg0_bits)
     {
         p_cmd->arg0 = (int16_t)pk_unoff_s(pk_get(word, CMD_P0_SHIFT, AMOUNT_BITS), AMOUNT_BITS);
         p_cmd->arg1 = (int16_t)pk_get(word, CMD_P0_SHIFT + AMOUNT_BITS, RATE_BITS);

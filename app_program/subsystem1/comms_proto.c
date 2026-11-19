@@ -68,7 +68,7 @@ static uint32_t mm_to_cm_field(uint16_t value_mm, bool b_valid, uint32_t none_co
 {
     uint32_t value_cm;
 
-    if (!b_valid || (value_mm == COMMS_D_NONE))
+    if (!b_valid || (COMMS_D_NONE == value_mm))
     {
         return none_code;
     }
@@ -147,7 +147,7 @@ uint16_t comms_build_event(comms_event_t const * p_ev, uint32_t seq, uint8_t * p
     uint8_t       dlen;
     uint8_t       width;
 
-    if (data == 0)
+    if (0 == data)
     {
         dlen  = 0u;
         width = 0u;
@@ -296,7 +296,7 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
             index         = pk_take(&reader, COMMS_PARAM_BITS);
             p_cmd->value  = pk_unoff_s(pk_take(&reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
             p_param       = comms_param_by_index((uint8_t)index);
-            if (p_param == NULL)
+            if (NULL == p_param)
             {
                 return COMMS_ERR_BAD_PARAM;
             }
@@ -322,7 +322,7 @@ comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * 
             for (kdx = 0u; kdx < 4u; kdx++)
             {
                 chars[kdx] = comms_symbol_char((uint8_t)pk_take(&reader, 6u));
-                if (chars[kdx] == '\0')
+                if ('\0' == chars[kdx])
                 {
                     return COMMS_ERR_BAD_MAP;
                 }
@@ -352,7 +352,7 @@ bool comms_map_char_ok(char chr)
 
 comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)
 {
-    if ((p_cmd->cmd == (uint8_t)COMMS_CMD_START) && !b_calibrated)
+    if (((uint8_t)COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
     {
         return COMMS_ERR_NOT_CAL;
     }
@@ -361,9 +361,9 @@ comms_err_t comms_check_ready(comms_cmd_t const * p_cmd, bool b_calibrated)
 
 comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle)
 {
-    if (((p_cmd->cmd == (uint8_t)COMMS_CMD_START) ||
-         (p_cmd->cmd == (uint8_t)COMMS_CMD_SET) ||
-         (p_cmd->cmd == (uint8_t)COMMS_CMD_MAP)) && !b_idle)
+    if ((((uint8_t)COMMS_CMD_START == p_cmd->cmd) ||
+         ((uint8_t)COMMS_CMD_SET == p_cmd->cmd) ||
+         ((uint8_t)COMMS_CMD_MAP == p_cmd->cmd)) && !b_idle)
     {
         return COMMS_ERR_BUSY;
     }
@@ -381,7 +381,7 @@ void comms_dedup_init(comms_dedup_t * p_dd)
 
 bool comms_cmd_repeat_safe(uint8_t cmd)
 {
-    return (cmd == (uint8_t)COMMS_CMD_STOP);
+    return ((uint8_t)COMMS_CMD_STOP == cmd);
 }
 
 comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
@@ -437,7 +437,7 @@ bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint8_t s
     bool    b_overwrote = false;
     uint8_t idx;
 
-    if (p_ring->count == COMMS_RING_LEN)
+    if (COMMS_RING_LEN == p_ring->count)
     {
         p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);  /* drop oldest */
         p_ring->count--;
@@ -452,7 +452,7 @@ bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint8_t s
 
 bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint8_t * p_seq)
 {
-    if (p_ring->count == 0u)
+    if (0u == p_ring->count)
     {
         return false;
     }

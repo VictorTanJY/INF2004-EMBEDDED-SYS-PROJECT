@@ -48,7 +48,7 @@ static bool imu_hw_init(void)
     ER sensor_er = E_IO;
     uint32_t diagnostic = 0xFF000000u;
 
-    if (bus_er == E_OK)
+    if (E_OK == bus_er)
     {
         read_er = drv_i2c1_read(DRV_LSM303_ADDR, 0x0Fu, &chip_id, 1u);
         sensor_er = drv_lsm303_init();
@@ -91,7 +91,7 @@ static bool imu_hw_init(void)
             IMU_LOG_INIT, (int32_t)diagnostic);
     }
 
-    return (bus_er == E_OK) && (sensor_er == E_OK);
+    return (E_OK == bus_er) && (E_OK == sensor_er);
 }
 
 EXPORT void imu_task(INT stacd, void *p_exinf)
@@ -140,7 +140,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
 
         if (!b_hw_ok)
         {
-            if ((cycle % IMU_RETRY_CYCLES) == 0u)
+            if (0u == (cycle % IMU_RETRY_CYCLES))
             {
                 b_hw_ok = imu_hw_init();
             }
@@ -150,9 +150,9 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
         {
             err = drv_lsm303_read_accel(acc);
 
-            if ((err == E_OK) && ((cycle % 2u) == 0u))
+            if ((E_OK == err) && (0u == (cycle % 2u)))
             {
-                b_mag = (drv_lsm303_read_mag(mag) == E_OK);
+                b_mag = (E_OK == drv_lsm303_read_mag(mag));
             }
         }
 
@@ -193,7 +193,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
             }
 
             if (b_fault && b_hw_ok &&
-                ((cycle % IMU_RETRY_CYCLES) == 0u))
+                (0u == (cycle % IMU_RETRY_CYCLES)))
             {
                 b_hw_ok = imu_hw_init();
             }
@@ -247,25 +247,21 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
         /* ---- Calibration ---- */
         if (mission.cal_phase != prev_phase)
         {
-            if (mission.cal_phase ==
-                (uint8_t)MISSION_CAL_PH_STILL)
+            if ((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase)
             {
                 imu_cal_level_start(&g_ic);
                 still_ms = now_ms;
             }
-            else if (mission.cal_phase ==
-                     (uint8_t)MISSION_CAL_PH_SPIN)
+            else if ((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase)
             {
                 (void)imu_cal_level_finish(&g_ic);
                 imu_cal_mag_start(&g_ic);
             }
-            else if (mission.cal_phase ==
-                     (uint8_t)MISSION_CAL_PH_FINISH)
+            else if ((uint8_t)MISSION_CAL_PH_FINISH == mission.cal_phase)
             {
                 bool b_level;
 
-                if (prev_phase ==
-                    (uint8_t)MISSION_CAL_PH_STILL)
+                if ((uint8_t)MISSION_CAL_PH_STILL == prev_phase)
                 {
                     (void)imu_cal_level_finish(&g_ic);
                 }
@@ -294,7 +290,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
             prev_phase = mission.cal_phase;
         }
 
-        if ((mission.cal_phase == (uint8_t)MISSION_CAL_PH_STILL) &&
+        if (((uint8_t)MISSION_CAL_PH_STILL == mission.cal_phase) &&
             (app_elapsed_ms(now_ms, still_ms) >= IMU_LEVEL_SETTLE_MS))
         {
             /* low-pass filtered (IMU_ACC_LPF_SHIFT), not single samples */
@@ -307,8 +303,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
             }
             imu_cal_level_sample(&g_ic, filt);
         }
-        else if ((mission.cal_phase ==
-                  (uint8_t)MISSION_CAL_PH_SPIN) && b_mag)
+        else if (((uint8_t)MISSION_CAL_PH_SPIN == mission.cal_phase) && b_mag)
         {
             imu_cal_mag_sample(&g_ic, mag);
         }
@@ -470,7 +465,7 @@ EXPORT void imu_task(INT stacd, void *p_exinf)
         {
             static bool first_sample = true;
 
-            if (first_sample || ((cycle % 100u) == 0u))
+            if (first_sample || (0u == (cycle % 100u)))
             {
                 first_sample = false;
 

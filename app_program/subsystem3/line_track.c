@@ -50,7 +50,7 @@ bool line_cal_finish(line_cal_t * p_cal)
         uint32_t high = p_cal->max[chan];
         uint32_t contrast;
 
-        if (chan == LINE_CH_BC)
+        if (LINE_CH_BC == chan)
         {
             /* Barcode sensor: fixed levels (line_cfg.h), never judged by
                the spin.  min/max are still kept for LOG 34.            */
@@ -66,7 +66,7 @@ bool line_cal_finish(line_cal_t * p_cal)
         else
         {
             /* AO ratio of the two levels, x 10 (3:1 = 30) */
-            contrast = (low == 0u) ? 999u : ((high * 10u) / low);
+            contrast = (0u == low) ? 999u : ((high * 10u) / low);
         }
 #if LINE_BLACK_IS_HIGH
         white[chan] = (uint16_t)low;
@@ -194,7 +194,7 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
     {
         p_t->both_black_um = 0u;
         p_t->b_junction    = false;
-        if (p_t->both_white_um == 0u)
+        if (0u == p_t->both_white_um)
         {
             /* how the line was left: the strongest error of the last
                LINE_EXIT_PEAK_UM, not the last one, which fades as the line
@@ -214,7 +214,7 @@ uint8_t line_track_step(line_track_t * p_t, line_trk_cfg_t const * p_cfg,
         p_t->both_white_um = 0u;
         p_t->b_junction    = false;
     }
-    if (p_t->both_white_um == 0u)
+    if (0u == p_t->both_white_um)
     {
         p_t->line_err = p_t->err;
         p_t->peak_um += step_um;
@@ -327,7 +327,7 @@ static int32_t slip_centre(line_slip_t const * p_s, line_cal_t const * p_cal, ui
     *p_runs = 0u;
     for (idx = 0u; idx <= p_s->n_samples; idx++)
     {
-        uint16_t const raw    = (idx < p_s->n_samples) ? ((chan == LINE_CH_L) ? p_s->raw_l[idx] : p_s->raw_r[idx]) : 0u;
+        uint16_t const raw    = (idx < p_s->n_samples) ? ((LINE_CH_L == chan) ? p_s->raw_l[idx] : p_s->raw_r[idx]) : 0u;
         uint16_t const norm     = (idx < p_s->n_samples) ? line_cal_norm(p_cal, chan, raw) : 0u;
         bool const     b_dark = (idx < p_s->n_samples) && (p_s->h_ddeg[idx] >= LINE_SLIP_SKIP_DDEG) &&
                                 (norm >= LINE_SLIP_DARK);

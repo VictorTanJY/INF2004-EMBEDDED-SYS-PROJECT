@@ -34,7 +34,7 @@ static void gpio_bank0_isr(UINT intno)
     g_count++;
     for (reg = 0u; reg < IO_INT_REGS; reg++)
     {
-        uint32_t ints = in_w((core == 0u) ? IO_PROC0_INTS(reg) : IO_PROC1_INTS(reg));
+        uint32_t ints = in_w((0u == core) ? IO_PROC0_INTS(reg) : IO_PROC1_INTS(reg));
 
         while (ints != 0u)
         {
@@ -66,7 +66,7 @@ EXPORT ER app_gpio_irq_init(void)
         dint.intatr = TA_HLNG;
         dint.inthdr = (FP)gpio_bank0_isr;
         err = tk_def_int(APP_GPIO_IRQ_NO, &dint);
-        gb_defined = (err == E_OK);
+        gb_defined = (E_OK == err);
     }
     return err;
 }
@@ -77,7 +77,7 @@ EXPORT ER app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t p_call
     uint32_t const shift = (pin % 8u) * 4u;
     UINT           intsts;
 
-    if ((pin >= GPIO_NUM) || (p_callback == NULL) || ((edges & ~IO_EDGE_BITS) != 0u) || !gb_defined)
+    if ((pin >= GPIO_NUM) || (NULL == p_callback) || ((edges & ~IO_EDGE_BITS) != 0u) || !gb_defined)
     {
         return E_PAR;
     }
@@ -85,7 +85,7 @@ EXPORT ER app_gpio_irq_attach(uint32_t pin, uint32_t edges, app_gpio_cb_t p_call
     DI(intsts);
     g_cb[pin] = p_callback;
     out_w(IO_INTR(reg), IO_EDGE_BITS << shift);             /* drop stale edges */
-    if (this_core() == 0u)
+    if (0u == this_core())
     {
         set_w(IO_PROC0_INTE(reg), edges << shift);
     }
