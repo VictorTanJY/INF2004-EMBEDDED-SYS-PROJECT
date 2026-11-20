@@ -22,7 +22,7 @@ const FAULTS = [[1, 'Lifted', 'The robot was lifted during a run: run ended, mot
   [1024, 'Start-up self-test failed', 'A start-up check did not pass.']];
 const LOGS = {31: 'Barcode rejected', 32: 'IR calibration (left)', 33: 'IR calibration (right)', 34: 'IR calibration (barcode)', 35: 'Barcode rejected: what the sensor saw', 36: 'Barcode rejected: bar widths', 37: 'Dark pattern, too few bars for a barcode', 38: 'Turn slip (calibration spin)', 39: 'Bypass plan', 40: 'Bypass pass leg', 44: 'Bypass: back on the line', 45: 'Turn slip: line crossings seen', 46: 'Bypass: turned onto the line', 47: 'Obstacle position (servo scan)', 48: 'Obstacle position (car turns)', 49: 'Edge scan: what each side saw', 50: 'Edge scan: face ahead / first left ping', 60: 'Bypass step-out (measured)', 71: 'Edge scan: last left echo', 72: 'Edge scan: last right echo', 73: 'Barcode sensor levels', 74: 'Width probe (side-step): edges', 75: 'Barcode widths (mm)', 76: 'Barcode: elements found by each reading',
   41: 'Heartbeat missed', 42: 'Last reset was the watchdog', 51: 'Motion class', 52: 'Ramp, not a hump', 53: 'IMU start result',
-  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared', 77: 'Lift seen (up axis rose, mg)', 78: 'Largest up-axis rise while driving this run (mg)', 79: 'No floor under the IR sensors (lifted)', 80: 'Barcode decode time (µs, line task limit 50 000)', 85: 'Scan point', 86: 'Scan points',
+  54: 'I²C scan', 55: 'Tilt warning: over 30° (0.01°)', 56: 'Tilt warning cleared', 77: 'Lift seen (up axis rose, mg)', 78: 'Largest up-axis rise while driving this run (mg)', 79: 'No floor under the IR sensors (lifted)', 80: 'Barcode decode time (µs, line task limit 50 000)',
   57: 'IMU level: samples (need ≥ 50)', 58: 'IMU level: shake, mg (need ≤ 60)', 59: 'IMU level: up axis, mg (need 500–1500)', 61: 'Start refused: not calibrated', 62: 'Calibration / self-test result', 63: 'Barcode latched',
   64: 'Barcode not in the map', 65: 'Map stored', 66: 'Map refused', 67: 'Run summary', 68: 'Parameter set',
   69: 'Mission queue full', 70: 'Motion queue full', 90: 'IMU bus start', 91: 'IMU identity read', 92: 'IMU identity value',
@@ -122,10 +122,6 @@ function describe(e) {
     if (p.code === 45) { const d = p.data >>> 0; detail = `left sensor ${d >>> 24}, right sensor ${(d >>> 16) & 0xFF}, spun ${d & 0xFFFF}° (encoders)`; }
     if (p.code === 39) { const d = p.data >>> 0, off = ((d >>> 16) << 16) >> 16; detail = `${off >= 0 ? 'left' : 'right'}, ${Math.abs(off) / 10} cm to the side, pass at least ${(d & 0xFFFF) / 10} cm`; }
     if (p.code === 40) { const d = p.data >>> 0; detail = `drove ${(d & 0xFFFF) / 10} cm, side ping ${(d >>> 16) ? 'saw' : 'did not see'} the obstacle`; }
-    if (p.code === 85) { const d = p.data >>> 0, a = (d >>> 10) & 0xFF, r = d & 0x3FF;
-      detail = `${(d >>> 18) & 1 ? 'coarse' : 'fine'} ${a === 90 ? 'straight ahead' : Math.abs(a - 90) + '° ' + (a > 90 ? 'left' : 'right')}: ${r === 1023 ? 'no echo' : (r / 10).toFixed(1) + ' cm'}`; }
-    if (p.code === 86) { const d = p.data >>> 0, one = (a, r) => `${a === 90 ? 'straight ahead' : Math.abs(a - 90) + '° ' + (a > 90 ? 'left' : 'right')}: ${r === 127 ? 'no echo' : (r / 2).toFixed(1) + ' cm'}`;
-      const a2 = (d >>> 7) & 0xFF; detail = `${(d >>> 30) & 1 ? 'coarse' : 'fine'} ${one((d >>> 22) & 0xFF, (d >>> 15) & 0x7F)}${a2 === 255 ? '' : ' · ' + one(a2, d & 0x7F)}`; }
     if (p.code === 44) detail = p.data ? `line touched after ${p.data / 10} cm` : 'line not found on the way back in';
     if (p.code === 53 || p.code === 62) detail = `0x${(p.data >>> 0).toString(16).padStart(8, '0')}`;
     const cat = [63, 64, 31, 65, 66, 67].includes(p.code) ? 'mission' : 'diagnostic';

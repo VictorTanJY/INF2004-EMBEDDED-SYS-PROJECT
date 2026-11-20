@@ -90,15 +90,6 @@
 /* step-out: face edge seen at mm (0xFFFF none) << 16 | stepped out mm */
 #define OBST_LOG_OUT 60u
 
-/* raw servo-scan points, two per record (21 Nov; one per record as LOG 85
-   before): coarse << 30 | point << 15 | point, a point = servo deg << 7 |
-   range in OBST_SCAN_PT_UNIT_MM (OBST_SCAN_PT_NONE = no echo or beyond
-   630 mm); the second angle is OBST_SCAN_PT_EMPTY when there is none */
-#define OBST_LOG_SCAN_PAIR   86u
-#define OBST_SCAN_PT_UNIT_MM 5u
-#define OBST_SCAN_PT_NONE    127u
-#define OBST_SCAN_PT_EMPTY   255u
-
 /* line scan phases */
 #define LS_PH_SWEEP 0u
 #define LS_PH_ALIGN 1u
@@ -252,10 +243,6 @@ static int32_t  motion_result(motion_types_odom_t const * p_odom);
 static void     store_pose(motion_types_odom_t const * p_odom);
 static void     start_scan(uint32_t now_ms);
 static void     publish_profile(void);
-static void     log_scan(void);
-static void log_scan_group(obstacle_core_point_t const * p_pts, uint8_t count,
-                           bool b_coarse);
-static uint32_t scan_point_bits(obstacle_core_point_t const * p_pt);
 static void     plan(uint32_t now_ms, motion_types_odom_t const * p_odom);
 static void     edge_finish(void);
 static void     probe_finish(uint32_t now_ms);
@@ -697,50 +684,6 @@ static void publish_profile (void)
     subsystem5_put_obst_snap(&snap);
 }
 
-/** Every point of the servo scan that just finished, two per LOG record
-    (21 Nov: the raw data behind the width estimate). */
-static void log_scan (void)
-{
-    log_scan_group(g_scan.coarse, g_scan.n_coarse, true);
-    log_scan_group(g_scan.fine, g_scan.n_fine, false);
-}
-
-/** count scan points p_pts as LOG records, two per record. */
-static void log_scan_group (obstacle_core_point_t const * p_pts, uint8_t count,
-                            bool b_coarse)
-{
-    uint8_t idx;
-
-    for (idx = 0u; idx < count; idx += 2u)
-    {
-        uint32_t const second = ((idx + 1u) < count)
-                                    ? scan_point_bits(&p_pts[idx + 1u])
-                                    : ((uint32_t)OBST_SCAN_PT_EMPTY << 7);
-
-        /* Cast (int32_t)(...): bit pattern of a packed LOG word (31 bits),
-           not an arithmetic value. */
-        log_ev(OBST_LOG_SCAN_PAIR,
-               (int32_t)(((b_coarse ? 1uL : 0uL) << 30)
-                         | (scan_point_bits(&p_pts[idx]) << 15) | second));
-    }
-}
-
-/** One scan point in 15 bits: servo angle (8 bits) << 7 | range (7 bits, in
-    OBST_SCAN_PT_UNIT_MM). */
-static uint32_t scan_point_bits (obstacle_core_point_t const * p_pt)
-{
-    uint32_t const range =
-        (p_pt->r_mm >= (OBST_SCAN_PT_NONE * OBST_SCAN_PT_UNIT_MM))
-            ? OBST_SCAN_PT_NONE
-            : (p_pt->r_mm / OBST_SCAN_PT_UNIT_MM);
-
-    /* Cast (uint32_t)app_types_clamp_i32(...): the value is 0..180. */
-    uint32_t const angle =
-        (uint32_t)app_types_clamp_i32(p_pt->angle_deg, 0, 180);
-
-    return (angle << 7) | range;
-}
-
 /** The scan finished: decide (PLAN). */
 static void plan (uint32_t now_ms, motion_types_odom_t const * p_odom)
 {
@@ -751,7 +694,6 @@ static void plan (uint32_t now_ms, motion_types_odom_t const * p_odom)
         &g_scan, g_o.det_mm,
         (uint16_t)app_types_clamp_i32(g_o.back_mm, 0, 1000), &g_prof);
     publish_profile();
-    log_scan();
 
     if (p_pr->b_valid)
     {
