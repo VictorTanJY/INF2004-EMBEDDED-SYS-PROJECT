@@ -517,7 +517,7 @@ Integration tests T1–T7 are run at this phase; log them in
 |---|---|---|
 | 31 | S3 | barcode rejected (reason, see step F6) |
 | 32–34 | S3 | calibration: raw ADC max << 16 \| min for left, right, barcode sensor |
-| 41 | S4 | heartbeat missed (bit mask: 1 Motion, 2 Line, 4 Mission, 8 Obstacle, 16 Imu) |
+| 41 | S4 | heartbeat missed (bit mask: 1 Motion, 2 Line, 4 Mission, 8 Obstacle, 16 Imu); 16 alone with the motors braked is logged, not a fault |
 | 42 | S4 | the last reset was the watchdog |
 | 51 | S4 | motion class (0 stationary, 1 accelerating, 2 turning, 3 climbing, 4 descending, 5 impact, 6 cruising, 7 decelerating) |
 | 52 | S4 | a climb > 600 mm was a ramp, not a hump |

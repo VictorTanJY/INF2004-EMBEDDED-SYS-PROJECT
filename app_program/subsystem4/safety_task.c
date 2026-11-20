@@ -10,7 +10,11 @@
  *  - any brake bit: subsystem2_motor_estop() at once, OR into the latched
  *  word, FAULT -> mbf_mission, fault record -> mbf_telem;
  *  - heartbeat check (50 / 50 / 300 / 300 / 100 ms): a missed task is
- *  HEARTBEAT_TIMEOUT, handled like a brake cause;
+ *  HEARTBEAT_TIMEOUT, handled like a brake cause.  20 Nov: a miss of
+ *  ImuTask alone (core 0, below the WiFi task) while MotionTask is idle and
+ *  braked is only logged (LOG 41): the WiFi start-up can hold it off for
+ *  more than 100 ms with the robot standing still.  Once the wheels are
+ *  driven, the same miss brakes and latches as before;
  *  - feed the watchdog (the only feeder; 200 ms).
  *  REQ_RESET (operator reset via MissionTask): the latch is cleared only
  *  if no cause is still present (obstacle < 8 cm, missed heartbeat, robot
@@ -70,6 +74,7 @@ static uint32_t volatile g_safety_tick_us; /* measured us per 100 ms of kernel
 
 static void     read_heartbeats(uint32_t counts[SAFETY_HB_COUNT]);
 static void     latch(uint32_t bits, uint32_t now_ms);
+static bool     hb_must_brake(uint32_t missed);
 static uint32_t live_causes(safety_core_hb_state_t * p_hb, uint32_t now_ms);
 static void     check_timer_tick(void);
 
@@ -121,10 +126,17 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
         read_heartbeats(counts);
         missed = safety_core_hb_check(&hb_state, counts, now_ms);
 
-        if (missed != 0u)
+        if (0u == missed)
         {
-            subsystem2_motor_estop();
-            latch(SAFETY_FLT_HEARTBEAT, now_ms);
+            missed_logged = 0u; /* a later miss is logged again */
+        }
+        else
+        {
+            if (hb_must_brake(missed))
+            {
+                subsystem2_motor_estop();
+                latch(SAFETY_FLT_HEARTBEAT, now_ms);
+            }
 
             if (missed != missed_logged)
             {
@@ -186,6 +198,22 @@ static void read_heartbeats (uint32_t counts[SAFETY_HB_COUNT])
     {
         counts[kdx] = subsystem4_heartbeat_count(kdx);
     }
+}
+
+/** False only for a miss of ImuTask alone while MotionTask is idle and
+    braked (20 Nov): the motors are off, so the miss is only logged. */
+static bool hb_must_brake (uint32_t missed)
+{
+    motion_types_odom_t odom;
+    bool                b_brake = true;
+
+    if ((1uL << SAFETY_HB_IMU) == missed)
+    {
+        subsystem2_get_odom(&odom);
+        b_brake = (odom.state != MOTION_ST_IDLE_BRAKED);
+    }
+
+    return b_brake;
 }
 
 /** Latch fault bits; newly latched ones are reported to MissionTask (FAULT)
