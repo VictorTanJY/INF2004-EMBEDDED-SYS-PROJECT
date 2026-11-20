@@ -74,9 +74,15 @@
    returned single 265-305 mm echoes); no beam correction.  The width is the
    straight line between the outermost face echoes.  Four runs on a 150 mm
    box (21 Nov 00:41-00:45, the raw scan points): 112-149 mm with these
-   values, against 47-117 mm before.  MEASURE: 10, 15 and 20 cm boxes. */
-#define OBST_WIDTH_BAND_MM 25
-#define OBST_WIDTH_GAP_PTS 2u
+   values, against 47-117 mm before.  MEASURE: 10, 15 and 20 cm boxes.
+   21 Nov 01:16: a face echo must also lie within OBST_WIDTH_DEPTH_MM of
+   the face's forward distance (a face square to the robot is at one
+   depth): an object beside the box at about the same range but nearer
+   ahead was joined on (186 and 210 mm); with the depth check the five
+   runs of 01:07-01:11 that can be replayed read 143-159 mm. */
+#define OBST_WIDTH_BAND_MM  25
+#define OBST_WIDTH_GAP_PTS  2u
+#define OBST_WIDTH_DEPTH_MM 25
 /* Step-out leg (7 Nov): how far a box keeps echoing past its corner
    depends on the box (9.5 cm black box: 33-36 deg off the beam; blue box
    left side: ~20), so no beam angle is assumed.  The edge scan gives a

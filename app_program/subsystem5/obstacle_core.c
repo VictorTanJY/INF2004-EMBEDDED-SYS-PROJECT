@@ -103,14 +103,14 @@ static int32_t  width_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
 static void     profile_clear(obstacle_core_profile_t * p_out);
 static uint16_t nearest_echo(obstacle_core_point_t const * p_fine,
                              uint8_t n_fine, uint8_t * p_nearest);
-static void face_width(obstacle_core_point_t const * p_fine, uint8_t n_fine,
-                       uint8_t nearest, uint16_t r_min,
-                       obstacle_core_profile_t * p_out);
-static uint8_t face_seed(obstacle_core_point_t const * p_fine, uint8_t n_fine,
-                         uint8_t nearest, uint16_t r_min);
-static uint8_t face_end(obstacle_core_point_t const * p_fine, uint8_t n_fine,
-                        uint8_t seed, bool b_left);
-static int32_t forward_mm(int32_t angle_cdeg, uint16_t r_mm);
+static void     face_width(obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                           uint8_t nearest, uint16_t r_min,
+                           obstacle_core_profile_t * p_out);
+static uint8_t  face_seed(obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                          uint8_t nearest, uint16_t r_min);
+static uint8_t  face_end(obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                         uint8_t seed, bool b_left);
+static int32_t  forward_mm(int32_t angle_cdeg, uint16_t r_mm);
 static void profile_measure(obstacle_core_point_t const * p_fine,
                             uint8_t                       n_fine,
                             obstacle_core_point_t const * p_coarse,
@@ -775,9 +775,8 @@ static int32_t forward_mm (int32_t angle_cdeg, uint16_t r_mm)
 {
     /* Casts (int64_t)r_mm: every uint16_t value fits;
        (int64_t)OBST_SERVO_ARM_MM: a constant that fits. */
-    int64_t const proj =
-        ((int64_t)r_mm + (int64_t)OBST_SERVO_ARM_MM)
-        * app_math_sin_q15(angle_cdeg);
+    int64_t const proj = ((int64_t)r_mm + (int64_t)OBST_SERVO_ARM_MM)
+                         * app_math_sin_q15(angle_cdeg);
 
     /* Cast (int32_t)(proj / 32768): a projection of a distance in mm with a Q15
        factor (<= 1.0). */
@@ -848,17 +847,22 @@ static uint8_t face_seed (obstacle_core_point_t const * p_fine, uint8_t n_fine,
 }
 
 /** The outermost face echo from seed towards the left (b_left) or the right:
-    within OBST_WIDTH_BAND_MM of the seed's range, skipping up to
-    OBST_WIDTH_GAP_PTS other readings in a row. */
+    within OBST_WIDTH_BAND_MM of the seed's range and OBST_WIDTH_DEPTH_MM of
+    its forward distance, skipping up to OBST_WIDTH_GAP_PTS other readings
+    in a row. */
 static uint8_t face_end (obstacle_core_point_t const * p_fine, uint8_t n_fine,
                          uint8_t seed, bool b_left)
 {
     /* Cast (uint32_t)p_fine[seed].r_mm: every uint16_t value fits. */
     uint32_t const limit = (uint32_t)p_fine[seed].r_mm + OBST_WIDTH_BAND_MM;
-    uint8_t        last  = seed;
-    uint8_t        gap   = 0u;
-    uint8_t        idx   = seed;
-    bool           b_run = true;
+
+    /* Cast (int32_t)p_fine[seed].angle_deg: every int16_t value fits. */
+    int32_t const depth =
+        forward_mm((int32_t)p_fine[seed].angle_deg * 100, p_fine[seed].r_mm);
+    uint8_t last  = seed;
+    uint8_t gap   = 0u;
+    uint8_t idx   = seed;
+    bool    b_run = true;
 
     while (b_run)
     {
@@ -872,7 +876,13 @@ static uint8_t face_end (obstacle_core_point_t const * p_fine, uint8_t n_fine,
                0..n_fine - 1 (checked above). */
             idx = b_left ? (uint8_t)(idx + 1u) : (uint8_t)(idx - 1u);
 
-            if (usable(&p_fine[idx]) && (p_fine[idx].r_mm <= limit))
+            /* Cast (int32_t)p_fine[idx].angle_deg: every int16_t value fits. */
+            if (usable(&p_fine[idx]) && (p_fine[idx].r_mm <= limit)
+                && (app_types_abs_i32(
+                        forward_mm((int32_t)p_fine[idx].angle_deg * 100,
+                                   p_fine[idx].r_mm)
+                        - depth)
+                    <= OBST_WIDTH_DEPTH_MM))
             {
                 last = idx;
                 gap  = 0u;
