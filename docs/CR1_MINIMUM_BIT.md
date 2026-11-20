@@ -218,6 +218,7 @@ in all, 3.4 % of the RP2040's 264 KB.
 | `pitch_cdeg`, `roll_cdeg`, `heading_cdeg` (IMU) | +-9 000, +-18 000, 0..35 999 | 15, 16, 16 | `int32_t` | Results of 32-bit atan2 / filter arithmetic; stored packed in the snapshot. |
 | `last_count[5]` (Safety) | 8-bit heartbeat counters since CR1 | 8 | `uint32_t` | Compared with the counters for a change; could be 8 bits (saves 15 B). |
 | times `*_ms` (all tasks) | 32-bit ms clock, wraps after 49.7 days | 32 | `uint32_t` | Wrap-safe subtraction needs the full clock width. |
+| `held_n`, `held_type[4]`, `held_mm[4]` hump events held while all IR are black (IMU, 20 Nov) | 0..4; 2 event types (22, 23); peak 0..1 023 mm (the snapshot's 10-bit hump field) | 3, 5, 10 | `uint8_t`, `uint8_t`, `uint16_t` | Smallest C types that hold them; `held_mm` is the same type as `imu_core_t.last_hump_mm`, which it copies. 13 B on ImuTask's stack. |
 | states, phases, flags (all tasks) | 2..13 values; true / false | 1..4 | `uint8_t` / `bool` | One byte is the smallest a C object can be addressed as; a bit-field would add a mask and shift to every test in the 10 ms loops. Stored packed (2..4 bits) wherever another task reads them. |
 
 ### 8.5 What full narrowing would save, and what it would cost
