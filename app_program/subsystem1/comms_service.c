@@ -138,10 +138,12 @@ void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
     if ((subsystem1_mbf_telem() > 0) && topic_eq(p_topic, COMMS_TOPIC_CMD))
     {
         err = comms_proto_parse_cmd(p_data, len, &cmd);
+
         if (COMMS_ERR_NONE == err)
         {
             err = comms_handle(&cmd);
         }
+
         ack_len = comms_proto_build_ack(&cmd, err, g_tx, sizeof(g_tx));
         (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
     }
@@ -171,6 +173,7 @@ static void comms_poll (ID mbf)
         {
             break; /* lwIP full: retry on the next poll */
         }
+
         comms_proto_ring_pop(&g_ring);
     }
 
@@ -182,11 +185,13 @@ static void comms_poll (ID mbf)
         {
             break;
         }
+
         g_event_seq++;
         /* Sent at once when online and nothing older is waiting; kept in the
            offline ring otherwise. */
         b_sent = gb_online && (0u == g_ring.count)
                  && comms_publish_event(&rec, g_event_seq);
+
         if (!b_sent && comms_proto_ring_push(&g_ring, &rec, g_event_seq))
         {
             g_ring_lost++;
@@ -231,21 +236,25 @@ static comms_proto_err_t comms_handle (comms_proto_cmd_t const * p_cmd)
 
         subsystem5_get_mission_snap(&mission);
         err = comms_proto_check_cmd(p_cmd, MISSION_ST_IDLE == mission.state);
+
         if (COMMS_ERR_NONE == err)
         {
             err = comms_proto_check_ready(
                 p_cmd,
                 MISSION_CAL_ALL == (mission.calibrated & MISSION_CAL_ALL));
         }
+
         if (COMMS_ERR_NONE == err)
         {
             err = comms_execute(p_cmd);
         }
+
         if ((COMMS_ERR_NONE == err) && !comms_proto_cmd_repeat_safe(p_cmd->cmd))
         {
             comms_proto_dedup_add(&g_dedup, p_cmd, now_ms);
         }
     }
+
     return err;
 }
 
@@ -257,6 +266,7 @@ static bool topic_eq (char const * p_a, char const * p_b)
         p_a++;
         p_b++;
     }
+
     return (*p_a == *p_b);
 }
 
@@ -275,6 +285,7 @@ static void comms_set_wifi_loss (bool b_lost)
             (void)tk_clr_flg(subsystem4_flg_safety(),
                              ~(UINT)SAFETY_FLT_WIFI_LOSS);
         }
+
         gb_flag_synced = true;
     }
 }
@@ -299,6 +310,7 @@ static bool comms_publish (char const * p_topic, uint16_t len, uint8_t qos,
     {
         /* published */
     }
+
     return b_done;
 }
 
@@ -393,6 +405,7 @@ static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
             *p_next_ms = now_ms + period_ms; /* fell behind: do not burst */
         }
     }
+
     return b_due;
 }
 
@@ -435,10 +448,12 @@ static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
     {
         result = COMMS_ERR_FULL;
     }
+
     if (COMMS_ERR_NONE == result)
     {
         err = subsystem5_mission_post(event, APP_SRC_COMMS, p_cmd->param_id,
                                       p_cmd->value);
+
         if (err != E_OK)
         {
             result = COMMS_ERR_FULL;
@@ -449,6 +464,7 @@ static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
                                         p_cmd->value);
         }
     }
+
     return result;
 }
 

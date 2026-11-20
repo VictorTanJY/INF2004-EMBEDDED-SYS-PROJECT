@@ -25,6 +25,7 @@ hmi_button_ev_t hmi_button_update (hmi_button_t * p_btn, bool b_pressed_raw,
     if (b_agrees && (b_pressed_raw != p_btn->b_stable))
     {
         p_btn->b_stable = b_pressed_raw;
+
         if (p_btn->b_stable)
         {
             p_btn->held_ms     = 0u;
@@ -49,6 +50,7 @@ hmi_button_ev_t hmi_button_update (hmi_button_t * p_btn, bool b_pressed_raw,
                (tested above). */
             p_btn->held_ms = (uint16_t)(p_btn->held_ms + dt_ms);
         }
+
         if (!p_btn->b_long_sent && (p_btn->held_ms >= long_ms))
         {
             p_btn->b_long_sent = true;
@@ -59,6 +61,7 @@ hmi_button_ev_t hmi_button_update (hmi_button_t * p_btn, bool b_pressed_raw,
     {
         /* released and stable: nothing to do */
     }
+
     return event;
 }
 

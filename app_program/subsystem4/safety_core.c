@@ -25,6 +25,7 @@ void safety_core_hb_start (safety_core_hb_state_t * p_st,
         p_st->last_count[kdx]   = counts[kdx];
         p_st->last_seen_ms[kdx] = now_ms;
     }
+
     p_st->b_started = true;
 }
 
@@ -58,6 +59,7 @@ uint32_t safety_core_hb_check (safety_core_hb_state_t * p_st,
             }
         }
     }
+
     return missed;
 }
 

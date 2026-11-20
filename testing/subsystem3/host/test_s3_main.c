@@ -193,14 +193,16 @@ static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
 
         for (elem = 0; elem < T_CHAR_ELEMS; elem++)
         {
-            /* Casts (float64_t)narrow: exact: a 32-bit integer fits the 53-bit
-               mantissa of a double; (uint32_t)(omega * (1.0 + (jitter * ...))):
-               narrow <= 6900 um, ratio <= 3.0 and jitter <= 15 %, so below
-               24000 um. */
+            /* Cast (float64_t)narrow: exact: a 32-bit integer fits the 53-bit
+               mantissa of a double. */
             float64_t omega =
                 (float64_t)narrow * (((pat >> (8 - elem)) & 1u) ? ratio : 1.0);
+
+            /* Cast (uint32_t)(omega * (1.0 + (jitter * ...))): narrow <= 6900
+               um, ratio <= 3.0 and jitter <= 15 %, so below 24000 um. */
             p_w[n_elems++] = (uint32_t)(omega * (1.0 + (jitter * rndu())));
         }
+
         if (kdx < 2)
         {
             /* Casts (uint32_t)((float64_t)narrow * (1.0 ...)): narrow <= 6900
@@ -210,6 +212,7 @@ static uint16_t make_code (char chr, uint32_t narrow, float64_t ratio,
                                         * (1.0 + (jitter * rndu()))); /* gap */
         }
     }
+
     return n_elems;
 }
 
@@ -220,7 +223,8 @@ static void reverse (uint32_t * p_w, uint16_t n_elems)
 
     for (idx = 0u; idx < (n_elems / 2u); idx++)
     {
-        uint32_t elapsed          = p_w[idx];
+        uint32_t elapsed = p_w[idx];
+
         p_w[idx]                  = p_w[(n_elems - 1u) - idx];
         p_w[(n_elems - 1u) - idx] = elapsed;
     }
@@ -260,7 +264,9 @@ static void test_synthetic (void)
                     {
                         reverse(widths, n_elems);
                     }
+
                     res = code39_decode_one(widths, n_elems, 15, &chr, &b_rev);
+
                     if (res != CODE39_OK)
                     {
                         b_ok = false;
@@ -277,6 +283,7 @@ static void test_synthetic (void)
             }
         }
     }
+
     CHECK("S3-H03", b_ok && (0 == wrong));
 }
 
@@ -295,14 +302,17 @@ static void test_rejects (void)
     for (idx = 0; idx < (int32_t)(sizeof(g_data_chars) - 1u); idx++)
     {
         int32_t elem;
+
         for (elem = T_DATA_FIRST; elem < T_DATA_END; elem++)
         {
             uint16_t pat = code39_pattern(g_data_chars[idx]);
 
             n_elems = make_code(g_data_chars[idx], 3000u, 3.0, 0.0, widths);
+
             if ((pat >> (8 - (elem - 10))) & 1u)
             {
                 widths[elem] = 3000u; /* wide -> narrow */
+
                 if (CODE39_OK
                     == code39_decode_one(widths, n_elems, 15, &chr, &b_rev))
                 {
@@ -311,6 +321,7 @@ static void test_rejects (void)
             }
         }
     }
+
     CHECK("S3-H04", 0 == wrong);
     n_elems = make_code('A', 3000u, 3.0, 0.0, widths);
     CHECK("S3-H04",
@@ -327,20 +338,25 @@ static void test_rejects (void)
         char const seq[4] = {'*', 'A', 'B', '*'};
         int32_t    kdx;
         int32_t    elem;
+
         n_elems = 0u;
+
         for (kdx = 0; kdx < T_AB_CHARS; kdx++)
         {
             uint16_t pat = code39_pattern(seq[kdx]);
+
             for (elem = 0; elem < T_CHAR_ELEMS; elem++)
             {
                 words_out[n_elems++] =
                     ((pat >> (8 - elem)) & 1u) ? 9000u : 3000u;
             }
+
             if (kdx < 3)
             {
                 words_out[n_elems++] = 3000u;
             }
         }
+
         CHECK("S3-H04",
               CODE39_ERR_LENGTH
                   == code39_decode_one(words_out, n_elems, 15, &chr, &b_rev));
@@ -388,10 +404,12 @@ static void test_capture_h05 (void)
                     widths[kdx] =
                         (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
                 }
+
                 if (diff)
                 {
                     reverse(widths, 29);
                 }
+
                 memset(&out, 0, sizeof(out));
                 CHECK("S3-H05",
                       (BC_VALID == run_pass(widths, 29, speeds[value], 0, &out))
@@ -425,13 +443,16 @@ static void test_capture_h05 (void)
                                     / 338.67)
                                    * (1.0 + (0.10 * rndu())));
                 }
+
                 if (pass % 2)
                 {
                     reverse(widths, 29);
                 }
+
                 memset(&out, 0, sizeof(out));
                 result = run_pass(widths, 29, speeds[value], 120, &out);
                 total++;
+
                 if ((BC_VALID == result)
                     && (out.chr == vectors_slides_get(step)->chr))
                 {
@@ -448,6 +469,7 @@ static void test_capture_h05 (void)
             }
         }
     }
+
     printf("noisy passes: %d / %d decoded, %d wrong\n", good, total, wrong);
     CHECK("S3-H05", (0 == wrong) && ((good * 100) >= (total * 95)));
 }
@@ -492,6 +514,7 @@ static void blur_passes (decode_count_t * p_count)
     for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
     {
         g_spot_um = spots[setpoint];
+
         for (step = 0; step < N_SLIDES; step++)
         {
             for (value = 0; value < T_SPEEDS; value++)
@@ -508,14 +531,17 @@ static void blur_passes (decode_count_t * p_count)
                         widths[kdx] =
                             (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
                     }
+
                     if (diff)
                     {
                         reverse(widths, 29);
                     }
+
                     memset(&out, 0, sizeof(out));
                     result = run_pass(widths, 29, speeds[value],
                                       (diff ? 60 : 0), &out);
                     p_count->total++;
+
                     if ((BC_VALID == result)
                         && (out.chr == vectors_slides_get(step)->chr))
                     {
@@ -543,6 +569,7 @@ static void weak_passes (decode_count_t * p_count)
     g_spot_um = 4000u;
     g_white   = 250u;
     g_black   = 800u;
+
     for (step = 0; step < N_SLIDES; step++)
     {
         uint32_t              widths[29];
@@ -554,9 +581,11 @@ static void weak_passes (decode_count_t * p_count)
         {
             widths[kdx] = (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
         }
+
         memset(&out, 0, sizeof(out));
         result = run_pass(widths, 29, 150u, 0, &out);
         p_count->total++;
+
         if ((BC_VALID == result) && (out.chr == vectors_slides_get(step)->chr))
         {
             p_count->good++;
@@ -604,11 +633,14 @@ static void test_capture_h18 (void)
                 {
                     widths[kdx] = vectors_slides_get(step)->p_w[kdx];
                 }
+
                 if (diff)
                 {
                     reverse(widths, 29);
                 }
+
                 total++;
+
                 if (CODE39_OK
                     == code39_decode_one_repair(cut ? widths : &widths[2], 27,
                                                 15, &chr, &b_rev))
@@ -625,6 +657,7 @@ static void test_capture_h18 (void)
             }
         }
     }
+
     printf("one bar short at an end: %d / %d decoded, %d wrong\n", good, total,
            wrong);
     CHECK("S3-H18", (0 == wrong) && (good == total));
@@ -657,7 +690,9 @@ static void test_capture_h18_bleed (void)
                     ? (widths[elem] + 1200u)
                     : ((widths[elem] > 1200u) ? (widths[elem] - 1200u) : 100u);
         }
+
         total++;
+
         if (CODE39_OK == code39_decode_one(widths, n_elems, 15, &chr, &b_rev))
         {
             /* Cast (char)('A' + idx): a Code 39 character code (< 128) stored
@@ -672,6 +707,7 @@ static void test_capture_h18_bleed (void)
             }
         }
     }
+
     printf("black bleeding 40 %%: %d / %d decoded, %d wrong\n", good, total,
            wrong);
     CHECK("S3-H18", (0 == wrong) && (good == total));
@@ -694,6 +730,7 @@ static void test_capture_h18_spot (void)
     for (setpoint = 0; setpoint < T_BLUR_SPOTS; setpoint++)
     {
         g_spot_um = spots[setpoint];
+
         for (step = 0; step < N_SLIDES; step++)
         {
             for (diff = 0; diff < T_DIRECTIONS; diff++)
@@ -707,13 +744,16 @@ static void test_capture_h18_spot (void)
                     widths[kdx] =
                         (vectors_slides_get(step)->p_w[kdx] * 297u) / 339u;
                 }
+
                 if (diff)
                 {
                     reverse(widths, 29);
                 }
+
                 memset(&out, 0, sizeof(out));
                 result = run_pass(widths, 29, 90u, 0, &out);
                 total++;
+
                 if ((BC_VALID == result)
                     && (out.chr == vectors_slides_get(step)->chr))
                 {
@@ -727,10 +767,12 @@ static void test_capture_h18_spot (void)
                 {
                     /* No action required. */
                 }
+
                 pass2 += (g_last_pass != 0u) ? 1 : 0;
             }
         }
     }
+
     g_spot_um = 1500u;
     printf("5-6 mm spot: %d / %d decoded (%d by the second try), %d "
            "wrong\n",
@@ -759,6 +801,7 @@ static void test_capture_h19 (void)
     g_white      = 20u;
     g_black      = 690u;
     g_thin_black = 240u;
+
     for (noise = 0; noise <= T_BLUR_NOISE; noise += T_BLUR_NOISE)
     {
         for (step = 0; step < N_SLIDES; step++)
@@ -783,20 +826,25 @@ static void test_capture_h19 (void)
                                    ? vectors_slides_get(step)->p_w[kdx]
                                    : wmin;
                     }
+
                     for (kdx = 0; kdx < T_CODE_ELEMS; kdx++)
                     {
                         widths[kdx] =
                             (vectors_slides_get(step)->p_w[kdx] * 3000u) / wmin;
                     }
+
                     g_thin_um = 6000u; /* bars under 6 mm are the faint
                                           narrow ones */
+
                     if (diff)
                     {
                         reverse(widths, 29);
                     }
+
                     memset(&out, 0, sizeof(out));
                     result = run_pass(widths, 29, 90u, noise, &out);
                     total++;
+
                     if ((BC_VALID == result) && ('Z' == out.chr))
                     {
                         good++;
@@ -820,6 +868,7 @@ static void test_capture_h19 (void)
             }
         }
     }
+
     g_spot_um    = 1500u;
     g_white      = 80u;
     g_black      = 920u;
@@ -858,6 +907,7 @@ static void test_capture_h20 (void)
         g_spot_um = 1000u;
         g_white   = 25u;
         g_black   = 1000u;
+
         for (noise = 0; noise <= T_BLEED_NOISE; noise += T_BLEED_NOISE)
         {
             for (diff = 0; diff < T_BLEED_CASES; diff++)
@@ -869,13 +919,16 @@ static void test_capture_h20 (void)
 
                 memcpy(widths, (diff < 2) ? k_r1 : k_r2,
                        n_elems * sizeof(uint32_t));
+
                 if ((diff % 2) != 0)
                 {
                     reverse(widths, n_elems);
                 }
+
                 memset(&out, 0, sizeof(out));
                 result = run_pass(widths, n_elems, 90u, noise, &out);
                 total++;
+
                 if ((BC_VALID == result) && ('A' == out.chr)
                     && (out.b_reversed == ((diff % 2) != 0)))
                 {
@@ -897,6 +950,7 @@ static void test_capture_h20 (void)
                 }
             }
         }
+
         g_spot_um = 1500u;
         g_white   = 80u;
         g_black   = 920u;
@@ -910,12 +964,14 @@ static void test_capture_h20 (void)
     {
         uint32_t           widths[1] = {18000u};
         line_barcode_out_t out;
+
         CHECK("S3-H06", BC_NONE == run_pass(widths, 1, 300u, 0, &out));
     }
     /* S3-H07: a long dark patch is rejected, never decoded */
     {
         uint32_t           widths[1] = {500000u};
         line_barcode_out_t out;
+
         memset(&out, 0, sizeof(out));
         CHECK("S3-H07", (BC_REJECT == run_pass(widths, 1, 300u, 0, &out))
                             && (CODE39_ERR_TOO_LONG == out.reason));
@@ -967,10 +1023,13 @@ static uint16_t profile_at (uint32_t const * p_w, uint16_t n_elems,
                 }
                 break;
             }
+
             pos += p_w[elem];
         }
+
         level += here;
     }
+
     /* Cast (uint16_t)(level / taps): a mean of simulated levels, each at most
        920. */
     return (uint16_t)(level / taps);
@@ -989,6 +1048,7 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
 
     g_last_pass = 0u;
     line_barcode_init(&capture);
+
     for (x_val = 0u; (x_val < TRACK_LEN_UM) && !b_double; x_val += step)
     {
         /* Casts (int32_t)profile_at(p_w, n_elems ...): every uint16_t value
@@ -1003,13 +1063,16 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
         {
             sample = 0;
         }
+
         if (sample > 1000)
         {
             sample = 1000;
         }
+
         /* Cast (uint16_t)sample: sample was clamped to 0..1000 just above. */
         memset(&out, 0, sizeof(out));
         result = line_barcode_sample(&capture, (uint16_t)sample, step, &out);
+
         if ((result != BC_NONE) && (BC_NONE == found))
         {
             found       = result;
@@ -1026,6 +1089,7 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
             /* No action required. */
         }
     }
+
     return found;
 }
 
@@ -1049,20 +1113,24 @@ static void test_table (void)
             if ((pos >> (8 - val_b)) & 1u)
             {
                 wide++;
+
                 if (val_b % 2)
                 {
                     wide_sp++;
                 }
             }
         }
+
         if ((0u == pos) || (wide != 3) || ((wide_sp != 1) && (wide_sp != 3)))
         {
             b_ok = false;
         }
+
         if (code39_char(pos) != g_data_chars[idx])
         {
             b_ok = false;
         }
+
         for (jdx = 0u; jdx < idx; jdx++)
         {
             if (code39_pattern(g_data_chars[jdx]) == pos)
@@ -1071,6 +1139,7 @@ static void test_table (void)
             }
         }
     }
+
     CHECK("S3-H01", b_ok);
     CHECK("S3-H01",
           (0x094u == code39_pattern('*')) && ('\0' == code39_char(0x1FFu)));
@@ -1100,6 +1169,7 @@ static void test_slides (void)
                 widths[kdx] =
                     (uint32_t)(vectors_slides_get(step)->p_w[kdx] * scale);
             }
+
             CHECK("S3-H02",
                   (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
                       && (chr == vectors_slides_get(step)->chr) && !b_rev);
@@ -1107,6 +1177,7 @@ static void test_slides (void)
             CHECK("S3-H02",
                   (CODE39_OK == code39_decode_one(widths, 29, 15, &chr, &b_rev))
                       && (chr == vectors_slides_get(step)->chr) && b_rev);
+
             if (scale < 1.0)
             {
                 break;
@@ -1126,6 +1197,7 @@ static uint8_t feed (line_track_t * p_t, uint16_t left, uint16_t ret,
     {
         events |= line_track_step(p_t, &g_cfg, left, ret, 3000u);
     }
+
     return events;
 }
 
@@ -1227,6 +1299,7 @@ static void test_track_h13 (void)
     line_track_init(&track);
     (void)feed(&track, 500u, 500u, 30000u);
     prev = track.omega;
+
     for (idx = 0; idx < T_ALTERNATIONS; idx++)
     {
         if (0 == (idx % 2))
@@ -1237,19 +1310,23 @@ static void test_track_h13 (void)
         {
             (void)line_track_step(&track, &g_cfg, 0u, 1000u, 3000u);
         }
+
         max_jump = (app_types_abs_i32(track.omega - prev) > max_jump)
                        ? app_types_abs_i32(track.omega - prev)
                        : max_jump;
         prev     = track.omega;
     }
+
     CHECK("S3-H13", max_jump <= LINE_OMEGA_STEP);
 
     line_track_init(&track);
     (void)feed(&track, 500u, 500u, 30000u);
+
     for (idx = 0; idx < T_RAMP_BLOCKS; idx++)
     {
         (void)line_track_step(&track, &g_cfg, 1000u, 0u, 3000u);
     }
+
     CHECK("S3-H13", (LINE_STEER_SIGN * LINE_KP) == track.omega);
     (void)line_track_step(&track, &g_cfg, 500u, 500u,
                           3000u); /* back on centre */
@@ -1268,6 +1345,7 @@ static void test_track_h12 (void)
     /* S3-H12: calibration: contrast check and normalisation */
     memset(&cal, 0, sizeof(cal));
     line_track_cal_start(&cal);
+
     for (idx = 0; idx < T_CAL_SAMPLES; idx++)
     {
         /* Casts (uint16_t)((idx < 50) ? 300 : ...): the value is 300..3000;
@@ -1279,12 +1357,14 @@ static void test_track_h12 (void)
         raw[2] = (uint16_t)((idx < 50) ? 250 : 2500);
         line_track_cal_sample(&cal, raw);
     }
+
     CHECK("S3-H12", line_track_cal_finish(&cal) && (cal.contrast_x10 >= 30u));
     CHECK("S3-H12", (0u == line_track_cal_norm(&cal, 0, 300))
                         && (1000u == line_track_cal_norm(&cal, 0, 3000)));
     CHECK("S3-H12", (500u == line_track_cal_norm(&cal, 0, 1650))
                         && (1000u == line_track_cal_norm(&cal, 0, 4095)));
     line_track_cal_start(&cal);
+
     for (idx = 0; idx < T_CAL_SAMPLES; idx++)
     {
         /* Cast (uint16_t)((idx < 50) ? 1000 : ...): the value is 1000..2000. */
@@ -1293,11 +1373,13 @@ static void test_track_h12 (void)
         raw[2] = 1000;
         line_track_cal_sample(&cal, raw);
     }
+
     CHECK("S3-H12", !line_track_cal_finish(&cal) && cal.b_valid
                         && (1000u == line_track_cal_norm(&cal, 0, 3000)));
     /* the barcode sensor does not take part: fixed levels from
        line_cfg.h, even when it saw no contrast during the spin */
     line_track_cal_start(&cal);
+
     for (idx = 0; idx < T_CAL_SAMPLES; idx++)
     {
         /* Casts (uint16_t)((idx < 50) ? 300 : ...): the value is 300..3000;
@@ -1307,6 +1389,7 @@ static void test_track_h12 (void)
         raw[2] = 3700; /* stuck */
         line_track_cal_sample(&cal, raw);
     }
+
     CHECK("S3-H12", line_track_cal_finish(&cal));
     CHECK("S3-H12", (LINE_BC_WHITE_RAW == cal.white[2])
                         && (LINE_BC_BLACK_RAW == cal.black[2]));
@@ -1342,6 +1425,7 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
     memset(&cal, 0, sizeof(cal));
     line_track_cal_start(&cal);
     line_track_slip_start(&slip, start_cdeg);
+
     for (kdx = 1; kdx <= T_SLIP_STEPS; kdx++)
     {
         /* Cast (int32_t)(enc * 100.0): kdx <= T_SLIP_STEPS (400), so enc <= 360
@@ -1360,9 +1444,11 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
         {
             height -= 36000;
         }
+
         raw[0] = b_line ? slip_raw(x_start, y_left) : 300u;
         raw[1] = b_line ? slip_raw(x_start, y_right) : 300u;
         raw[2] = 300u;
+
         if (!b_line && (200 == kdx))
         {
             raw[0] = 3000u;
@@ -1371,6 +1457,7 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
         line_track_cal_sample(&cal, raw);
         line_track_slip_sample(&slip, height, raw[0], raw[1]);
     }
+
     (void)line_track_cal_finish(&cal);
     /* no line: both dark for one block only */
     return line_track_slip_gain(&slip, &cal, &diag);
@@ -1391,9 +1478,11 @@ static void test_slip (void)
                (uint32_t)gap);
         CHECK("S3-H16", abs((int32_t)gap - gains[idx]) <= 25);
     }
+
     CHECK("S3-H16", slip_run(1500, true, -9000) != 0u);
     /* sensors 25 mm either side: they cross the line one after the other */
     g_slip_half = 25.0;
+
     for (idx = 0; idx < T_GAINS; idx++)
     {
         uint16_t const gap = slip_run(gains[idx], true, 0);
@@ -1403,6 +1492,7 @@ static void test_slip (void)
                gains[idx], (uint32_t)gap);
         CHECK("S3-H16", abs((int32_t)gap - gains[idx]) <= 25);
     }
+
     g_slip_half = 9.0;
     /* no line under the car: not measured */
     CHECK("S3-H16", 0u == slip_run(1500, false, 0));
@@ -1435,6 +1525,7 @@ static uint16_t split_at (uint32_t const * p_in, uint16_t n_elems,
             p_out[out_n++] = p_in[idx];
         }
     }
+
     return out_n;
 }
 
@@ -1459,6 +1550,7 @@ static uint16_t merge_at (uint32_t const * p_in, uint16_t n_elems,
             p_out[out_n++] = p_in[idx];
         }
     }
+
     return out_n;
 }
 
@@ -1490,6 +1582,7 @@ static void test_best_h20 (void)
     {
         best_kind(kind, &count);
     }
+
     printf("best match: %d / %d decoded, %d wrong\n", count.good, count.total,
            count.wrong);
     CHECK("S3-H20", 0 == count.wrong);
@@ -1517,6 +1610,7 @@ static void best_kind (int32_t kind, decode_count_t * p_count)
             }
         }
     }
+
     printf("best match, %s: %d / %d decoded\n",
            (0 == kind) ? "split bar"
                        : ((1 == kind) ? "merged thin pair"
@@ -1551,15 +1645,19 @@ static void best_one (int32_t kind, size_t cnt, uint16_t at_idx, int32_t diff,
         widths[elem] =
             (0u == (elem % 2u)) ? (widths[elem] + 800u) : (widths[elem] - 800u);
     }
+
     if (diff)
     {
         reverse(widths, n_elems);
     }
+
     b_case = best_damage(kind, widths, n_elems, at_idx, accel, &mid);
+
     if (b_case)
     {
         p_count->total++;
     }
+
     if (b_case
         && (CODE39_OK == code39_decode_one_best(accel, mid, &chr, &b_rev)))
     {
@@ -1646,6 +1744,7 @@ static bool best_damage (int32_t kind, uint32_t widths[29], uint16_t n_elems,
                            (uint16_t)(at_idx - 2u), 1000u, accel);
         }
     }
+
     *p_mid = mid;
     return b_case;
 }
@@ -1676,13 +1775,16 @@ static void test_best_h20_part2 (void)
             {
                 widths[elem] = 1500u + (rnd() % 9000u);
             }
+
             tries++;
+
             if (CODE39_OK
                 == code39_decode_one_best(widths, n_elems, &chr, &b_rev))
             {
                 accepted++;
             }
         }
+
         for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
         {
             for (ret = 0; ret < T_TRIES_PER_CHAR; ret++)
@@ -1700,10 +1802,12 @@ static void test_best_h20_part2 (void)
 
                 /* three random merges or splits: more than it may repair */
                 mid = n_elems;
+
                 for (elem = 0u; elem < T_CODE_ELEMS_U; elem++)
                 {
                     accel[elem] = widths[elem];
                 }
+
                 for (proj = 0u; proj < T_DAMAGES_U; proj++)
                 {
                     /* Cast (uint16_t)(1u + (rnd() % (mid - ...))): an element
@@ -1715,12 +1819,15 @@ static void test_best_h20_part2 (void)
                     mid = ((rnd() & 1u) != 0u)
                               ? merge_at(accel, mid, at_idx, buf)
                               : split_at(accel, mid, at_idx, 900u, buf);
+
                     for (x_val = 0u; x_val < mid; x_val++)
                     {
                         accel[x_val] = buf[x_val];
                     }
                 }
+
                 tries++;
+
                 if ((CODE39_OK
                      == code39_decode_one_best(accel, mid, &chr, &b_rev))
                     && (chr != g_data_chars[cnt]))
@@ -1729,6 +1836,7 @@ static void test_best_h20_part2 (void)
                 }
             }
         }
+
         printf("best match: random widths accepted %d / 20000, over-damaged "
                "codes wrong %d\n",
                accepted, bad);
@@ -1768,15 +1876,18 @@ static void test_best_h20_part3 (void)
                            ? vectors_slides_get(step2)->p_w[kdx]
                            : wmin;
             }
+
             for (kdx = 0u; kdx < T_CODE_ELEMS_U; kdx++)
             {
                 widths[kdx] =
                     (vectors_slides_get(step2)->p_w[kdx] * 3000u) / wmin;
             }
+
             if (diff2)
             {
                 reverse(widths, 29);
             }
+
             for (kdx = T_DATA_FIRST_U; kdx < T_DATA_END_U; kdx += 2u)
             {
                 at_idx = (widths[kdx] > widths[at_idx]) ? kdx : at_idx;
@@ -1785,6 +1896,7 @@ static void test_best_h20_part3 (void)
             memset(&out, 0, sizeof(out));
             result2 = run_pass(accel, 31, 150u, 0, &out);
             elapsed2++;
+
             if ((BC_VALID == result2)
                 && (out.chr == vectors_slides_get(step2)->chr))
             {
@@ -1808,6 +1920,7 @@ static void test_best_h20_part3 (void)
             }
         }
     }
+
     g_spot_um = 1500u;
     printf("capture with a speck in a wide bar: %d / %d decoded (%d by "
            "best match), %d wrong\n",
@@ -1842,12 +1955,14 @@ static void test_light_print (void)
     g_white   = 7u;
     g_black   = 715u;
     g_thin_um = 6000u;
+
     for (theta = 0; theta < T_THIN_LEVELS; theta++)
     {
         for (setpoint = 0; setpoint < T_WEAK_SPOTS; setpoint++)
         {
             g_spot_um    = spots[setpoint];
             g_thin_black = thin[theta];
+
             for (cnt = 0u; cnt < (sizeof(g_data_chars) - 1u); cnt++)
             {
                 for (value = 0; value < T_WEAK_SPEEDS; value++)
@@ -1864,10 +1979,12 @@ static void test_light_print (void)
                         {
                             reverse(widths, n_elems);
                         }
+
                         memset(&out, 0, sizeof(out));
                         result =
                             run_pass(widths, n_elems, speeds[value], 25, &out);
                         total++;
+
                         if ((BC_VALID == result)
                             && (out.chr == g_data_chars[cnt]))
                         {
@@ -1895,6 +2012,7 @@ static void test_light_print (void)
                     }
                 }
             }
+
             /* Cast (uint32_t)thin[theta]: every uint32_t value fits. */
             printf("light print, thin bars %u, %u mm spot: %d / %d so far (%d "
                    "by the adaptive swing, %d by the first three readings)\n",
@@ -1902,6 +2020,7 @@ static void test_light_print (void)
                    total, by_adapt, before);
         }
     }
+
     g_spot_um    = 1500u;
     g_white      = 80u;
     g_black      = 920u;

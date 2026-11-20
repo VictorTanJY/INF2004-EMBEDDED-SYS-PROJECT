@@ -93,6 +93,7 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
     app_pack_put(&writer, COMMS_FRAME_VERSION, 3u);
     app_pack_put(&writer, ident, 8u);
     app_pack_put(&writer, cmd, 3u);
+
     if (COMMS_CMD_SET == cmd)
     {
         /* Casts (uint32_t)param_index: only the low 4 bits are written; a test
@@ -102,6 +103,7 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
         app_pack_put(&writer, (uint32_t)param_index, 4u);
         app_pack_put(&writer, (uint32_t)(value + 32768) & 0xFFFFu, 16u);
     }
+
     if (COMMS_CMD_MAP == cmd)
     {
         for (kdx = 0; kdx < T_MAP_CHARS; kdx++)
@@ -109,6 +111,7 @@ static uint16_t cmd_frame (uint8_t * p_buf, uint8_t ident, uint8_t cmd,
             app_pack_put(&writer, comms_proto_symbol_index(p_map[kdx]), 6u);
         }
     }
+
     return app_pack_writer_len(&writer);
 }
 
@@ -140,6 +143,7 @@ static int32_t param_index (char const * p_name)
             found = idx;
         }
     }
+
     return found;
 }
 
@@ -169,12 +173,15 @@ static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
     {
         snprintf(&text[2u * idx], 3u, "%02x", p_buf[idx]);
     }
+
     text[2u * count] = '\0';
+
     if (strcmp(text, p_hex) != 0)
     {
         printf("  got %s\n  expected %s\n", text, p_hex);
         b_eq = 0;
     }
+
     return b_eq;
 }
 
@@ -209,10 +216,11 @@ static void test_writer (void)
         uint16_t            cap;
         uint8_t             big[64];
 
-        /* Cast (uint16_t)(full + 2u): full <= sizeof(big) (64 bytes). */
         memset(&telem, 0, sizeof(telem));
         telem.obst_d_mm = COMMS_D_NONE;
         full            = comms_proto_build_telemetry(&telem, big, sizeof(big));
+
+        /* Cast (uint16_t)(full + 2u): full <= sizeof(big) (64 bytes). */
         for (cap = 0u; cap <= (uint16_t)(full + 2u); cap++)
         {
             uint8_t  area[80];
@@ -222,6 +230,7 @@ static void test_writer (void)
 
             memset(area, 0x5A, sizeof(area));
             len = comms_proto_build_telemetry(&telem, area, cap);
+
             for (idx = cap; idx < sizeof(area); idx++)
             {
                 if (area[idx] != 0x5Au)
@@ -229,6 +238,7 @@ static void test_writer (void)
                     b_ok = false;
                 }
             }
+
             CHECK("S1-H02", b_ok);
             CHECK("S1-H02", (cap >= full) ? (len == full) : (0u == len));
         }
@@ -543,6 +553,7 @@ static void test_parser_h09 (void)
                                 == parse(9u, COMMS_CMD_SET, (int32_t)idx,
                                          p_param->max + 1, NULL, &cmd));
         }
+
         CHECK("S1-H10", (COMMS_ERR_RANGE
                          == parse(9u, COMMS_CMD_SET, 0, -32768, NULL, &cmd))
                             && (-32768 == cmd.value));
@@ -611,12 +622,15 @@ static void test_parser_h12 (void)
         uint32_t mid;
 
         count = cmd_frame(frame, 5u, COMMS_CMD_MAP, 0, 0, "AFZW");
+
         for (mid = 0u; mid <= count; mid++)
         {
             /* Cast (uint16_t)mid: mid <= count, a frame of at most 8 bytes. */
             (void)comms_proto_parse_cmd(frame, (uint16_t)mid, &cmd);
         }
+
         srand(1234);
+
         for (kdx = 0u; kdx < T_FUZZ_FRAMES; kdx++)
         {
             /* Cast (uint32_t)rand(): rand() is not negative. */
@@ -628,13 +642,16 @@ static void test_parser_h12 (void)
                    purpose. */
                 junk[mid] = (uint8_t)rand();
             }
+
             if ((kdx & 1u) && (len > 0u))
             {
                 junk[0] = 0x25u; /* a valid header, junk after it */
             }
+
             /* Cast (uint16_t)len: len < sizeof(junk) (64 bytes). */
             (void)comms_proto_parse_cmd(junk, (uint16_t)len, &cmd);
         }
+
         CHECK("S1-H14", 1);
     }
 }
@@ -651,6 +668,7 @@ static void test_ring (void)
     comms_proto_ring_init(&ring);
     CHECK("S1-H15", !comms_proto_ring_peek(&ring, &rec, &seq));
     memset(&rec, 0, sizeof(rec));
+
     for (idx = 1u; idx <= T_RING_PUSHES; idx++)
     {
         /* Casts (int32_t)idx: idx <= T_RING_PUSHES (20); (uint8_t)(idx + 250u):
@@ -660,7 +678,9 @@ static void test_ring (void)
                          ? 1
                          : 0; /* seq wraps */
     }
+
     CHECK("S1-H15", (4 == overwrote) && (COMMS_RING_LEN == ring.count));
+
     for (idx = T_RING_OLDEST; idx <= T_RING_PUSHES; idx++)
     {
         CHECK("S1-H15", comms_proto_ring_peek(&ring, &rec, &seq)
@@ -668,6 +688,7 @@ static void test_ring (void)
                             && (rec.data == (int32_t)idx));
         comms_proto_ring_pop(&ring);
     }
+
     CHECK("S1-H15",
           (0u == ring.count) && !comms_proto_ring_peek(&ring, &rec, &seq));
     comms_proto_ring_pop(&ring); /* pop on empty is harmless */
@@ -687,6 +708,7 @@ static int32_t run_button (char const * p_pattern, uint16_t long_ms,
     int32_t      count = 0;
 
     hmi_button_init(&btn);
+
     for (; *p_pattern != '\0'; p_pattern++)
     {
         hmi_button_ev_t event =
@@ -696,15 +718,18 @@ static int32_t run_button (char const * p_pattern, uint16_t long_ms,
         {
             p_events[count++] = 'P';
         }
+
         if (HMI_BTN_EV_SHORT == event)
         {
             p_events[count++] = 'S';
         }
+
         if (HMI_BTN_EV_LONG == event)
         {
             p_events[count++] = 'L';
         }
     }
+
     p_events[count] = '\0';
     return count;
 }
@@ -753,6 +778,7 @@ static void test_dedup (void)
     CHECK("S1-H18",
           COMMS_DEDUP_NEW == comms_proto_dedup_check(&dedup, &cmd_a, 1000u));
     comms_proto_dedup_add(&dedup, &cmd_a, 1000u);
+
     /* delayed redelivery after other commands, inside the window */
     for (idx = 0u; idx < T_OTHER_CMDS; idx++)
     {
@@ -762,6 +788,7 @@ static void test_dedup (void)
         (void)parse((uint8_t)(100u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
         comms_proto_dedup_add(&dedup, &other, 2000u + idx);
     }
+
     CHECK("S1-H18", COMMS_DEDUP_REPEAT
                         == comms_proto_dedup_check(&dedup, &cmd_a, 30000u));
     CHECK("S1-H18", COMMS_DEDUP_CONFLICT
@@ -779,6 +806,7 @@ static void test_dedup (void)
     /* only the last COMMS_DEDUP_LEN commands are kept */
     comms_proto_dedup_init(&dedup);
     comms_proto_dedup_add(&dedup, &cmd_a, 0u);
+
     for (idx = 0u; idx < COMMS_DEDUP_LEN; idx++)
     {
         comms_proto_cmd_t other;
@@ -788,6 +816,7 @@ static void test_dedup (void)
         (void)parse((uint8_t)(200u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
         comms_proto_dedup_add(&dedup, &other, 10u + idx);
     }
+
     CHECK("S1-H18",
           COMMS_DEDUP_NEW == comms_proto_dedup_check(&dedup, &cmd_a, 100u));
     CHECK("S1-H18", COMMS_DEDUP_LEN == dedup.count);

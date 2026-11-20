@@ -59,6 +59,7 @@ int main (void)
 static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
 {
     int32_t val_a;
+
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
     for (val_a = -T_SIN_RANGE_CDEG; val_a <= T_SIN_RANGE_CDEG; val_a += 7)
     {
@@ -74,26 +75,33 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
         {
             ref = 32767;
         }
+
         diff = abs(got - ref);
+
         if (diff > *p_worst_sin)
         {
             *p_worst_sin = diff;
         }
+
         /* Casts (int32_t)lround(cos(...)): a Q15 cosine: -32768..32768;
            (float64_t)val_a: exact: a 32-bit integer fits the 53-bit mantissa of
            a double. */
         ref =
             (int32_t)lround(cos(((float64_t)val_a * M_PI) / 18000.0) * 32768.0);
+
         if (ref > 32767)
         {
             ref = 32767;
         }
+
         diff = abs(app_math_cos_q15(val_a) - ref);
+
         if (diff > *p_worst_sin)
         {
             *p_worst_sin = diff;
         }
     }
+
     CHECK("SH-H01", *p_worst_sin <= 2);
 
     /* SH-H02: atan2 on a grid of vectors, all quadrants */
@@ -119,12 +127,14 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
                 {
                     diff = 36000.0 - diff;
                 } /* +-180 seam */
+
                 if (diff > *p_worst_atan)
                 {
                     *p_worst_atan = diff;
                 }
             }
         }
+
         CHECK("SH-H02", *p_worst_atan <= 1.0);
         CHECK("SH-H02", 0 == app_math_atan2_cdeg(0, 0));
         CHECK("SH-H02", 9000 == app_math_atan2_cdeg(1, 0));
@@ -153,6 +163,7 @@ static void test_isqrt (void)
             CHECK("SH-H03", 0);
             break;
         }
+
         /* Cast (uint32_t)square: square <= 0xFFFFFFFF on this branch (tested in
            the same statement). */
         if ((square <= 0xFFFFFFFFu)
@@ -162,6 +173,7 @@ static void test_isqrt (void)
             break;
         }
     }
+
     CHECK("SH-H03", 65535u == app_math_isqrt32(0xFFFFFFFFu));
     CHECK("SH-H03", 0xFFFFFFFFu == app_math_isqrt64(0xFFFFFFFFFFFFFFFFull));
 }
@@ -220,6 +232,7 @@ static void test_pack_h05 (void)
                 b_ok = false;
             }
         }
+
         /* unsigned: saturates at the field maximum */
         if ((app_pack_sat_u(app_pack_mask(width), width)
              != app_pack_mask(width))
@@ -229,6 +242,7 @@ static void test_pack_h05 (void)
         {
             b_ok = false;
         }
+
         /* wrapping counters: modular difference within +-half */
         if ((width >= 8u)
             && ((app_pack_wrap_diff(2u, app_pack_mask(width) - 1u, width) != 4)
@@ -238,6 +252,7 @@ static void test_pack_h05 (void)
             b_ok = false;
         }
     }
+
     CHECK("SH-H05", b_ok);
     CHECK("SH-H05", (0u == app_pack_off_s(INT32_MIN, 32u))
                         && (0xFFFFFFFFu == app_pack_off_s(INT32_MAX, 32u)));
@@ -275,21 +290,27 @@ static void test_pack_h05_part2 (void)
     /* streams: random widths and values round-trip; overflow is reported */
     srand(77);
     app_pack_writer_init(&writer, buf, sizeof(buf));
+
     while (count < T_RANDOM_FIELDS)
     {
         /* Casts (uint8_t)(1 + (rand() % 32)): 1..32; (uint32_t)rand(): rand()
-           is not negative; (uint32_t)writer.bits: every uint16_t value fits. */
+           is not negative. */
         bit_widths[count] = (uint8_t)(1 + (rand() % 32));
         vals[count]       = (((uint32_t)rand() << 16) ^ (uint32_t)rand())
                             & app_pack_mask(bit_widths[count]);
+
+        /* Cast (uint32_t)writer.bits: every uint16_t value fits. */
         if (((uint32_t)writer.bits + bit_widths[count]) > (sizeof(buf) * 8u))
         {
             break;
         }
+
         app_pack_put(&writer, vals[count], bit_widths[count]);
         count++;
     }
+
     app_pack_reader_init(&reader, buf, app_pack_writer_len(&writer));
+
     for (kdx = 0u; kdx < count; kdx++)
     {
         if (app_pack_take(&reader, bit_widths[kdx]) != vals[kdx])
@@ -297,6 +318,7 @@ static void test_pack_h05_part2 (void)
             ret = 0;
         }
     }
+
     CHECK("SH-H05", ret && !reader.b_short && (count > 10u));
     app_pack_put(&writer, 0xFFFFFFFFu, 32u);
     app_pack_put(&writer, 0u, 33u);

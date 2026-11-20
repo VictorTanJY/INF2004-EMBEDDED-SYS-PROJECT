@@ -64,6 +64,7 @@ static void    hump_reset(imu_core_t * p_ic);
 static void    side_reset(imu_core_t * p_ic);
 static int32_t axis(int32_t const vec[3], int32_t axis_no, int32_t sign);
 static void    integrate(imu_core_t * p_ic, int32_t theta, uint32_t ds_um);
+static void    hump_done(imu_core_t * p_ic);
 static uint8_t hump_step(imu_core_t * p_ic, uint32_t ds_um);
 static void    side_record(imu_core_t * p_ic, uint16_t height_mm);
 static uint8_t side_step(imu_core_t * p_ic, uint32_t ds_um);
@@ -93,6 +94,7 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
             b_ok = false;
         }
     }
+
     if (b_ok)
     {
         for (kdx = 0u; kdx < IMU_AXES; kdx++)
@@ -104,8 +106,10 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
                 (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx])
                           / 2);
         }
+
         p_ic->cal |= IMU_CAL_MAG;
     }
+
     return b_ok;
 }
 
@@ -134,10 +138,12 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
 
         p_ic->accel_mm_s2 += (raw - p_ic->accel_mm_s2) / 4;
     }
+
     p_ic->prev_v   = v_mm_s;
     p_ic->b_have_v = true;
 
     up_mg = attitude(p_ic, accel);
+
     if (p_mag != NULL)
     {
         heading_update(p_ic, p_mag);
@@ -153,6 +159,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     {
         /* Cast (uint32_t)ds_um: ds_um > 0 here (tested above). */
         events |= hump_step(p_ic, (uint32_t)ds_um);
+
         if ((IMU_HUMP_FLAT == p_ic->hump_state)
             && (0u == (events & IMU_EV_HUMP_START)))
         {
@@ -168,6 +175,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
     events |= lift_step(p_ic, up_mg, v_mm_s, now_ms);
 
     cls = classify(p_ic, v_mm_s, yaw_cdeg_s);
+
     if ((cls != p_ic->motion)
         && (app_types_elapsed_ms(now_ms, p_ic->motion_ms) >= IMU_CLASS_HOLD_MS))
     {
@@ -175,6 +183,7 @@ uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
         p_ic->motion_ms = now_ms;
         events |= IMU_EV_MOTION;
     }
+
     return events;
 }
 
@@ -189,6 +198,7 @@ void imu_core_init (imu_core_t * p_ic)
     {
         p_b[idx] = 0u;
     }
+
     p_ic->hump_state = IMU_HUMP_FLAT;
     p_ic->motion     = IMU_MOTION_STATIONARY;
 }
@@ -228,6 +238,7 @@ void imu_core_hump_restore (imu_core_t * p_ic)
         p_ic->humps        = p_ic->saved_humps;
         p_ic->b_hump_saved = false;
     }
+
     hump_reset(p_ic);
     side_reset(p_ic);
 }
@@ -243,6 +254,7 @@ void imu_core_cal_level_start (imu_core_t * p_ic)
         p_ic->lvl_min[kdx] = 0x7FFFFFFF;
         p_ic->lvl_max[kdx] = -0x7FFFFFFF;
     }
+
     p_ic->lvl_n = 0u;
 }
 
@@ -260,6 +272,7 @@ void imu_core_cal_level_sample (imu_core_t * p_ic, int32_t const acc_mg[3])
             p_ic->lvl_max[kdx] =
                 app_types_max_i32(p_ic->lvl_max[kdx], acc_mg[kdx]);
         }
+
         p_ic->lvl_n++;
     }
 }
@@ -277,6 +290,7 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
     p_ic->lvl_spread_mg = 0;
     p_ic->lvl_up_mg     = 0;
     b_ok                = (p_ic->lvl_n >= 50u);
+
     if (b_ok)
     {
         for (kdx = 0u; kdx < IMU_AXES; kdx++)
@@ -288,6 +302,7 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
                 p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
             mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / (int64_t)p_ic->lvl_n);
         }
+
         fwd             = axis(mean, IMU_AXIS_FWD, IMU_SIGN_FWD);
         left            = axis(mean, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
         up_mg           = axis(mean, IMU_AXIS_UP, IMU_SIGN_UP);
@@ -297,6 +312,7 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
            are mis-set), or the output is stuck / saturated (2 Nov). */
         b_ok = (p_ic->lvl_spread_mg <= IMU_LEVEL_MAX_SPREAD_MG)
                && (up_mg >= 500) && (up_mg <= IMU_LEVEL_UP_MAX_MG);
+
         if (b_ok)
         {
             /* Casts (int32_t)app_math_isqrt64(...): the root of two squares of
@@ -312,6 +328,7 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
             p_ic->cal |= IMU_CAL_LEVEL;
         }
     }
+
     return b_ok;
 }
 
@@ -336,6 +353,7 @@ void imu_core_cal_mag_sample (imu_core_t * p_ic, int16_t const mag[3])
         {
             p_ic->mag_min[kdx] = mag[kdx];
         }
+
         if (mag[kdx] > p_ic->mag_max[kdx])
         {
             p_ic->mag_max[kdx] = mag[kdx];
@@ -375,6 +393,7 @@ static void acc_filter (imu_core_t * p_ic, int32_t const acc_mg[IMU_AXES],
         {
             p_ic->acc_f[kdx] = acc_mg[kdx] * 16;
         }
+
         p_ic->acc_f[kdx] +=
             ((acc_mg[kdx] * 16) - p_ic->acc_f[kdx]) / IMU_ACC_LPF_DIV;
         accel[kdx] = p_ic->acc_f[kdx] / 16;
@@ -485,6 +504,7 @@ static uint8_t tilt_step (imu_core_t * p_ic, uint32_t now_ms)
     {
         /* no change */
     }
+
     return events;
 }
 
@@ -507,14 +527,43 @@ static void integrate (imu_core_t * p_ic, int32_t theta, uint32_t ds_um)
     /* Casts (int64_t)app_math_sin_q15(theta): every int32_t value fits;
        (int64_t)ds_um: every uint32_t value fits. */
     p_ic->h_um += ((int64_t)app_math_sin_q15(theta) * (int64_t)ds_um) / 32768;
+
     if (p_ic->h_um > p_ic->h_peak_um)
     {
         p_ic->h_peak_um = p_ic->h_um;
     }
+
     if (theta > p_ic->theta_max_cdeg)
     {
         p_ic->theta_max_cdeg = theta;
     }
+}
+
+/** hump_step(): the hump is complete; record its height, the larger of
+    the integrated peak and the wheelbase geometry check. */
+static void hump_done (imu_core_t * p_ic)
+{
+    /* HUMP_DONE: integrated peak, or the wheelbase geometry
+       check for humps shorter than the wheelbase. */
+    /* Cast (int64_t)IMU_WHEELBASE_MM: a constant that fits. */
+    int64_t const geo_um = ((int64_t)IMU_WHEELBASE_MM * 1000
+                            * app_math_sin_q15(p_ic->theta_max_cdeg))
+                           / 32768;
+    int64_t const peak = (p_ic->h_peak_um > geo_um) ? p_ic->h_peak_um : geo_um;
+
+    /* Casts (uint16_t)app_types_clamp_i32(...): the value is
+       0..65535; (int32_t)((peak + 500) / 1000): the peak is at most
+       the wheelbase or the climb (<= 2 x IMU_RAMP_UM): below 2000
+       mm. */
+    p_ic->last_hump_mm =
+        (uint16_t)app_types_clamp_i32((int32_t)((peak + 500) / 1000), 0, 65535);
+
+    if (p_ic->last_hump_mm > p_ic->hump_max_mm)
+    {
+        p_ic->hump_max_mm = p_ic->last_hump_mm;
+    }
+
+    p_ic->humps++;
 }
 
 /** Pitch hump detection on forward travel ds_um: climb, crest, descent,
@@ -532,6 +581,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             {
                 integrate(p_ic, theta, ds_um);
                 p_ic->dwell_um += ds_um;
+
                 if (p_ic->dwell_um >= IMU_DWELL_UM)
                 {
                     p_ic->hump_state = IMU_HUMP_CLIMBING;
@@ -550,6 +600,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
         case IMU_HUMP_CREST:
             integrate(p_ic, theta, ds_um);
             p_ic->hump_um += ds_um;
+
             if (p_ic->hump_um > IMU_RAMP_UM)
             {
                 hump_reset(p_ic); /* a long slope, not a hump */
@@ -577,6 +628,7 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
         default: /* IMU_HUMP_DESCENDING */
             integrate(p_ic, theta, ds_um);
             p_ic->hump_um += ds_um;
+
             if (app_types_abs_i32(theta) < IMU_FLAT_CDEG)
             {
                 p_ic->dwell_um += ds_um;
@@ -585,35 +637,17 @@ static uint8_t hump_step (imu_core_t * p_ic, uint32_t ds_um)
             {
                 p_ic->dwell_um = 0u;
             }
+
             if ((p_ic->dwell_um >= IMU_DWELL_UM)
                 || (p_ic->hump_um > (2u * IMU_RAMP_UM)))
             {
-                /* HUMP_DONE: integrated peak, or the wheelbase geometry
-                   check for humps shorter than the wheelbase. */
-                /* Cast (int64_t)IMU_WHEELBASE_MM: a constant that fits. */
-                int64_t const geo_um =
-                    ((int64_t)IMU_WHEELBASE_MM * 1000
-                     * app_math_sin_q15(p_ic->theta_max_cdeg))
-                    / 32768;
-                int64_t const peak =
-                    (p_ic->h_peak_um > geo_um) ? p_ic->h_peak_um : geo_um;
-
-                /* Casts (uint16_t)app_types_clamp_i32(...): the value is
-                   0..65535; (int32_t)((peak + 500) / 1000): the peak is at most
-                   the wheelbase or the climb (<= 2 x IMU_RAMP_UM): below 2000
-                   mm. */
-                p_ic->last_hump_mm = (uint16_t)app_types_clamp_i32(
-                    (int32_t)((peak + 500) / 1000), 0, 65535);
-                if (p_ic->last_hump_mm > p_ic->hump_max_mm)
-                {
-                    p_ic->hump_max_mm = p_ic->last_hump_mm;
-                }
-                p_ic->humps++;
+                hump_done(p_ic);
                 hump_reset(p_ic);
                 events |= IMU_EV_HUMP_END;
             }
         break;
     }
+
     return events;
 }
 
@@ -631,10 +665,12 @@ static void side_reset (imu_core_t * p_ic)
 static void side_record (imu_core_t * p_ic, uint16_t height_mm)
 {
     p_ic->last_hump_mm = height_mm;
+
     if (height_mm > p_ic->hump_max_mm)
     {
         p_ic->hump_max_mm = height_mm;
     }
+
     p_ic->humps++;
 }
 
@@ -651,6 +687,7 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
         p_ic->side_um += ds_um;
         p_ic->side_peak_cdeg =
             app_types_max_i32(p_ic->side_peak_cdeg, roll_abs);
+
         if (p_ic->side_um >= IMU_SIDE_DWELL_UM)
         {
             p_ic->side_state = 1u;
@@ -666,10 +703,12 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
         p_ic->side_um += ds_um;
         p_ic->side_peak_cdeg =
             app_types_max_i32(p_ic->side_peak_cdeg, roll_abs);
+
         if (roll_abs < (p_ic->side_peak_cdeg - IMU_SIDE_DESC_CDEG))
         {
             p_ic->side_state = 2u; /* coming down */
         }
+
         if (p_ic->side_um > IMU_SIDE_MAX_UM)
         {
             side_reset(p_ic); /* a long side slope, not a hump */
@@ -695,6 +734,7 @@ static uint8_t side_step (imu_core_t * p_ic, uint32_t ds_um)
             /* still on the hump */
         }
     }
+
     return events;
 }
 
@@ -737,6 +777,7 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
     else
     {
         p_ic->b_lift_over = false;
+
         if (p_ic->b_lift && (rise < IMU_LIFT_REARM_MG))
         {
             p_ic->b_lift = false;
@@ -749,6 +790,7 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
     {
         p_ic->rise_peak_mg = app_types_max_i32(p_ic->rise_peak_mg, rise);
     }
+
     if ((rise < IMU_RISE_END_MG) && (p_ic->rise_peak_mg > 0))
     {
         if ((p_ic->rise_peak_mg > IMU_RISE_LOG_MG)
@@ -757,8 +799,10 @@ static uint8_t lift_step (imu_core_t * p_ic, int32_t up_mg, int32_t v_mm_s,
             p_ic->rise_max_mg = p_ic->rise_peak_mg;
             events |= IMU_EV_RISE_MAX;
         }
+
         p_ic->rise_peak_mg = 0;
     }
+
     return events;
 }
 
@@ -804,6 +848,7 @@ static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
     {
         motion = IMU_MOTION_CRUISING;
     }
+
     return motion;
 }
 

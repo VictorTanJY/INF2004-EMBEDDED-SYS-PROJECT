@@ -138,6 +138,7 @@ typedef struct
     uint16_t runs;           /**< runs started since boot                */
     uint8_t  state; /**< mission_types_state_t                        */
     uint8_t  auth;  /**< motion_types_src_t granted to MotionTask     */
+
     uint8_t
          pending_nav;  /**< mission_types_nav_t latched for the next junction */
     char pending_char; /**< the barcode character that set it, 0 = none */

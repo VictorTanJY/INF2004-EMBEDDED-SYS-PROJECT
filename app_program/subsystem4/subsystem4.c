@@ -61,6 +61,7 @@ EXPORT ER subsystem4_init (void)
         g_cyc_imu   = tk_cre_cyc(&ccyc);
         err         = (g_cyc_imu < E_OK) ? g_cyc_imu : E_OK;
     }
+
     return err;
 }
 
@@ -74,6 +75,7 @@ EXPORT ER subsystem4_start (void)
     tid = app_main_start_task((FP)safety_task_thread, S4_PRI_SAFETY,
                               S4_CORE_SAFETY, "safety");
     err = (tid < E_OK) ? tid : E_OK;
+
     if (E_OK == err)
     {
         /* Cast (FP)imu_task_thread: the kernel stores the entry point as FP;
@@ -82,6 +84,7 @@ EXPORT ER subsystem4_start (void)
                                         S4_CORE_IMU, "imu");
         err       = (g_tid_imu < E_OK) ? g_tid_imu : tk_sta_cyc(g_cyc_imu);
     }
+
     return err;
 }
 
@@ -122,6 +125,7 @@ EXPORT void subsystem4_get_imu_snap (imu_types_snap_t * p_out)
     {
         words[idx] = g_imu_snap[idx];
     }
+
     app_unlock(&g_imu_lock, sts);
     imu_core_snap_unpack(words, p_out);
 }
@@ -134,10 +138,12 @@ EXPORT void subsystem4_put_imu_snap (imu_types_snap_t const * p_in)
 
     imu_core_snap_pack(p_in, words);
     sts = app_lock(&g_imu_lock);
+
     for (idx = 0u; idx < IMU_SNAP_WORDS; idx++)
     {
         g_imu_snap[idx] = words[idx];
     }
+
     app_unlock(&g_imu_lock, sts);
 }
 

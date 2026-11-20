@@ -79,11 +79,13 @@ EXPORT void subsystem3_test_run (void)
         {
             elem_widths[n_elems++] = ((pat >> (8 - elem)) & 1u) ? 9000u : 3000u;
         }
+
         if (kdx < 2)
         {
             elem_widths[n_elems++] = 3000u;
         }
     }
+
     TEST_CHECK(&report, "S3-U04",
                (CODE39_OK
                 == code39_decode_one(elem_widths, n_elems, 15u, &chr, &b_rev))
@@ -137,6 +139,7 @@ static void test_pipeline (test_report_t * p_report)
     line_barcode_out_t    out_ok   = {0};
 
     line_barcode_init(&g_t_bc);
+
     for (x_val = 0u; x_val < T_TRACK_UM; x_val += T_STEP_UM)
     {
         line_barcode_out_t    out     = {0};
@@ -147,13 +150,16 @@ static void test_pipeline (test_report_t * p_report)
 
         total_us += elapsed;
         samples++;
+
         if (elapsed > worst_us)
         {
             worst_us = elapsed;
         }
+
         if (result != BC_NONE)
         {
             results++;
+
             if (BC_NONE == found)
             {
                 found  = result;
@@ -161,6 +167,7 @@ static void test_pipeline (test_report_t * p_report)
             }
         }
     }
+
     /* Casts (UB *)"[INFO] S3-U07 result %d ...: tm_printf() takes UB *; the
        string bytes are unchanged; (INT)found, (INT)worst_us,
        (INT)(total_us / samples), (INT)samples: printed with %d: the value is a
@@ -196,11 +203,13 @@ static uint16_t make_star_code (char chr, uint32_t * p_w)
             p_w[n_elems++] =
                 (((pat >> (8 - elem)) & 1u) != 0u) ? T_WIDE_UM : T_NARROW_UM;
         }
+
         if (kdx < 2)
         {
             p_w[n_elems++] = T_NARROW_UM; /* gap between characters */
         }
     }
+
     return n_elems;
 }
 
@@ -220,8 +229,10 @@ static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
             level   = (0u == (elem % 2u)) ? T_BLACK : T_WHITE;
             b_found = true;
         }
+
         pos += p_w[elem];
     }
+
     return level;
 }
 

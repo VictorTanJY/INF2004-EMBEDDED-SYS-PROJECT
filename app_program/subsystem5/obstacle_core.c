@@ -92,6 +92,8 @@ static void force_ahead(obstacle_core_point_t const * p_fine, uint8_t n_fine,
                         uint8_t n_coarse, uint16_t range,
                         obstacle_core_profile_t * p_out);
 static bool is_hit(obstacle_core_point_t const * p_point, uint16_t r_min);
+static void coarse_done(obstacle_core_scan_t * p_s);
+static void refine_step(obstacle_core_scan_t * p_s, uint16_t r_mm);
 static void edge_plan_apply(obstacle_core_profile_t * p_prof, bool b_has_l,
                             int32_t lat_l, bool b_has_r, int32_t lat_r);
 static void fine_insert(obstacle_core_scan_t * p_s, int16_t angle,
@@ -118,6 +120,7 @@ uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
         low  = val_b;
         high = val_a;
     }
+
     if (val_c <= low)
     {
         median = low;
@@ -130,6 +133,7 @@ uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
     {
         /* val_c is the median */
     }
+
     return median;
 }
 
@@ -143,6 +147,7 @@ uint16_t obstacle_core_echo_to_mm (uint32_t width_us)
            (tested above), so the range is below 4000 mm. */
         r_mm = (uint16_t)((width_us * 10u) / 58u); /* us / 58 = cm */
     }
+
     return r_mm;
 }
 
@@ -178,6 +183,7 @@ void obstacle_core_profile (obstacle_core_point_t const * p_fine,
             r_ahead = p_point->r_mm;
         }
     }
+
     if ((r_ahead < OBST_GUARD_MM) && (OBST_PLAN_CONTINUE == p_out->plan))
     {
         force_ahead(p_fine, n_fine, p_coarse, n_coarse, r_ahead, p_out);
@@ -236,6 +242,7 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
             p_s->coarse[p_s->n_coarse].angle_deg = p_s->angle;
             p_s->coarse[p_s->n_coarse].r_mm      = r_mm;
             p_s->n_coarse++;
+
             if (p_s->n_coarse < 5u)
             {
                 /* Cast (int16_t)(p_s->angle + 30): the coarse sweep stays
@@ -244,39 +251,13 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
             }
             else
             {
-                uint8_t  idx;
-                uint16_t best   = OBST_RANGE_NONE;
-                int16_t  centre = OBST_SERVO_CENTRE_DEG;
-
-                for (idx = 0u; idx < OBST_COARSE_PINGS; idx++)
-                {
-                    if (usable(&p_s->coarse[idx])
-                        && (p_s->coarse[idx].r_mm < best))
-                    {
-                        best   = p_s->coarse[idx].r_mm;
-                        centre = p_s->coarse[idx].angle_deg;
-                    }
-                }
-                if (OBST_RANGE_NONE == best)
-                {
-                    p_s->phase = OBST_SCAN_DONE; /* nothing near: CONTINUE */
-                }
-                else
-                {
-                    /* Casts (int16_t)app_types_max_i32(centre ...): the value
-                       is 20..32727; (int16_t)app_types_min_i32(centre ...): the
-                       value is -32728..160. */
-                    p_s->phase = OBST_SCAN_FINE;
-                    p_s->angle = (int16_t)app_types_max_i32(
-                        centre - OBST_FINE_HALF_DEG, OBST_SCAN_MIN_DEG);
-                    p_s->fine_to = (int16_t)app_types_min_i32(
-                        centre + OBST_FINE_HALF_DEG, OBST_SCAN_MAX_DEG);
-                }
+                coarse_done(p_s);
             }
         break;
 
         case OBST_SCAN_FINE:
             fine_insert(p_s, p_s->angle, r_mm);
+
             if ((p_s->angle + OBST_FINE_STEP_DEG) <= p_s->fine_to)
             {
                 /* Cast (int16_t)(p_s->angle + ...): the fine sweep stays within
@@ -291,37 +272,7 @@ void obstacle_core_scan_feed (obstacle_core_scan_t * p_s, uint16_t r_mm)
 
         case OBST_SCAN_REFINE_R:
         case OBST_SCAN_REFINE_L:
-        {
-            obstacle_core_point_t point;
-
-            point.angle_deg = p_s->angle;
-            point.r_mm      = r_mm;
-            fine_insert(p_s, p_s->angle, r_mm);
-            if (is_hit(&point, p_s->r_min))
-            {
-                p_s->hit = p_s->angle;
-            }
-            else
-            {
-                p_s->miss = p_s->angle;
-            }
-            /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is
-               -32768..32767. */
-            p_s->iter++;
-            p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
-            if ((p_s->iter >= OBST_REFINE_ITERS) || (p_s->angle == p_s->hit)
-                || (p_s->angle == p_s->miss))
-            {
-                if (OBST_SCAN_REFINE_R == p_s->phase)
-                {
-                    start_refine(p_s, false);
-                }
-                else
-                {
-                    p_s->phase = OBST_SCAN_DONE;
-                }
-            }
-        }
+            refine_step(p_s, r_mm);
         break;
 
         default:
@@ -472,6 +423,7 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
         p_steps[n_steps].value = (int16_t)-back;
         n_steps++;
     }
+
     /* Casts (int16_t)(sign * ...), (int16_t)(-sign * ...): +-450 (0.1 deg);
        (int16_t)diag: the step-out leg is a few hundred mm (dev < 1 m). */
     p_steps[n_steps].kind  = OBST_STEP_TURN;
@@ -562,9 +514,10 @@ void obstacle_core_out_ping (obstacle_core_out_t * p_o, int32_t axle_lat,
         obstacle_core_out_expect_mm(face_mm, axle_fwd, theta_cdeg);
 
     /* Casts (uint8_t)app_types_min_i32(...): the value is 1..255;
-       (int32_t)p_o->pings: every uint8_t value fits; (int32_t)r_mm: every
-       uint16_t value fits. */
+       (int32_t)p_o->pings: every uint8_t value fits. */
     p_o->pings = (uint8_t)app_types_min_i32((int32_t)p_o->pings + 1, 255);
+
+    /* Cast (int32_t)r_mm: every uint16_t value fits. */
     if ((r_mm != OBST_RANGE_NONE)
         && ((int32_t)r_mm <= (expect + OBST_DEPTH_TOL_MM)))
     {
@@ -579,6 +532,7 @@ void obstacle_core_out_ping (obstacle_core_out_t * p_o, int32_t axle_lat,
         {
             p_o->seen_lat = lat;
         }
+
         p_o->b_seen = true;
     }
 }
@@ -591,6 +545,7 @@ int32_t obstacle_core_out_target (obstacle_core_out_t const * p_o)
     {
         target = app_types_max_i32(target, p_o->seen_lat + OUT_EXTRA_MM);
     }
+
     return app_types_min_i32(target, OBST_WIDTH_MAX_MM + OUT_EXTRA_MM);
 }
 
@@ -656,6 +611,7 @@ bool obstacle_core_probe_ping (obstacle_core_probe_t * p_p, int32_t sensor_lat,
             p_p->low  = sensor_lat;
             p_p->high = sensor_lat;
         }
+
         p_p->low    = app_types_min_i32(p_p->low, sensor_lat);
         p_p->high   = app_types_max_i32(p_p->high, sensor_lat);
         p_p->b_seen = true;
@@ -667,6 +623,7 @@ bool obstacle_core_probe_ping (obstacle_core_probe_t * p_p, int32_t sensor_lat,
            (int32_t)p_p->off: every uint8_t value fits. */
         p_p->off = (uint8_t)app_types_min_i32((int32_t)p_p->off + 1, 255);
     }
+
     return b_face;
 }
 
@@ -680,15 +637,18 @@ bool obstacle_core_probe_edges (obstacle_core_probe_t const * p_p,
     {
         left  = p_p->high - OBST_PROBE_EDGE_OVER_MM;
         right = p_p->low + OBST_PROBE_EDGE_OVER_MM;
+
         if (left < right)
         {
             left  = (p_p->high + p_p->low)
                     / 2; /* narrower than the run-on: a post */
             right = left;
         }
+
         *p_left  = left;
         *p_right = right;
     }
+
     return p_p->b_seen;
 }
 
@@ -746,6 +706,7 @@ bool obstacle_core_hump_mask (obstacle_core_mask_t * p_m, bool b_pitch_valid,
             p_m->start_ms      = (0u == now_ms) ? 1u : now_ms;
             p_m->start_dist_mm = dist_mm;
         }
+
         if (p_m->b_active
             && ((app_types_elapsed_ms(now_ms, p_m->start_ms)
                  >= OBST_HUMP_MASK_MS)
@@ -755,6 +716,7 @@ bool obstacle_core_hump_mask (obstacle_core_mask_t * p_m, bool b_pitch_valid,
             p_m->b_active = false; /* lapsed: stays off until level again */
         }
     }
+
     return p_m->b_active;
 }
 
@@ -857,6 +819,7 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
             break;
         }
     }
+
     for (;;)
     {
         if (((high + 1u) < count) && in_group(&p_pts[high + 1u], r_min, lat0))
@@ -875,6 +838,7 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
             break;
         }
     }
+
     *p_lo = low;
     *p_hi = high;
 }
@@ -888,11 +852,13 @@ static void profile_core (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     uint16_t const r_min   = nearest_echo(p_fine, n_fine, &nearest);
 
     profile_clear(p_out);
+
     if (r_min != OBST_RANGE_NONE)
     {
         profile_measure(p_fine, n_fine, p_coarse, n_coarse, nearest, r_min,
                         p_out);
     }
+
     /* else nothing in front: CONTINUE */
 }
 
@@ -937,6 +903,7 @@ static uint16_t nearest_echo (obstacle_core_point_t const * p_fine,
             nearest = idx;
         }
     }
+
     if (OBST_RANGE_NONE == r_min)
     {
         /* nothing in the path: the nearest echo anywhere (may be CONTINUE) */
@@ -949,6 +916,7 @@ static uint16_t nearest_echo (obstacle_core_point_t const * p_fine,
             }
         }
     }
+
     *p_nearest = nearest;
     return r_min;
 }
@@ -977,6 +945,7 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
        every int16_t value fits. */
     a_right = ((int32_t)p_fine[low].angle_deg * 100) + OBST_HALF_BEAM_CDEG;
     a_left  = ((int32_t)p_fine[high].angle_deg * 100) - OBST_HALF_BEAM_CDEG;
+
     if (a_left < a_right)
     {
         int32_t const mid = (a_left + a_right) / 2; /* narrower than the beam */
@@ -984,6 +953,7 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
         a_left  = mid;
         a_right = mid;
     }
+
     /* Casts (int32_t)p_fine[high].angle_deg, (int32_t)p_fine[low].angle_deg:
        every int16_t value fits. */
     lat_l = lateral2_mm((int32_t)p_fine[high].angle_deg * 100, a_left,
@@ -1012,15 +982,18 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
                         && (w_est <= OBST_WIDTH_MAX_MM) && b_r_end && b_l_end;
         pl_l          = raw_l;
         pl_r          = raw_r;
+
         if (w_est < OBST_WIDTH_MIN_MM)
         {
             pl_l = app_types_max_i32(pl_l, centre + (OBST_WIDTH_MAX_MM / 2));
             pl_r = app_types_min_i32(pl_r, centre - (OBST_WIDTH_MAX_MM / 2));
         }
+
         if (!b_l_end)
         {
             pl_l = app_types_max_i32(pl_l, raw_r + OBST_WIDTH_MAX_MM);
         }
+
         if (!b_r_end)
         {
             pl_r = app_types_min_i32(pl_r, raw_l - OBST_WIDTH_MAX_MM);
@@ -1079,6 +1052,7 @@ static void decide (obstacle_core_point_t const * p_fine, uint8_t n_fine,
         {
             /* Cast (int32_t)p_point->angle_deg: every int16_t value fits. */
             lat = lateral_mm((int32_t)p_point->angle_deg * 100, p_point->r_mm);
+
             if (lat > pl_l)
             {
                 clr_l = app_types_min_i32(clr_l, lat - pl_l);
@@ -1147,11 +1121,13 @@ static void force_ahead (obstacle_core_point_t const * p_fine, uint8_t n_fine,
     p_out->b_sure        = false;
     p_out->closest_mm    = range;
     p_out->nearest_angle = OBST_SERVO_CENTRE_DEG;
+
     if (0u == p_out->w_mm)
     {
         p_out->left_lat_mm  = 0;
         p_out->right_lat_mm = 0;
     }
+
     decide(p_fine, n_fine, p_coarse, n_coarse, 1u, 0u, range,
            OBST_WIDTH_MAX_MM / 2, -(OBST_WIDTH_MAX_MM / 2), p_out);
 }
@@ -1161,6 +1137,78 @@ static void force_ahead (obstacle_core_point_t const * p_fine, uint8_t n_fine,
 static bool is_hit (obstacle_core_point_t const * p_point, uint16_t r_min)
 {
     return same_object(p_point, r_min);
+}
+
+/** obstacle_core_scan_feed(): the coarse sweep is complete; aim the fine
+    sweep at the nearest usable ping, or finish if there is none. */
+static void coarse_done (obstacle_core_scan_t * p_s)
+{
+    uint8_t  idx;
+    uint16_t best   = OBST_RANGE_NONE;
+    int16_t  centre = OBST_SERVO_CENTRE_DEG;
+
+    for (idx = 0u; idx < OBST_COARSE_PINGS; idx++)
+    {
+        if (usable(&p_s->coarse[idx]) && (p_s->coarse[idx].r_mm < best))
+        {
+            best   = p_s->coarse[idx].r_mm;
+            centre = p_s->coarse[idx].angle_deg;
+        }
+    }
+
+    if (OBST_RANGE_NONE == best)
+    {
+        p_s->phase = OBST_SCAN_DONE; /* nothing near: CONTINUE */
+    }
+    else
+    {
+        /* Casts (int16_t)app_types_max_i32(centre ...): the value
+           is 20..32727; (int16_t)app_types_min_i32(centre ...): the
+           value is -32728..160. */
+        p_s->phase   = OBST_SCAN_FINE;
+        p_s->angle   = (int16_t)app_types_max_i32(centre - OBST_FINE_HALF_DEG,
+                                                  OBST_SCAN_MIN_DEG);
+        p_s->fine_to = (int16_t)app_types_min_i32(centre + OBST_FINE_HALF_DEG,
+                                                  OBST_SCAN_MAX_DEG);
+    }
+}
+
+/** obstacle_core_scan_feed() while refining an edge: halve the hit-miss
+    interval with the ping r_mm. */
+static void refine_step (obstacle_core_scan_t * p_s, uint16_t r_mm)
+{
+    obstacle_core_point_t point;
+
+    point.angle_deg = p_s->angle;
+    point.r_mm      = r_mm;
+    fine_insert(p_s, p_s->angle, r_mm);
+
+    if (is_hit(&point, p_s->r_min))
+    {
+        p_s->hit = p_s->angle;
+    }
+    else
+    {
+        p_s->miss = p_s->angle;
+    }
+
+    /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is
+       -32768..32767. */
+    p_s->iter++;
+    p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
+
+    if ((p_s->iter >= OBST_REFINE_ITERS) || (p_s->angle == p_s->hit)
+        || (p_s->angle == p_s->miss))
+    {
+        if (OBST_SCAN_REFINE_R == p_s->phase)
+        {
+            start_refine(p_s, false);
+        }
+        else
+        {
+            p_s->phase = OBST_SCAN_DONE;
+        }
+    }
 }
 
 /** obstacle_core_edge_plan() with something to plan from: the edges, the
@@ -1185,6 +1233,7 @@ static void edge_plan_apply (obstacle_core_profile_t * p_prof, bool b_has_l,
         lat_l = p_prof->plan_l_mm;
         lat_r = p_prof->plan_r_mm;
     }
+
     /* 4 Nov: a side with no echo at all is not proof that the obstacle runs
        on that way (a centred box got 0 echoes on the left and the car went
        right).  Take the servo scan's edge for it when that scan saw a real
@@ -1194,11 +1243,13 @@ static void edge_plan_apply (obstacle_core_profile_t * p_prof, bool b_has_l,
         lat_l = b_servo ? app_types_max_i32(p_prof->plan_l_mm, lat_r)
                         : (lat_r + OBST_WIDTH_MAX_MM);
     }
+
     if (!b_has_r)
     {
         lat_r = b_servo ? app_types_min_i32(p_prof->plan_r_mm, lat_l)
                         : (lat_l - OBST_WIDTH_MAX_MM);
     }
+
     if (lat_l < lat_r)
     {
         int32_t const mid = (lat_l + lat_r) / 2;
@@ -1206,6 +1257,7 @@ static void edge_plan_apply (obstacle_core_profile_t * p_prof, bool b_has_l,
         lat_l = mid;
         lat_r = mid;
     }
+
     /* Casts (int16_t)lat_l, (int16_t)lat_r: lateral edges of echoes within 800
        mm are within +-800 mm; (uint16_t)(lat_l - lat_r): lat_l >= lat_r here,
        and both are within +-800 mm. */
@@ -1259,11 +1311,13 @@ static void fine_insert (obstacle_core_scan_t * p_s, int16_t angle,
     if (p_s->n_fine < OBST_SCAN_MAX_POINTS) /* else the window is full */
     {
         idx = p_s->n_fine;
+
         while ((idx > 0u) && (p_s->fine[idx - 1u].angle_deg > angle))
         {
             p_s->fine[idx] = p_s->fine[idx - 1u];
             idx--;
         }
+
         p_s->fine[idx].angle_deg = angle;
         p_s->fine[idx].r_mm      = r_mm;
         p_s->n_fine++;
@@ -1288,8 +1342,10 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
             nearest = idx;
         }
     }
+
     p_s->r_min = r_min;
     p_s->iter  = 0u;
+
     if (OBST_RANGE_NONE == r_min)
     {
         p_s->phase = OBST_SCAN_DONE;
@@ -1297,6 +1353,7 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
     else
     {
         grow(p_s->fine, p_s->n_fine, nearest, r_min, &low, &high);
+
         if (b_right && (low > 0u))
         {
             p_s->phase = OBST_SCAN_REFINE_R;
@@ -1322,11 +1379,13 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
             p_s->phase = OBST_SCAN_DONE;
         }
     }
+
     if (b_refine)
     {
         /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is
            -32768..32767. */
         p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
+
         if ((p_s->angle == p_s->hit) || (p_s->angle == p_s->miss))
         {
             p_s->iter = OBST_REFINE_ITERS; /* already 1 deg apart */

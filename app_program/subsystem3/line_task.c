@@ -172,10 +172,12 @@ static void line_block (line_task_state_t * p_st,
     uint32_t             sum[LINE_CH_COUNT] = {0u, 0u, 0u};
 
     timing_pin_toggle();
+
     if ((p_st->last_seq != 0u) && ((seq - p_st->last_seq) > 1u))
     {
         p_st->snap.missed_blocks += (seq - p_st->last_seq) - 1u;
     }
+
     p_st->last_seq = seq;
     p_st->snap.blocks++;
 
@@ -224,6 +226,7 @@ static void line_block (line_task_state_t * p_st,
             omega = app_types_clamp_i32(omega, -LINE_BC_OMEGA_MAX,
                                         LINE_BC_OMEGA_MAX);
         }
+
         /* Casts (int16_t)g_trk.v_mm_s: v_mm_s is at most the cruise speed (<=
            350 mm/s); (int16_t)omega: omega is clamped to +-LINE_OMEGA_MAX by
            line_track_step(). */
@@ -251,12 +254,14 @@ static void line_cal_spin (line_task_state_t *         p_st,
         line_track_slip_start(&g_slip, p_odom->heading_cdeg);
         p_st->b_cal_active = true;
     }
+
     for (idx = 0u; idx < LINE_SAMPLES_PER_BLOCK; idx++)
     {
         line_track_cal_sample(&g_cal, &block[idx * LINE_CH_COUNT]);
         cross_left += block[(idx * LINE_CH_COUNT) + LINE_CH_L];
         cross_right += block[(idx * LINE_CH_COUNT) + LINE_CH_R];
     }
+
     /* Casts (uint16_t)(cross_left / ...), (uint16_t)(cross_right / ...): a mean
        of 12-bit ADC samples. */
     line_track_slip_sample(&g_slip, p_odom->heading_cdeg,
@@ -283,6 +288,7 @@ static void line_cal_finish (line_task_state_t * p_st)
             (uint16_t)(LINE_LOG_CAL_LEVELS + chan),
             (int32_t)(((uint32_t)g_cal.max[chan] << 16) | g_cal.min[chan]));
     }
+
     /* turn slip for the bypass turns (3 Nov) */
     /* Cast (int32_t)diag: bit pattern of the packed diagnosis word. */
     p_st->snap.turn_gain_pm = line_track_slip_gain(&g_slip, &g_cal, &diag);
@@ -315,6 +321,7 @@ static void line_barcode_block (line_task_state_t * p_st,
         sum[LINE_CH_L] += p_s[LINE_CH_L];
         sum[LINE_CH_R] += p_s[LINE_CH_R];
         sum[LINE_CH_BC] += p_s[LINE_CH_BC];
+
         if (g_cal.b_valid && !p_st->b_cal_active)
         {
             line_barcode_one(p_st, p_s[LINE_CH_BC], step_um);
@@ -333,6 +340,7 @@ static void line_barcode_one (line_task_state_t * p_st, uint16_t bc_raw,
 
     result = line_barcode_sample(
         &g_bc, line_track_cal_norm(&g_cal, LINE_CH_BC, bc_raw), step_um, &out);
+
     if (b_was_capturing && ((BC_VALID == result) || (BC_REJECT == result)))
     {
         /* Cast (int32_t)(app_time_us() - t0_us): a decode time in us, far below
@@ -341,6 +349,7 @@ static void line_barcode_one (line_task_state_t * p_st, uint16_t bc_raw,
                                     LINE_LOG_BC_DECODE_US,
                                     (int32_t)(app_time_us() - t0_us));
     }
+
     if (BC_VALID == result)
     {
         p_st->snap.barcode_ok++;
@@ -389,10 +398,12 @@ static void line_region (line_task_state_t *          p_st,
         /* Cast (uint16_t)(sum[idx] / ...): a mean of 12-bit ADC samples. */
         mean[idx] = (uint16_t)(sum[idx] / LINE_SAMPLES_PER_BLOCK);
     }
+
     p_st->snap.raw_l = line_track_cal_norm(&g_cal, LINE_CH_L, mean[LINE_CH_L]);
     p_st->snap.raw_r = line_track_cal_norm(&g_cal, LINE_CH_R, mean[LINE_CH_R]);
     p_st->snap.raw_bc =
         line_track_cal_norm(&g_cal, LINE_CH_BC, mean[LINE_CH_BC]);
+
     if (g_cal.b_valid && !p_st->b_cal_active)
     {
         line_track_cfg_t cfg;
@@ -408,16 +419,19 @@ static void line_region (line_task_state_t *          p_st,
         events =
             line_track_step(&g_trk, &cfg, p_st->snap.raw_l, p_st->snap.raw_r,
                             (uint32_t)app_types_abs_i32(p_odom->v_mm_s) * 10u);
+
         if ((events & LINE_TRK_EV_JUNCTION) != 0u)
         {
             (void)subsystem5_mission_post(MISSION_EV_JUNCTION, APP_SRC_LINE, 0u,
                                           0);
         }
+
         if ((events & LINE_TRK_EV_LOST) != 0u)
         {
             (void)subsystem5_mission_post(MISSION_EV_LINE_LOST, APP_SRC_LINE,
                                           0u, 0);
         }
+
         if ((events & LINE_TRK_EV_FOUND) != 0u)
         {
             (void)subsystem5_mission_post(MISSION_EV_LINE_FOUND, APP_SRC_LINE,
@@ -440,6 +454,7 @@ static void line_no_floor (line_task_state_t *         p_st,
         /* um per 10 ms block */
         /* Cast (uint32_t)app_types_abs_i32(...): the value is 0..32768. */
         p_st->nofloor_um += (uint32_t)app_types_abs_i32(p_odom->v_mm_s) * 10u;
+
         if (!p_st->b_no_floor && (p_st->nofloor_um >= LINE_NOFLOOR_UM))
         {
             /* Casts (int32_t)(((uint32_t)p_st->snap.raw ...)): bit pattern of a
@@ -511,10 +526,12 @@ static void bc_reject_detail (line_barcode_capture_t const * p_bc)
         w_min = (width < w_min) ? width : w_min;
         w_max = (width > w_max) ? width : w_max;
     }
+
     if (0u == p_bc->n_elems)
     {
         w_min = 0u;
     }
+
     /* Casts (int32_t)(((uint32_t)app_types_min_ ...)),
        (int32_t)((w_min << 16) | w_max): bit pattern of a packed LOG word, not
        an arithmetic value; (uint32_t)app_types_min_i32(...): the value is
@@ -553,6 +570,7 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
     /* Cast (int32_t)counts: bit pattern of the packed LOG word. */
     (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_LINE,
                                 LINE_LOG_BC_COUNTS, (int32_t)counts);
+
     for (reading = 0u; reading < BC_READINGS;
          reading += 5u) /* swing (0), adaptive 10 % (5) */
     {
@@ -580,6 +598,7 @@ static void bc_widths_log (line_barcode_capture_t const * p_bc)
                                                                       : elem))
                     << (8u * (2u - jdx));
             }
+
             /* Cast (int32_t)data: bit pattern of the packed LOG word. */
             (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_LINE,
                                         LINE_LOG_BC_ELEM, (int32_t)data);
@@ -631,12 +650,14 @@ static uint32_t bc_step_um (motion_types_odom_t const * p_odom)
     /* yaw [cdeg/s] x pi / 18000 x offset [mm] = mm/s; offset + right, so a left
        turn (yaw > 0) speeds up a right-hand sensor and slows a left-hand one */
     /* Casts (int32_t)(((int64_t)p_odom->yaw_rat ...)): the value is -257..257;
-       (int64_t)p_odom->yaw_rate_cdeg_s, (int32_t)p_odom->v_mm_s: every int16_t
-       value fits; (int64_t)18000: a constant that fits;
-       (uint32_t)app_types_abs_i32(...): the value is 0..2147516416. */
+       (int64_t)p_odom->yaw_rate_cdeg_s: every int16_t value fits;
+       (int64_t)18000: a constant that fits. */
     int32_t const side = (int32_t)(((int64_t)p_odom->yaw_rate_cdeg_s * 3141593
                                     * LINE_BC_OFFSET_MM)
                                    / ((int64_t)18000 * 1000000));
+
+    /* Casts (uint32_t)app_types_abs_i32(...): the value is 0..2147516416;
+       (int32_t)p_odom->v_mm_s: every int16_t value fits. */
     return (uint32_t)app_types_abs_i32((int32_t)p_odom->v_mm_s + side);
 }
 

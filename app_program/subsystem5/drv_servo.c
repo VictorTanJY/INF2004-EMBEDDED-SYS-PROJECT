@@ -37,6 +37,7 @@ EXPORT void drv_servo_set_deg (int32_t angle_deg)
     {
         angle = 0;
     }
+
     if (angle > 180)
     {
         angle = 180;

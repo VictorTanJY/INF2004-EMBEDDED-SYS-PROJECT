@@ -9,6 +9,7 @@
 #define IO_EDGE_BITS (APP_GPIO_EDGE_FALL | APP_GPIO_EDGE_RISE)
 
 static app_gpio_irq_cb_t g_cb[APP_REGS_GPIO_NUM];
+
 static uint32_t volatile g_count;
 static bool gb_defined;
 
@@ -34,6 +35,7 @@ EXPORT ER app_gpio_irq_init (void)
         err         = tk_def_int(APP_GPIO_IRQ_NO, &dint);
         gb_defined  = (E_OK == err);
     }
+
     return err;
 }
 
@@ -51,6 +53,7 @@ EXPORT ER app_gpio_irq_attach (uint32_t pin, uint32_t edges,
         DI(intsts);
         g_cb[pin] = p_callback;
         out_w(io_intr(reg), IO_EDGE_BITS << shift); /* drop stale edges */
+
         if (0u == this_core())
         {
             set_w(io_proc0_inte(reg), edges << shift);
@@ -59,11 +62,13 @@ EXPORT ER app_gpio_irq_attach (uint32_t pin, uint32_t edges,
         {
             set_w(io_proc1_inte(reg), edges << shift);
         }
+
         EI(intsts);
 
         EnableInt(APP_GPIO_IRQ_NO, APP_GPIO_IRQ_LEVEL); /* this core's NVIC */
         err = E_OK;
     }
+
     return err;
 }
 
@@ -140,6 +145,7 @@ static void gpio_bank0_isr (UINT intno)
 
     (void)intno;
     g_count++;
+
     for (reg = 0u; reg < IO_INT_REGS; reg++)
     {
         uint32_t ints =

@@ -178,6 +178,7 @@ static void test_wheels (test_report_t * p_report)
     step_rec_t rec = {0};
 
     step_measure(&rec);
+
     if (!rec.b_turn)
     {
         (void)motion_api_stop(MOTION_SRC_MISSION, T_SEQ);
@@ -215,6 +216,7 @@ static void step_measure (step_rec_t * p_rec)
     p_rec->b_turn = true;
     (void)motion_api_move_forward(MOTION_SRC_MISSION, T_SEQ, T_DIST_MM,
                                   T_SPEED_MM_S);
+
     for (;;)
     {
         int32_t elapsed;
@@ -225,6 +227,7 @@ static void step_measure (step_rec_t * p_rec)
         subsystem2_get_odom(&p_rec->odom);
         elapsed = (int32_t)(app_time_ms() - t_start);
         step_sample(p_rec, elapsed);
+
         if ((elapsed >= T_NO_TURN_MS)
             && (p_rec->odom.enc_l == p_rec->odom_start.enc_l)
             && (p_rec->odom.enc_r == p_rec->odom_start.enc_r))
@@ -232,12 +235,14 @@ static void step_measure (step_rec_t * p_rec)
             p_rec->b_turn = false;
             break;
         }
+
         if ((p_rec->odom.done_count != p_rec->odom_start.done_count)
             && (MOTION_ST_IDLE_BRAKED == p_rec->odom.state))
         {
             p_rec->b_done = true;
             break;
         }
+
         if (elapsed > 5000)
         {
             break;
@@ -259,11 +264,13 @@ static void step_sample (step_rec_t * p_rec, int32_t elapsed)
         {
             p_rec->peak = value;
         }
+
         if (iabs(value - T_SPEED_MM_S) > T_BAND_MM_S)
         {
             p_rec->settle = elapsed; /* last time outside the band */
         }
     }
+
     if ((elapsed >= T_WIN_LO_MS) && (elapsed <= T_WIN_HI_MS))
     {
         if (!p_rec->b_lo)
@@ -272,6 +279,7 @@ static void step_sample (step_rec_t * p_rec, int32_t elapsed)
             p_rec->t_lo = elapsed;
             p_rec->b_lo = true;
         }
+
         /* Casts (int32_t)p_rec->odom.v_l_mm_s, (int32_t)p_rec->odom.v_r_mm_s:
            every int16_t value fits. */
         p_rec->o_hi = p_rec->odom;
@@ -402,6 +410,7 @@ static bool wait_idle (uint32_t max_ms)
     for (elapsed = 0u; (elapsed < max_ms) && !b_idle; elapsed += 50u)
     {
         subsystem5_get_mission_snap(&mission);
+
         if ((MISSION_ST_IDLE == mission.state) && !subsystem2_estop_latched())
         {
             b_idle = true;
@@ -411,6 +420,7 @@ static bool wait_idle (uint32_t max_ms)
             (void)tk_dly_tsk(50);
         }
     }
+
     return b_idle;
 }
 
@@ -429,6 +439,7 @@ static bool wait_done (motion_types_odom_t const * p_start, uint32_t max_ms,
         b_done = (p_end->done_count != p_start->done_count)
                  && (MOTION_ST_IDLE_BRAKED == p_end->state);
     }
+
     return b_done;
 }
 

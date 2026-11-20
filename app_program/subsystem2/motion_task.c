@@ -86,10 +86,12 @@ EXPORT void motion_task_thread (INT stacd, void * p_exinf)
 
     /* Connect PWM (duty 0) unless SafetyTask already latched the brake. */
     DI(intsts);
+
     if (!subsystem2_estop_latched())
     {
         drv_motor_connect();
     }
+
     EI(intsts);
 
     motion_core_init(&g_core, app_time_ms_hw());
@@ -171,12 +173,15 @@ static void tt_wake (uint32_t now_us)
         {
             g_tt_per_min_us = per;
         }
+
         if (per > g_tt_per_max_us)
         {
             g_tt_per_max_us = per;
         }
+
         g_tt_cycles = g_tt_cycles + 1u;
     }
+
     g_tt_prev_us = now_us;
 }
 
@@ -217,10 +222,12 @@ static void write_pwm (int16_t duty_l, int16_t duty_r)
     UINT intsts;
 
     DI(intsts);
+
     if (!subsystem2_estop_latched())
     {
         drv_motor_write(duty_l, duty_r);
     }
+
     EI(intsts);
 }
 

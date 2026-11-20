@@ -1,7 +1,7 @@
 /** @file drv_lsm303.c
  *
  *  @brief LSM303D driver for the robot identified by WHO_AM_I 0x49 at 0x1D.
- *  Datasheet: https://www.st.com/resource/en/datasheet/lsm303d.pdf
+ *  Datasheet: www.st.com/resource/en/datasheet/lsm303d.pdf
  *  API units and sensor-axis order match the existing imu_core interface.
  */
 
@@ -64,6 +64,7 @@ EXPORT ER drv_lsm303_init (void)
     {
         err = init_once(); /* stuck: reboot and try once more */
     }
+
     return err;
 }
 
@@ -74,6 +75,7 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
     ER      err;
 
     err = drv_i2c1_read(SENSOR_ADDR, (0x28u | AUTO_INC), raw, 6u);
+
     if (E_OK == err)
     {
         for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
@@ -86,6 +88,7 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
                 / 1000;
         }
     }
+
     return err;
 }
 
@@ -96,6 +99,7 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
     ER      err;
 
     err = drv_i2c1_read(SENSOR_ADDR, (0x08u | AUTO_INC), raw, 6u);
+
     if (E_OK == err)
     {
         for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
@@ -103,6 +107,7 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
             mag[kdx] = le16(raw[2u * kdx], raw[(2u * kdx) + 1u]);
         }
     }
+
     return err;
 }
 
@@ -149,6 +154,7 @@ static ER init_once (void)
     g_diag = 0u;
 
     err = drv_i2c1_read(SENSOR_ADDR, 0x0Fu, &chip_id, 1u);
+
     if (err != E_OK)
     {
         stage = 1u;
@@ -161,10 +167,12 @@ static ER init_once (void)
     else
     {
         err = init_registers();
+
         if (E_OK == err)
         {
             err = first_reading(&b_stuck);
         }
+
         if (err != E_OK)
         {
             stage = 4u;
@@ -179,6 +187,7 @@ static ER init_once (void)
             stage = 0u;
         }
     }
+
     return init_result(stage, err, chip_id);
 }
 
@@ -191,6 +200,7 @@ static ER init_registers (void)
     ER       err;
 
     err = drv_i2c1_write_reg(SENSOR_ADDR, 0x1Fu, 0x80u);
+
     if (E_OK == err)
     {
         wait_ms(BOOT_WAIT_MS);
@@ -204,15 +214,18 @@ static ER init_registers (void)
 
         err = drv_i2c1_write_reg(SENSOR_ADDR, g_reg_init[idx].reg,
                                  g_reg_init[idx].value);
+
         if (E_OK == err)
         {
             err = drv_i2c1_read(SENSOR_ADDR, g_reg_init[idx].reg, &check, 1u);
         }
+
         if ((E_OK == err) && (check != g_reg_init[idx].value))
         {
             err = E_IO;
         }
     }
+
     return err;
 }
 
@@ -227,6 +240,7 @@ static ER first_reading (bool * pb_stuck)
     *pb_stuck = false;
     wait_ms(FIRST_DATA_WAIT_MS);
     err = drv_lsm303_read_accel(acc);
+
     for (idx = 0u; (E_OK == err) && (idx < LSM303_AXES); ++idx)
     {
         if ((acc[idx] >= STUCK_MG) || (acc[idx] <= -STUCK_MG))
@@ -234,6 +248,7 @@ static ER first_reading (bool * pb_stuck)
             *pb_stuck = true;
         }
     }
+
     return err;
 }
 

@@ -72,6 +72,7 @@ static motion_api_err_t post_signed (uint8_t src, uint8_t seq, uint8_t cmd,
         err = subsystem2_post(src, seq, cmd, (int16_t)(sign * (int32_t)amount),
                               (int16_t)rate);
     }
+
     return err;
 }
 

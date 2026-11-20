@@ -45,6 +45,7 @@ EXPORT void subsystem3_get_snap (line_types_snap_t * p_out)
     {
         words[idx] = g_line_snap[idx];
     }
+
     app_unlock(&g_line_lock, sts);
     line_track_snap_unpack(words, p_out);
 }
@@ -57,10 +58,12 @@ EXPORT void subsystem3_put_snap (line_types_snap_t const * p_in)
 
     line_track_snap_pack(p_in, words);
     sts = app_lock(&g_line_lock);
+
     for (idx = 0u; idx < LINE_SNAP_WORDS; idx++)
     {
         g_line_snap[idx] = words[idx];
     }
+
     app_unlock(&g_line_lock, sts);
 }
 

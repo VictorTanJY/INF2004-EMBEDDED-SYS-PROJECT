@@ -56,8 +56,9 @@ EXPORT void mission_task_thread (INT stacd, void * p_exinf)
         subsystem4_heartbeat(SAFETY_HB_MISSION);
         now_ms = app_time_ms();
 
-        /* Cast (INT)sizeof(ev_word): a constant that fits. */
         out.n_acts = 0u;
+
+        /* Cast (INT)sizeof(ev_word): a constant that fits. */
         if ((INT)sizeof(ev_word) == msg_len)
         {
             mission_core_evt_unpack(ev_word, &event);
@@ -132,6 +133,7 @@ static ER mission_motion (mission_core_act_t const * p_a)
                 subsystem2_post(src, p_a->seq, p_a->cmd, p_a->arg0, p_a->arg1);
         break;
     }
+
     return err;
 }
 

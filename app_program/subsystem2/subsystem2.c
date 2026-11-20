@@ -63,6 +63,7 @@ EXPORT ER subsystem2_init (void)
         g_cyc_motion = tk_cre_cyc(&ccyc);
         err          = (g_cyc_motion < E_OK) ? g_cyc_motion : E_OK;
     }
+
     return err;
 }
 
@@ -74,6 +75,7 @@ EXPORT ER subsystem2_start (void)
        is called with its own type. */
     g_tid_motion = app_main_start_task((FP)motion_task_thread, S2_PRI_MOTION,
                                        S2_CORE_MOTION, "motion");
+
     if (g_tid_motion < E_OK)
     {
         err = g_tid_motion;
@@ -82,6 +84,7 @@ EXPORT ER subsystem2_start (void)
     {
         err = tk_sta_cyc(g_cyc_motion);
     }
+
     return err;
 }
 
@@ -119,6 +122,7 @@ EXPORT void subsystem2_get_odom (motion_types_odom_t * p_out)
     {
         words[idx] = g_odom[idx];
     }
+
     app_unlock(&g_odom_lock, sts);
     motion_core_odom_unpack(words, p_out);
 }
@@ -131,10 +135,12 @@ EXPORT void subsystem2_put_odom (motion_types_odom_t const * p_in)
 
     motion_core_odom_pack(p_in, words);
     sts = app_lock(&g_odom_lock);
+
     for (idx = 0u; idx < MOTION_ODOM_WORDS; idx++)
     {
         g_odom[idx] = words[idx];
     }
+
     app_unlock(&g_odom_lock, sts);
 }
 
@@ -175,6 +181,7 @@ EXPORT bool subsystem2_estop_reconnect (void)
     UINT intsts;
 
     DI(intsts);
+
     if ((g_estop_latch != 0u) && (0u == subsystem4_get_latched()))
     {
         drv_motor_write(0, 0);
@@ -182,6 +189,7 @@ EXPORT bool subsystem2_estop_reconnect (void)
         g_estop_latch = 0u;
         b_ok          = true;
     }
+
     EI(intsts);
     return b_ok;
 }

@@ -133,6 +133,7 @@ void mqtt_utk_start (void)
     if (b_go && (NULL == gp_client))
     {
         gp_client = mqtt_client_new();
+
         if (NULL == gp_client)
         {
             /* Cast (UB *) of the string literal: tm_printf() takes UB *; the
@@ -160,6 +161,7 @@ void mqtt_utk_start (void)
         client_info.keep_alive = MQTT_UTK_KEEPALIVE_S;
 
         p_cfg = mqtt_utk_app_config();
+
         if ((p_cfg != NULL) && (p_cfg->p_will_topic != NULL)
             && (p_cfg->p_will_msg != NULL))
         {
@@ -172,6 +174,7 @@ void mqtt_utk_start (void)
         gb_busy = true;
         err = mqtt_client_connect(gp_client, &g_broker_addr, MQTT_BROKER_PORT,
                                   connection_cb, NULL, &client_info);
+
         if (err != ERR_OK)
         {
             /* Casts (UB *) of the format string: tm_printf() takes UB *;
@@ -200,6 +203,7 @@ int32_t mqtt_utk_publish (char const * p_topic, uint8_t const * p_data,
         result = (int32_t)mqtt_publish(gp_client, p_topic, p_data, len, qos,
                                        retain, publish_done_cb, NULL);
     }
+
     return result;
 }
 
@@ -246,6 +250,7 @@ static void schedule_retry (void)
     sys_timeout(g_backoff_ms, retry_timeout, NULL);
 
     g_backoff_ms *= 2u;
+
     if (g_backoff_ms > MQTT_UTK_BACKOFF_MAX_MS)
     {
         g_backoff_ms = MQTT_UTK_BACKOFF_MAX_MS;
@@ -266,6 +271,7 @@ static void incoming_publish_cb (void * p_arg, char const * p_topic,
     {
         g_rx_topic[idx] = p_topic[idx];
     }
+
     g_rx_topic[idx] = '\0';
 
     g_rx_len       = 0u;
@@ -290,6 +296,7 @@ static void incoming_data_cb (void * p_arg, uint8_t const * p_data,
     {
         g_rx_data[g_rx_len] =
             0u; /* convenience terminator; length is authoritative */
+
         if (gb_rx_too_long)
         {
             g_rx_dropped++;
@@ -305,6 +312,7 @@ static void incoming_data_cb (void * p_arg, uint8_t const * p_data,
 static void subscribe_done_cb (void * p_arg, err_t result)
 {
     (void)p_arg;
+
     if (result != ERR_OK)
     {
         /* Casts (UB *) of the format string: tm_printf() takes UB *; the
@@ -317,6 +325,7 @@ static void subscribe_done_cb (void * p_arg, err_t result)
 static void publish_done_cb (void * p_arg, err_t result)
 {
     (void)p_arg;
+
     if (result != ERR_OK)
     {
         g_pub_failures++;
@@ -345,10 +354,12 @@ static void connection_cb (mqtt_client_t * p_client, void * p_arg,
          * first delivery has nowhere to go. */
         mqtt_set_inpub_callback(gp_client, incoming_publish_cb,
                                 incoming_data_cb, NULL);
+
         if ((p_cfg != NULL) && (p_cfg->p_sub_topic != NULL))
         {
             err_t err = mqtt_subscribe(gp_client, p_cfg->p_sub_topic,
                                        p_cfg->sub_qos, subscribe_done_cb, NULL);
+
             if (err != ERR_OK)
             {
                 /* Casts (UB *) of the format string: tm_printf() takes UB *;
@@ -357,6 +368,7 @@ static void connection_cb (mqtt_client_t * p_client, void * p_arg,
                           (INT)err);
             }
         }
+
         mqtt_utk_app_connected();
     }
     else

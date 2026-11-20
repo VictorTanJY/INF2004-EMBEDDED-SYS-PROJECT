@@ -77,6 +77,7 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
     {
         hist[idx] = 0u;
     }
+
     for (idx = 0u; idx < n_bins; idx++)
     {
         /* Cast (uint16_t)(p_prof[idx] / 16u): the value is 0..4095. */
@@ -84,12 +85,14 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
 
         hist[(bin < HIST_BINS) ? bin : (HIST_BINS - 1u)]++;
     }
+
     *p_white = 0u;
     *p_dark  = 1000u;
     for (idx = 0u; idx < HIST_BINS; idx++)
     {
-        /* Cast (uint32_t)n_bins: every uint16_t value fits. */
         sum += hist[idx];
+
+        /* Cast (uint32_t)n_bins: every uint16_t value fits. */
         if (!b_white
             && ((sum * 100u) >= ((uint32_t)n_bins * BC_PROF_WHITE_PCT)))
         {
@@ -98,6 +101,7 @@ void line_barcode_prof_levels (uint16_t const * p_prof, uint16_t n_bins,
             *p_white = (uint16_t)((idx * 16u) + 8u);
             b_white  = true;
         }
+
         /* Cast (uint32_t)n_bins: every uint16_t value fits. */
         if ((sum * 100u) >= ((uint32_t)n_bins * BC_PROF_DARK_PCT))
         {
@@ -126,6 +130,7 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
     {
         idx++;
     }
+
     for (; idx < n_bins; idx++)
     {
         /* Cast (uint16_t)(thr + hyst): callers pass a level threshold (<= 1016)
@@ -142,11 +147,14 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
                 runs[n_runs] = run;
                 n_runs++;
             }
+
             run     = 0u;
             b_black = b_now;
         }
+
         run++;
     }
+
     /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that fits. */
     if (b_black && (run > 0u)
         && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
@@ -154,6 +162,7 @@ uint16_t line_barcode_prof_elements (uint16_t const * p_prof, uint16_t n_bins,
         runs[n_runs] = run; /* a bar ran to the end: keep it  */
         n_runs++;
     }
+
     return runs_to_widths(runs, n_runs, p_widths, max_elems);
 }
 
@@ -171,6 +180,7 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
 
     /* n_bins 0: no runs, so no elements */
     ext = (n_bins > 0u) ? p_prof[0] : 0u;
+
     for (idx = 0u; idx < n_bins; idx++)
     {
         uint16_t const level = p_prof[idx];
@@ -178,8 +188,9 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
 
         if (b_black)
         {
-            /* Cast (uint32_t)level: every uint16_t value fits. */
             ext = (level > ext) ? level : ext;
+
+            /* Cast (uint32_t)level: every uint16_t value fits. */
             if (((uint32_t)level + delta) < ext)
             {
                 b_now = false;
@@ -188,15 +199,17 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         }
         else
         {
+            ext = (level < ext) ? level : ext;
+
             /* Casts (uint32_t)level, (uint32_t)ext: every uint16_t value
                fits. */
-            ext = (level < ext) ? level : ext;
             if ((uint32_t)level > ((uint32_t)ext + delta))
             {
                 b_now = true;
                 ext   = level;
             }
         }
+
         if (b_now != b_black)
         {
             /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that
@@ -207,12 +220,15 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
                 runs[n_runs] = run;
                 n_runs++;
             }
+
             b_bar_seen = b_bar_seen || b_now;
             run        = 0u;
             b_black    = b_now;
         }
+
         run++;
     }
+
     /* Cast (uint16_t)(sizeof(runs) / sizeof(...)): a constant that fits. */
     if (b_black && (run > 0u)
         && (n_runs < (uint16_t)(sizeof(runs) / sizeof(runs[0]))))
@@ -220,6 +236,7 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         runs[n_runs] = run; /* a bar ran to the end: keep it  */
         n_runs++;
     }
+
     return runs_to_widths(runs, n_runs, p_widths, max_elems);
 }
 
@@ -239,6 +256,7 @@ uint16_t line_barcode_reading (line_barcode_capture_t const * p_bc,
     {
         kdx = prof_read(p_bc, reading, p_widths);
     }
+
     return kdx;
 }
 
@@ -250,10 +268,12 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
     line_barcode_result_t result      = BC_NONE;
 
     swing(p_bc, norm);
+
     switch (p_bc->state)
     {
         case LINE_BC_WAIT_QUIET:
             p_bc->white_um = p_bc->b_black ? 0u : (p_bc->white_um + step_um);
+
             if (p_bc->white_um >= BC_QUIET_UM)
             {
                 p_bc->state    = LINE_BC_ARMED;
@@ -276,6 +296,7 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
 
         default: /* LINE_BC_COOLDOWN */
             p_bc->cooldown_um += step_um;
+
             if (p_bc->cooldown_um >= BC_COOLDOWN_UM)
             {
                 p_bc->state    = LINE_BC_WAIT_QUIET;
@@ -283,6 +304,7 @@ line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
             }
         break;
     }
+
     return result;
 }
 
@@ -300,8 +322,9 @@ static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
        extreme, so for a full swing bar and gap widths stay unbiased. */
     if (p_bc->b_black)
     {
-        /* Cast (uint32_t)norm: every uint16_t value fits. */
         p_bc->ext = (norm > p_bc->ext) ? norm : p_bc->ext; /* darkest so far */
+
+        /* Cast (uint32_t)norm: every uint16_t value fits. */
         if (((uint32_t)norm + BC_DELTA) < p_bc->ext)
         {
             p_bc->b_black = false;
@@ -310,9 +333,10 @@ static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
     }
     else
     {
+        p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext; /* lightest so far */
+
         /* Casts (uint32_t)norm, (uint32_t)p_bc->ext: every uint16_t value
            fits. */
-        p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext; /* lightest so far */
         if ((norm >= BC_DELTA_MIN)
             && ((uint32_t)norm > ((uint32_t)p_bc->ext + BC_DELTA)))
         {
@@ -333,6 +357,7 @@ static void armed (line_barcode_capture_t * p_bc, uint16_t norm,
         p_bc->q_wlo = (norm < p_bc->q_wlo) ? norm : p_bc->q_wlo;
         p_bc->q_whi = (norm > p_bc->q_whi) ? norm : p_bc->q_whi;
         p_bc->white_um += step_um;
+
         if (p_bc->white_um >= BC_QUIET_UM)
         {
             p_bc->q_lo     = p_bc->q_wlo;
@@ -342,6 +367,7 @@ static void armed (line_barcode_capture_t * p_bc, uint16_t norm,
             p_bc->white_um = 0u;
         }
     }
+
     if (p_bc->b_black)
     {
         capture_start(p_bc, norm, step_um);
@@ -364,6 +390,7 @@ static void capture_start (line_barcode_capture_t * p_bc, uint16_t norm,
     p_bc->total_um    = step_um;
     p_bc->max_elem_um = 0u;
     p_bc->peak        = norm;
+
     /* the darkness record starts with what came just before,
        oldest first (faint leading bars) */
     for (kdx = 0u; kdx < p_bc->pre_n; kdx++)
@@ -374,6 +401,7 @@ static void capture_start (line_barcode_capture_t * p_bc, uint16_t norm,
             uint16_t)((((p_bc->pre_i + BC_PRE_BINS) - p_bc->pre_n) + kdx)
                       % BC_PRE_BINS)];
     }
+
     /* Cast (uint16_t)(p_bc->pre_n + 1u): pre_n <= BC_PRE_BINS, well below the
        16-bit range. */
     p_bc->prof[p_bc->pre_n] = norm;
@@ -393,6 +421,7 @@ static line_barcode_result_t capturing (line_barcode_capture_t * p_bc,
 
     p_bc->total_um += step_um;
     capture_profile(p_bc, norm, step_um);
+
     if (p_bc->b_black == b_was_black)
     {
         p_bc->run_um += step_um;
@@ -408,12 +437,15 @@ static line_barcode_result_t capturing (line_barcode_capture_t * p_bc,
         /* run ended: store it as an element */
         p_bc->widths[p_bc->n_elems] = p_bc->run_um;
         p_bc->n_elems++;
+
         if (p_bc->run_um > p_bc->max_elem_um)
         {
             p_bc->max_elem_um = p_bc->run_um;
         }
+
         p_bc->run_um = step_um;
     }
+
     if (!b_done && !p_bc->b_black)
     {
         uint32_t end_um = (p_bc->max_elem_um * BC_END_FACTOR_X10) / 10u;
@@ -422,16 +454,19 @@ static line_barcode_result_t capturing (line_barcode_capture_t * p_bc,
         {
             end_um = BC_END_MIN_UM;
         }
+
         if (p_bc->run_um >= end_um)
         {
             result = finish(p_bc, p_out);
             b_done = true;
         }
     }
+
     if (!b_done && (p_bc->total_um > BC_MAX_LEN_UM))
     {
         result = capture_reject(p_bc, CODE39_ERR_TOO_LONG, p_out);
     }
+
     return result;
 }
 
@@ -441,16 +476,19 @@ static void capture_profile (line_barcode_capture_t * p_bc, uint16_t norm,
                              uint32_t step_um)
 {
     p_bc->bin_um += step_um;
+
     while ((p_bc->bin_um >= BC_PROF_BIN_UM) && (p_bc->prof_n < BC_PROF_BINS))
     {
         p_bc->bin_um -= BC_PROF_BIN_UM;
         p_bc->prof[p_bc->prof_n] = norm;
         p_bc->prof_n++;
     }
+
     if ((p_bc->prof_n > 0u) && (norm > p_bc->prof[p_bc->prof_n - 1u]))
     {
         p_bc->prof[p_bc->prof_n - 1u] = norm;
     }
+
     if (norm > p_bc->peak)
     {
         p_bc->peak = norm;
@@ -484,16 +522,19 @@ static void pre_feed (line_barcode_capture_t * p_bc, uint16_t norm,
 {
     p_bc->pre_cur = (norm > p_bc->pre_cur) ? norm : p_bc->pre_cur;
     p_bc->pre_um += step_um;
+
     while (p_bc->pre_um >= BC_PROF_BIN_UM)
     {
         /* Cast (uint16_t)((p_bc->pre_i + 1u) % ...): the value is 0..74. */
         p_bc->pre_um -= BC_PROF_BIN_UM;
         p_bc->pre[p_bc->pre_i] = p_bc->pre_cur;
         p_bc->pre_i            = (uint16_t)((p_bc->pre_i + 1u) % BC_PRE_BINS);
+
         if (p_bc->pre_n < BC_PRE_BINS)
         {
             p_bc->pre_n++;
         }
+
         p_bc->pre_cur = norm;
     }
 }
@@ -524,10 +565,12 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
                profile: at most BC_PROF_BINS bins together. */
             p_runs[kdx - 1u] =
                 (uint16_t)(p_runs[kdx - 1u] + p_runs[kdx] + p_runs[kdx + 1u]);
+
             for (idx = kdx; (idx + 2u) < n_runs; idx++)
             {
                 p_runs[idx] = p_runs[idx + 2u];
             }
+
             /* Cast (uint16_t)(n_runs - 2u): a merge needs kdx > 0 and kdx + 1 <
                n_runs, so n_runs >= 3. */
             n_runs = (uint16_t)(n_runs - 2u);
@@ -537,12 +580,14 @@ static uint16_t runs_to_widths (uint16_t * p_runs, uint16_t n_runs,
             kdx++;
         }
     }
+
     for (kdx = 0u; (kdx < n_runs) && (out < max_elems); kdx++)
     {
         /* Cast (uint32_t)p_runs[kdx]: every uint16_t value fits. */
         p_widths[out] = (uint32_t)p_runs[kdx] * BC_PROF_BIN_UM;
         out++;
     }
+
     return out;
 }
 
@@ -559,11 +604,13 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
     if (p_bc->prof_n > 0u)
     {
         line_barcode_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
+
         if (dark > white)
         {
             n_read = prof_read_span(p_bc, kdx, white, dark, p_w);
         }
     }
+
     return n_read;
 }
 
@@ -589,12 +636,13 @@ static uint16_t prof_read_span (line_barcode_capture_t const * p_bc,
                                    : 0u;
         uint32_t       delta = ((uint32_t)span * pct) / 100u;
 
-        /* Cast (uint32_t)BC_DELTA: a constant that fits. */
         delta = (delta < (noise * BC_ADAPT_NOISE_X))
                     ? (noise * BC_ADAPT_NOISE_X)
                     : delta;
         delta = (delta < BC_ADAPT_MIN) ? BC_ADAPT_MIN : delta;
+
         /* No reading if delta is no smaller than the first reading's. */
+        /* Cast (uint32_t)BC_DELTA: a constant that fits. */
         if (delta < (uint32_t)BC_DELTA)
         {
             /* Cast (uint16_t)delta: delta < BC_DELTA (250, tested above). */
@@ -615,6 +663,7 @@ static uint16_t prof_read_span (line_barcode_capture_t const * p_bc,
                                             (uint16_t)(span / 16u), p_w,
                                             BC_MAX_ELEMENTS);
     }
+
     return n_read;
 }
 
@@ -648,15 +697,19 @@ static uint16_t trim_specks (uint32_t const * p_w, uint16_t n_elems,
             {
                 sorted[jdx] = sorted[jdx - 1u];
             }
+
             sorted[jdx] = width;
             mid++;
         }
-        /* Casts (uint64_t)p_w[0], (uint64_t)med: every uint32_t value fits. */
+
         med = sorted[mid / 2u];
+
+        /* Casts (uint64_t)p_w[0], (uint64_t)med: every uint32_t value fits. */
         if (((uint64_t)p_w[0] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
         {
             *p_first = 2u;
         }
+
         /* Casts (uint64_t)p_w[n_elems - 1u], (uint64_t)med: every uint32_t
            value fits. */
         if (((uint64_t)p_w[n_elems - 1u] * 100u)
@@ -666,6 +719,7 @@ static uint16_t trim_specks (uint32_t const * p_w, uint16_t n_elems,
             last = (uint16_t)(n_elems - 2u);
         }
     }
+
     /* Cast (uint16_t)(last - *p_first): *p_first is 0 or 2 and last >= n_elems
        - 2 >= 9 (or last = n_elems and *p_first = 0). */
     return (uint16_t)(last - *p_first);
@@ -695,6 +749,7 @@ static code39_result_t decode_exact (uint32_t const * p_w, uint16_t n_elems,
             result   = CODE39_OK;
         }
     }
+
     return result;
 }
 
@@ -730,10 +785,12 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
     p_bc->pass       = 0u;
     result           = decode_exact(p_bc->widths, p_bc->n_elems, &p_out->chr,
                                     &p_out->b_reversed, &b_trim);
+
     if (b_trim)
     {
         p_bc->pass = BC_PROF_PASSES;
     }
+
     for (kdx = 1u; (kdx <= BC_PROF_PASSES) && (result != CODE39_OK); kdx++)
     {
         uint16_t const n_read = prof_read(p_bc, kdx, read_widths);
@@ -751,11 +808,13 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
             result            = CODE39_OK;
         }
     }
+
     if ((result != CODE39_OK) && (result != CODE39_NOT_BARCODE)
         && best_pass(p_bc, read_widths, p_out))
     {
         result = CODE39_OK;
     }
+
     if (CODE39_NOT_BARCODE == result)
     {
         /* A crossing line or a speck: not a barcode, not an error.  The
@@ -766,6 +825,7 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
     else
     {
         start_cooldown(p_bc);
+
         if (CODE39_OK == result)
         {
             bc_result = BC_VALID;
@@ -776,6 +836,7 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
             bc_result     = BC_REJECT;
         }
     }
+
     return bc_result;
 }
 
@@ -807,6 +868,7 @@ static bool best_pass (line_barcode_capture_t * p_bc,
             k_pick = kdx;
         }
     }
+
     if (k_pick < BC_READINGS)
     {
         uint16_t       first;
@@ -826,6 +888,7 @@ static bool best_pass (line_barcode_capture_t * p_bc,
             b_ok              = true;
         }
     }
+
     return b_ok;
 }
 

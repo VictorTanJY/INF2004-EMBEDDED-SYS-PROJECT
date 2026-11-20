@@ -142,12 +142,14 @@ static void test_button (test_report_t * p_report)
                HMI_BTN_EV_NONE == hmi_button_update(&btn, false, 20u, 2000u),
                "single-sample glitch ignored");
     hmi_button_init(&btn);
+
     for (idx = 0u; idx < T_HOLD_SAMPLES; idx++)
     {
         hmi_button_ev_t event = hmi_button_update(&btn, true, 20u, 2000u);
 
         b_long = b_long || (HMI_BTN_EV_LONG == event);
     }
+
     (void)hmi_button_update(&btn, false, 20u, 2000u);
     b_short = (HMI_BTN_EV_SHORT == hmi_button_update(&btn, false, 20u, 2000u));
     TEST_CHECK(p_report, "S1-U06b", b_long && !b_short,
@@ -165,6 +167,7 @@ static bool s1_bytes_eq (uint8_t const * p_a, uint8_t const * p_b,
     {
         b_eq = (p_a[idx] == p_b[idx]);
     }
+
     return b_eq;
 }
 

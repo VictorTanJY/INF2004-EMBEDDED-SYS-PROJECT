@@ -51,6 +51,7 @@
 #define DMA_IRQ_LEVEL 2
 
 static uint16_t g_buf[2][DRV_ADC_BLOCK_LEN];
+
 static uint8_t volatile g_ready; /* buffer last completed */
 static uint32_t volatile g_seq;  /* blocks completed      */
 static uint32_t volatile g_errors;
@@ -83,12 +84,14 @@ EXPORT ER drv_adc_init (void)
     }
 
     out_w(ADC_CS, ADC_CS_EN);
+
     for (spin = 0u;
          (spin < ADC_READY_SPINS) && (0u == (in_w(ADC_CS) & ADC_CS_READY));
          spin++)
     {
         ;
     }
+
     if (0u == (in_w(ADC_CS) & ADC_CS_READY))
     {
         err = E_IO; /* clk_adc not running? */
@@ -97,6 +100,7 @@ EXPORT ER drv_adc_init (void)
     {
         out_w(ADC_DIV, ADC_DIV_3KHZ);
         out_w(ADC_FCS, ADC_FCS_EN | ADC_FCS_DREQ_EN | ADC_FCS_THRESH_1);
+
         while (adc_fcs_level(in_w(ADC_FCS)) != 0u)
         {
             (void)in_w(ADC_FIFO); /* drain */
@@ -114,6 +118,7 @@ EXPORT ER drv_adc_init (void)
         out_w(dma_trans_count(DMA_CH_B), DRV_ADC_BLOCK_LEN);
         out_w(dma_al1_ctrl(DMA_CH_B), ctrl_for(DMA_CH_A));
     }
+
     return err;
 }
 
@@ -128,6 +133,7 @@ EXPORT ER drv_adc_start (ID task)
     dint.intatr = TA_HLNG;
     dint.inthdr = (FP)adc_dma_isr;
     err         = tk_def_int(DMA_IRQ1_NO, &dint);
+
     if (E_OK == err)
     {
         out_w(DMA_INTS1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
@@ -138,6 +144,7 @@ EXPORT ER drv_adc_start (ID task)
         /* AINSEL = 0 and round robin 0, 1, 2: the buffer always starts at L. */
         out_w(ADC_CS, ADC_CS_EN | ADC_CS_RROBIN_012 | ADC_CS_START_MANY);
     }
+
     return err;
 }
 
@@ -152,6 +159,7 @@ EXPORT bool drv_adc_get_block (uint16_t   p_out[DRV_ADC_BLOCK_LEN],
     which  = g_ready;
     *p_seq = g_seq;
     EI(intsts);
+
     if (*p_seq != 0u)
     {
         /* The other buffer is being filled now; this one is stable for 10 ms.
@@ -163,6 +171,7 @@ EXPORT bool drv_adc_get_block (uint16_t   p_out[DRV_ADC_BLOCK_LEN],
             p_out[idx] = (uint16_t)(g_buf[which][idx] & 0x0FFFu);
         }
     }
+
     return (*p_seq != 0u);
 }
 
@@ -232,6 +241,7 @@ static void adc_dma_isr (UINT intno)
 
     (void)intno;
     out_w(DMA_INTS1, ints); /* write 1 to clear */
+
     if ((ints & (1uL << DMA_CH_A)) != 0u)
     {
         /* Cast (uint32_t)&g_buf[0][0]: the DMA register takes the 32-bit
@@ -241,6 +251,7 @@ static void adc_dma_isr (UINT intno)
         g_ready = 0u;
         g_seq++;
     }
+
     if ((ints & (1uL << DMA_CH_B)) != 0u)
     {
         /* Cast (uint32_t)&g_buf[1][0]: the DMA register takes the 32-bit
@@ -249,11 +260,13 @@ static void adc_dma_isr (UINT intno)
         g_ready = 1u;
         g_seq++;
     }
+
     if ((in_w(ADC_FCS) & (ADC_FCS_OVER | ADC_FCS_UNDER)) != 0u)
     {
         out_w(ADC_FCS, in_w(ADC_FCS) | ADC_FCS_OVER | ADC_FCS_UNDER); /* W1C */
         g_errors++;
     }
+
     if (g_task > 0)
     {
         (void)tk_wup_tsk(g_task);

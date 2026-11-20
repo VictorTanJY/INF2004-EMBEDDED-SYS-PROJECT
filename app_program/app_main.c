@@ -78,6 +78,7 @@ EXPORT ID app_main_start_task (FP entry, PRI pri, uint32_t prc,
 
     /* tk_cre_tsk: create the task.  It starts in the DORMANT state. */
     tid = tk_cre_tsk(&ctsk);
+
     if (tid < E_OK)
     {
         check_er(tid, p_name);
@@ -88,6 +89,7 @@ EXPORT ID app_main_start_task (FP entry, PRI pri, uint32_t prc,
         err = tk_sta_tsk(tid, 0);
         check_er(err, p_name);
     }
+
     return tid;
 }
 

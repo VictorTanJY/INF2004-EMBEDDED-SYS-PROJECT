@@ -105,6 +105,7 @@ static void     test_obstacle_h17(void);
 static void     test_obstacle_h12(void);
 static void     test_obstacle_h15(void);
 static void     test_pack_h26(void);
+static void     test_pack_h26_snap(void);
 static void     test_pack_h26_part2(void);
 static void     probe_sim(obstacle_core_probe_t * p_probe, float64_t omega,
                           float64_t coef, float64_t run);
@@ -157,6 +158,7 @@ static int32_t find (uint8_t kind, uint8_t cmd)
             found = idx;
         }
     }
+
     return found;
 }
 
@@ -175,6 +177,7 @@ static uint8_t last_seq (void)
             seq = g_out.act[idx].seq;
         }
     }
+
     return seq;
 }
 
@@ -483,10 +486,12 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
 
             phi += side * OBST_EDGE_STEP_DDEG * 10;
             ret = edge_ping(diff, omega, coef, phi / 100.0);
+
             if ((side < 0) && (phi <= -2500) && (g_edge_clutter != 0u))
             {
                 ret = g_edge_clutter;
             } /* something to the right */
+
             /* Cast (uint16_t)diff: diff is a simulated box distance of 150..326
                mm. */
             if (obstacle_core_edge_on_face(phi, ret, (uint16_t)diff))
@@ -497,6 +502,7 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
                     b_past = true;
                     break;
                 }
+
                 b_has[kdx]      = true;
                 lat[kdx]        = obstacle_core_edge_wide_lat(phi, ret, side);
                 minimum[kdx]    = obstacle_core_edge_lat(phi);
@@ -511,9 +517,11 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
                 {
                     high = phi;
                 }
+
                 miss++;
             }
         }
+
         /* 7 Nov: refine between the last echo and the first miss, as the task
          */
         for (iter = 0u; b_has[kdx] && !b_past && (miss >= OBST_EDGE_MISSES)
@@ -522,10 +530,11 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
         {
             uint16_t ret;
 
-            /* Cast (uint16_t)diff: diff is a simulated box distance of 150..326
-               mm. */
             phi = (low + high) / 2;
             ret = edge_ping(diff, omega, coef, phi / 100.0);
+
+            /* Cast (uint16_t)diff: diff is a simulated box distance of 150..326
+               mm. */
             if (obstacle_core_edge_on_face(phi, ret, (uint16_t)diff)
                 && !obstacle_core_edge_past_max(
                     obstacle_core_edge_wide_lat(phi, ret, side), side))
@@ -540,11 +549,13 @@ static void edge_sim (float64_t diff, float64_t omega, float64_t coef,
             {
                 high = phi;
             }
+
             g_edge_phi[kdx] =
                 (low + high)
                 / 2; /* the edge is between the last echo and the miss */
         }
     }
+
     obstacle_core_edge_plan(p_prof, b_has[0], lat[0], b_has[1], lat[1]);
     obstacle_core_edge_plan_min(p_prof, b_has[0], minimum[0], b_has[1],
                                 minimum[1]);
@@ -576,6 +587,7 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
 
     *p_edge = high;
     obstacle_core_out_start(&out_state, min_lat);
+
     for (time_s = 0.0; (time_s < 2000.0) && !b_done; time_s += step)
     {
         float64_t const accel_x = time_s * sin(theta);
@@ -613,6 +625,7 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
                     best = radius2;
                 }
             }
+
             /* Casts (uint16_t)best: best is a distance (>= 0) of at most 4000
                mm on this branch; (int32_t)accel_x, (int32_t)accel_y: time_s <
                2000 and sin, cos 45 deg < 1, so below 1415 mm; (int32_t)face:
@@ -622,6 +635,7 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
                                    (int32_t)accel_y, 4500, ret, (int32_t)face);
         }
     }
+
     return lat;
 }
 
@@ -650,6 +664,7 @@ static uint16_t edge_ping (float64_t diff, float64_t omega, float64_t coef,
             best = radius;
         }
     }
+
     /* Cast (uint16_t)best: best is a distance (>= 0) of at most 4000 mm on this
        branch. */
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
@@ -687,6 +702,7 @@ static uint16_t ping (box_t const * p_b, int32_t n_b, int32_t angle_deg)
             }
         }
     }
+
     /* Cast (uint16_t)lround(best): best is a distance (>= 0) of at most 4000 mm
        on this branch. */
     return (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)lround(best);
@@ -700,12 +716,14 @@ static void scan_box (box_t const * p_b, int32_t n_b,
 
     obstacle_core_scan_start(&scan);
     g_pings = 0;
+
     while (!obstacle_core_scan_done(&scan) && (g_pings < T_SCAN_MAX_PINGS))
     {
         obstacle_core_scan_feed(
             &scan, ping(p_b, n_b, obstacle_core_scan_angle(&scan)));
         g_pings++;
     }
+
     obstacle_core_scan_profile(&scan, p_prof);
 }
 
@@ -757,10 +775,12 @@ static void test_obstacle_h09 (void)
                double. */
             scan_box(&box, 1, &prof);
             err = fabs((float64_t)prof.w_mm - width) / width;
+
             if (err > worst)
             {
                 worst = err;
             }
+
             /* Casts (uint32_t)prof.w_mm, (uint32_t)prof.closest_mm: every
                uint16_t value fits; (uint32_t)prof.plan: every uint8_t value
                fits. */
@@ -777,6 +797,7 @@ static void test_obstacle_h09 (void)
                                     == prof.plan)); /* free space around */
         }
     }
+
     printf("worst width error on the beam model: %.1f %%\n", worst * 100.0);
     CHECK("S5-H10", worst <= 0.10);
 }
@@ -789,6 +810,7 @@ static void test_obstacle_h11 (void)
     /* S5-H11: plan: free both sides -> the side needing less deviation */
     {
         box_t box = {200.0, 150.0, 30.0}; /* centred a little to the left */
+
         scan_box(&box, 1, &prof);
         CHECK("S5-H11",
               (OBST_PLAN_RIGHT == prof.plan) && (prof.deviation_mm < 0));
@@ -796,6 +818,7 @@ static void test_obstacle_h11 (void)
     {
         box_t box[2] = {{200.0, 150.0, 0.0},
                         {260.0, 120.0, -200.0}}; /* wall on the right */
+
         scan_box(box, 2, &prof);
         CHECK("S5-H11",
               (OBST_PLAN_LEFT == prof.plan)
@@ -857,6 +880,7 @@ static void test_obstacle_h11 (void)
                    "width %u\n",
                    col, (uint32_t)prof.plan, prof.deviation_mm,
                    (uint32_t)prof.w_mm);
+
             if (col > 0)
             {
                 CHECK("S5-H25",
@@ -898,11 +922,13 @@ static void test_obstacle_h24 (void)
     {
         box_t box[3] = {
             {200.0, 150.0, 0.0}, {250.0, 120.0, -200.0}, {250.0, 120.0, 200.0}};
+
         scan_box(box, 3, &prof);
         CHECK("S5-H11", OBST_PLAN_BLOCKED == prof.plan);
     }
     {
         box_t box = {200.0, 100.0, 340.0}; /* clearly beside the path */
+
         scan_box(&box, 1, &prof);
         CHECK("S5-H11", OBST_PLAN_CONTINUE == prof.plan);
     }
@@ -911,6 +937,7 @@ static void test_obstacle_h24 (void)
            but even a 200 mm object centred on what was seen stays out of
            the car's corridor: continue */
         box_t box = {200.0, 100.0, 260.0};
+
         scan_box(&box, 1, &prof);
         CHECK("S5-H11", !prof.b_sure && (OBST_PLAN_CONTINUE == prof.plan)
                             && (prof.plan_r_mm > ((OBST_ROBOT_WIDTH_MM / 2)
@@ -920,6 +947,7 @@ static void test_obstacle_h24 (void)
         obstacle_core_point_t none[3] = {{80, OBST_RANGE_NONE},
                                          {90, OBST_RANGE_NONE},
                                          {100, OBST_RANGE_NONE}};
+
         obstacle_core_profile(none, 3u, none, 0u, &prof);
         CHECK("S5-H11", !prof.b_valid && (OBST_PLAN_CONTINUE == prof.plan));
     }
@@ -946,6 +974,7 @@ static void test_obstacle_h24 (void)
          * override */
         {
             box_t box = {200.0, 100.0, 260.0};
+
             scan_box(&box, 1, &prof);
             CHECK("S5-H16", OBST_PLAN_CONTINUE == prof.plan);
         }
@@ -1053,15 +1082,18 @@ static void test_obstacle_h22 (void)
             width       = obstacle_core_edge_width(g_edge_phi[0], g_edge_r[0],
                                                    g_edge_phi[1], g_edge_r[1]);
             elem        = fabs(width - widths[val_a]) / widths[val_a];
+
             if (elem > worst_w)
             {
                 worst_w = elem;
             }
+
             /* Cast (uint32_t)width: every uint16_t value fits. */
             printf("width: %3.0f mm box at %3.0f mm -> %3u mm (%4.1f %%)\n",
                    widths[val_a], dists[val_b2], (uint32_t)width, elem * 100.0);
         }
     }
+
     /* Cast (uint32_t)obstacle_core_edge_width(...): every uint16_t value
        fits. */
     CHECK("S5-H22", worst_w <= 0.10);
@@ -1089,11 +1121,13 @@ static void probe_sim (obstacle_core_probe_t * p_probe, float64_t omega,
     int32_t         pass;
 
     obstacle_core_probe_start(p_probe);
+
     for (pass = 0; pass < T_PROBE_PASSES; pass++)
     {
         bool b_seen = false;
 
         p_probe->off = 0u;
+
         for (;;)
         {
             /* Casts (int32_t)(diff * sin((th_deg * ...))),
@@ -1115,6 +1149,7 @@ static void probe_sim (obstacle_core_probe_t * p_probe, float64_t omega,
             {
                 b_seen = true;
             }
+
             if (0 == pass)
             {
                 if (((p_probe->off >= OBST_PROBE_OFF) && (lat >= 20))
@@ -1122,6 +1157,7 @@ static void probe_sim (obstacle_core_probe_t * p_probe, float64_t omega,
                 {
                     break;
                 }
+
                 diff += step;
             }
             else
@@ -1131,6 +1167,7 @@ static void probe_sim (obstacle_core_probe_t * p_probe, float64_t omega,
                 {
                     break;
                 }
+
                 diff -= step;
             }
         }
@@ -1175,14 +1212,17 @@ static void test_obstacle_h23 (void)
                 probe_sim(&probe, omega, coef, run);
                 CHECK("S5-H23", obstacle_core_probe_edges(&probe, &left, &ret));
                 elem = fabs((left - ret) - omega) / omega;
+
                 if ((1 == cnt4) && (elem > worst))
                 {
                     worst = elem;
                 }
+
                 if ((cnt4 != 1) && (elem > worst_off))
                 {
                     worst_off = elem;
                 }
+
                 if ((1 == cnt4) || (elem > 0.10))
                 {
                     printf("probe: %3.0f mm box at %+3.0f, run-on %2.0f -> "
@@ -1190,12 +1230,14 @@ static void test_obstacle_h23 (void)
                            omega, coef, run, left, ret, (left - ret),
                            elem * 100.0);
                 }
+
                 CHECK("S5-H23",
                       (fabs(left - (coef + (omega / 2.0))) <= 15.0)
                           && (fabs(ret - (coef - (omega / 2.0))) <= 15.0));
             }
         }
     }
+
     printf("probe: worst width error %.1f %% (run-on as corrected), %.1f "
            "%% (5 mm off)\n",
            worst * 100.0, worst_off * 100.0);
@@ -1350,6 +1392,7 @@ static void test_obstacle_h12 (void)
 
         scan_box(&box, 1, &prof);
         count = obstacle_core_bypass_plan(&prof, prof.plan, steps);
+
         for (idx = 0; idx < count; idx++)
         {
             /* Cast (float64_t)steps[idx].value: exact: a 16-bit integer fits a
@@ -1365,6 +1408,7 @@ static void test_obstacle_h12 (void)
             {
                 height += steps[idx].value / 10.0;
             }
+
             if (OBST_STEP_LINESCAN == steps[idx].kind)
             {
                 /* spins toward value's side until parallel to the line */
@@ -1373,17 +1417,21 @@ static void test_obstacle_h12 (void)
                           && (fabs(height) <= fabs(steps[idx].value / 10.0)));
                 height = 0.0;
             }
+
             if (OBST_STEP_JOIN == steps[idx].kind)
             {
                 diff     = (-(y_val + (OBST_IR_AHEAD_MM * sine)) / sine);
                 b_joined = (diff >= 0.0) && (diff <= steps[idx].value);
             }
+
             x_val += diff * coef;
             y_val += diff * sine;
+
             if (fabs(y_val) > max_lat)
             {
                 max_lat = fabs(y_val);
             }
+
             if (OBST_STEP_PASS == steps[idx].kind)
             {
                 /* before turning back in, the rear is past the far side
@@ -1393,6 +1441,7 @@ static void test_obstacle_h12 (void)
                           >= ((float64_t)prof.closest_mm + 150.0));
             }
         }
+
         /* Cast (uint32_t)count: every uint8_t value fits. */
         printf("bypass: %u steps, axle ends (%.0f, %.0f) heading %.1f, max "
                "lateral %.0f mm\n",
@@ -1457,6 +1506,7 @@ static void test_obstacle_h15 (void)
             pts[kdx].angle_deg = (int16_t)(30 + (30 * (int32_t)kdx));
             pts[kdx].r_mm      = OBST_RANGE_NONE;
         }
+
         pts[2].r_mm = 150u; /* 90 deg */
         obstacle_core_profile(pts, 0u, pts, 5u,
                               &prof); /* no fine scan at all */
@@ -1478,6 +1528,7 @@ static void test_obstacle_h15 (void)
             pts[kdx].r_mm =
                 ((0u == kdx) || (12u == kdx)) ? OBST_RANGE_NONE : 200u;
         }
+
         pts[6].r_mm = OBST_RANGE_NONE; /* the dropout, straight ahead */
         obstacle_core_profile(pts, 13u, pts, 0u, &prof);
         CHECK("S5-H15", prof.b_valid && (prof.left_lat_mm > 50)
@@ -1493,6 +1544,7 @@ static void test_obstacle_h15 (void)
               && (-100 == obstacle_core_cross_track_mm(100, 0, 0, 0, 9000)));
     {
         obstacle_core_mask_t mask = {false, 0u, 0};
+
         CHECK("S5-H13", !obstacle_core_hump_mask(&mask, true, 200, 0, 1000u));
         CHECK("S5-H13", obstacle_core_hump_mask(&mask, true, 700, 0, 1100u));
         CHECK("S5-H13", obstacle_core_hump_mask(&mask, true, 700, 500, 2000u));
@@ -1542,6 +1594,7 @@ static void test_bench (void)
 static void test_pack_s5 (void)
 {
     test_pack_h26();
+    test_pack_h26_snap();
     test_pack_h26_part2();
 }
 
@@ -1552,9 +1605,6 @@ static void test_pack_h26 (void)
     mission_types_evt_t      decoded;
     mission_types_scan_req_t req;
     mission_types_scan_req_t req_out;
-    mission_types_snap_t     mission;
-    mission_types_snap_t     mission_r;
-    uint32_t                 words_min[MISSION_SNAP_WORDS];
     static int32_t const     datas[] = {0,   -1,   65535, -65536,
                                         'F', 3600, -3600, 0x07FF};
     uint32_t                 kdx;
@@ -1569,12 +1619,14 @@ static void test_pack_h26 (void)
         evt.arg  = (uint16_t)(kdx * 15u);
         evt.data = datas[kdx];
         mission_core_evt_unpack(mission_core_evt_pack(&evt), &decoded);
+
         if ((decoded.type != evt.type) || (decoded.src != evt.src)
             || (decoded.arg != evt.arg) || (decoded.data != evt.data))
         {
             b_ok = false;
         }
     }
+
     /* Casts (int32_t)((uint32_t)'A' | ...): bit pattern of a packed LOG word,
        not an arithmetic value; (uint32_t)'A', (uint32_t)'F', (uint32_t)'Z',
        (uint32_t)'%': a constant that fits. */
@@ -1599,6 +1651,14 @@ static void test_pack_h26 (void)
     mission_core_scan_req_unpack(mission_core_scan_req_pack(&req), &req_out);
     CHECK("S5-H26", (req_out.type == req.type) && (5u == req_out.seq)
                         && (180 == req_out.param));
+}
+
+/** S5-H26: the mission snapshot packs and unpacks every field. */
+static void test_pack_h26_snap (void)
+{
+    mission_types_snap_t mission;
+    mission_types_snap_t mission_r;
+    uint32_t             words_min[MISSION_SNAP_WORDS];
 
     CHECK("S5-H26", (MISSION_SNAP_BITS == mission_core_snap_layout_bits())
                         && (MISSION_SNAP_WORDS == PK_WORDS(MISSION_SNAP_BITS))

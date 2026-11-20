@@ -44,15 +44,18 @@ EXPORT ER drv_motor_init (void)
     DI(intsts);
     out_w(APP_REGS_GPIO_OUT_CLR, MOTOR_PIN_MASK);
     out_w(APP_REGS_GPIO_OE_SET, MOTOR_PIN_MASK);
+
     for (idx = 0u; idx < MOTOR_PIN_COUNT; idx++)
     {
         clr_w(app_regs_pad(pins[idx]), APP_REGS_PAD_OD);
         out_w(app_regs_gpio_ctrl(pins[idx]), APP_REGS_FUNCSEL_SIO);
     }
+
     EI(intsts);
 
     /* 2. PWM block out of reset, slices 4 and 5 at 20 kHz, duty 0. */
     app_reset_release(APP_REGS_RESET_PWM);
+
     for (idx = 0u; idx < MOTOR_SLICE_COUNT; idx++)
     {
         out_w(pwm_ch_csr(slices[idx]), 0u);
@@ -123,10 +126,12 @@ static uint32_t cc_for (int32_t duty, int32_t sign)
     {
         drive = MOTION_DUTY_MAX;
     }
+
     if (drive < -MOTION_DUTY_MAX)
     {
         drive = -MOTION_DUTY_MAX;
     }
+
     /* Casts (uint32_t)((drive < 0) ? -drive : ...): drive is limited to
        +-MOTION_DUTY_MAX above; (uint32_t)MOTION_DUTY_MAX: a constant that
        fits. */

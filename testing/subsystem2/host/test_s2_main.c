@@ -193,6 +193,7 @@ static void test_h09 (void)
                       0);
             run_ms(10u, false);
         }
+
         /* Cast (int32_t)odom.v_mm_s: every int16_t value fits. */
         motion_core_snapshot(&g_mc, &odom);
         CHECK("S2-H09", abs(odom.v_mm_s - 250) <= 25); /* NFR5 logic: +-10 % */
@@ -204,12 +205,14 @@ static void test_h09 (void)
         CHECK("S2-H04", MOTION_ST_STOPPING == g_mc.state);
         /* S2-H05: ramp at 1 m/s^2 from 250 mm/s: about 250 ms to braked */
         elapsed = 0u;
+
         while ((g_mc.state != MOTION_ST_IDLE_BRAKED)
                && (elapsed < T_STOP_MAX_MS))
         {
             run_ms(10u, false);
             elapsed += 10u;
         }
+
         CHECK("S2-H05", (elapsed >= 200u) && (elapsed <= 300u));
         CHECK("S2-H05", (0 == g_mc.duty_l) && (0 == g_mc.duty_r));
         printf("STOP ramp from 250 mm/s: braked after %u ms\n", elapsed);
@@ -396,16 +399,19 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
         {
             /* No action required. */
         }
+
         if ((0 == duty[width]) || g_pl.locked[width])
         {
             sum_sq = 0.0;
         } /* brake */
         g_pl.vals[width] += (sum_sq - g_pl.vals[width])
+
                             * (10.0 / ((0 == duty[width]) ? 20.0 : 50.0));
         if (g_pl.locked[width])
         {
             g_pl.vals[width] = 0.0;
         }
+
         g_pl.pos_um[width] += g_pl.vals[width] * 10.0; /* mm/s * 10 ms = um */
     }
 }
@@ -438,11 +444,13 @@ static void run_ms (uint32_t delay_ms, bool b_estop)
     {
         g_now += 10u;
         motion_core_step(&g_mc, enc_of(0), enc_of(1), b_estop, g_now);
+
         while (motion_core_pop_event(&g_mc, &event))
         {
             g_ev[event.code]++;
             g_last_seq = event.seq;
         }
+
         plant_step(g_mc.duty_l, g_mc.duty_r);
     }
 }
@@ -461,6 +469,7 @@ static motion_core_result_t cmd (uint8_t src, uint8_t seq, uint8_t code,
         g_ev[event.code]++;
         g_last_seq = event.seq;
     }
+
     return result;
 }
 
@@ -486,6 +495,7 @@ static uint32_t run_until_event (int32_t code, uint32_t max_ms)
         run_ms(10u, false);
         elapsed += 10u;
     }
+
     return elapsed;
 }
 
@@ -509,6 +519,7 @@ static void test_pack_h16 (void)
         {1000, 200}, {-4095, 511}, {4095, 1}, {0, 90}};
 
     memset(&cmd, 0, sizeof(cmd));
+
     for (kdx = 0; kdx < T_MOVES; kdx++)
     {
         /* Cast (uint8_t)(kdx * 9): kdx < T_MOVES (4). */
@@ -518,23 +529,27 @@ static void test_pack_h16 (void)
         cmd.arg0 = drive[kdx][0];
         cmd.arg1 = drive[kdx][1];
         motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
+
         if ((unpacked.src != cmd.src) || (unpacked.seq != cmd.seq)
             || (unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0)
             || (unpacked.arg1 != cmd.arg1))
         {
             b_ok = false;
         }
+
         cmd.src  = 0u;
         cmd.cmd  = (0 != (kdx % 2)) ? MOTION_CMD_TURN : MOTION_CMD_MOVE;
         cmd.arg0 = move[kdx][0];
         cmd.arg1 = move[kdx][1];
         motion_core_cmd_unpack(motion_core_cmd_pack(&cmd), &unpacked);
+
         if ((unpacked.cmd != cmd.cmd) || (unpacked.arg0 != cmd.arg0)
             || (unpacked.arg1 != cmd.arg1))
         {
             b_ok = false;
         }
     }
+
     CHECK("S2-H16", b_ok);
     cmd.cmd  = MOTION_CMD_SET_AUTH;
     cmd.arg0 = 2;

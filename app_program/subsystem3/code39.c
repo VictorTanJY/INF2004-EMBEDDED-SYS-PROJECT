@@ -152,6 +152,7 @@ uint16_t code39_pattern (char chr)
             b_found = true;
         }
     }
+
     return pattern;
 }
 
@@ -169,6 +170,7 @@ char code39_char (uint16_t pattern)
             b_found = true;
         }
     }
+
     return chr;
 }
 
@@ -178,7 +180,8 @@ code39_result_t code39_decode (uint32_t const * p_widths, uint16_t n_elems,
 {
     code39_result_t result;
 
-    p_text[0]    = '\0';
+    p_text[0] = '\0';
+
     *pb_reversed = false;
     if (n_elems < 9u)
     {
@@ -197,6 +200,7 @@ code39_result_t code39_decode (uint32_t const * p_widths, uint16_t n_elems,
         result =
             decode_both(p_widths, n_elems, ratio_min_x10, p_text, pb_reversed);
     }
+
     return result;
 }
 
@@ -213,10 +217,12 @@ code39_result_t code39_decode_one (uint32_t const * p_widths, uint16_t n_elems,
     {
         result = CODE39_ERR_LENGTH;
     }
+
     if (CODE39_OK == result)
     {
         *p_char = text[0];
     }
+
     return result;
 }
 
@@ -242,6 +248,7 @@ code39_result_t code39_decode_one_repair (uint32_t const * p_widths,
         result = repair_tries(p_widths, n_elems, ratio_min_x10, p_char,
                               pb_reversed, result);
     }
+
     return result;
 }
 
@@ -268,6 +275,7 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
     {
         best_levels(p_widths, n_elems, levels);
         nar = (levels[0] + levels[2]) / 2u;
+
         if ((0u == nar) || (levels[1] <= levels[0]) || (levels[3] <= levels[2]))
         {
             result = CODE39_ERR_RATIO;
@@ -278,6 +286,7 @@ code39_result_t code39_decode_one_best (uint32_t const * p_widths,
                 best_match(p_widths, n_elems, levels, nar, p_char, pb_reversed);
         }
     }
+
     return result;
 }
 
@@ -296,6 +305,7 @@ static code39_result_t decode_both (uint32_t const * p_widths, uint16_t n_elems,
     if (fwd != CODE39_OK)
     {
         rev = decode_dir(p_widths, n_elems, ratio_min_x10, true, p_text);
+
         if (CODE39_OK == rev)
         {
             *pb_reversed = true;
@@ -307,6 +317,7 @@ static code39_result_t decode_both (uint32_t const * p_widths, uint16_t n_elems,
             result = (CODE39_ERR_START_STOP == fwd) ? rev : fwd;
         }
     }
+
     return result;
 }
 
@@ -332,6 +343,7 @@ static code39_result_t repair_tries (uint32_t const * p_widths,
         narrow = (p_widths[idx] < narrow) ? p_widths[idx] : narrow;
         widest = (p_widths[idx] > widest) ? p_widths[idx] : widest;
     }
+
     for (kdx = 0u; (kdx < REPAIR_TRIES) && !b_conflict; kdx++)
     {
         bool const     b_front = (kdx < 2u);
@@ -349,10 +361,12 @@ static code39_result_t repair_tries (uint32_t const * p_widths,
             widths[out_n++] = add_first;
             widths[out_n++] = add_second;
         }
+
         for (idx = 0u; idx < n_elems; idx++)
         {
             widths[out_n++] = p_widths[idx];
         }
+
         if (!b_front)
         {
             widths[out_n++] =
@@ -361,6 +375,7 @@ static code39_result_t repair_tries (uint32_t const * p_widths,
                     : widest; /* k 2: space n, bar n; k 3: space W, bar n */
             widths[out_n++] = narrow;
         }
+
         if (CODE39_OK
             == code39_decode_one(widths, out_n, ratio_min_x10, &chr, &b_rev))
         {
@@ -375,6 +390,7 @@ static code39_result_t repair_tries (uint32_t const * p_widths,
             }
         }
     }
+
     if (b_conflict)
     {
         *p_char = '\0';
@@ -390,6 +406,7 @@ static code39_result_t repair_tries (uint32_t const * p_widths,
         *pb_reversed = b_got_rev;
         result       = CODE39_OK;
     }
+
     return result;
 }
 
@@ -412,11 +429,13 @@ static code39_result_t best_match (uint32_t const * p_widths, uint16_t n_elems,
            above). */
         b_speck[entry] = is_speck(p_widths[entry], (uint16_t)entry, levels);
     }
+
     fit.p_w     = p_widths;
     fit.n_elems = n_elems;
     fit.p_lv    = levels;
     fit.p_speck = b_speck;
     fit.inv     = (100u << 16) / nar;
+
     for (entry = 0u; entry < TABLE_LEN; entry++)
     {
         if ('*' != g_code39_table[entry].chr)
@@ -424,6 +443,7 @@ static code39_result_t best_match (uint32_t const * p_widths, uint16_t n_elems,
             best_try_char(&fit, &g_code39_table[entry], &rank);
         }
     }
+
     /* Casts (uint32_t)BEST_ELEM_MAX: a constant that fits;
        (uint64_t)rank.next_cost, (uint64_t)rank.best_cost: every uint32_t value
        fits. */
@@ -436,6 +456,7 @@ static code39_result_t best_match (uint32_t const * p_widths, uint16_t n_elems,
         *pb_reversed = rank.b_rev1;
         result       = CODE39_OK;
     }
+
     return result;
 }
 
@@ -448,6 +469,7 @@ static void best_try_char (best_fit_in_t const *  p_fit,
     uint8_t  dir;
 
     best_template(bits_of(p_entry->p_bits), p_fit->p_lv, expect, b_wide);
+
     for (dir = 0u; dir < DIRECTIONS; dir++)
     {
         uint32_t cost;
@@ -456,6 +478,7 @@ static void best_try_char (best_fit_in_t const *  p_fit,
         {
             best_reverse(expect, b_wide);
         }
+
         /* A fit costing c2 or more changes neither result, and the
            runner-up only matters below the margin times the largest
            best that is accepted. */
@@ -517,6 +540,7 @@ static void best_rank (best_rank_t * p_rank, uint32_t cost, char chr,
         {
             p_rank->next_cost = p_rank->best_cost;
         }
+
         p_rank->best_cost = cost;
         p_rank->ch1       = chr;
         p_rank->b_rev1    = b_rev;
@@ -543,6 +567,7 @@ static uint16_t bits_of (char const * p_bits)
            bits. */
         pattern = (uint16_t)((pattern << 1) | (('1' == p_bits[idx]) ? 1u : 0u));
     }
+
     return pattern;
 }
 
@@ -577,8 +602,10 @@ static uint32_t kth_widest (uint32_t const * p_w, uint8_t first, uint8_t rank,
                 b_any  = true;
             }
         }
+
         used |= (1u << *p_idx);
     }
+
     return best;
 }
 
@@ -612,13 +639,15 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
            and idx < 9, so below n_elems. */
         widths[idx] = width_at(p_w, n_elems, (uint16_t)(first + idx), b_rev);
     }
-    /* Casts (uint64_t)bar_w2, (uint64_t)bar_w3, (uint64_t)space_w1,
-       (uint64_t)space_w2: every uint32_t value fits. */
+
     (void)kth_widest(widths, 0u, 0u, &ib1);
     bar_w2   = kth_widest(widths, 0u, 1u, &ib2);
     bar_w3   = kth_widest(widths, 0u, 2u, &ib3); /* widest narrow bar   */
     space_w1 = kth_widest(widths, 1u, 0u, &is1);
     space_w2 = kth_widest(widths, 1u, 1u, &is2); /* widest narrow space */
+
+    /* Casts (uint64_t)bar_w2, (uint64_t)bar_w3, (uint64_t)space_w1,
+       (uint64_t)space_w2: every uint32_t value fits. */
     if ((bar_w3 != 0u) && (space_w2 != 0u)
         && (((uint64_t)bar_w2 * 10u) >= ((uint64_t)bar_w3 * ratio_min_x10))
         && (((uint64_t)space_w1 * 10u) >= ((uint64_t)space_w2 * ratio_min_x10)))
@@ -654,6 +683,7 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
             wide = (1u << is1) | (1u << is2) | (1u << is3);
         }
     }
+
     if (CODE39_OK == result)
     {
         for (idx = 0u; idx < CHAR_ELEMS; idx++)
@@ -663,8 +693,10 @@ static code39_result_t classify (uint32_t const * p_w, uint16_t n_elems,
             pattern = (uint16_t)((pattern << 1)
                                  | (((wide & (1u << idx)) != 0u) ? 1u : 0u));
         }
+
         *p_pattern = pattern;
     }
+
     return result;
 }
 
@@ -691,9 +723,11 @@ static code39_result_t decode_dir (uint32_t const * p_w, uint16_t n_elems,
            char_idx x 10 <= n_elems. */
         result = classify(p_w, n_elems, (uint16_t)(char_idx * 10u), b_rev,
                           ratio_min_x10, &pattern);
+
         if (CODE39_OK == result)
         {
             chr = code39_char(pattern);
+
             if ('\0' == chr)
             {
                 result = CODE39_ERR_PATTERN;
@@ -717,10 +751,12 @@ static code39_result_t decode_dir (uint32_t const * p_w, uint16_t n_elems,
             }
         }
     }
+
     if (CODE39_OK == result)
     {
         p_text[out] = '\0';
     }
+
     return result;
 }
 
@@ -738,8 +774,10 @@ static uint32_t median_of (uint32_t * p_v, uint16_t n_elems)
         {
             p_v[jdx] = p_v[jdx - 1u];
         }
+
         p_v[jdx] = value;
     }
+
     return (0u == n_elems) ? 0u : p_v[n_elems / 2u];
 }
 
@@ -762,16 +800,19 @@ static void best_levels (uint32_t const * p_w, uint16_t n_elems,
     {
         sorted[idx] = p_w[idx];
     }
+
     nar = median_of(sorted, n_elems);
     wid =
         sorted[(n_elems - 1u) - ((n_elems / 3u) / 2u)]; /* median of the widest
                                                          third (sorted) */
     thr = (nar + wid) / 2u;
+
     for (kind = 0u; kind < ELEM_KINDS; kind++)
     {
         for (wide = 0u; wide < WIDTH_KINDS; wide++)
         {
             mid = 0u;
+
             for (idx = kind; idx < n_elems; idx += 2u)
             {
                 if ((p_w[idx] >= thr) == (wide != 0u))
@@ -779,6 +820,7 @@ static void best_levels (uint32_t const * p_w, uint16_t n_elems,
                     sorted[mid++] = p_w[idx];
                 }
             }
+
             p_lv[(kind * 2u) + wide] = (mid > 0u) ? median_of(sorted, mid)
                                                   : ((wide != 0u) ? wid : nar);
         }
@@ -799,6 +841,7 @@ static uint32_t sq_err (uint32_t meas, uint32_t expect, uint32_t inv)
         scaled = (diff * inv) >> 16;
         err    = (scaled > 1000u) ? 1000000u : (scaled * scaled);
     }
+
     return err;
 }
 
@@ -839,6 +882,7 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
     uint16_t       jdx;
 
     best_clear(n_elems);
+
     for (idx = 0u; (idx < n_elems) && !b_over; idx++)
     {
         /* Every path to the end passes a filled cell of row i, i + 1 or
@@ -852,10 +896,12 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
         c_open = (((idx + 2u) <= n_elems) && (g_bt.rmin[idx + 2u] < c_open))
                      ? g_bt.rmin[idx + 2u]
                      : c_open;
+
         if (c_open >= bound)
         {
             b_over = true; /* no fit below the bound: BEST_INF */
         }
+
         /* Cast (uint16_t)(idx - BEST_BAND): idx > BEST_BAND on this branch. */
         for (jdx = (idx > BEST_BAND) ? (uint16_t)(idx - BEST_BAND) : 0u;
              !b_over && (jdx < BEST_T) && (jdx <= (idx + BEST_BAND)); jdx++)
@@ -866,9 +912,11 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
             }
         }
     }
+
     if (!b_over)
     {
         best = in_band(n_elems, BEST_T) ? g_bt.cost[n_elems][BEST_T] : BEST_INF;
+
         if (in_band(n_elems, (BEST_T - 2u))
             && (g_bt.edits[n_elems][BEST_T - 2u] < BEST_MAX_EDITS)
             && (g_bt.cost[n_elems][BEST_T - 2u] < BEST_INF)
@@ -878,6 +926,7 @@ static uint32_t best_fit (best_fit_in_t const * p_fit, uint32_t const * p_e,
             best = g_bt.cost[n_elems][BEST_T - 2u] + BEST_EDIT;
         }
     }
+
     return best;
 }
 
@@ -897,8 +946,10 @@ static void best_clear (uint16_t n_elems)
             g_bt.cost[idx][jdx]  = BEST_INF;
             g_bt.edits[idx][jdx] = 0u;
         }
+
         g_bt.rmin[idx] = BEST_INF;
     }
+
     g_bt.cost[0][0]  = 0u;
     g_bt.rmin[0]     = 0u;
     g_bt.cost[0][2]  = BEST_EDIT; /* first bar and space lost */
@@ -919,6 +970,7 @@ static void best_steps (best_fit_in_t const * p_fit, uint32_t const * p_e,
         best_relax(idx + 1u, jdx + 1u,
                    cost_here + sq_err(p_w[idx], p_e[jdx], p_fit->inv), edits);
     }
+
     /* Casts (uint16_t)(idx + 3u): idx + 3 <= n_elems (tested in the same
        statement); (uint16_t)(jdx + 1u): jdx <= BEST_T (29), a table index. */
     if ((edits < BEST_MAX_EDITS) && ((idx + 3u) <= p_fit->n_elems)
@@ -934,6 +986,7 @@ static void best_steps (best_fit_in_t const * p_fit, uint32_t const * p_e,
                                 p_e[jdx], p_fit->inv),
                    (uint8_t)(edits + 1u));
     }
+
     /* Casts (uint16_t)(idx + 1u): idx <= n_elems <= BEST_N_MAX (33), a table
        index; (uint16_t)(jdx + 3u): jdx + 3 <= BEST_T (tested in the same
        statement). */

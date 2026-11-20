@@ -93,6 +93,7 @@ void line_track_cal_sample (line_track_cal_t * p_cal,
         {
             p_cal->min[chan] = raw[chan];
         }
+
         if (raw[chan] > p_cal->max[chan])
         {
             p_cal->max[chan] = raw[chan];
@@ -151,11 +152,14 @@ bool line_track_cal_finish (line_track_cal_t * p_cal)
             }
         }
     }
+
     if (worst < LINE_CONTRAST_MIN_X10)
     {
         b_ok = false;
     }
+
     p_cal->contrast_x10 = worst;
+
     if (b_ok)
     {
         for (chan = 0u; chan < LINE_CH_COUNT; chan++)
@@ -163,8 +167,10 @@ bool line_track_cal_finish (line_track_cal_t * p_cal)
             p_cal->white[chan] = white[chan];
             p_cal->black[chan] = black[chan];
         }
+
         p_cal->b_valid = true;
     }
+
     return b_ok;
 }
 
@@ -183,6 +189,7 @@ uint16_t line_track_cal_norm (line_track_cal_t const * p_cal, uint8_t chan,
         norm  = (((int32_t)raw - white) * 1000) / (black - white);
         level = (uint16_t)app_types_clamp_i32(norm, 0, 1000);
     }
+
     return level;
 }
 
@@ -221,6 +228,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
     p_t->b_black_r = is_black(p_t->b_black_r, norm_r);
     p_t->b_white_l = is_white(p_t->b_white_l, norm_l);
     p_t->b_white_r = is_white(p_t->b_white_r, norm_r);
+
     if (p_t->since_junction_um < LINE_JUNCTION_REFRACT_UM)
     {
         p_t->since_junction_um += step_um;
@@ -230,6 +238,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
        both read ~50 %; e > 0 means the line is under the left sensor.
        Plain difference (-1000..+1000), see LINE_KP in line_cfg.h. */
     p_t->prev_err = p_t->err;
+
     if (sum >= LINE_ERR_VALID_SUM)
     {
         /* Casts (int32_t)norm_l, (int32_t)norm_r: every uint16_t value fits. */
@@ -255,6 +264,7 @@ uint8_t line_track_step (line_track_t * p_t, line_track_cfg_t const * p_cfg,
     {
         /* straight long enough */
     }
+
     return events;
 }
 
@@ -275,12 +285,15 @@ void line_track_slip_sample (line_track_slip_t * p_s, int32_t heading_cdeg,
     {
         delta -= 36000;
     }
+
     while (delta < -APP_CDEG_180)
     {
         delta += 36000;
     }
+
     p_s->prev_cdeg = heading_cdeg;
     p_s->acc_cdeg += delta;
+
     if (p_s->n_samples < LINE_SLIP_MAX_BLOCKS)
     {
         /* Cast (int16_t)app_types_clamp_i32(...): the value is 0..32767. */
@@ -316,11 +329,13 @@ uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
         runs_l = 0u;
         runs_r = 0u;
     }
+
     /* diagnosis: dark runs L << 24 | R << 16 | encoder deg spun */
     /* Casts (uint32_t)runs_l, (uint32_t)runs_r: every uint8_t value fits;
        (uint32_t)app_types_clamp_i32(tot / ...): the value is 0..65535. */
     *p_diag = ((uint32_t)runs_l << 24) | ((uint32_t)runs_r << 16)
               | (uint32_t)app_types_clamp_i32(tot / 10, 0, 0xFFFF);
+
     if ((c_l >= 0) && (c_r >= 0))
     {
         /* Cast (uint16_t)gain: gain is within LINE_SLIP_GAIN_MIN_PM..MAX_PM
@@ -331,6 +346,7 @@ uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
                 ? (uint16_t)gain
                 : 0u;
     }
+
     return slip_gain;
 }
 
@@ -361,6 +377,7 @@ static uint8_t track_patterns (line_track_t *           p_t,
     {
         p_t->both_white_um = 0u;
         p_t->both_black_um += step_um;
+
         if (!p_t->b_junction && (p_t->both_black_um >= p_cfg->junction_um)
             && (p_t->straight_um >= LINE_STRAIGHT_UM)
             && (p_t->since_junction_um >= LINE_JUNCTION_REFRACT_UM))
@@ -374,6 +391,7 @@ static uint8_t track_patterns (line_track_t *           p_t,
     {
         p_t->both_black_um = 0u;
         p_t->b_junction    = false;
+
         if (0u == p_t->both_white_um)
         {
             /* how the line was left: the strongest error of the last
@@ -381,7 +399,9 @@ static uint8_t track_patterns (line_track_t *           p_t,
                slides out past the outer sensor on a curve (2 Nov) */
             p_t->exit_err = p_t->peak_err;
         }
+
         p_t->both_white_um += step_um;
+
         if (!p_t->b_lost && (p_t->both_white_um >= p_cfg->lost_um))
         {
             p_t->b_lost = true;
@@ -394,10 +414,12 @@ static uint8_t track_patterns (line_track_t *           p_t,
         p_t->both_white_um = 0u;
         p_t->b_junction    = false;
     }
+
     if (0u == p_t->both_white_um)
     {
         p_t->line_err = p_t->err;
         p_t->peak_um += step_um;
+
         if ((app_types_abs_i32(p_t->err) >= app_types_abs_i32(p_t->peak_err))
             || (p_t->peak_um > LINE_EXIT_PEAK_UM))
         {
@@ -411,6 +433,7 @@ static uint8_t track_patterns (line_track_t *           p_t,
         p_t->b_lost = false;
         events |= LINE_TRK_EV_FOUND;
     }
+
     return events;
 }
 
@@ -517,6 +540,7 @@ static int32_t slip_centre (line_track_slip_t const * p_s,
             {
                 (*p_runs)++;
             }
+
             /* the first long enough dark run is the line */
             if ((len >= LINE_SLIP_MIN_BLOCKS) && (found < 0)
                 && (sum_weight > 0))
@@ -525,6 +549,7 @@ static int32_t slip_centre (line_track_slip_t const * p_s,
                    h_ddeg values. */
                 found = (int32_t)(swh / sum_weight);
             }
+
             sum_weight = 0;
             swh        = 0;
             len        = 0u;
@@ -534,6 +559,7 @@ static int32_t slip_centre (line_track_slip_t const * p_s,
             /* white */
         }
     }
+
     return found;
 }
 

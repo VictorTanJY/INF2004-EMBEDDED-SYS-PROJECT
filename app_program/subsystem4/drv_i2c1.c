@@ -56,6 +56,7 @@ EXPORT ER drv_i2c1_init (void)
     /* I2C1 is not released at boot and has one owner: a full reset pulse
        also recovers a wedged controller. */
     ER bus_er;
+
     set_w(RESETS_RESET, APP_REGS_RESET_I2C1);
     bus_er = clear_bus();
     app_reset_release(APP_REGS_RESET_I2C1);
@@ -77,10 +78,12 @@ EXPORT ER drv_i2c1_init (void)
     out_w(IC_FS_SCL_LCNT, 750u);
     out_w(IC_FS_SPKLEN, 11u);
     out_w(IC_SDA_HOLD, 38u);
+
     if (E_OK == bus_er)
     {
         bus_er = (750u == in_w(IC_FS_SCL_LCNT)) ? E_OK : E_IO;
     }
+
     return bus_er;
 }
 
@@ -97,6 +100,7 @@ EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
         out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
         err = finish(t_start);
     }
+
     return err;
 }
 
@@ -108,11 +112,13 @@ EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
     if ((p_buf != 0) && (addr7 <= 0x7Fu) && (n_bytes != 0u) && (n_bytes <= 16u))
     {
         err = set_target(addr7);
+
         if (E_OK == err)
         {
             err = read_bytes(reg, p_buf, n_bytes);
         }
     }
+
     return err;
 }
 
@@ -138,6 +144,7 @@ static ER read_bytes (uint8_t reg, uint8_t * p_buf, uint8_t n_bytes)
     uint8_t        idx;
 
     out_w(IC_DATA_CMD, reg); /* register address */
+
     for (idx = 0u; idx < n_bytes; idx++)
     {
         uint32_t cmd = CMD_READ;
@@ -146,13 +153,17 @@ static ER read_bytes (uint8_t reg, uint8_t * p_buf, uint8_t n_bytes)
         {
             cmd |= CMD_RESTART;
         }
+
         if (idx == (n_bytes - 1u))
         {
             cmd |= CMD_STOP;
         }
+
         out_w(IC_DATA_CMD, cmd);
     }
+
     err = finish(t_start);
+
     for (idx = 0u; (E_OK == err) && (idx < n_bytes); idx++)
     {
         while ((E_OK == err) && (0u == in_w(IC_RXFLR)))
@@ -162,6 +173,7 @@ static ER read_bytes (uint8_t reg, uint8_t * p_buf, uint8_t n_bytes)
                 err = E_TMOUT;
             }
         }
+
         if (E_OK == err)
         {
             /* Cast (uint8_t)in_w(IC_DATA_CMD): the data byte is the low 8 bits
@@ -169,6 +181,7 @@ static ER read_bytes (uint8_t reg, uint8_t * p_buf, uint8_t n_bytes)
             p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
         }
     }
+
     return err;
 }
 
@@ -180,6 +193,7 @@ static ER set_target (uint8_t addr7)
     ER             err     = E_OK;
 
     out_w(IC_ENABLE, 0u);
+
     while ((E_OK == err) && ((in_w(IC_ENABLE_STATUS) & 1u) != 0u))
     {
         if (timed_out(t_start))
@@ -187,12 +201,14 @@ static ER set_target (uint8_t addr7)
             err = E_TMOUT;
         }
     }
+
     if (E_OK == err)
     {
         out_w(IC_TAR, addr7);
         (void)in_w(IC_CLR_INTR);
         out_w(IC_ENABLE, 1u);
     }
+
     return err;
 }
 
@@ -209,6 +225,7 @@ static ER finish (uint32_t t_start)
             err = E_TMOUT;
         }
     }
+
     if (E_OK == err)
     {
         if ((in_w(IC_RAW_INTR_STAT) & INTR_TX_ABRT) != 0u)
@@ -216,8 +233,10 @@ static ER finish (uint32_t t_start)
             (void)in_w(IC_CLR_TX_ABRT);
             err = E_IO;
         }
+
         (void)in_w(IC_CLR_INTR);
     }
+
     return err;
 }
 
@@ -228,6 +247,7 @@ static ER finish (uint32_t t_start)
 static void recovery_delay (void)
 {
     uint32_t const t_start = app_time_us();
+
     while ((app_time_us() - t_start) < I2C_RECOVERY_HALF_US)
     {
     }
@@ -241,6 +261,7 @@ static ER scl_release (void)
     ER             err     = E_OK;
 
     out_w(APP_REGS_GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
+
     while ((E_OK == err)
            && (0u == (in_w(APP_REGS_GPIO_IN) & (1uL << S4_PIN_IMU_SCL))))
     {
@@ -249,10 +270,12 @@ static ER scl_release (void)
             err = E_TMOUT;
         }
     }
+
     if (E_OK == err)
     {
         recovery_delay();
     }
+
     return err;
 }
 
@@ -264,6 +287,7 @@ static ER clear_bus (void)
     uint32_t const scl = 1uL << S4_PIN_IMU_SCL;
     uint8_t        idx;
     ER             err;
+
     out_w(APP_REGS_GPIO_OE_CLR, sda | scl);
     out_w(APP_REGS_GPIO_OUT_CLR, sda | scl);
     out_w(app_regs_gpio_ctrl(S4_PIN_IMU_SDA), APP_REGS_FUNCSEL_SIO);
@@ -275,6 +299,7 @@ static ER clear_bus (void)
                                             | APP_REGS_PAD_PUE
                                             | APP_REGS_PAD_SHEMITT);
     err = scl_release();
+
     if ((E_OK == err) && (0u == (in_w(APP_REGS_GPIO_IN) & sda)))
     {
         for (idx = 0u; (idx < I2C_RECOVERY_CLOCKS)
@@ -284,11 +309,13 @@ static ER clear_bus (void)
             out_w(APP_REGS_GPIO_OE_SET, scl);
             recovery_delay();
             err = scl_release();
+
             if (err != E_OK)
             {
                 break;
             }
         }
+
         if (E_OK == err)
         {
             /* STOP: SDA rises while SCL is HIGH. */
@@ -300,12 +327,15 @@ static ER clear_bus (void)
             recovery_delay();
         }
     }
+
     out_w(APP_REGS_GPIO_OE_CLR, sda | scl);
+
     if ((E_OK == err)
         && ((in_w(APP_REGS_GPIO_IN) & (sda | scl)) != (sda | scl)))
     {
         err = E_IO;
     }
+
     return err;
 }
 

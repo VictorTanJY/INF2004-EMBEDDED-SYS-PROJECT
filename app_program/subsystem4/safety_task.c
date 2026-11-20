@@ -88,10 +88,12 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
     (void)p_exinf;
 
     check_timer_tick();
+
     if (drv_watchdog_caused_reboot())
     {
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 42u, 1);
     }
+
     drv_watchdog_enable(SAFETY_WD_TIMEOUT_MS);
 
     read_heartbeats(counts);
@@ -118,10 +120,12 @@ EXPORT void safety_task_thread (INT stacd, void * p_exinf)
 
         read_heartbeats(counts);
         missed = safety_core_hb_check(&hb_state, counts, now_ms);
+
         if (missed != 0u)
         {
             subsystem2_motor_estop();
             latch(SAFETY_FLT_HEARTBEAT, now_ms);
+
             if (missed != missed_logged)
             {
                 /* Cast (int32_t)missed: a bit mask of SAFETY_HB_COUNT tasks. */
@@ -192,6 +196,7 @@ static void latch (uint32_t bits, uint32_t now_ms)
 
     (void)now_ms;
     g_safety_latched |= bits;
+
     if (fresh != 0u)
     {
         /* Casts (int32_t)g_safety_latched, (int32_t)fresh: bit pattern of the
@@ -214,18 +219,22 @@ static uint32_t live_causes (safety_core_hb_state_t * p_hb, uint32_t now_ms)
     subsystem4_get_imu_snap(&imu);
     subsystem5_get_obst_snap(&obst);
     read_heartbeats(counts);
+
     if ((obst.d_mm != OBST_RANGE_NONE) && (obst.d_mm < SAFETY_TOO_CLOSE_MM))
     {
         live |= SAFETY_FLT_TOO_CLOSE;
     }
+
     if (imu.tilt != 0u)
     {
         live |= SAFETY_FLT_TILT;
     }
+
     if (safety_core_hb_check(p_hb, counts, now_ms) != 0u)
     {
         live |= SAFETY_FLT_HEARTBEAT;
     }
+
     return live;
 }
 
@@ -243,6 +252,7 @@ static void check_timer_tick (void)
     bool     b_borrowed = false;
 
     DI(intsts);
+
     if (0u == (in_w(CHK_SYST_CSR) & CHK_SYST_ENABLE))
     {
         out_w(CHK_SYST_RVR, 0x00FFFFFFu);
@@ -251,9 +261,11 @@ static void check_timer_tick (void)
               CHK_SYST_CLK_CPU | CHK_SYST_ENABLE); /* TICKINT off */
         b_borrowed = true;
     }
+
     reload = (in_w(CHK_SYST_RVR) & 0x00FFFFFFu) + 1u;
     prev   = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
     us0    = app_time_us();
+
     while ((acc < CHK_SYS_COUNTS) && (guard < CHK_GUARD_SPINS))
     {
         uint32_t const cur = in_w(CHK_SYST_CVR) & 0x00FFFFFFu;
@@ -263,12 +275,15 @@ static void check_timer_tick (void)
         prev = cur;
         guard++;
     }
+
     delta_us = app_time_us() - us0;
+
     if (b_borrowed)
     {
         out_w(CHK_SYST_CSR, 0u); /* back to the kernel's state */
         out_w(CHK_SYST_CVR, 0u);
     }
+
     EI(intsts);
 
     /* Casts (uint32_t)(((uint64_t)delta_us * ...)): delta_us x 50 fits 32 bits

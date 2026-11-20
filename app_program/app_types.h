@@ -38,10 +38,12 @@ static inline int32_t app_types_clamp_i32 (int32_t value, int32_t low,
     {
         result = low;
     }
+
     if (result > high)
     {
         result = high;
     }
+
     return result;
 }
 

@@ -87,6 +87,7 @@ EXPORT void subsystem4_test_run (void)
     subsystem4_get_imu_snap(&snap_a);
     (void)tk_dly_tsk(1000);
     subsystem4_get_imu_snap(&snap_b);
+
     if (0u == snap_b.b_ok)
     {
         test_report_skip(&report, "S4-U07", "IMU level and I2C clean",
@@ -158,10 +159,12 @@ static void test_estop (test_report_t * p_report)
     /* ---- S4-U09: Reset clears it, as the dashboard button does ---- */
     (void)subsystem5_mission_post(MISSION_EV_REMOTE_RESET, APP_SRC_SAFETY_IMU,
                                   0u, 0);
+
     for (elapsed = 0u; elapsed < T_RESET_WAIT_MS; elapsed += 50u)
     {
         (void)tk_dly_tsk(50);
         subsystem5_get_mission_snap(&mission);
+
         if (!subsystem2_estop_latched() && (0u == subsystem4_get_latched())
             && ((pre != MISSION_ST_IDLE) || (MISSION_ST_IDLE == mission.state)))
         {
@@ -169,6 +172,7 @@ static void test_estop (test_report_t * p_report)
             break;
         }
     }
+
     /* Casts (UB *)"[INFO] S4-U09 cleared ...: tm_printf() takes UB *; the
        string bytes are unchanged; (INT)elapsed, (INT)subsystem4_get_latched():
        printed with %d: the value is a 32-bit count or measurement below 2^31;

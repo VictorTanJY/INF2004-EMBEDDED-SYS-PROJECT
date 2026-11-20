@@ -64,6 +64,7 @@ static void      check_result(char const * p_id, bool b_ok, char const * p_file,
                               int32_t line);
 static void      test_h01(void);
 static void      test_h10(void);
+static void      test_h02_flat(void);
 static void      test_h03(void);
 static void      test_h04b(void);
 static void      test_h05b(void);
@@ -77,6 +78,7 @@ int main (void)
 {
     test_h01();
     test_h10();
+    test_h02_flat();
     test_h03();
     test_h04b();
     test_h05b();
@@ -107,6 +109,7 @@ static void test_h01 (void)
             CHECK("S4-H01", (1 == start_idx) && (1 == end_idx));
             CHECK("S4-H01", fabs(peak - heights[idx]) <= tol);
         }
+
         CHECK("S4-H01",
               (g_ic.hump_max_mm == g_ic.last_hump_mm) && (1u == g_ic.humps));
     }
@@ -117,6 +120,7 @@ static void test_h01 (void)
     {
         int32_t start_idx;
         int32_t end_idx;
+
         (void)run_hump(10.0, 300.0, &start_idx, &end_idx);
         CHECK("S4-H01b", (0 == start_idx) && (0 == end_idx));
         printf("hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - "
@@ -149,6 +153,7 @@ static void test_h10 (void)
                     printf("one-wheel hump %.0f mm x 300 mm: reported %d mm\n",
                            heights[idx], peak);
                 }
+
                 CHECK("S4-H10",
                       (1 == start_idx) && (1 == end_idx) && (1u == g_ic.humps));
                 CHECK("S4-H10", fabs(peak - heights[idx]) <= tol);
@@ -158,13 +163,16 @@ static void test_h10 (void)
     /* S4-H10b: robot lifted on one side by hand, wheels still: no hump */
     {
         int32_t kdx;
+
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
+
         for (kdx = 0; kdx < T_2_S; kdx++)
         {
             step(0.0, 10.0, 0.0, 0, 0, 0);
         }
+
         CHECK("S4-H10b", (0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)))
                              && (0u == g_ic.humps));
     }
@@ -172,49 +180,60 @@ static void test_h10 (void)
      */
     {
         int32_t kdx;
+
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
+
         for (kdx = 0; kdx < T_1_S; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 0);
         }
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step(0.0, 6.0, 0.0, 100, 1000, 0);
         }
+
         for (kdx = 0; kdx < T_1_S; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 0);
         }
+
         CHECK("S4-H10c", (0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)))
                              && (0u == g_ic.humps));
     }
+}
 
-    /* S4-H02: hard acceleration and braking on flat ground: no hump */
+/** S4-H02: hard acceleration and braking on flat ground: no hump. */
+static void test_h02_flat (void)
+{
+    int32_t kdx;
+    int32_t value = 0;
+
+    imu_core_init(&g_ic);
+    g_now = 0u;
+    g_ev  = 0u;
+
+    for (kdx = 0; kdx < T_4_S; kdx++)
     {
-        int32_t kdx;
-        int32_t value = 0;
+        float64_t val_a =
+            (0 == ((kdx / 50) % 2)) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
 
-        imu_core_init(&g_ic);
-        g_now = 0u;
-        g_ev  = 0u;
-        for (kdx = 0; kdx < T_4_S; kdx++)
+        /* Cast (int32_t)(val_a / 100.0): val_a is +-1500, so +-15. */
+        value += (int32_t)(val_a / 100.0);
+
+        if (value < 0)
         {
-            /* Cast (int32_t)(val_a / 100.0): val_a is +-1500, so +-15. */
-            float64_t val_a =
-                (0 == ((kdx / 50) % 2)) ? 1500.0 : -1500.0; /* +-1.5 m/s^2 */
-            value += (int32_t)(val_a / 100.0);
-            if (value < 0)
-            {
-                value = 0;
-                val_a = 0.0;
-            }
-            step(0.0, 0.0, val_a, value, value * 10, 0);
+            value = 0;
+            val_a = 0.0;
         }
-        CHECK("S4-H02", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)));
-        CHECK("S4-H02", abs(g_ic.pitch_cdeg) < 300);
+
+        step(0.0, 0.0, val_a, value, value * 10, 0);
     }
+
+    CHECK("S4-H02", 0u == (g_ev & (IMU_EV_HUMP_START | IMU_EV_HUMP_END)));
+    CHECK("S4-H02", abs(g_ic.pitch_cdeg) < 300);
 }
 
 /** Checks S4-H03, S4-H04. */
@@ -227,10 +246,12 @@ static void test_h03 (void)
         imu_core_init(&g_ic);
         g_now = 0u;
         g_ev  = 0u;
+
         for (kdx = 0; kdx < T_3_S; kdx++)
         {
             step(8.0, 0.0, 0.0, 300, 3000, 0);
         }
+
         CHECK("S4-H03",
               ((g_ev & IMU_EV_RAMP) != 0u) && (0u == (g_ev & IMU_EV_HUMP_END)));
     }
@@ -242,6 +263,7 @@ static void test_h03 (void)
     g_ev  = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step(35.0, 0.0, 0.0, 0, 0, 0);
@@ -251,6 +273,7 @@ static void test_h03 (void)
                         && !g_ic.b_tilt); /* 100 ms: not yet */
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(35.0, 0.0, 0.0, 0, 0, 0);
@@ -260,6 +283,7 @@ static void test_h03 (void)
     g_ev = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step(20.0, 0.0, 0.0, 0, 0, 0);
@@ -269,6 +293,7 @@ static void test_h03 (void)
     g_ev = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, -40.0, 0.0, 0, 0, 0);
@@ -289,6 +314,7 @@ static void test_h04b (void)
     g_ev  = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 0, 0, 0);
@@ -296,6 +322,7 @@ static void test_h04b (void)
     }
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, (kdx < 2) ? (200 * (kdx + 1)) : 400, 4000, 0);
@@ -303,6 +330,7 @@ static void test_h04b (void)
     }
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step(40.0, 0.0, 0.0, 400, 4000, 0);
@@ -310,6 +338,7 @@ static void test_h04b (void)
     }
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 400, 4000, 0);
@@ -325,6 +354,7 @@ static void test_h04b (void)
     g_ev  = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step_up(0, 200, 2000);
@@ -333,6 +363,7 @@ static void test_h04b (void)
     CHECK("S4-H05", 0u == (g_ev & IMU_EV_LIFT));
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(400, 0, 0);
@@ -346,6 +377,7 @@ static void test_h04b (void)
     g_ev = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step_up(0, 0, 0);
@@ -354,6 +386,7 @@ static void test_h04b (void)
     CHECK("S4-H05", (0u == (g_ev & IMU_EV_LIFT)) && !g_ic.b_lift);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(400, 0, 0);
@@ -372,6 +405,7 @@ static void test_h05b (void)
     g_ev  = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step_up(0, 200, 2000);
@@ -380,6 +414,7 @@ static void test_h05b (void)
     step_up(1500, 200, 2000);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
@@ -389,6 +424,7 @@ static void test_h05b (void)
     step_up(1000, 200, 2000);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
@@ -396,6 +432,7 @@ static void test_h05b (void)
     }
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step_up(200, 200, 2000);
@@ -403,6 +440,7 @@ static void test_h05b (void)
     }
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
@@ -422,6 +460,7 @@ static void test_h05b (void)
     g_ev  = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_100_MS; kdx++)
         {
             step_up(0, 200, 2000);
@@ -430,6 +469,7 @@ static void test_h05b (void)
     g_ic.hump_state = IMU_HUMP_CLIMBING;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(400, 200, 2000);
@@ -445,6 +485,7 @@ static void test_h05b (void)
     g_ic.lvl_up_mg = 890;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_150_MS; kdx++)
         {
             step_up(-110 + 300, 0, 0);
@@ -472,6 +513,7 @@ static void test_h05e (void)
     g_ev = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_600_MS; kdx++)
         {
             step(10.0, 0.0, 0.0, 300, 3000, 0);
@@ -479,6 +521,7 @@ static void test_h05e (void)
     } /* nose up in the air */
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_600_MS; kdx++)
         {
             step(-10.0, 0.0, 0.0, 300, 3000, 0);
@@ -486,6 +529,7 @@ static void test_h05e (void)
     }
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 300, 3000, 0);
@@ -523,24 +567,30 @@ static void test_h06 (void)
         int32_t accel[3];
 
         accel_for(3.0, -2.0, 0.0, accel);
+
         for (kdx = 0; kdx < T_1_S; kdx++)
         {
             imu_core_cal_level_sample(&g_ic, accel);
         }
+
         CHECK("S4-H06", imu_core_cal_level_finish(&g_ic));
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(3.0, -2.0, 0.0, 0, 0, 0);
         }
+
         CHECK("S4-H06",
               (abs(g_ic.pitch_cdeg) <= 10) && (abs(g_ic.roll_cdeg) <= 10));
         /* moving robot: calibration refused */
         imu_core_cal_level_start(&g_ic);
+
         for (kdx = 0; kdx < T_1_S; kdx++)
         {
             accel_for((kdx % 2) ? 5.0 : -5.0, 0.0, 0.0, accel);
             imu_core_cal_level_sample(&g_ic, accel);
         }
+
         CHECK("S4-H06", !imu_core_cal_level_finish(&g_ic));
         CHECK("S4-H06", (100u == g_ic.lvl_n)
                             && (g_ic.lvl_spread_mg
@@ -550,10 +600,12 @@ static void test_h06 (void)
         accel[0] = -3997;
         accel[1] = 0;
         accel[2] = -3997;
+
         for (kdx = 0; kdx < T_1_S; kdx++)
         {
             imu_core_cal_level_sample(&g_ic, accel);
         }
+
         CHECK("S4-H06", !imu_core_cal_level_finish(&g_ic));
         CHECK("S4-H06",
               (0 == g_ic.lvl_spread_mg)
@@ -565,6 +617,7 @@ static void test_h06 (void)
     imu_core_cal_mag_start(&g_ic);
     {
         int32_t diff;
+
         for (diff = 0; diff < T_FULL_TURN_DEG; diff += 5)
         {
             float64_t radius = (diff * M_PI) / 180.0;
@@ -580,6 +633,7 @@ static void test_h06 (void)
             mag[IMU_AXIS_UP] = 30;
             imu_core_cal_mag_sample(&g_ic, mag);
         }
+
         CHECK("S4-H07", imu_core_cal_mag_finish(&g_ic));
         {
             int16_t mag[3] = {0, 0, 0};
@@ -603,6 +657,7 @@ static void test_h08 (void)
     g_now = 0u;
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 0, 0, 0);
@@ -611,6 +666,7 @@ static void test_h08 (void)
     CHECK("S4-H08", IMU_MOTION_STATIONARY == g_ic.motion);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 100, 1000, 6000);
@@ -619,6 +675,7 @@ static void test_h08 (void)
     CHECK("S4-H08", IMU_MOTION_TURNING == g_ic.motion);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 250, 2500, 0);
@@ -628,6 +685,7 @@ static void test_h08 (void)
     /* speed up then slow down, forward: 1000 mm/s^2 each way */
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 250 + (10 * kdx), 2600, 0);
@@ -636,6 +694,7 @@ static void test_h08 (void)
     CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_200_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, 440 - (10 * kdx), 2600, 0);
@@ -647,6 +706,7 @@ static void test_h08 (void)
     imu_core_init(&g_ic);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_400_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, -20 - (10 * kdx), -1000, 0);
@@ -655,6 +715,7 @@ static void test_h08 (void)
     CHECK("S4-H08", IMU_MOTION_ACCELERATING == g_ic.motion);
     {
         int32_t kdx;
+
         for (kdx = 0; kdx < T_300_MS; kdx++)
         {
             step(0.0, 0.0, 0.0, -410 + (10 * kdx), -1000, 0);
@@ -678,25 +739,30 @@ static void test_h09 (void)
               0u
                   == safety_core_hb_check(&hb_state, coefs,
                                           1000u)); /* starts supervision */
+
         for (elapsed = T_HB_START_MS; elapsed <= T_HB_END_MS; elapsed += 20u)
         {
             coefs[SAFETY_HB_MISSION]++; /* only Mission keeps running */
             mid = safety_core_hb_check(&hb_state, coefs, elapsed);
+
             if (1040u == elapsed)
             {
                 CHECK("S4-H09", 0u == mid);
             }
+
             if (1060u == elapsed)
             {
                 CHECK("S4-H09",
                       ((1u << SAFETY_HB_MOTION) | (1u << SAFETY_HB_LINE))
                           == mid);
             }
+
             if (1120u == elapsed)
             {
                 CHECK("S4-H09", (mid & (1u << SAFETY_HB_IMU)) != 0u);
             }
         }
+
         CHECK("S4-H09", 0u == (mid & (1u << SAFETY_HB_MISSION)));
         CHECK("S4-H09",
               (mid & (1u << SAFETY_HB_OBSTACLE)) != 0u); /* > 300 ms */
@@ -770,6 +836,7 @@ static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
         z_val =
             0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
     }
+
     return z_val;
 }
 
@@ -781,7 +848,8 @@ static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
     float64_t       x_val;
 
     imu_core_init(&g_ic);
-    g_now     = 0u;
+    g_now = 0u;
+
     *p_starts = 0;
     *p_ends   = 0;
     for (x_val = 0.0; x_val < 1500.0; x_val += 3.0)
@@ -794,15 +862,18 @@ static int32_t run_hump (float64_t h_mm, float64_t len_mm, int32_t * p_starts,
 
         g_ev = 0u;
         step(theta, 0.0, 0.0, 300, 3000, 0);
+
         if (g_ev & IMU_EV_HUMP_START)
         {
             (*p_starts)++;
         }
+
         if (g_ev & IMU_EV_HUMP_END)
         {
             (*p_ends)++;
         }
     }
+
     return g_ic.last_hump_mm;
 }
 
@@ -818,7 +889,8 @@ static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
     float64_t       x_val;
 
     imu_core_init(&g_ic);
-    g_now     = 0u;
+    g_now = 0u;
+
     *p_starts = 0;
     *p_ends   = 0;
     for (x_val = 0.0; x_val < 1200.0; x_val += 1.0)
@@ -829,15 +901,18 @@ static int32_t run_side_hump (float64_t h_mm, float64_t len_mm, int32_t side,
 
         g_ev = 0u;
         step(theta, roll, 0.0, 100, 1000, 0);
+
         if (g_ev & IMU_EV_HUMP_START)
         {
             (*p_starts)++;
         }
+
         if (g_ev & IMU_EV_HUMP_END)
         {
             (*p_ends)++;
         }
     }
+
     return g_ic.last_hump_mm;
 }
 

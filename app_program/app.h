@@ -188,6 +188,7 @@ Inline uint32_t app_time_ms_hw (void)
 Inline void app_reset_release (uint32_t mask)
 {
     clr_w(RESETS_RESET, mask);
+
     while ((in_w(RESETS_RESET_DONE) & mask) != mask)
     {
         ;

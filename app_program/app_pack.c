@@ -35,6 +35,7 @@ void app_pack_writer_init (app_pack_writer_t * p_w, uint8_t * p_buf,
     {
         p_buf[idx] = 0u;
     }
+
     p_w->p_buf      = p_buf;
     p_w->cap        = cap;
     p_w->bits       = 0u;
@@ -63,6 +64,7 @@ void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
                    a byte. */
                 p_w->p_buf[p_w->bits >> 3] |= (uint8_t)(1u << (p_w->bits & 7u));
             }
+
             p_w->bits++;
         }
     }
@@ -108,9 +110,11 @@ uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
             {
                 value |= (1uL << idx);
             }
+
             p_r->bits++;
         }
     }
+
     return value;
 }
 
@@ -128,6 +132,7 @@ uint8_t app_pack_sym_index (char chr)
             sym_index = (uint8_t)(idx + 1u);
         }
     }
+
     return sym_index;
 }
 
@@ -148,6 +153,7 @@ uint32_t app_pack_layout_bits (app_pack_field_t const * p_f, uint16_t n_fields)
     {
         bits += p_f[idx].width;
     }
+
     return bits;
 }
 
@@ -162,6 +168,7 @@ void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
     {
         p_words[idx] = 0u;
     }
+
     for (idx = 0u; idx < n_fields; idx++)
     {
         uint8_t const  width = p_f[idx].width;
@@ -185,6 +192,7 @@ void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
 
                 value = (raw == none) ? app_pack_mask(width)
                                       : app_pack_sat_u(raw, width);
+
                 if ((raw != none) && (value == app_pack_mask(width)))
                 {
                     value = app_pack_mask(width) - 1u;
@@ -200,6 +208,7 @@ void app_pack_pack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
                 value = app_pack_sat_u(raw, width);
             break;
         }
+
         pk_word_put(p_words, &pos, value, width);
     }
 }
@@ -236,6 +245,7 @@ void app_pack_unpack_rec (app_pack_field_t const * p_f, uint16_t n_fields,
                 raw = value;
             break;
         }
+
         pk_member_set(p_rec, &p_f[idx], raw);
     }
 }
@@ -250,10 +260,12 @@ static void pk_word_put (uint32_t * p_w, uint32_t * p_pos, uint32_t value,
 
     value &= app_pack_mask(width);
     p_w[word] |= value << bit;
+
     if ((bit + width) > 32u)
     {
         p_w[word + 1u] |= value >> (32u - bit);
     }
+
     *p_pos += width;
 }
 
@@ -270,6 +282,7 @@ static uint32_t pk_word_take (uint32_t const * p_w, uint32_t * p_pos,
     {
         value |= p_w[word + 1u] << (32u - bit);
     }
+
     *p_pos += width;
     return value & app_pack_mask(width);
 }
@@ -300,6 +313,7 @@ static uint32_t pk_member_u (void const * p_rec, app_pack_field_t const * p_f)
     {
         (void)memcpy(&value, p_byte, 4u);
     }
+
     return value;
 }
 
@@ -330,6 +344,7 @@ static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
            as signed. */
         value = (int32_t)raw;
     }
+
     return value;
 }
 

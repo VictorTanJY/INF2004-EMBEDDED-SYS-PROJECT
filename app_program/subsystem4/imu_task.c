@@ -120,6 +120,7 @@ EXPORT void imu_task_thread (INT stacd, void * p_exinf)
             {
                 state.b_hw_ok = imu_hw_init();
             }
+
             err = E_IO;
         }
         else
@@ -246,11 +247,13 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
         imu_cal_phase(p_st, mission.cal_phase, now_ms);
         p_st->prev_phase = mission.cal_phase;
     }
+
     imu_cal_sample(p_st, mission.cal_phase, now_ms, acc, p_mag);
 
     /* ---- 14 Nov: humps while the floor may have gone ---- */
     p_st->b_air_start = false;
     p_st->safety_bits = 0u;
+
     if (imu_floor_check(p_st))
     {
         ds_um = 0; /* no hump progress in the air */
@@ -271,6 +274,7 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
     imu_debug_logs(p_st, acc);
 
     subsystem4_put_imu_snap(&p_st->snap);
+
     if (p_st->safety_bits != 0u)
     {
         (void)tk_set_flg(subsystem4_flg_safety(), p_st->safety_bits);
@@ -345,6 +349,7 @@ static void imu_cal_sample (imu_task_state_t const * p_st, uint8_t phase,
         {
             filt[kdx] = g_ic.b_have_acc ? (g_ic.acc_f[kdx] / 16) : acc[kdx];
         }
+
         imu_core_cal_level_sample(&g_ic, filt);
     }
     else if ((MISSION_CAL_PH_SPIN == phase) && (p_mag != NULL))
@@ -371,19 +376,23 @@ static bool imu_floor_check (imu_task_state_t * p_st)
     subsystem3_get_snap(&line);
     b_black = (line.sens & LINE_SENS_ALL_BLACK) != 0u;
     b_air   = (line.sens & LINE_SENS_NO_FLOOR) != 0u;
+
     if (b_black && !p_st->b_was_black)
     {
         imu_core_hump_save(&g_ic);
     }
+
     if (b_air && !p_st->b_was_air)
     {
         imu_core_hump_restore(&g_ic);
         p_st->b_air_start = true;
     }
+
     if (!b_black && p_st->b_was_black && !p_st->b_was_air)
     {
         imu_core_hump_drop(&g_ic);
     }
+
     p_st->b_was_black = b_black;
     p_st->b_was_air   = b_air;
     return b_air;
@@ -424,7 +433,9 @@ static void imu_safety_bits (imu_task_state_t * p_st, uint8_t events,
     {
         p_st->safety_bits |= SAFETY_FLT_TILT;
     }
+
     p_st->b_tilt_sent = b_run && g_ic.b_tilt;
+
     if (b_run && (((events & IMU_EV_LIFT) != 0u) || p_st->b_air_start))
     {
         /* IMU lift, or no floor under the IR sensors */
@@ -440,6 +451,7 @@ static void imu_log_events (uint8_t events)
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
                                     IMU_LOG_LIFT, g_ic.lift_rise_mg);
     }
+
     if ((events & IMU_EV_RISE_MAX) != 0u)
     {
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,

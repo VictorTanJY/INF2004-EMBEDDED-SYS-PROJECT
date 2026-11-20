@@ -26,6 +26,7 @@ EXPORT ER subsystem1_init (void)
     cmbf.bufsz  = S1_MBF_TELEM_BYTES;
     cmbf.maxmsz = sizeof(comms_proto_rec_t);
     obj_id      = tk_cre_mbf(&cmbf);
+
     if (obj_id < E_OK)
     {
         err = obj_id;
@@ -38,6 +39,7 @@ EXPORT ER subsystem1_init (void)
            only hand-over needed: one aligned word store. */
         g_mbf_telem = obj_id;
     }
+
     return err;
 }
 
@@ -60,10 +62,12 @@ EXPORT bool subsystem1_telem_post (uint8_t kind, uint8_t src, uint16_t code,
         comms_proto_rec_pack(&rec, kind, src, code, data, app_time_ms());
         b_sent = (E_OK == tk_snd_mbf(g_mbf_telem, &rec, sizeof(rec), TMO_POL));
     }
+
     if (!b_sent)
     {
         app_atomic_inc(&g_telem_drops);
     }
+
     return b_sent;
 }
 

@@ -36,6 +36,7 @@ EXPORT void drv_watchdog_enable (uint32_t timeout_ms)
     {
         load = WD_LOAD_MAX;
     }
+
     g_load = load;
     clr_w(WD_CTRL, WD_CTRL_ENABLE);
     set_w(PSM_WDSEL, PSM_WDSEL_ALL); /* a timeout resets the whole chip */

@@ -74,6 +74,7 @@ static inline uint32_t app_pack_off_s (int32_t value, uint8_t width)
     {
         /* in range */
     }
+
     /* Casts (uint32_t)(uint64_t)(clamped + ...): clamped is within
        -half..half-1, so the sum is 0..2^width-1; (uint64_t)(clamped + half):
        clamped >= -half, so the sum is not negative. */

@@ -76,6 +76,7 @@ EXPORT ER drv_encoder_init (void)
         {
             out_w(pio_instr_mem(idx), g_quad_prog[idx]);
         }
+
         pin_setup(S2_PIN_ENC_L_A);
         pin_setup(S2_PIN_ENC_L_A + 1u);
         pin_setup(S2_PIN_ENC_R_A);
@@ -85,6 +86,7 @@ EXPORT ER drv_encoder_init (void)
         set_w(PIO_CTRL, pio_ctrl_sm_enable(DRV_ENC_LEFT)
                             | pio_ctrl_sm_enable(DRV_ENC_RIGHT));
     }
+
     return err;
 }
 
@@ -101,6 +103,7 @@ EXPORT int32_t drv_encoder_read (uint32_t which)
         value = in_w(pio_rxf(sm_idx));
         n_words--;
     }
+
     for (spin = 0u; spin < READ_SPIN_MAX; spin++)
     {
         if (0u == (pio_fstat_rxempty(sm_idx) & in_w(PIO_FSTAT)))
@@ -109,6 +112,7 @@ EXPORT int32_t drv_encoder_read (uint32_t which)
             break;
         }
     }
+
     /* Cast (int32_t)value: the PIO counter's 32-bit pattern read as a signed
        count. */
     g_last[sm_idx] = value;

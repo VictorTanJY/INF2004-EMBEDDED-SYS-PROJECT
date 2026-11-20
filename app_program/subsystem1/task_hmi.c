@@ -45,6 +45,7 @@ EXPORT void task_hmi_thread (INT stacd, void * p_exinf)
 
         event = hmi_button_update(&btn_start, hmi_pressed(S1_PIN_BTN_START),
                                   HMI_PERIOD_MS, HMI_LONG_PRESS_MS);
+
         if (HMI_BTN_EV_PRESS == event)
         {
             hmi_report(MISSION_EV_BTN_START_STOP);
@@ -52,6 +53,7 @@ EXPORT void task_hmi_thread (INT stacd, void * p_exinf)
 
         event = hmi_button_update(&btn_mode, hmi_pressed(S1_PIN_BTN_MODE),
                                   HMI_PERIOD_MS, HMI_LONG_PRESS_MS);
+
         if (HMI_BTN_EV_SHORT == event)
         {
             hmi_report(MISSION_EV_BTN_CALIBRATE);
@@ -90,6 +92,7 @@ static void hmi_report (mission_types_ev_t event)
     {
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_COMMS, event, -1);
     }
+
     (void)subsystem1_telem_post(COMMS_KIND_EVENT, APP_SRC_COMMS, event, 0);
 }
 

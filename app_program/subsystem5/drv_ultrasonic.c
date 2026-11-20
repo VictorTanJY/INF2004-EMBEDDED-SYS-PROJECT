@@ -75,10 +75,12 @@ EXPORT void drv_ultrasonic_trigger (void)
     g_echo  = 0u;
     out_w(APP_REGS_GPIO_OUT_SET, 1uL << S5_PIN_US_TRIG);
     t_start = app_time_us();
+
     while ((app_time_us() - t_start) < US_TRIG_PULSE_US)
     {
         ; /* >= 10 us (datasheet) */
     }
+
     out_w(APP_REGS_GPIO_OUT_CLR, 1uL << S5_PIN_US_TRIG);
 #endif /* else no pins: nothing to trigger */
 }
@@ -102,11 +104,13 @@ EXPORT bool drv_ultrasonic_take (uint32_t * p_width_us)
 static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
 {
     (void)pin;
+
     if ((events & APP_GPIO_EDGE_RISE) != 0u)
     {
         g_rise_us = t_us;
         gb_rise   = true;
     }
+
     if (((events & APP_GPIO_EDGE_FALL) != 0u) && gb_rise)
     {
         uint32_t width = t_us - g_rise_us;
@@ -115,6 +119,7 @@ static void echo_isr (uint32_t pin, uint32_t events, uint32_t t_us)
         {
             width = (1uL << ECHO_WIDTH_BITS) - 1uL;
         }
+
         g_echo  = ECHO_DONE | width;
         gb_rise = false;
         (void)tk_set_flg(subsystem5_flg_obst(), OBST_FLG_ECHO);

@@ -81,6 +81,7 @@ EXPORT ER subsystem5_init (void)
         g_cyc_range = tk_cre_cyc(&ccyc);
         err         = (g_cyc_range < E_OK) ? g_cyc_range : E_OK;
     }
+
     return err;
 }
 
@@ -94,6 +95,7 @@ EXPORT ER subsystem5_start (void)
     tid = app_main_start_task((FP)mission_task_thread, S5_PRI_MISSION, S5_CORE,
                               "mission");
     err = (tid < E_OK) ? tid : E_OK;
+
     if (E_OK == err)
     {
         /* Cast (FP)obstacle_task_thread: the kernel stores the entry point as
@@ -102,6 +104,7 @@ EXPORT ER subsystem5_start (void)
                                   S5_CORE, "obstacle");
         err = (tid < E_OK) ? tid : tk_sta_cyc(g_cyc_range);
     }
+
     return err;
 }
 
@@ -118,10 +121,12 @@ EXPORT ER subsystem5_mission_post (uint8_t type, uint8_t src, uint16_t arg,
     evt.data = data;
     word     = mission_core_evt_pack(&evt);
     err      = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
+
     if (err != E_OK)
     {
         app_atomic_inc(&g_drops); /* senders on both cores */
     }
+
     return err;
 }
 
@@ -155,6 +160,7 @@ EXPORT void subsystem5_get_mission_snap (mission_types_snap_t * p_out)
     {
         words[idx] = g_mission_snap[idx];
     }
+
     app_unlock(&g_mission_lock, sts);
     mission_core_snap_unpack(words, p_out);
 }
@@ -167,10 +173,12 @@ EXPORT void subsystem5_put_mission_snap (mission_types_snap_t const * p_in)
 
     mission_core_snap_pack(p_in, words);
     sts = app_lock(&g_mission_lock);
+
     for (idx = 0u; idx < MISSION_SNAP_WORDS; idx++)
     {
         g_mission_snap[idx] = words[idx];
     }
+
     app_unlock(&g_mission_lock, sts);
 }
 
@@ -184,6 +192,7 @@ EXPORT void subsystem5_get_obst_snap (mission_types_obst_snap_t * p_out)
     {
         words[idx] = g_obst_snap[idx];
     }
+
     app_unlock(&g_obst_lock, sts);
     obstacle_core_snap_unpack(words, p_out);
 }
@@ -196,10 +205,12 @@ EXPORT void subsystem5_put_obst_snap (mission_types_obst_snap_t const * p_in)
 
     obstacle_core_snap_pack(p_in, words);
     sts = app_lock(&g_obst_lock);
+
     for (idx = 0u; idx < OBST_SNAP_WORDS; idx++)
     {
         g_obst_snap[idx] = words[idx];
     }
+
     app_unlock(&g_obst_lock, sts);
 }
 

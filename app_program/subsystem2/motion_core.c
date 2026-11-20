@@ -139,6 +139,7 @@ uint32_t motion_core_expected_ms (int64_t distance_um, int32_t vmax_mm_s)
                       + (((int64_t)vmax_mm_s * 1000) / MOTION_ACCEL_MM_S2);
         expected_ms = (t_ms > 600000) ? 600000u : (uint32_t)t_ms;
     }
+
     return expected_ms;
 }
 
@@ -154,6 +155,7 @@ void motion_core_init (motion_core_t * p_mc, uint32_t now_ms)
     {
         p_byte[idx] = 0u;
     }
+
     p_mc->state   = MOTION_ST_IDLE_BRAKED;
     p_mc->auth    = MOTION_SRC_MISSION;
     p_mc->prev_ms = now_ms;
@@ -191,11 +193,13 @@ motion_core_result_t motion_core_command (motion_core_t *            p_mc,
     else
     {
         res = command_run(p_mc, p_cmd, now_ms);
+
         if ((MOTION_RES_REJECTED_AUTH == res) || (MOTION_RES_INVALID == res))
         {
             p_mc->rejected++;
         }
     }
+
     return res;
 }
 
@@ -219,6 +223,7 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
     {
         dt_ms = DT_DEFAULT_MS; /* first call or a long gap */
     }
+
     update_odometry(p_mc, enc_l, enc_r, dt_ms, now_ms);
     p_mc->prev_ms = now_ms;
 
@@ -266,6 +271,7 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
 
             p_mc->sp_v = ramp(p_mc->sp_v, 0, dv_step);
             p_mc->sp_w = ramp(p_mc->sp_w, 0, dw_step);
+
             if ((0 == p_mc->sp_v) && (0 == p_mc->sp_w))
             {
                 brake(p_mc);
@@ -302,6 +308,7 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
         p_mc->duty_r =
             pid_wheel(sp_r, p_mc->v_r, &p_mc->integ_r_um, &p_mc->dir_r, dt_ms);
     }
+
     check_stall(p_mc, now_ms);
 }
 
@@ -350,8 +357,10 @@ bool motion_core_pop_event (motion_core_t * p_mc, motion_core_event_t * p_ev)
         {
             p_mc->events[idx - 1u] = p_mc->events[idx];
         }
+
         p_mc->ev_count--;
     }
+
     return b_have;
 }
 
@@ -368,6 +377,7 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
                         app_pack_sat_u(cmd, CMD_CMD_BITS));
     word = app_pack_set(word, CMD_SEQ_SHIFT, MOTION_SEQ_BITS,
                         (uint32_t)p_cmd->seq & MOTION_SEQ_MASK);
+
     if (MOTION_CMD_DRIVE == cmd)
     {
         word = app_pack_set(word, CMD_P0_SHIFT, DRIVE_V_BITS,
@@ -399,6 +409,7 @@ uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
     {
         /* STOP, CLEAR_ESTOP: no payload */
     }
+
     return word;
 }
 
@@ -417,6 +428,7 @@ void motion_core_cmd_unpack (uint32_t word, motion_types_cmd_t * p_cmd)
     p_cmd->reserved = 0u;
     p_cmd->arg0     = 0;
     p_cmd->arg1     = 0;
+
     if (MOTION_CMD_DRIVE == cmd)
     {
         /* Casts (int16_t)app_pack_unoff_s(...): the value is -512..511;
@@ -548,6 +560,7 @@ static motion_core_result_t command_run (motion_core_t *            p_mc,
             res = MOTION_RES_INVALID;
         break;
     }
+
     return res;
 }
 
@@ -560,6 +573,7 @@ static void command_move (motion_core_t *            p_mc,
     int32_t vmax;
 
     end_maneuver(p_mc, false);
+
     if (MOTION_CMD_MOVE == p_cmd->cmd)
     {
         /* Cast (int64_t)app_types_abs_i32(...): every int32_t value fits. */
@@ -578,7 +592,9 @@ static void command_move (motion_core_t *            p_mc,
         vmax =
             app_types_clamp_i32(vmax, MOTION_PROFILE_V_MIN, MOTION_V_MAX_MM_S);
     }
+
     start_maneuver(p_mc, p_cmd, target, vmax, dir, now_ms);
+
     if (0 == target)
     {
         end_maneuver(p_mc, true); /* nothing to do */
@@ -637,6 +653,7 @@ static void end_maneuver (motion_core_t * p_mc, bool b_ok)
             p_mc->fail_count++;
             push_event(p_mc, MOTION_EV_FAILED, p_mc->m_seq, p_mc->m_src);
         }
+
         p_mc->phase = MOTION_PH_NONE;
         p_mc->state = MOTION_ST_IDLE_BRAKED;
     }
@@ -721,8 +738,10 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
             *p_integ_um = 0;
             *p_dir      = dir;
         }
+
         output = pid_output(setpoint, speed, p_integ_um, integ_max, dt_ms);
     }
+
     /* Cast (int16_t)app_types_clamp_i32(...): the value is -1000..1000. */
     return (int16_t)app_types_clamp_i32(output, -MOTION_DUTY_MAX,
                                         MOTION_DUTY_MAX);
@@ -761,6 +780,7 @@ static int32_t pid_output (int32_t setpoint, int32_t speed,
             feedfwd + ((MOTION_KP_MILLI * error) / 1000)
             + (int32_t)(((int64_t)MOTION_KI_MILLI * *p_integ_um) / 1000000);
     }
+
     return output;
 }
 
@@ -846,6 +866,7 @@ static void odometry_step (motion_core_t * p_mc, int32_t enc_left,
         {
             push_event(p_mc, MOTION_EV_ENC_FAULT, 0u, 0u);
         }
+
         p_mc->b_enc_fault   = true;
         p_mc->enc_glitch_ms = now_ms;
     }
@@ -904,6 +925,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
     if (MOTION_PH_SETTLE == p_mc->phase)
     {
         brake(p_mc);
+
         if (app_types_elapsed_ms(now_ms, p_mc->m_settle_ms) >= MOTION_SETTLE_MS)
         {
             end_maneuver(p_mc, true);
@@ -934,6 +956,7 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
             b_drive = true;
         }
     }
+
     return b_drive;
 }
 
@@ -961,6 +984,7 @@ static void maneuver_drive (motion_core_t * p_mc, int64_t rel_l, int64_t rel_r,
         (uint64_t)((2 * (int64_t)MOTION_ACCEL_MM_S2 * remaining) / 1000));
     speed = app_types_min_i32(app_types_min_i32(v_acc, v_dec), p_mc->m_vmax);
     speed = app_types_max_i32(speed, MOTION_PROFILE_V_MIN);
+
     if (speed >= p_mc->m_vmax)
     {
         p_mc->phase = MOTION_PH_CRUISE;
@@ -973,6 +997,7 @@ static void maneuver_drive (motion_core_t * p_mc, int64_t rel_l, int64_t rel_r,
     {
         p_mc->phase = MOTION_PH_ACCEL;
     }
+
     p_mc->m_prof_v = speed;
 
     if (b_move)
@@ -1016,6 +1041,7 @@ static uint8_t p0_bits (uint8_t cmd)
     {
         bits = (MOTION_CMD_SET_AUTH == cmd) ? CMD_SRC_BITS : 0u;
     }
+
     return bits;
 }
 

@@ -20,6 +20,7 @@ uint32_t app_math_isqrt64 (uint64_t value)
     {
         bit >>= 2;
     }
+
     while (bit != 0u)
     {
         if (value >= (result + bit))
@@ -31,8 +32,10 @@ uint32_t app_math_isqrt64 (uint64_t value)
         {
             result >>= 1;
         }
+
         bit >>= 2;
     }
+
     /* Cast (uint32_t)result: the square root of a 64-bit value is below
        2^32. */
     return (uint32_t)result;
@@ -48,6 +51,7 @@ uint32_t app_math_isqrt32 (uint32_t value)
     {
         bit >>= 2;
     }
+
     while (bit != 0u)
     {
         if (value >= (result + bit))
@@ -59,8 +63,10 @@ uint32_t app_math_isqrt32 (uint32_t value)
         {
             result >>= 1;
         }
+
         bit >>= 2;
     }
+
     return result;
 }
 
@@ -92,14 +98,17 @@ int32_t app_math_atan2_cdeg (int32_t y_val, int32_t x_val)
         angle = APP_CDEG_90
                 - atan_unit_cdeg((int64_t)(((uint64_t)abs_x << 30) / abs_y));
     }
+
     if (x_val < 0)
     {
         angle = APP_CDEG_180 - angle;
     }
+
     if (y_val < 0)
     {
         angle = -angle;
     }
+
     return angle;
 }
 
@@ -119,6 +128,7 @@ int32_t app_math_wrap_cdeg (int32_t cdeg)
     {
         /* already in range */
     }
+
     return angle;
 }
 
@@ -160,14 +170,17 @@ int32_t app_math_sin_q15 (int32_t cdeg)
     sine = q30_floor(term * sine); /* Q30 */
 
     sine = (sine + ((sine >= 0) ? 16384 : -16384)) / 32768; /* Q15, rounded */
+
     if (sine > 32767)
     {
         sine = 32767;
     }
+
     if (sine < -32768)
     {
         sine = -32768;
     }
+
     /* Cast (int32_t)sine: sine was clamped to -32768..32767 above. */
     return (int32_t)sine;
 }
@@ -203,6 +216,7 @@ static int64_t q30_floor (int64_t value)
     {
         quot--;
     }
+
     return quot;
 }
 
