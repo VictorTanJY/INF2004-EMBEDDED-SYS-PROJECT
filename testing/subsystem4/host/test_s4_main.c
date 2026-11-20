@@ -763,11 +763,14 @@ static void step_up (int32_t extra_up_mg, int32_t value, int32_t ds_um)
 static float64_t z_of (float64_t x_val, float64_t start, float64_t len,
                        float64_t height)
 {
-    if ((x_val < start) || (x_val > (start + len)))
+    float64_t z_val = 0.0;
+
+    if ((x_val >= start) && (x_val <= (start + len)))
     {
-        return 0.0;
+        z_val =
+            0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
     }
-    return 0.5 * height * (1.0 - cos((2.0 * M_PI * (x_val - start)) / len));
+    return z_val;
 }
 
 /** Drive 1.5 m at 300 mm/s over a cosine hump; returns the reported peak. */

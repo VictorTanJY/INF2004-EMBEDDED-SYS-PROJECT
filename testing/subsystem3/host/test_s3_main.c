@@ -984,11 +984,12 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
     static line_barcode_capture_t capture;
     uint32_t                      x_val;
     uint32_t                      step = v_mm_s; /* um per 1 ms sample = mm/s */
-    line_barcode_result_t         found = BC_NONE;
+    line_barcode_result_t         found    = BC_NONE;
+    bool                          b_double = false;
 
     g_last_pass = 0u;
     line_barcode_init(&capture);
-    for (x_val = 0u; x_val < TRACK_LEN_UM; x_val += step)
+    for (x_val = 0u; (x_val < TRACK_LEN_UM) && !b_double; x_val += step)
     {
         /* Casts (int32_t)profile_at(p_w, n_elems ...): every uint16_t value
            fits; (int32_t)(noise * rndu()): |rndu()| <= 1, so |noise x rndu()|
@@ -1017,7 +1018,8 @@ static line_barcode_result_t run_pass (uint32_t const * p_w, uint16_t n_elems,
         }
         else if (result != BC_NONE)
         {
-            return BC_REJECT; /* more than one result per code */
+            found    = BC_REJECT; /* more than one result per code */
+            b_double = true;
         }
         else
         {
@@ -1335,6 +1337,7 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
     static line_track_slip_t slip;
     line_track_cal_t         cal;
     int32_t                  kdx;
+    uint32_t                 diag;
 
     memset(&cal, 0, sizeof(cal));
     line_track_cal_start(&cal);
@@ -1369,11 +1372,8 @@ static uint16_t slip_run (int32_t gain_pm, bool b_line, int32_t start_cdeg)
         line_track_slip_sample(&slip, height, raw[0], raw[1]);
     }
     (void)line_track_cal_finish(&cal);
-    {
-        uint32_t diag;
-        return line_track_slip_gain(
-            &slip, &cal, &diag); /* no line: both dark for one block only */
-    }
+    /* no line: both dark for one block only */
+    return line_track_slip_gain(&slip, &cal, &diag);
 }
 
 /** S3-H16: turn slip measured from a simulated calibration spin. */
@@ -1664,8 +1664,8 @@ static void test_best_h20_part2 (void)
 
         for (ret = 0; ret < T_RANDOM_CODES; ret++)
         {
-            /* Cast (uint16_t)(25u + (2u * (rnd() % ...))): the value is 25..33.
-             */
+            /* Cast (uint16_t)(25u + (2u * (rnd() % ...))): the value is
+               25..33. */
             uint32_t widths[60];
             uint16_t n_elems = (uint16_t)(25u + (2u * (rnd() % 5u)));
             uint16_t elem;

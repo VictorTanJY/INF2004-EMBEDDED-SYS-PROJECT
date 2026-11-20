@@ -30,6 +30,7 @@ EXPORT ER subsystem5_init (void)
     T_CMBF cmbf = {0};
     T_CFLG cflg = {0};
     T_CCYC ccyc = {0};
+    ER     err;
 
     app_lock_init(&g_mission_lock);
     app_lock_init(&g_obst_lock);
@@ -50,59 +51,58 @@ EXPORT ER subsystem5_init (void)
     cmbf.bufsz    = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
     cmbf.maxmsz   = sizeof(uint32_t);
     g_mbf_mission = tk_cre_mbf(&cmbf);
-    if (g_mbf_mission < E_OK)
+    err           = (g_mbf_mission < E_OK) ? g_mbf_mission : E_OK;
+
+    if (E_OK == err)
     {
-        return g_mbf_mission;
+        cmbf.bufsz  = S5_MBF_SCAN_DEPTH
+                      * (sizeof(INT) + sizeof(INT)); /* 2 B rounded to 4 */
+        cmbf.maxmsz = sizeof(uint16_t);
+        g_mbf_scan  = tk_cre_mbf(&cmbf);
+        err         = (g_mbf_scan < E_OK) ? g_mbf_scan : E_OK;
     }
 
-    cmbf.bufsz =
-        S5_MBF_SCAN_DEPTH * (sizeof(INT) + sizeof(INT)); /* 2 B rounded to 4 */
-    cmbf.maxmsz = sizeof(uint16_t);
-    g_mbf_scan  = tk_cre_mbf(&cmbf);
-    if (g_mbf_scan < E_OK)
+    if (E_OK == err)
     {
-        return g_mbf_scan;
+        cflg.flgatr  = TA_TFIFO | TA_WSGL; /* only ObstacleTask waits */
+        cflg.iflgptn = 0;
+        g_flg_obst   = tk_cre_flg(&cflg);
+        err          = (g_flg_obst < E_OK) ? g_flg_obst : E_OK;
     }
 
-    cflg.flgatr  = TA_TFIFO | TA_WSGL; /* only ObstacleTask waits */
-    cflg.iflgptn = 0;
-    g_flg_obst   = tk_cre_flg(&cflg);
-    if (g_flg_obst < E_OK)
+    if (E_OK == err)
     {
-        return g_flg_obst;
+        /* Cast (FP)range_cyc_handler: the kernel stores the entry point as FP;
+           it is called with its own type. */
+        ccyc.cycatr = TA_HLNG;
+        ccyc.cychdr = (FP)range_cyc_handler;
+        ccyc.cyctim = S5_RANGE_PERIOD_MS;
+        ccyc.cycphs = S5_RANGE_PERIOD_MS;
+        g_cyc_range = tk_cre_cyc(&ccyc);
+        err         = (g_cyc_range < E_OK) ? g_cyc_range : E_OK;
     }
-
-    /* Cast (FP)range_cyc_handler: the kernel stores the entry point as FP; it
-       is called with its own type. */
-    ccyc.cycatr = TA_HLNG;
-    ccyc.cychdr = (FP)range_cyc_handler;
-    ccyc.cyctim = S5_RANGE_PERIOD_MS;
-    ccyc.cycphs = S5_RANGE_PERIOD_MS;
-    g_cyc_range = tk_cre_cyc(&ccyc);
-    return (g_cyc_range < E_OK) ? g_cyc_range : E_OK;
+    return err;
 }
 
 EXPORT ER subsystem5_start (void)
 {
     ID tid;
+    ER err;
 
     /* Cast (FP)mission_task_thread: the kernel stores the entry point as FP; it
        is called with its own type. */
     tid = app_main_start_task((FP)mission_task_thread, S5_PRI_MISSION, S5_CORE,
                               "mission");
-    if (tid < E_OK)
+    err = (tid < E_OK) ? tid : E_OK;
+    if (E_OK == err)
     {
-        return tid;
+        /* Cast (FP)obstacle_task_thread: the kernel stores the entry point as
+           FP; it is called with its own type. */
+        tid = app_main_start_task((FP)obstacle_task_thread, S5_PRI_OBSTACLE,
+                                  S5_CORE, "obstacle");
+        err = (tid < E_OK) ? tid : tk_sta_cyc(g_cyc_range);
     }
-    /* Cast (FP)obstacle_task_thread: the kernel stores the entry point as FP;
-       it is called with its own type. */
-    tid = app_main_start_task((FP)obstacle_task_thread, S5_PRI_OBSTACLE,
-                              S5_CORE, "obstacle");
-    if (tid < E_OK)
-    {
-        return tid;
-    }
-    return tk_sta_cyc(g_cyc_range);
+    return err;
 }
 
 EXPORT ER subsystem5_mission_post (uint8_t type, uint8_t src, uint16_t arg,

@@ -82,26 +82,31 @@ bool imu_core_cal_mag_finish (imu_core_t * p_ic)
     int32_t const axes[IMU_HORIZ_AXES] = {IMU_AXIS_FWD,
                                           IMU_AXIS_LEFT}; /* horizontal plane */
     uint8_t       kdx;
+    bool          b_ok = true;
 
-    for (kdx = 0u; kdx < IMU_HORIZ_AXES; kdx++)
+    for (kdx = 0u; (kdx < IMU_HORIZ_AXES) && b_ok; kdx++)
     {
         /* Cast (int32_t)p_ic->mag_max[axes[kdx]]: every int16_t value fits. */
         if (((int32_t)p_ic->mag_max[axes[kdx]] - p_ic->mag_min[axes[kdx]])
             < IMU_MAG_MIN_SPAN)
         {
-            return false;
+            b_ok = false;
         }
     }
-    for (kdx = 0u; kdx < IMU_AXES; kdx++)
+    if (b_ok)
     {
-        /* Casts (int16_t)(((int32_t)p_ic->mag_min[k ...)): the value is
-           -32768..32767; (int32_t)p_ic->mag_min[kdx]: every int16_t value fits.
-         */
-        p_ic->mag_off[kdx] =
-            (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx]) / 2);
+        for (kdx = 0u; kdx < IMU_AXES; kdx++)
+        {
+            /* Casts (int16_t)(((int32_t)p_ic->mag_min[k ...)): the value is
+               -32768..32767; (int32_t)p_ic->mag_min[kdx]: every int16_t value
+               fits. */
+            p_ic->mag_off[kdx] =
+                (int16_t)(((int32_t)p_ic->mag_min[kdx] + p_ic->mag_max[kdx])
+                          / 2);
+        }
+        p_ic->cal |= IMU_CAL_MAG;
     }
-    p_ic->cal |= IMU_CAL_MAG;
-    return true;
+    return b_ok;
 }
 
 uint8_t imu_core_step (imu_core_t * p_ic, int32_t const acc_mg[3],
@@ -245,17 +250,18 @@ void imu_core_cal_level_sample (imu_core_t * p_ic, int32_t const acc_mg[3])
 {
     uint8_t kdx;
 
-    if (0xFFFFu == p_ic->lvl_n)
+    if (p_ic->lvl_n != 0xFFFFu) /* else the sample count is full */
     {
-        return;
+        for (kdx = 0u; kdx < IMU_AXES; kdx++)
+        {
+            p_ic->lvl_sum[kdx] += acc_mg[kdx];
+            p_ic->lvl_min[kdx] =
+                app_types_min_i32(p_ic->lvl_min[kdx], acc_mg[kdx]);
+            p_ic->lvl_max[kdx] =
+                app_types_max_i32(p_ic->lvl_max[kdx], acc_mg[kdx]);
+        }
+        p_ic->lvl_n++;
     }
-    for (kdx = 0u; kdx < IMU_AXES; kdx++)
-    {
-        p_ic->lvl_sum[kdx] += acc_mg[kdx];
-        p_ic->lvl_min[kdx] = app_types_min_i32(p_ic->lvl_min[kdx], acc_mg[kdx]);
-        p_ic->lvl_max[kdx] = app_types_max_i32(p_ic->lvl_max[kdx], acc_mg[kdx]);
-    }
-    p_ic->lvl_n++;
 }
 
 bool imu_core_cal_level_finish (imu_core_t * p_ic)
@@ -265,49 +271,48 @@ bool imu_core_cal_level_finish (imu_core_t * p_ic)
     int32_t left;
     int32_t up_mg;
     uint8_t kdx;
+    bool    b_ok;
 
     /* Diagnostics for LOG 57-59 (why a calibration failed). */
     p_ic->lvl_spread_mg = 0;
     p_ic->lvl_up_mg     = 0;
-    if (p_ic->lvl_n < 50u)
+    b_ok                = (p_ic->lvl_n >= 50u);
+    if (b_ok)
     {
-        return false;
+        for (kdx = 0u; kdx < IMU_AXES; kdx++)
+        {
+            /* Casts (int32_t)(p_ic->lvl_sum[kdx] / ...): a mean of readings of
+               the +-4 g sensor (|axis| <= 3998 mg); (int64_t)p_ic->lvl_n:
+               every uint16_t value fits. */
+            p_ic->lvl_spread_mg = app_types_max_i32(
+                p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
+            mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / (int64_t)p_ic->lvl_n);
+        }
+        fwd             = axis(mean, IMU_AXIS_FWD, IMU_SIGN_FWD);
+        left            = axis(mean, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
+        up_mg           = axis(mean, IMU_AXIS_UP, IMU_SIGN_UP);
+        p_ic->lvl_up_mg = up_mg;
+
+        /* Rejected if the robot was moving, is not right way up (or the axes
+           are mis-set), or the output is stuck / saturated (2 Nov). */
+        b_ok = (p_ic->lvl_spread_mg <= IMU_LEVEL_MAX_SPREAD_MG)
+               && (up_mg >= 500) && (up_mg <= IMU_LEVEL_UP_MAX_MG);
+        if (b_ok)
+        {
+            /* Casts (int32_t)app_math_isqrt64(...): the root of two squares of
+               +-4 g readings (|axis| <= 3998 mg): below 5655;
+               (uint64_t)(((int64_t)left * left) + ...): a sum of squares is
+               not negative; (int64_t)left, (int64_t)up_mg: every int32_t value
+               fits. */
+            p_ic->pitch0_cdeg = app_math_atan2_cdeg(
+                fwd, (int32_t)app_math_isqrt64(
+                         (uint64_t)(((int64_t)left * left)
+                                    + ((int64_t)up_mg * up_mg))));
+            p_ic->roll0_cdeg = app_math_atan2_cdeg(left, up_mg);
+            p_ic->cal |= IMU_CAL_LEVEL;
+        }
     }
-    for (kdx = 0u; kdx < IMU_AXES; kdx++)
-    {
-        /* Casts (int32_t)(p_ic->lvl_sum[kdx] / ...): a mean of readings of the
-           +-4 g sensor (|axis| <= 3998 mg); (int64_t)p_ic->lvl_n: every
-           uint16_t value fits. */
-        p_ic->lvl_spread_mg = app_types_max_i32(
-            p_ic->lvl_spread_mg, p_ic->lvl_max[kdx] - p_ic->lvl_min[kdx]);
-        mean[kdx] = (int32_t)(p_ic->lvl_sum[kdx] / (int64_t)p_ic->lvl_n);
-    }
-    fwd             = axis(mean, IMU_AXIS_FWD, IMU_SIGN_FWD);
-    left            = axis(mean, IMU_AXIS_LEFT, IMU_SIGN_LEFT);
-    up_mg           = axis(mean, IMU_AXIS_UP, IMU_SIGN_UP);
-    p_ic->lvl_up_mg = up_mg;
-    if (p_ic->lvl_spread_mg > IMU_LEVEL_MAX_SPREAD_MG)
-    {
-        return false; /* the robot was moving */
-    }
-    if (up_mg < 500)
-    {
-        return false; /* not right way up (or axes mis-set) */
-    }
-    if (up_mg > IMU_LEVEL_UP_MAX_MG)
-    {
-        return false; /* stuck / saturated output (2 Nov) */
-    }
-    /* Casts (int32_t)app_math_isqrt64(...): the root of two squares of +-4 g
-       readings (|axis| <= 3998 mg): below 5655;
-       (uint64_t)(((int64_t)left * left) + ...): a sum of squares is not
-       negative; (int64_t)left, (int64_t)up_mg: every int32_t value fits. */
-    p_ic->pitch0_cdeg = app_math_atan2_cdeg(
-        fwd, (int32_t)app_math_isqrt64((uint64_t)(((int64_t)left * left)
-                                                  + ((int64_t)up_mg * up_mg))));
-    p_ic->roll0_cdeg = app_math_atan2_cdeg(left, up_mg);
-    p_ic->cal |= IMU_CAL_LEVEL;
-    return true;
+    return b_ok;
 }
 
 void imu_core_cal_mag_start (imu_core_t * p_ic)
@@ -767,41 +772,39 @@ static uint8_t classify (imu_core_t const * p_ic, int32_t v_mm_s,
        is accelerating, slowing down while reversing is decelerating. */
     int32_t const a_speed =
         (v_mm_s < 0) ? -p_ic->accel_mm_s2 : p_ic->accel_mm_s2;
+    uint8_t motion;
 
-    if (1u == p_ic->side_state)
+    if ((1u == p_ic->side_state) || (IMU_HUMP_CLIMBING == p_ic->hump_state))
     {
-        return IMU_MOTION_CLIMBING;
+        motion = IMU_MOTION_CLIMBING;
     }
-    if (2u == p_ic->side_state)
+    else if ((2u == p_ic->side_state)
+             || (IMU_HUMP_DESCENDING == p_ic->hump_state))
     {
-        return IMU_MOTION_DESCENDING;
+        motion = IMU_MOTION_DESCENDING;
     }
-    if (IMU_HUMP_CLIMBING == p_ic->hump_state)
+    else if ((app_types_abs_i32(v_mm_s) < IMU_STATIONARY_MM_S)
+             && (app_types_abs_i32(yaw_cdeg_s) < 500))
     {
-        return IMU_MOTION_CLIMBING;
+        motion = IMU_MOTION_STATIONARY;
     }
-    if (IMU_HUMP_DESCENDING == p_ic->hump_state)
+    else if (app_types_abs_i32(yaw_cdeg_s) > IMU_TURNING_CDEG_S)
     {
-        return IMU_MOTION_DESCENDING;
+        motion = IMU_MOTION_TURNING;
     }
-    if ((app_types_abs_i32(v_mm_s) < IMU_STATIONARY_MM_S)
-        && (app_types_abs_i32(yaw_cdeg_s) < 500))
+    else if (a_speed > IMU_ACCEL_MM_S2)
     {
-        return IMU_MOTION_STATIONARY;
+        motion = IMU_MOTION_ACCELERATING;
     }
-    if (app_types_abs_i32(yaw_cdeg_s) > IMU_TURNING_CDEG_S)
+    else if (a_speed < -IMU_ACCEL_MM_S2)
     {
-        return IMU_MOTION_TURNING;
+        motion = IMU_MOTION_DECELERATING;
     }
-    if (a_speed > IMU_ACCEL_MM_S2)
+    else
     {
-        return IMU_MOTION_ACCELERATING;
+        motion = IMU_MOTION_CRUISING;
     }
-    if (a_speed < -IMU_ACCEL_MM_S2)
-    {
-        return IMU_MOTION_DECELERATING;
-    }
-    return IMU_MOTION_CRUISING;
+    return motion;
 }
 
 /** body-frame value of one raw axis triple */

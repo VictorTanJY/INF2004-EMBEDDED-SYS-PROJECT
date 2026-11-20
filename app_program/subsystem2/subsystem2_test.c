@@ -121,8 +121,8 @@ EXPORT void subsystem2_test_run (void)
     /* Casts (UB *)"[INFO] S2-U07 period min ...: tm_printf() takes UB *; the
        string bytes are unchanged; (INT)timing.per_min_us,
        (INT)timing.per_max_us, (INT)timing.exec_max_us, (INT)timing.cycles:
-       printed with %d: the value is a 32-bit count or measurement below 2^31.
-     */
+       printed with %d: the value is a 32-bit count or measurement below
+       2^31. */
     motion_task_timing_restart();
     (void)tk_dly_tsk(1000);
     motion_task_test_timing(&timing);
@@ -397,17 +397,21 @@ static bool wait_idle (uint32_t max_ms)
 {
     mission_types_snap_t mission;
     uint32_t             elapsed;
+    bool                 b_idle = false;
 
-    for (elapsed = 0u; elapsed < max_ms; elapsed += 50u)
+    for (elapsed = 0u; (elapsed < max_ms) && !b_idle; elapsed += 50u)
     {
         subsystem5_get_mission_snap(&mission);
         if ((MISSION_ST_IDLE == mission.state) && !subsystem2_estop_latched())
         {
-            return true;
+            b_idle = true;
         }
-        (void)tk_dly_tsk(50);
+        else
+        {
+            (void)tk_dly_tsk(50);
+        }
     }
-    return false;
+    return b_idle;
 }
 
 /** Wait until the MOVE/TURN posted after p_start completes; false on timeout.
@@ -416,18 +420,16 @@ static bool wait_done (motion_types_odom_t const * p_start, uint32_t max_ms,
                        motion_types_odom_t * p_end)
 {
     uint32_t elapsed;
+    bool     b_done = false;
 
-    for (elapsed = 0u; elapsed < max_ms; elapsed += 20u)
+    for (elapsed = 0u; (elapsed < max_ms) && !b_done; elapsed += 20u)
     {
         (void)tk_dly_tsk(20);
         subsystem2_get_odom(p_end);
-        if ((p_end->done_count != p_start->done_count)
-            && (MOTION_ST_IDLE_BRAKED == p_end->state))
-        {
-            return true;
-        }
+        b_done = (p_end->done_count != p_start->done_count)
+                 && (MOTION_ST_IDLE_BRAKED == p_end->state);
     }
-    return false;
+    return b_done;
 }
 
 #endif

@@ -107,9 +107,15 @@ static void start_maneuver(motion_core_t *            p_mc,
 static int32_t ramp(int32_t value, int32_t target, int32_t step);
 static int16_t pid_wheel(int32_t setpoint, int32_t speed, int32_t * p_integ_um,
                          int8_t * p_dir, uint32_t dt_ms);
+static int32_t pid_output(int32_t setpoint, int32_t speed, int32_t * p_integ_um,
+                          int32_t integ_max, uint32_t dt_ms);
 static void update_odometry(motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
                             uint32_t dt_ms, uint32_t now_ms);
+static void odometry_step(motion_core_t * p_mc, int32_t enc_left,
+                          int32_t enc_right, uint32_t dt_ms, uint32_t now_ms);
 static void check_stall(motion_core_t * p_mc, uint32_t now_ms);
+static void maneuver_drive(motion_core_t * p_mc, int64_t rel_l, int64_t rel_r,
+                           int64_t remaining, uint32_t dt_ms);
 static bool step_maneuver(motion_core_t * p_mc, uint32_t now_ms,
                           uint32_t dt_ms);
 static uint8_t              p0_bits(uint8_t cmd);
@@ -121,18 +127,19 @@ static void command_move(motion_core_t * p_mc, motion_types_cmd_t const * p_cmd,
 
 uint32_t motion_core_expected_ms (int64_t distance_um, int32_t vmax_mm_s)
 {
-    int64_t t_ms;
+    int64_t  t_ms;
+    uint32_t expected_ms = 0u;
 
-    if (vmax_mm_s <= 0)
+    if (vmax_mm_s > 0)
     {
-        return 0u;
+        /* um / (mm/s) = ms; plus the time lost accelerating and braking */
+        /* Casts (int64_t)vmax_mm_s: every int32_t value fits; (uint32_t)t_ms:
+           t_ms <= 600000 (tested in the same statement). */
+        t_ms        = (distance_um / vmax_mm_s)
+                      + (((int64_t)vmax_mm_s * 1000) / MOTION_ACCEL_MM_S2);
+        expected_ms = (t_ms > 600000) ? 600000u : (uint32_t)t_ms;
     }
-    /* um / (mm/s) = ms; plus the time lost accelerating and braking */
-    /* Casts (int64_t)vmax_mm_s: every int32_t value fits; (uint32_t)t_ms: t_ms
-       <= 600000 (tested in the same statement). */
-    t_ms = (distance_um / vmax_mm_s)
-           + (((int64_t)vmax_mm_s * 1000) / MOTION_ACCEL_MM_S2);
-    return (t_ms > 600000) ? 600000u : (uint32_t)t_ms;
+    return expected_ms;
 }
 
 /* ------------------------------------------------------------------ */
@@ -281,8 +288,8 @@ void motion_core_step (motion_core_t * p_mc, int32_t enc_l, int32_t enc_r,
     if (b_drive)
     {
         /* Casts (int32_t)(((int64_t)p_mc->sp_w * ...)): the value is
-           -118111600..118111600; (int64_t)p_mc->sp_w: every int32_t value fits.
-         */
+           -118111600..118111600; (int64_t)p_mc->sp_w: every int32_t value
+           fits. */
         int32_t const half_w =
             (int32_t)(((int64_t)p_mc->sp_w * MOTION_TRACK_MM) / 2000);
         int32_t const sp_l = app_types_clamp_i32(
@@ -333,19 +340,19 @@ void motion_core_snapshot (motion_core_t const * p_mc,
 
 bool motion_core_pop_event (motion_core_t * p_mc, motion_core_event_t * p_ev)
 {
-    uint8_t idx;
+    uint8_t    idx;
+    bool const b_have = (p_mc->ev_count != 0u);
 
-    if (0u == p_mc->ev_count)
+    if (b_have)
     {
-        return false;
+        *p_ev = p_mc->events[0];
+        for (idx = 1u; idx < p_mc->ev_count; idx++)
+        {
+            p_mc->events[idx - 1u] = p_mc->events[idx];
+        }
+        p_mc->ev_count--;
     }
-    *p_ev = p_mc->events[0];
-    for (idx = 1u; idx < p_mc->ev_count; idx++)
-    {
-        p_mc->events[idx - 1u] = p_mc->events[idx];
-    }
-    p_mc->ev_count--;
-    return true;
+    return b_have;
 }
 
 uint32_t motion_core_cmd_pack (motion_types_cmd_t const * p_cmd)
@@ -615,25 +622,24 @@ static void brake (motion_core_t * p_mc)
 /** End the active manoeuvre (if any) and report it. */
 static void end_maneuver (motion_core_t * p_mc, bool b_ok)
 {
-    if (p_mc->state != MOTION_ST_MANEUVER)
+    if (MOTION_ST_MANEUVER == p_mc->state)
     {
-        return;
+        if (b_ok)
+        {
+            p_mc->last_done_seq = p_mc->m_seq;
+            p_mc->last_done_src = p_mc->m_src;
+            p_mc->done_count++;
+            push_event(p_mc, MOTION_EV_DONE, p_mc->m_seq, p_mc->m_src);
+        }
+        else
+        {
+            p_mc->last_fail_seq = p_mc->m_seq;
+            p_mc->fail_count++;
+            push_event(p_mc, MOTION_EV_FAILED, p_mc->m_seq, p_mc->m_src);
+        }
+        p_mc->phase = MOTION_PH_NONE;
+        p_mc->state = MOTION_ST_IDLE_BRAKED;
     }
-    if (b_ok)
-    {
-        p_mc->last_done_seq = p_mc->m_seq;
-        p_mc->last_done_src = p_mc->m_src;
-        p_mc->done_count++;
-        push_event(p_mc, MOTION_EV_DONE, p_mc->m_seq, p_mc->m_src);
-    }
-    else
-    {
-        p_mc->last_fail_seq = p_mc->m_seq;
-        p_mc->fail_count++;
-        push_event(p_mc, MOTION_EV_FAILED, p_mc->m_seq, p_mc->m_src);
-    }
-    p_mc->phase = MOTION_PH_NONE;
-    p_mc->state = MOTION_ST_IDLE_BRAKED;
 }
 
 /** Wheel travel of counts encoder counts, um. */
@@ -682,11 +688,8 @@ static void start_maneuver (motion_core_t *            p_mc,
 /** Ramp value toward target by at most step (step >= 0). */
 static int32_t ramp (int32_t value, int32_t target, int32_t step)
 {
-    if (value < target)
-    {
-        return app_types_min_i32(value + step, target);
-    }
-    return app_types_max_i32(value - step, target);
+    return (value < target) ? app_types_min_i32(value + step, target)
+                            : app_types_max_i32(value - step, target);
 }
 
 /** PI speed controller with feed-forward for one wheel: duty (per mille) for
@@ -698,10 +701,8 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
        fits; (int64_t)MOTION_I_MAX: a constant that fits. */
     int32_t const integ_max =
         (int32_t)(((int64_t)MOTION_I_MAX * 1000000) / MOTION_KI_MILLI);
-    int8_t const dir = (setpoint > 0) ? 1 : -1;
-    int32_t      error;
-    int32_t      feedfwd;
-    int32_t      output;
+    int8_t const dir    = (setpoint > 0) ? 1 : -1;
+    int32_t      output = 0; /* wheel braked */
 
     /* Below a minimum target the wheel is simply braked: otherwise the
        static-friction offset flips between + and - MOTION_MIN_DUTY while
@@ -711,14 +712,32 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
     {
         *p_integ_um = 0;
         *p_dir      = 0;
-        return 0; /* wheel braked */
     }
-    /* A change of direction starts the controller clean. */
-    if (dir != *p_dir)
+    else
     {
-        *p_integ_um = 0;
-        *p_dir      = dir;
+        /* A change of direction starts the controller clean. */
+        if (dir != *p_dir)
+        {
+            *p_integ_um = 0;
+            *p_dir      = dir;
+        }
+        output = pid_output(setpoint, speed, p_integ_um, integ_max, dt_ms);
     }
+    /* Cast (int16_t)app_types_clamp_i32(...): the value is -1000..1000. */
+    return (int16_t)app_types_clamp_i32(output, -MOTION_DUTY_MAX,
+                                        MOTION_DUTY_MAX);
+}
+
+/** PI output with feed-forward and anti-windup for one wheel (pid_wheel()),
+    before the duty limit. */
+static int32_t pid_output (int32_t setpoint, int32_t speed,
+                           int32_t * p_integ_um, int32_t integ_max,
+                           uint32_t dt_ms)
+{
+    int32_t error;
+    int32_t feedfwd;
+    int32_t output;
+
     /* Casts (int32_t)(((int64_t)MOTION_KI_MILLI ...)): the value is
        -12884901..12884901; (int64_t)MOTION_KI_MILLI: a constant that fits. */
     error   = setpoint - speed;
@@ -734,17 +753,15 @@ static int16_t pid_wheel (int32_t setpoint, int32_t speed, int32_t * p_integ_um,
     {
         /* Casts (int32_t)dt_ms: dt_ms is one control period (<= 100 ms);
            (int32_t)(((int64_t)MOTION_KI_MILLI ...)): the value is
-           -12884901..12884901; (int64_t)MOTION_KI_MILLI: a constant that fits.
-         */
+           -12884901..12884901; (int64_t)MOTION_KI_MILLI: a constant that
+           fits. */
         *p_integ_um = app_types_clamp_i32(
             *p_integ_um + (error * (int32_t)dt_ms), -integ_max, integ_max);
         output =
             feedfwd + ((MOTION_KP_MILLI * error) / 1000)
             + (int32_t)(((int64_t)MOTION_KI_MILLI * *p_integ_um) / 1000000);
     }
-    /* Cast (int16_t)app_types_clamp_i32(...): the value is -1000..1000. */
-    return (int16_t)app_types_clamp_i32(output, -MOTION_DUTY_MAX,
-                                        MOTION_DUTY_MAX);
+    return output;
 }
 
 /** Wheel speeds, distance, heading and position from the new encoder counts,
@@ -754,22 +771,33 @@ static void update_odometry (motion_core_t * p_mc, int32_t raw_l, int32_t raw_r,
 {
     int32_t const enc_left  = MOTION_ENC_SIGN_L * raw_l;
     int32_t const enc_right = MOTION_ENC_SIGN_R * raw_r;
-    int32_t       dcl;
-    int32_t       dcr;
-    int64_t       delta_left;
-    int64_t       delta_right;
-    int64_t       delta_mid;
-    int32_t       h_old;
-    int32_t       h_mid;
-    int32_t       vraw;
 
     if (!p_mc->b_have_prev)
     {
         p_mc->enc_l       = enc_left;
         p_mc->enc_r       = enc_right;
         p_mc->b_have_prev = true;
-        return;
     }
+    else
+    {
+        odometry_step(p_mc, enc_left, enc_right, dt_ms, now_ms);
+    }
+}
+
+/** update_odometry() after the first sample: enc_left and enc_right are the
+    signed counts. */
+static void odometry_step (motion_core_t * p_mc, int32_t enc_left,
+                           int32_t enc_right, uint32_t dt_ms, uint32_t now_ms)
+{
+    int32_t dcl;
+    int32_t dcr;
+    int64_t delta_left;
+    int64_t delta_right;
+    int64_t delta_mid;
+    int32_t h_old;
+    int32_t h_mid;
+    int32_t vraw;
+
     /* Modular difference: correct across the 32-bit counter wrap. */
     /* Casts (int32_t)((uint32_t)enc_left - ...),
        (int32_t)((uint32_t)enc_right - ...): difference of two wrapping 32-bit
@@ -865,15 +893,13 @@ static void check_stall (motion_core_t * p_mc, uint32_t now_ms)
 static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
                            uint32_t dt_ms)
 {
-    int64_t const rel_l  = p_mc->dist_l_um - p_mc->m_start_l_um;
-    int64_t const rel_r  = p_mc->dist_r_um - p_mc->m_start_r_um;
-    bool const    b_move = (MOTION_CMD_MOVE == p_mc->m_cmd);
+    int64_t const rel_l   = p_mc->dist_l_um - p_mc->m_start_l_um;
+    int64_t const rel_r   = p_mc->dist_r_um - p_mc->m_start_r_um;
+    bool const    b_move  = (MOTION_CMD_MOVE == p_mc->m_cmd);
+    bool          b_drive = false;
     int64_t       progress;
     int64_t       remaining;
     int64_t       tol;
-    int32_t       v_acc;
-    int32_t       v_dec;
-    int32_t       speed;
 
     if (MOTION_PH_SETTLE == p_mc->phase)
     {
@@ -882,27 +908,44 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
         {
             end_maneuver(p_mc, true);
         }
-        return false;
     }
-
-    progress  = b_move ? ((p_mc->m_dir * (rel_l + rel_r)) / 2)
-                       : ((p_mc->m_dir * (rel_r - rel_l)) / 2);
-    remaining = p_mc->m_target_um - progress;
-    tol       = b_move ? MOTION_POS_TOL_UM : turn_arc_um(MOTION_ANG_TOL_CDEG);
-
-    if (remaining <= tol)
+    else
     {
-        p_mc->phase       = MOTION_PH_SETTLE;
-        p_mc->m_settle_ms = now_ms;
-        brake(p_mc);
-        return false;
+        progress  = b_move ? ((p_mc->m_dir * (rel_l + rel_r)) / 2)
+                           : ((p_mc->m_dir * (rel_r - rel_l)) / 2);
+        remaining = p_mc->m_target_um - progress;
+        tol = b_move ? MOTION_POS_TOL_UM : turn_arc_um(MOTION_ANG_TOL_CDEG);
+
+        if (remaining <= tol)
+        {
+            p_mc->phase       = MOTION_PH_SETTLE;
+            p_mc->m_settle_ms = now_ms;
+            brake(p_mc);
+        }
+        else if (app_types_elapsed_ms(now_ms, p_mc->m_start_ms)
+                 >= p_mc->m_timeout_ms)
+        {
+            brake(p_mc);
+            end_maneuver(p_mc, false);
+        }
+        else
+        {
+            maneuver_drive(p_mc, rel_l, rel_r, remaining, dt_ms);
+            b_drive = true;
+        }
     }
-    if (app_types_elapsed_ms(now_ms, p_mc->m_start_ms) >= p_mc->m_timeout_ms)
-    {
-        brake(p_mc);
-        end_maneuver(p_mc, false);
-        return false;
-    }
+    return b_drive;
+}
+
+/** step_maneuver() while driving: speed profile and wheel set-points from the
+    wheel travel since the start (rel_l, rel_r) and the remaining distance. */
+static void maneuver_drive (motion_core_t * p_mc, int64_t rel_l, int64_t rel_r,
+                            int64_t remaining, uint32_t dt_ms)
+{
+    bool const b_move = (MOTION_CMD_MOVE == p_mc->m_cmd);
+    int32_t    v_acc;
+    int32_t    v_dec;
+    int32_t    speed;
 
     /* Trapezoid: limited by acceleration, by the speed from which the
        remaining distance still allows braking, and by the cruise speed. */
@@ -954,21 +997,26 @@ static bool step_maneuver (motion_core_t * p_mc, uint32_t now_ms,
             (int32_t)(((int64_t)p_mc->m_dir * speed * 2000) / MOTION_TRACK_MM);
         p_mc->sp_v = (int32_t)((-4 * ((rel_l + rel_r) / 2)) / 1000);
     }
-    return true;
 }
 
 /** Width of the first argument field of a packed command of this kind, bits. */
 static uint8_t p0_bits (uint8_t cmd)
 {
+    uint8_t bits;
+
     if (MOTION_CMD_DRIVE == cmd)
     {
-        return DRIVE_V_BITS;
+        bits = DRIVE_V_BITS;
     }
-    if ((MOTION_CMD_MOVE == cmd) || (MOTION_CMD_TURN == cmd))
+    else if ((MOTION_CMD_MOVE == cmd) || (MOTION_CMD_TURN == cmd))
     {
-        return AMOUNT_BITS;
+        bits = AMOUNT_BITS;
     }
-    return (MOTION_CMD_SET_AUTH == cmd) ? CMD_SRC_BITS : 0u;
+    else
+    {
+        bits = (MOTION_CMD_SET_AUTH == cmd) ? CMD_SRC_BITS : 0u;
+    }
+    return bits;
 }
 
 /*** end of file ***/

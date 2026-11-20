@@ -47,6 +47,8 @@ static uint32_t g_diag;
 static ER      init_result(uint8_t stage, ER err, uint8_t chip_id);
 static void    wait_ms(uint32_t delay_ms);
 static ER      init_once(void);
+static ER      init_registers(void);
+static ER      first_reading(bool * pb_stuck);
 static int16_t le16(uint8_t low, uint8_t high);
 
 EXPORT uint32_t drv_lsm303_diag (void)
@@ -72,21 +74,19 @@ EXPORT ER drv_lsm303_read_accel (int32_t acc_mg[3])
     ER      err;
 
     err = drv_i2c1_read(SENSOR_ADDR, (0x28u | AUTO_INC), raw, 6u);
-    if (err != E_OK)
+    if (E_OK == err)
     {
-        return err;
+        for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
+        {
+            /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
+            /* Cast (int32_t)le16(raw[2u * kdx], raw[ ...): every int16_t value
+               fits. */
+            acc_mg[kdx] =
+                ((int32_t)le16(raw[2u * kdx], raw[(2u * kdx) + 1u]) * 122)
+                / 1000;
+        }
     }
-
-    for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
-    {
-        /* LSM303D +/-4 g: 0.122 mg per full 16-bit count. */
-        /* Cast (int32_t)le16(raw[2u * kdx], raw[ ...): every int16_t value
-           fits. */
-        acc_mg[kdx] =
-            ((int32_t)le16(raw[2u * kdx], raw[(2u * kdx) + 1u]) * 122) / 1000;
-    }
-
-    return E_OK;
+    return err;
 }
 
 EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
@@ -96,17 +96,14 @@ EXPORT ER drv_lsm303_read_mag (int16_t mag[3])
     ER      err;
 
     err = drv_i2c1_read(SENSOR_ADDR, (0x08u | AUTO_INC), raw, 6u);
-    if (err != E_OK)
+    if (E_OK == err)
     {
-        return err;
+        for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
+        {
+            mag[kdx] = le16(raw[2u * kdx], raw[(2u * kdx) + 1u]);
+        }
     }
-
-    for (kdx = 0u; kdx < LSM303_AXES; ++kdx)
-    {
-        mag[kdx] = le16(raw[2u * kdx], raw[(2u * kdx) + 1u]);
-    }
-
-    return E_OK;
+    return err;
 }
 
 /** Diagnostic layout:
@@ -144,71 +141,100 @@ static void wait_ms (uint32_t delay_ms)
     Returns E_OK or the first error. */
 static ER init_once (void)
 {
-    uint8_t  chip_id = 0u;
-    int32_t  acc[3];
-    uint32_t idx;
-    ER       err;
+    uint8_t chip_id = 0u;
+    uint8_t stage;
+    bool    b_stuck = false;
+    ER      err;
 
     g_diag = 0u;
 
     err = drv_i2c1_read(SENSOR_ADDR, 0x0Fu, &chip_id, 1u);
     if (err != E_OK)
     {
-        return init_result(1u, err, chip_id);
+        stage = 1u;
     }
-
-    if (chip_id != 0x49u)
+    else if (chip_id != 0x49u)
     {
-        return init_result(2u, E_OBJ, chip_id);
+        stage = 2u;
+        err   = E_OBJ;
     }
+    else
+    {
+        err = init_registers();
+        if (E_OK == err)
+        {
+            err = first_reading(&b_stuck);
+        }
+        if (err != E_OK)
+        {
+            stage = 4u;
+        }
+        else if (b_stuck)
+        {
+            stage = 5u;
+            err   = E_IO;
+        }
+        else
+        {
+            stage = 0u;
+        }
+    }
+    return init_result(stage, err, chip_id);
+}
 
-    /* Reboot the chip's memory content first (CTRL0 BOOT). */
+/** Reboot the chip's memory content (CTRL0 BOOT), then write and read back
+    every register of g_reg_init.  Returns E_OK or the first error (E_IO if
+    a register reads back wrong). */
+static ER init_registers (void)
+{
+    uint32_t idx;
+    ER       err;
+
     err = drv_i2c1_write_reg(SENSOR_ADDR, 0x1Fu, 0x80u);
-    if (err != E_OK)
+    if (E_OK == err)
     {
-        return init_result(4u, err, chip_id);
+        wait_ms(BOOT_WAIT_MS);
     }
-    wait_ms(BOOT_WAIT_MS);
 
-    for (idx = 0u; idx < (sizeof(g_reg_init) / sizeof(g_reg_init[0])); ++idx)
+    for (idx = 0u;
+         (E_OK == err) && (idx < (sizeof(g_reg_init) / sizeof(g_reg_init[0])));
+         ++idx)
     {
         uint8_t check = 0u;
 
         err = drv_i2c1_write_reg(SENSOR_ADDR, g_reg_init[idx].reg,
                                  g_reg_init[idx].value);
-        if (err != E_OK)
+        if (E_OK == err)
         {
-            return init_result(4u, err, chip_id);
+            err = drv_i2c1_read(SENSOR_ADDR, g_reg_init[idx].reg, &check, 1u);
         }
-
-        err = drv_i2c1_read(SENSOR_ADDR, g_reg_init[idx].reg, &check, 1u);
-        if (err != E_OK)
+        if ((E_OK == err) && (check != g_reg_init[idx].value))
         {
-            return init_result(4u, err, chip_id);
-        }
-
-        if (check != g_reg_init[idx].value)
-        {
-            return init_result(4u, E_IO, chip_id);
+            err = E_IO;
         }
     }
+    return err;
+}
 
-    /* First readings: an axis at full scale means the output is stuck. */
+/** First readings: an axis at full scale means the output is stuck
+    (*pb_stuck).  Returns the read's result. */
+static ER first_reading (bool * pb_stuck)
+{
+    int32_t  acc[3];
+    uint32_t idx;
+    ER       err;
+
+    *pb_stuck = false;
     wait_ms(FIRST_DATA_WAIT_MS);
     err = drv_lsm303_read_accel(acc);
-    if (err != E_OK)
-    {
-        return init_result(4u, err, chip_id);
-    }
-    for (idx = 0u; idx < LSM303_AXES; ++idx)
+    for (idx = 0u; (E_OK == err) && (idx < LSM303_AXES); ++idx)
     {
         if ((acc[idx] >= STUCK_MG) || (acc[idx] <= -STUCK_MG))
         {
-            return init_result(5u, E_IO, chip_id);
+            *pb_stuck = true;
         }
     }
-
-    return init_result(0u, E_OK, chip_id);
+    return err;
 }
 
 /** Signed 16-bit value from its low and high bytes. */

@@ -92,6 +92,8 @@ static void force_ahead(obstacle_core_point_t const * p_fine, uint8_t n_fine,
                         uint8_t n_coarse, uint16_t range,
                         obstacle_core_profile_t * p_out);
 static bool is_hit(obstacle_core_point_t const * p_point, uint16_t r_min);
+static void edge_plan_apply(obstacle_core_profile_t * p_prof, bool b_has_l,
+                            int32_t lat_l, bool b_has_r, int32_t lat_r);
 static void fine_insert(obstacle_core_scan_t * p_s, int16_t angle,
                         uint16_t r_mm);
 static void start_refine(obstacle_core_scan_t * p_s, bool b_right);
@@ -107,8 +109,9 @@ static void profile_measure(obstacle_core_point_t const * p_fine,
 
 uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
 {
-    uint16_t low  = val_a;
-    uint16_t high = val_b;
+    uint16_t low    = val_a;
+    uint16_t high   = val_b;
+    uint16_t median = val_c;
 
     if (low > high)
     {
@@ -117,24 +120,30 @@ uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
     }
     if (val_c <= low)
     {
-        return low;
+        median = low;
     }
-    if (val_c >= high)
+    else if (val_c >= high)
     {
-        return high;
+        median = high;
     }
-    return val_c;
+    else
+    {
+        /* val_c is the median */
+    }
+    return median;
 }
 
 uint16_t obstacle_core_echo_to_mm (uint32_t width_us)
 {
-    if ((0u == width_us) || (width_us >= OBST_ECHO_MAX_US))
+    uint16_t r_mm = OBST_RANGE_NONE;
+
+    if ((width_us != 0u) && (width_us < OBST_ECHO_MAX_US))
     {
-        return OBST_RANGE_NONE;
+        /* Cast (uint16_t)((width_us * 10u) / 58u): width_us < OBST_ECHO_MAX_US
+           (tested above), so the range is below 4000 mm. */
+        r_mm = (uint16_t)((width_us * 10u) / 58u); /* us / 58 = cm */
     }
-    /* Cast (uint16_t)((width_us * 10u) / 58u): width_us < OBST_ECHO_MAX_US
-       (tested above), so the range is below 4000 mm. */
-    return (uint16_t)((width_us * 10u) / 58u); /* us / 58 = cm */
+    return r_mm;
 }
 
 void obstacle_core_profile (obstacle_core_point_t const * p_fine,
@@ -394,90 +403,11 @@ bool obstacle_core_edge_past_max (int32_t lat_mm, int32_t side)
 void obstacle_core_edge_plan (obstacle_core_profile_t * p_prof, bool b_has_l,
                               int32_t lat_l, bool b_has_r, int32_t lat_r)
 {
-    int32_t const extra =
-        OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
-    bool b_left;
-
-    bool const b_servo =
-        p_prof->b_valid
-        && (p_prof->w_mm > 0u); /* the servo scan saw a real face */
-
-    if (!b_has_l && !b_has_r)
+    /* No echo on either side and no servo scan: nothing to plan from. */
+    if (b_has_l || b_has_r || p_prof->b_valid)
     {
-        /* 6 Nov: no echo on either side: plan from the servo scan's edges
-           with the same side rule below (keeping the servo scan's own
-           plan chose sides by other rules: left 35 cm when right was
-           the short way) */
-        if (!p_prof->b_valid)
-        {
-            return;
-        }
-        lat_l = p_prof->plan_l_mm;
-        lat_r = p_prof->plan_r_mm;
+        edge_plan_apply(p_prof, b_has_l, lat_l, b_has_r, lat_r);
     }
-    /* 4 Nov: a side with no echo at all is not proof that the obstacle runs
-       on that way (a centred box got 0 echoes on the left and the car went
-       right).  Take the servo scan's edge for it when that scan saw a real
-       face, otherwise as far as the largest obstacle from the seen edge. */
-    if (!b_has_l)
-    {
-        lat_l = b_servo ? app_types_max_i32(p_prof->plan_l_mm, lat_r)
-                        : (lat_r + OBST_WIDTH_MAX_MM);
-    }
-    if (!b_has_r)
-    {
-        lat_r = b_servo ? app_types_min_i32(p_prof->plan_r_mm, lat_l)
-                        : (lat_l - OBST_WIDTH_MAX_MM);
-    }
-    if (lat_l < lat_r)
-    {
-        int32_t const mid = (lat_l + lat_r) / 2;
-
-        lat_l = mid;
-        lat_r = mid;
-    }
-    /* Casts (int16_t)lat_l, (int16_t)lat_r: lateral edges of echoes within 800
-       mm are within +-800 mm; (uint16_t)(lat_l - lat_r): lat_l >= lat_r here,
-       and both are within +-800 mm. */
-    p_prof->b_valid      = true;
-    p_prof->b_sure       = b_has_l && b_has_r;
-    p_prof->left_lat_mm  = (int16_t)lat_l;
-    p_prof->right_lat_mm = (int16_t)lat_r;
-    p_prof->plan_l_mm    = (int16_t)lat_l;
-    p_prof->plan_r_mm    = (int16_t)lat_r;
-    p_prof->w_mm         = (uint16_t)(lat_l - lat_r);
-
-    /* 5 Nov: the smaller step-out; within OBST_TIE_MM they are equal, then
-       the side whose edge was measured rather than filled in, then
-       OBST_PREF_LEFT.  (4 Nov: from the edges only, not the servo scan's
-       clearances: that scan split a centred box in two and its left half
-       "blocked" the left, so the car went right, off the mat.) */
-    {
-        int32_t const sh_l = lat_l + extra;
-        int32_t const sh_r = -lat_r + extra;
-
-        if ((sh_l + OBST_TIE_MM) < sh_r)
-        {
-            b_left = true;
-        }
-        else if ((sh_r + OBST_TIE_MM) < sh_l)
-        {
-            b_left = false;
-        }
-        else if (b_has_l != b_has_r)
-        {
-            b_left = b_has_l;
-        }
-        else
-        {
-            b_left = (OBST_PREF_LEFT != 0);
-        }
-    }
-    /* Cast (int16_t)(b_left ? (lat_l + extra) ...): edge offsets (+-800 mm)
-       plus a margin of a few hundred mm. */
-    p_prof->plan = b_left ? OBST_PLAN_LEFT : OBST_PLAN_RIGHT;
-    p_prof->deviation_mm =
-        (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
 }
 
 void obstacle_core_edge_plan_min (obstacle_core_profile_t * p_prof,
@@ -688,13 +618,11 @@ bool obstacle_core_out_blocked (int32_t face_mm, int32_t axle_fwd_mm,
 uint16_t obstacle_core_probe_face (uint16_t r_mm, uint16_t expect_mm)
 {
     /* Casts (int32_t)r_mm, (int32_t)expect_mm: every uint16_t value fits. */
-    if ((OBST_RANGE_NONE == r_mm)
-        || (app_types_abs_i32((int32_t)r_mm - (int32_t)expect_mm)
-            > OBST_PROBE_FACE_TOL_MM))
-    {
-        return expect_mm;
-    }
-    return r_mm;
+    return ((OBST_RANGE_NONE == r_mm)
+            || (app_types_abs_i32((int32_t)r_mm - (int32_t)expect_mm)
+                > OBST_PROBE_FACE_TOL_MM))
+               ? expect_mm
+               : r_mm;
 }
 
 void obstacle_core_probe_start (obstacle_core_probe_t * p_p)
@@ -748,21 +676,20 @@ bool obstacle_core_probe_edges (obstacle_core_probe_t const * p_p,
     int32_t left;
     int32_t right;
 
-    if (!p_p->b_seen)
+    if (p_p->b_seen)
     {
-        return false;
+        left  = p_p->high - OBST_PROBE_EDGE_OVER_MM;
+        right = p_p->low + OBST_PROBE_EDGE_OVER_MM;
+        if (left < right)
+        {
+            left  = (p_p->high + p_p->low)
+                    / 2; /* narrower than the run-on: a post */
+            right = left;
+        }
+        *p_left  = left;
+        *p_right = right;
     }
-    left  = p_p->high - OBST_PROBE_EDGE_OVER_MM;
-    right = p_p->low + OBST_PROBE_EDGE_OVER_MM;
-    if (left < right)
-    {
-        left =
-            (p_p->high + p_p->low) / 2; /* narrower than the run-on: a post */
-        right = left;
-    }
-    *p_left  = left;
-    *p_right = right;
-    return true;
+    return p_p->b_seen;
 }
 
 int32_t obstacle_core_out_servo_deg (int32_t theta_cdeg, int32_t side)
@@ -810,20 +737,23 @@ bool obstacle_core_hump_mask (obstacle_core_mask_t * p_m, bool b_pitch_valid,
     {
         p_m->b_active = false;
         p_m->start_ms = 0u; /* re-arm for the next hump */
-        return false;
     }
-    if (!p_m->b_active && (0u == p_m->start_ms))
+    else
     {
-        p_m->b_active      = true;
-        p_m->start_ms      = (0u == now_ms) ? 1u : now_ms;
-        p_m->start_dist_mm = dist_mm;
-    }
-    if (p_m->b_active
-        && ((app_types_elapsed_ms(now_ms, p_m->start_ms) >= OBST_HUMP_MASK_MS)
-            || (app_types_abs_i32(dist_mm - p_m->start_dist_mm)
-                >= OBST_HUMP_MASK_MM)))
-    {
-        p_m->b_active = false; /* lapsed: stays off until level again */
+        if (!p_m->b_active && (0u == p_m->start_ms))
+        {
+            p_m->b_active      = true;
+            p_m->start_ms      = (0u == now_ms) ? 1u : now_ms;
+            p_m->start_dist_mm = dist_mm;
+        }
+        if (p_m->b_active
+            && ((app_types_elapsed_ms(now_ms, p_m->start_ms)
+                 >= OBST_HUMP_MASK_MS)
+                || (app_types_abs_i32(dist_mm - p_m->start_dist_mm)
+                    >= OBST_HUMP_MASK_MM)))
+        {
+            p_m->b_active = false; /* lapsed: stays off until level again */
+        }
     }
     return p_m->b_active;
 }
@@ -936,8 +866,8 @@ static void grow (obstacle_core_point_t const * p_pts, uint8_t count,
         else if (((high + 2u) < count)
                  && in_group(&p_pts[high + 2u], r_min, lat0))
         {
-            /* Cast (uint8_t)(high + 2u): high + 2 < count <= 37 (tested above).
-             */
+            /* Cast (uint8_t)(high + 2u): high + 2 < count <= 37 (tested
+               above). */
             high = (uint8_t)(high + 2u);
         }
         else
@@ -1233,25 +1163,111 @@ static bool is_hit (obstacle_core_point_t const * p_point, uint16_t r_min)
     return same_object(p_point, r_min);
 }
 
+/** obstacle_core_edge_plan() with something to plan from: the edges, the
+    planned side and the deviation. */
+static void edge_plan_apply (obstacle_core_profile_t * p_prof, bool b_has_l,
+                             int32_t lat_l, bool b_has_r, int32_t lat_r)
+{
+    int32_t const extra =
+        OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM;
+    bool b_left;
+
+    bool const b_servo =
+        p_prof->b_valid
+        && (p_prof->w_mm > 0u); /* the servo scan saw a real face */
+
+    if (!b_has_l && !b_has_r)
+    {
+        /* 6 Nov: no echo on either side: plan from the servo scan's edges
+           with the same side rule below (keeping the servo scan's own
+           plan chose sides by other rules: left 35 cm when right was
+           the short way) */
+        lat_l = p_prof->plan_l_mm;
+        lat_r = p_prof->plan_r_mm;
+    }
+    /* 4 Nov: a side with no echo at all is not proof that the obstacle runs
+       on that way (a centred box got 0 echoes on the left and the car went
+       right).  Take the servo scan's edge for it when that scan saw a real
+       face, otherwise as far as the largest obstacle from the seen edge. */
+    if (!b_has_l)
+    {
+        lat_l = b_servo ? app_types_max_i32(p_prof->plan_l_mm, lat_r)
+                        : (lat_r + OBST_WIDTH_MAX_MM);
+    }
+    if (!b_has_r)
+    {
+        lat_r = b_servo ? app_types_min_i32(p_prof->plan_r_mm, lat_l)
+                        : (lat_l - OBST_WIDTH_MAX_MM);
+    }
+    if (lat_l < lat_r)
+    {
+        int32_t const mid = (lat_l + lat_r) / 2;
+
+        lat_l = mid;
+        lat_r = mid;
+    }
+    /* Casts (int16_t)lat_l, (int16_t)lat_r: lateral edges of echoes within 800
+       mm are within +-800 mm; (uint16_t)(lat_l - lat_r): lat_l >= lat_r here,
+       and both are within +-800 mm. */
+    p_prof->b_valid      = true;
+    p_prof->b_sure       = b_has_l && b_has_r;
+    p_prof->left_lat_mm  = (int16_t)lat_l;
+    p_prof->right_lat_mm = (int16_t)lat_r;
+    p_prof->plan_l_mm    = (int16_t)lat_l;
+    p_prof->plan_r_mm    = (int16_t)lat_r;
+    p_prof->w_mm         = (uint16_t)(lat_l - lat_r);
+
+    /* 5 Nov: the smaller step-out; within OBST_TIE_MM they are equal, then
+       the side whose edge was measured rather than filled in, then
+       OBST_PREF_LEFT.  (4 Nov: from the edges only, not the servo scan's
+       clearances: that scan split a centred box in two and its left half
+       "blocked" the left, so the car went right, off the mat.) */
+    {
+        int32_t const sh_l = lat_l + extra;
+        int32_t const sh_r = -lat_r + extra;
+
+        if ((sh_l + OBST_TIE_MM) < sh_r)
+        {
+            b_left = true;
+        }
+        else if ((sh_r + OBST_TIE_MM) < sh_l)
+        {
+            b_left = false;
+        }
+        else if (b_has_l != b_has_r)
+        {
+            b_left = b_has_l;
+        }
+        else
+        {
+            b_left = (OBST_PREF_LEFT != 0);
+        }
+    }
+    /* Cast (int16_t)(b_left ? (lat_l + extra) ...): edge offsets (+-800 mm)
+       plus a margin of a few hundred mm. */
+    p_prof->plan = b_left ? OBST_PLAN_LEFT : OBST_PLAN_RIGHT;
+    p_prof->deviation_mm =
+        (int16_t)(b_left ? (lat_l + extra) : -(-lat_r + extra));
+}
+
 /** Insert keeping fine[] sorted by angle (refine points land between). */
 static void fine_insert (obstacle_core_scan_t * p_s, int16_t angle,
                          uint16_t r_mm)
 {
     uint8_t idx;
 
-    if (p_s->n_fine >= OBST_SCAN_MAX_POINTS)
+    if (p_s->n_fine < OBST_SCAN_MAX_POINTS) /* else the window is full */
     {
-        return;
+        idx = p_s->n_fine;
+        while ((idx > 0u) && (p_s->fine[idx - 1u].angle_deg > angle))
+        {
+            p_s->fine[idx] = p_s->fine[idx - 1u];
+            idx--;
+        }
+        p_s->fine[idx].angle_deg = angle;
+        p_s->fine[idx].r_mm      = r_mm;
+        p_s->n_fine++;
     }
-    idx = p_s->n_fine;
-    while ((idx > 0u) && (p_s->fine[idx - 1u].angle_deg > angle))
-    {
-        p_s->fine[idx] = p_s->fine[idx - 1u];
-        idx--;
-    }
-    p_s->fine[idx].angle_deg = angle;
-    p_s->fine[idx].r_mm      = r_mm;
-    p_s->n_fine++;
 }
 
 /** Edges of the obstacle in the fine scan; false if none or no outer miss. */
@@ -1261,7 +1277,8 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
     uint8_t  nearest = 0u;
     uint8_t  low;
     uint8_t  high;
-    uint16_t r_min = OBST_RANGE_NONE;
+    uint16_t r_min    = OBST_RANGE_NONE;
+    bool     b_refine = false;
 
     for (idx = 0u; idx < p_s->n_fine; idx++)
     {
@@ -1276,38 +1293,44 @@ static void start_refine (obstacle_core_scan_t * p_s, bool b_right)
     if (OBST_RANGE_NONE == r_min)
     {
         p_s->phase = OBST_SCAN_DONE;
-        return;
-    }
-    grow(p_s->fine, p_s->n_fine, nearest, r_min, &low, &high);
-    if (b_right && (low > 0u))
-    {
-        p_s->phase = OBST_SCAN_REFINE_R;
-        p_s->hit   = p_s->fine[low].angle_deg;
-        p_s->miss  = p_s->fine[low - 1u].angle_deg;
-    }
-    else if (!b_right && ((high + 1u) < p_s->n_fine))
-    {
-        p_s->phase = OBST_SCAN_REFINE_L;
-        p_s->hit   = p_s->fine[high].angle_deg;
-        p_s->miss  = p_s->fine[high + 1u].angle_deg;
     }
     else
     {
-        /* edge at the window limit: nothing to refine on this side */
-        if (b_right)
+        grow(p_s->fine, p_s->n_fine, nearest, r_min, &low, &high);
+        if (b_right && (low > 0u))
         {
-            start_refine(p_s, false);
-            return;
+            p_s->phase = OBST_SCAN_REFINE_R;
+            p_s->hit   = p_s->fine[low].angle_deg;
+            p_s->miss  = p_s->fine[low - 1u].angle_deg;
+            b_refine   = true;
         }
-        p_s->phase = OBST_SCAN_DONE;
-        return;
+        else if (!b_right && ((high + 1u) < p_s->n_fine))
+        {
+            p_s->phase = OBST_SCAN_REFINE_L;
+            p_s->hit   = p_s->fine[high].angle_deg;
+            p_s->miss  = p_s->fine[high + 1u].angle_deg;
+            b_refine   = true;
+        }
+        else if (b_right)
+        {
+            /* right edge at the window limit: refine the left edge */
+            start_refine(p_s, false);
+        }
+        else
+        {
+            /* edge at the window limit: nothing to refine on this side */
+            p_s->phase = OBST_SCAN_DONE;
+        }
     }
-    /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is -32768..32767.
-     */
-    p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
-    if ((p_s->angle == p_s->hit) || (p_s->angle == p_s->miss))
+    if (b_refine)
     {
-        p_s->iter = OBST_REFINE_ITERS; /* already 1 deg apart */
+        /* Cast (int16_t)((p_s->hit + p_s->miss) / ...): the value is
+           -32768..32767. */
+        p_s->angle = (int16_t)((p_s->hit + p_s->miss) / 2);
+        if ((p_s->angle == p_s->hit) || (p_s->angle == p_s->miss))
+        {
+            p_s->iter = OBST_REFINE_ITERS; /* already 1 deg apart */
+        }
     }
 }
 

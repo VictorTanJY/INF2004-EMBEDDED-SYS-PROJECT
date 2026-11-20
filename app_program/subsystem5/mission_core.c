@@ -134,6 +134,8 @@ static bool seq_matches(mission_core_t *            p_mc,
 static void mission_core_ev_safety(mission_core_t *            p_mc,
                                    mission_types_evt_t const * p_ev,
                                    uint32_t now_ms, mission_core_out_t * p_out);
+static void remote_map(mission_core_t * p_mc, int32_t data,
+                       mission_core_out_t * p_out);
 static void mission_core_ev_operator(mission_core_t *            p_mc,
                                      mission_types_evt_t const * p_ev,
                                      uint32_t                    now_ms,
@@ -163,15 +165,16 @@ static void tick_calibrating(mission_core_t * p_mc, uint32_t now_ms,
 bool mission_core_map_char_ok (char chr)
 {
     size_t idx;
+    bool   b_ok = false;
 
-    for (idx = 0u; idx < (sizeof(g_map_chars) - 1u); idx++)
+    for (idx = 0u; (idx < (sizeof(g_map_chars) - 1u)) && !b_ok; idx++)
     {
         if (g_map_chars[idx] == chr)
         {
-            return true;
+            b_ok = true;
         }
     }
-    return false;
+    return b_ok;
 }
 
 int32_t mission_core_map_pack (char const map[MISSION_NAV_COUNT])
@@ -194,40 +197,40 @@ bool mission_core_map_unpack (int32_t packed, char map[MISSION_NAV_COUNT])
 {
     uint8_t kdx;
     uint8_t jdx;
+    bool    b_ok = true;
 
-    for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
+    for (kdx = 0u; (kdx < MISSION_NAV_COUNT) && b_ok; kdx++)
     {
         /* Casts (char)(((uint32_t)packed >> (8u ...))): the value is 0..255;
            (uint32_t)packed: bit pattern of four packed characters, read back as
            unsigned. */
         map[kdx] = (char)(((uint32_t)packed >> (8u * kdx)) & 0xFFu);
-        if (!mission_core_map_char_ok(map[kdx]))
-        {
-            return false;
-        }
-        for (jdx = 0u; jdx < kdx; jdx++)
+        b_ok     = mission_core_map_char_ok(map[kdx]);
+        for (jdx = 0u; (jdx < kdx) && b_ok; jdx++)
         {
             if (map[jdx] == map[kdx])
             {
-                return false; /* one character, one movement */
+                b_ok = false; /* one character, one movement */
             }
         }
     }
-    return true;
+    return b_ok;
 }
 
 uint8_t mission_core_nav_for (mission_types_snap_t const * p_snap, char chr)
 {
     uint8_t kdx;
+    uint8_t nav = MISSION_NAV_NONE;
 
-    for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
+    for (kdx = 0u; (kdx < MISSION_NAV_COUNT) && (MISSION_NAV_NONE == nav);
+         kdx++)
     {
         if ((p_snap->nav_map[kdx] != '\0') && (p_snap->nav_map[kdx] == chr))
         {
-            return kdx;
+            nav = kdx;
         }
     }
-    return MISSION_NAV_NONE;
+    return nav;
 }
 
 /* ---- public ----------------------------------------------------------------
@@ -656,6 +659,34 @@ static void mission_core_ev_safety (mission_core_t *            p_mc,
     }
 }
 
+/** Store a remote navigation map (MISSION_EV_REMOTE_MAP) if it unpacks, and
+    log the result. */
+static void remote_map (mission_core_t * p_mc, int32_t data,
+                        mission_core_out_t * p_out)
+{
+    char map[MISSION_NAV_COUNT];
+
+    if (mission_core_map_unpack(data, map))
+    {
+        uint8_t kdx;
+
+        for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
+        {
+            p_mc->snap.nav_map[kdx] = map[kdx];
+        }
+        /* Casts (int16_t)((uint32_t)data & ...): LOG argument: the low 16
+           bits of the packed map, as a bit pattern; (uint32_t)data: bit
+           pattern of the packed map; (int16_t)((uint32_t)data >> ...): LOG
+           argument: the high 16 bits of the packed map, as a bit pattern. */
+        log_act(p_out, MISSION_LOG_MAP_SET, (int16_t)((uint32_t)data & 0xFFFFu),
+                (int16_t)((uint32_t)data >> 16));
+    }
+    else
+    {
+        log_act(p_out, MISSION_LOG_MAP_BAD, 0, 0);
+    }
+}
+
 /** mission_core_event(): operator buttons and remote commands. */
 static void mission_core_ev_operator (mission_core_t *            p_mc,
                                       mission_types_evt_t const * p_ev,
@@ -727,30 +758,7 @@ static void mission_core_ev_operator (mission_core_t *            p_mc,
         case MISSION_EV_REMOTE_MAP:
             if (!is_active(state) && (state != MISSION_ST_CALIBRATING))
             {
-                char map[MISSION_NAV_COUNT];
-
-                if (mission_core_map_unpack(p_ev->data, map))
-                {
-                    uint8_t kdx;
-
-                    for (kdx = 0u; kdx < MISSION_NAV_COUNT; kdx++)
-                    {
-                        p_mc->snap.nav_map[kdx] = map[kdx];
-                    }
-                    /* Casts (int16_t)((uint32_t)p_ev->data & ...): LOG
-                       argument: the low 16 bits of the packed map, as a bit
-                       pattern; (uint32_t)p_ev->data: bit pattern of the packed
-                       map; (int16_t)((uint32_t)p_ev->data >> ...): LOG
-                       argument: the high 16 bits of the packed map, as a bit
-                       pattern. */
-                    log_act(p_out, MISSION_LOG_MAP_SET,
-                            (int16_t)((uint32_t)p_ev->data & 0xFFFFu),
-                            (int16_t)((uint32_t)p_ev->data >> 16));
-                }
-                else
-                {
-                    log_act(p_out, MISSION_LOG_MAP_BAD, 0, 0);
-                }
+                remote_map(p_mc, p_ev->data, p_out);
             }
         break;
 
@@ -1097,15 +1105,17 @@ static void start_run (mission_core_t * p_mc, uint32_t now_ms,
     if ((p_mc->snap.calibrated & MISSION_CAL_ALL) != MISSION_CAL_ALL)
     {
         log_act(p_out, MISSION_LOG_NOT_CALIBRATED, p_mc->snap.calibrated, 0);
-        return;
     }
-    /* Cast (int16_t)p_mc->snap.runs: LOG argument: the run count, logged modulo
-       2^16. */
-    p_mc->snap.runs++;
-    p_mc->snap.pending_nav  = MISSION_NAV_NONE;
-    p_mc->snap.pending_char = '\0';
-    push(p_out, MISSION_ACT_NEW_RUN, 0u, 0u, (int16_t)p_mc->snap.runs, 0);
-    enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+    else
+    {
+        /* Cast (int16_t)p_mc->snap.runs: LOG argument: the run count, logged
+           modulo 2^16. */
+        p_mc->snap.runs++;
+        p_mc->snap.pending_nav  = MISSION_NAV_NONE;
+        p_mc->snap.pending_char = '\0';
+        push(p_out, MISSION_ACT_NEW_RUN, 0u, 0u, (int16_t)p_mc->snap.runs, 0);
+        enter(p_mc, MISSION_ST_LINE_FOLLOW, now_ms, p_out);
+    }
 }
 
 /** Apply a remote SET (value already range-checked by CommsTask): store the
@@ -1113,6 +1123,8 @@ static void start_run (mission_core_t * p_mc, uint32_t now_ms,
 static void apply_param (mission_core_t * p_mc, uint16_t param_id,
                          int32_t value, mission_core_out_t * p_out)
 {
+    bool b_stored = true; /* a run parameter was stored */
+
     switch (param_id)
     {
         case 1u:
@@ -1146,25 +1158,33 @@ static void apply_param (mission_core_t * p_mc, uint16_t param_id,
             /* Cast (int16_t)value: commsTask checked the value against the
                whitelist: -2000..2000. */
             motion(p_mc, p_out, MOTION_CMD_MOVE, (int16_t)value, 200);
-            return;
+            b_stored = false;
+        break;
         case 102u:
             /* Cast (int16_t)value: commsTask checked the value against the
                whitelist: -3600..3600. */
             motion(p_mc, p_out, MOTION_CMD_TURN, (int16_t)value, 90);
-            return;
+            b_stored = false;
+        break;
         case 103u:
             /* Cast (int16_t)value: commsTask checked the value against the
                whitelist: 50..450. */
             motion(p_mc, p_out, MOTION_CMD_MOVE, 1000, (int16_t)value);
-            return;
+            b_stored = false;
+        break;
 #endif
         default:
-            return;
+            b_stored = false;
+        break;
     }
-    /* Casts (int16_t)param_id: parameter ids are below 256; (int16_t)value:
-       whitelisted values are within -3600..3600. */
-    update_speed_cap(p_mc);
-    log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id, (int16_t)value);
+    if (b_stored)
+    {
+        /* Casts (int16_t)param_id: parameter ids are below 256;
+           (int16_t)value: whitelisted values are within -3600..3600. */
+        update_speed_cap(p_mc);
+        log_act(p_out, MISSION_LOG_PARAM_SET, (int16_t)param_id,
+                (int16_t)value);
+    }
 }
 
 /** True if this MOTION_DONE / MOTION_FAILED answers the command MissionTask is
@@ -1174,13 +1194,15 @@ static bool seq_matches (mission_core_t *            p_mc,
 {
     /* Casts (uint8_t)p_ev->arg: the motion sequence number (5 bits) carried in
        arg; (int32_t)MOTION_SRC_MISSION: a constant that fits. */
-    if (p_mc->b_waiting && ((uint8_t)p_ev->arg == p_mc->wait_seq)
-        && ((int32_t)MOTION_SRC_MISSION == p_ev->data))
+    bool const b_match = p_mc->b_waiting
+                         && ((uint8_t)p_ev->arg == p_mc->wait_seq)
+                         && ((int32_t)MOTION_SRC_MISSION == p_ev->data);
+
+    if (b_match)
     {
         p_mc->b_waiting = false;
-        return true;
     }
-    return false;
+    return b_match;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1266,6 +1288,8 @@ static void update_speed_cap (mission_core_t * p_mc)
     into steps[].  Returns how many. */
 static uint8_t nav_steps (uint8_t nav, step_t steps[2])
 {
+    uint8_t n_steps = 2u;
+
     steps[0].cmd  = MOTION_CMD_MOVE;
     steps[0].arg0 = MISSION_NAV_CENTRE_MM;
     steps[0].arg1 = MISSION_NAV_SPEED_MM_S;
@@ -1275,17 +1299,19 @@ static uint8_t nav_steps (uint8_t nav, step_t steps[2])
     {
         case MISSION_NAV_LEFT:
             steps[1].arg0 = 900;
-            return 2u;
+        break;
         case MISSION_NAV_RIGHT:
             steps[1].arg0 = -900;
-            return 2u;
+        break;
         case MISSION_NAV_UTURN:
             steps[1].arg0 = 1800;
-            return 2u;
+        break;
         default: /* STRAIGHT: just clear the crossing */
             steps[0].arg0 = MISSION_NAV_STRAIGHT_MM;
-            return 1u;
+            n_steps       = 1u;
+        break;
     }
+    return n_steps;
 }
 
 /** EXECUTE_NAV: send the next step of the movement, or go back to line

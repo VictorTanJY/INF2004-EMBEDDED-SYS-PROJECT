@@ -86,6 +86,8 @@ static void imu_report(imu_task_state_t * p_st, uint8_t events,
 static void imu_safety_bits(imu_task_state_t * p_st, uint8_t events,
                             mission_types_snap_t const * p_mission);
 static void imu_log_events(uint8_t events);
+static void imu_snapshot(imu_task_state_t *          p_st,
+                         motion_types_odom_t const * p_odom);
 static void imu_debug_logs(imu_task_state_t const * p_st,
                            int32_t const            acc[IMU_AXES]);
 
@@ -159,8 +161,8 @@ static void imu_read_failed (imu_task_state_t * p_st, ER err)
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 110u,
                                     err);
 
-        /* Cast (int32_t)(((in_w(APP_REGS_GPIO_IN) ...))): two pin levels: 0..3.
-         */
+        /* Cast (int32_t)(((in_w(APP_REGS_GPIO_IN) ...))): two pin levels:
+           0..3. */
         (void)subsystem1_telem_post(
             COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 111u,
             (int32_t)(((in_w(APP_REGS_GPIO_IN) >> S4_PIN_IMU_SDA) & 1u)
@@ -264,26 +266,7 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
     imu_report(p_st, events, &mission);
 
     /* ---- Snapshot ---- */
-    /* Casts (int16_t)g_ic.pitch_cdeg, (int16_t)g_ic.roll_cdeg: a wrapped angle:
-       +-18000 0.01 deg; (uint16_t)g_ic.heading_cdeg: the heading is 0..35999
-       (imu_core wraps it); (int16_t)(g_ic.prev_mag_mg - 1000): with the +-4 g
-       sensor |a| <= 6925 mg, so -1000..5925. */
-    p_st->snap.t_ms             = app_time_ms();
-    p_st->snap.pitch_cdeg       = (int16_t)g_ic.pitch_cdeg;
-    p_st->snap.roll_cdeg        = (int16_t)g_ic.roll_cdeg;
-    p_st->snap.heading_cdeg     = (uint16_t)g_ic.heading_cdeg;
-    p_st->snap.turn_rate_cdeg_s = odom.yaw_rate_cdeg_s;
-    p_st->snap.accel_mg         = (int16_t)(g_ic.prev_mag_mg - 1000);
-    p_st->snap.tilt             = g_ic.b_tilt ? 1u : 0u;
-    p_st->snap.hump_max_mm      = g_ic.hump_max_mm;
-    p_st->snap.last_hump_mm     = g_ic.last_hump_mm;
-    p_st->snap.humps            = g_ic.humps;
-    p_st->snap.hump_state       = g_ic.hump_state;
-    p_st->snap.motion           = g_ic.motion;
-    p_st->snap.cal              = g_ic.cal;
-    p_st->snap.b_ok             = p_st->b_fault ? 0u : 1u;
-    p_st->snap.pitch_valid =
-        (!p_st->b_fault && (p_st->good >= IMU_RECOVER_SAMPLES)) ? 1u : 0u;
+    imu_snapshot(p_st, &odom);
 
     imu_debug_logs(p_st, acc);
 
@@ -490,6 +473,32 @@ static void imu_log_events (uint8_t events)
     }
 }
 
+/** Fill the IMU snapshot (IF-08) from the IMU core and the odometry. */
+static void imu_snapshot (imu_task_state_t *          p_st,
+                          motion_types_odom_t const * p_odom)
+{
+    /* Casts (int16_t)g_ic.pitch_cdeg, (int16_t)g_ic.roll_cdeg: a wrapped angle:
+       +-18000 0.01 deg; (uint16_t)g_ic.heading_cdeg: the heading is 0..35999
+       (imu_core wraps it); (int16_t)(g_ic.prev_mag_mg - 1000): with the +-4 g
+       sensor |a| <= 6925 mg, so -1000..5925. */
+    p_st->snap.t_ms             = app_time_ms();
+    p_st->snap.pitch_cdeg       = (int16_t)g_ic.pitch_cdeg;
+    p_st->snap.roll_cdeg        = (int16_t)g_ic.roll_cdeg;
+    p_st->snap.heading_cdeg     = (uint16_t)g_ic.heading_cdeg;
+    p_st->snap.turn_rate_cdeg_s = p_odom->yaw_rate_cdeg_s;
+    p_st->snap.accel_mg         = (int16_t)(g_ic.prev_mag_mg - 1000);
+    p_st->snap.tilt             = g_ic.b_tilt ? 1u : 0u;
+    p_st->snap.hump_max_mm      = g_ic.hump_max_mm;
+    p_st->snap.last_hump_mm     = g_ic.last_hump_mm;
+    p_st->snap.humps            = g_ic.humps;
+    p_st->snap.hump_state       = g_ic.hump_state;
+    p_st->snap.motion           = g_ic.motion;
+    p_st->snap.cal              = g_ic.cal;
+    p_st->snap.b_ok             = p_st->b_fault ? 0u : 1u;
+    p_st->snap.pitch_valid =
+        (!p_st->b_fault && (p_st->good >= IMU_RECOVER_SAMPLES)) ? 1u : 0u;
+}
+
 /** Bring-up only (IMU_DEBUG_LOGS in imu_cfg.h): raw acceleration, pitch and
    roll as LOG 100..104 on the first good sample, then every 100 cycles.
    Off by default: five QoS 1 events per second exceed lwIP's MQTT
@@ -574,8 +583,8 @@ static bool imu_hw_init (void)
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU, 93u,
                                     sensor_er);
 
-        /* Cast (int32_t)diagnostic: bit pattern of the packed diagnosis word.
-         */
+        /* Cast (int32_t)diagnostic: bit pattern of the packed diagnosis
+           word. */
         (void)subsystem1_telem_post(COMMS_KIND_LOG, APP_SRC_SAFETY_IMU,
                                     IMU_LOG_INIT, (int32_t)diagnostic);
     }

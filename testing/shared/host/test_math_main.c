@@ -34,6 +34,7 @@ static void check_result(char const * p_id, bool b_ok, char const * p_file,
 static void test_pack_h05(void);
 static void test_pack_h05_part2(void);
 static void test_trig(int32_t * p_worst_sin, float64_t * p_worst_atan);
+static void test_isqrt(void);
 static void test_wrap(void);
 
 /** Run the shared host tests (app_pack, app_math).  Exit status 0 if all
@@ -45,6 +46,7 @@ int main (void)
 
     test_pack();
     test_trig(&worst_sin, &worst_atan);
+    test_isqrt();
     test_wrap();
     printf("worst sin/cos error %d LSB, worst atan2 error %.1f cdeg\n",
            worst_sin, worst_atan);
@@ -56,9 +58,7 @@ int main (void)
  *p_worst_sin / *p_worst_atan = the largest errors seen. */
 static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
 {
-    int32_t  val_a;
-    uint32_t x_val;
-
+    int32_t val_a;
     /* SH-H01: sin/cos over -720..720 deg in 0.07 deg steps */
     for (val_a = -T_SIN_RANGE_CDEG; val_a <= T_SIN_RANGE_CDEG; val_a += 7)
     {
@@ -134,8 +134,13 @@ static void test_trig (int32_t * p_worst_sin, float64_t * p_worst_atan)
               abs(app_math_atan2_cdeg(2147483647, -2147483647 - 1) - 13500)
                   <= 10);
     }
+}
 
-    /* SH-H03: integer square roots, exhaustive near squares */
+/** SH-H03: integer square roots, exhaustive near squares. */
+static void test_isqrt (void)
+{
+    uint32_t x_val;
+
     for (x_val = 0u; x_val < T_ISQRT_MAX; x_val++)
     {
         /* Cast (uint64_t)x_val: every uint32_t value fits. */

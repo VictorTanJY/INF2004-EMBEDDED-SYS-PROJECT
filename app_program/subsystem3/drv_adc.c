@@ -71,6 +71,7 @@ EXPORT ER drv_adc_init (void)
     uint32_t const pins[ADC_PIN_COUNT] = {26u, 27u, 28u};
     uint32_t       spin;
     uint32_t       idx;
+    ER             err = E_OK;
 
     app_reset_release(APP_REGS_RESET_ADC | APP_REGS_RESET_DMA);
 
@@ -90,27 +91,30 @@ EXPORT ER drv_adc_init (void)
     }
     if (0u == (in_w(ADC_CS) & ADC_CS_READY))
     {
-        return E_IO; /* clk_adc not running? */
+        err = E_IO; /* clk_adc not running? */
     }
-    out_w(ADC_DIV, ADC_DIV_3KHZ);
-    out_w(ADC_FCS, ADC_FCS_EN | ADC_FCS_DREQ_EN | ADC_FCS_THRESH_1);
-    while (adc_fcs_level(in_w(ADC_FCS)) != 0u)
+    else
     {
-        (void)in_w(ADC_FIFO); /* drain */
-    }
+        out_w(ADC_DIV, ADC_DIV_3KHZ);
+        out_w(ADC_FCS, ADC_FCS_EN | ADC_FCS_DREQ_EN | ADC_FCS_THRESH_1);
+        while (adc_fcs_level(in_w(ADC_FCS)) != 0u)
+        {
+            (void)in_w(ADC_FIFO); /* drain */
+        }
 
-    /* Two chained channels, B configured without triggering. */
-    /* Casts (uint32_t)&g_buf[0][0], (uint32_t)&g_buf[1][0]: the DMA register
-       takes the 32-bit address of the buffer. */
-    out_w(DMA_CHAN_ABORT, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
-    out_w(dma_read_addr(DMA_CH_A), ADC_FIFO);
-    out_w(dma_write_addr(DMA_CH_A), (uint32_t)&g_buf[0][0]);
-    out_w(dma_trans_count(DMA_CH_A), DRV_ADC_BLOCK_LEN);
-    out_w(dma_read_addr(DMA_CH_B), ADC_FIFO);
-    out_w(dma_write_addr(DMA_CH_B), (uint32_t)&g_buf[1][0]);
-    out_w(dma_trans_count(DMA_CH_B), DRV_ADC_BLOCK_LEN);
-    out_w(dma_al1_ctrl(DMA_CH_B), ctrl_for(DMA_CH_A));
-    return E_OK;
+        /* Two chained channels, B configured without triggering. */
+        /* Casts (uint32_t)&g_buf[0][0], (uint32_t)&g_buf[1][0]: the DMA
+           register takes the 32-bit address of the buffer. */
+        out_w(DMA_CHAN_ABORT, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
+        out_w(dma_read_addr(DMA_CH_A), ADC_FIFO);
+        out_w(dma_write_addr(DMA_CH_A), (uint32_t)&g_buf[0][0]);
+        out_w(dma_trans_count(DMA_CH_A), DRV_ADC_BLOCK_LEN);
+        out_w(dma_read_addr(DMA_CH_B), ADC_FIFO);
+        out_w(dma_write_addr(DMA_CH_B), (uint32_t)&g_buf[1][0]);
+        out_w(dma_trans_count(DMA_CH_B), DRV_ADC_BLOCK_LEN);
+        out_w(dma_al1_ctrl(DMA_CH_B), ctrl_for(DMA_CH_A));
+    }
+    return err;
 }
 
 EXPORT ER drv_adc_start (ID task)
@@ -124,18 +128,17 @@ EXPORT ER drv_adc_start (ID task)
     dint.intatr = TA_HLNG;
     dint.inthdr = (FP)adc_dma_isr;
     err         = tk_def_int(DMA_IRQ1_NO, &dint);
-    if (err != E_OK)
+    if (E_OK == err)
     {
-        return err;
-    }
-    out_w(DMA_INTS1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
-    set_w(DMA_INTE1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
-    EnableInt(DMA_IRQ1_NO, DMA_IRQ_LEVEL); /* this (owning) core */
+        out_w(DMA_INTS1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
+        set_w(DMA_INTE1, (1uL << DMA_CH_A) | (1uL << DMA_CH_B));
+        EnableInt(DMA_IRQ1_NO, DMA_IRQ_LEVEL); /* this (owning) core */
 
-    out_w(dma_ctrl_trig(DMA_CH_A), ctrl_for(DMA_CH_B)); /* arm A */
-    /* AINSEL = 0 and round robin 0, 1, 2: the buffer always starts at L. */
-    out_w(ADC_CS, ADC_CS_EN | ADC_CS_RROBIN_012 | ADC_CS_START_MANY);
-    return E_OK;
+        out_w(dma_ctrl_trig(DMA_CH_A), ctrl_for(DMA_CH_B)); /* arm A */
+        /* AINSEL = 0 and round robin 0, 1, 2: the buffer always starts at L. */
+        out_w(ADC_CS, ADC_CS_EN | ADC_CS_RROBIN_012 | ADC_CS_START_MANY);
+    }
+    return err;
 }
 
 EXPORT bool drv_adc_get_block (uint16_t   p_out[DRV_ADC_BLOCK_LEN],
@@ -149,17 +152,18 @@ EXPORT bool drv_adc_get_block (uint16_t   p_out[DRV_ADC_BLOCK_LEN],
     which  = g_ready;
     *p_seq = g_seq;
     EI(intsts);
-    if (0u == *p_seq)
+    if (*p_seq != 0u)
     {
-        return false;
+        /* The other buffer is being filled now; this one is stable for 10 ms.
+         */
+        for (idx = 0u; idx < DRV_ADC_BLOCK_LEN; idx++)
+        {
+            /* Cast (uint16_t)(g_buf[which][idx] & ...): the value is
+               0..4095. */
+            p_out[idx] = (uint16_t)(g_buf[which][idx] & 0x0FFFu);
+        }
     }
-    /* The other buffer is being filled now; this one is stable for 10 ms. */
-    for (idx = 0u; idx < DRV_ADC_BLOCK_LEN; idx++)
-    {
-        /* Cast (uint16_t)(g_buf[which][idx] & ...): the value is 0..4095. */
-        p_out[idx] = (uint16_t)(g_buf[which][idx] & 0x0FFFu);
-    }
-    return true;
+    return (*p_seq != 0u);
 }
 
 EXPORT uint32_t drv_adc_errors (void)

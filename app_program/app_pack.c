@@ -46,23 +46,25 @@ void app_pack_put (app_pack_writer_t * p_w, uint32_t value, uint8_t width)
 {
     uint8_t idx;
 
-    /* Casts (uint32_t)p_w->bits, (uint32_t)p_w->cap: every uint16_t value fits.
-     */
+    /* Casts (uint32_t)p_w->bits, (uint32_t)p_w->cap: every uint16_t value
+       fits. */
     if ((width > 32u)
         || (((uint32_t)p_w->bits + width) > ((uint32_t)p_w->cap * 8u)))
     {
         p_w->b_overflow = true;
-        return;
     }
-    for (idx = 0u; idx < width; idx++)
+    else
     {
-        if (((value >> idx) & 1u) != 0u)
+        for (idx = 0u; idx < width; idx++)
         {
-            /* Cast (uint8_t)(1u << (p_w->bits & 7u)): a single bit 0..7 of a
-               byte. */
-            p_w->p_buf[p_w->bits >> 3] |= (uint8_t)(1u << (p_w->bits & 7u));
+            if (((value >> idx) & 1u) != 0u)
+            {
+                /* Cast (uint8_t)(1u << (p_w->bits & 7u)): a single bit 0..7 of
+                   a byte. */
+                p_w->p_buf[p_w->bits >> 3] |= (uint8_t)(1u << (p_w->bits & 7u));
+            }
+            p_w->bits++;
         }
-        p_w->bits++;
     }
 }
 
@@ -88,24 +90,26 @@ uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
     uint32_t value = 0u;
     uint8_t  idx;
 
-    /* Casts (uint32_t)p_r->bits, (uint32_t)p_r->len: every uint16_t value fits.
-     */
+    /* Casts (uint32_t)p_r->bits, (uint32_t)p_r->len: every uint16_t value
+       fits. */
     if ((width > 32u)
         || (((uint32_t)p_r->bits + width) > ((uint32_t)p_r->len * 8u)))
     {
         p_r->b_short = true;
-        return 0u;
     }
-    for (idx = 0u; idx < width; idx++)
+    else
     {
-        /* Cast (uint8_t)(1u << (p_r->bits & 7u)): a single bit 0..7 of a byte.
-         */
-        if ((p_r->p_buf[p_r->bits >> 3] & (uint8_t)(1u << (p_r->bits & 7u)))
-            != 0u)
+        for (idx = 0u; idx < width; idx++)
         {
-            value |= (1uL << idx);
+            /* Cast (uint8_t)(1u << (p_r->bits & 7u)): a single bit 0..7 of a
+               byte. */
+            if ((p_r->p_buf[p_r->bits >> 3] & (uint8_t)(1u << (p_r->bits & 7u)))
+                != 0u)
+            {
+                value |= (1uL << idx);
+            }
+            p_r->bits++;
         }
-        p_r->bits++;
     }
     return value;
 }
@@ -114,16 +118,17 @@ uint32_t app_pack_take (app_pack_reader_t * p_r, uint8_t width)
 uint8_t app_pack_sym_index (char chr)
 {
     uint8_t idx;
+    uint8_t sym_index = 0u;
 
-    for (idx = 0u; idx < PK_SYM_COUNT; idx++)
+    for (idx = 0u; (idx < PK_SYM_COUNT) && (0u == sym_index); idx++)
     {
         if (g_symbols[idx] == chr)
         {
             /* Cast (uint8_t)(idx + 1u): a symbol index 1..PK_SYM_COUNT (43). */
-            return (uint8_t)(idx + 1u);
+            sym_index = (uint8_t)(idx + 1u);
         }
     }
-    return 0u;
+    return sym_index;
 }
 
 char app_pack_sym_char (uint8_t sym_index)
@@ -303,24 +308,29 @@ static uint32_t pk_member_u (void const * p_rec, app_pack_field_t const * p_f)
 static int32_t pk_member_s (void const * p_rec, app_pack_field_t const * p_f)
 {
     uint32_t const raw = pk_member_u(p_rec, p_f);
+    int32_t        value;
 
     if (1u == p_f->size)
     {
         /* Casts (int8_t)(uint8_t)raw: the member is 1 byte: its bit pattern
            read back as signed; (uint8_t)raw: the member is 1 byte: raw holds 8
            bits. */
-        return (int8_t)(uint8_t)raw;
+        value = (int8_t)(uint8_t)raw;
     }
-    if (2u == p_f->size)
+    else if (2u == p_f->size)
     {
         /* Casts (int16_t)(uint16_t)raw: the member is 2 bytes: its bit pattern
            read back as signed; (uint16_t)raw: the member is 2 bytes: raw holds
            16 bits. */
-        return (int16_t)(uint16_t)raw;
+        value = (int16_t)(uint16_t)raw;
     }
-    /* Cast (int32_t)raw: the member is 4 bytes: its bit pattern read back as
-       signed. */
-    return (int32_t)raw;
+    else
+    {
+        /* Cast (int32_t)raw: the member is 4 bytes: its bit pattern read back
+           as signed. */
+        value = (int32_t)raw;
+    }
+    return value;
 }
 
 /** Store value into the record member described by p_f (1, 2 or 4 bytes). */

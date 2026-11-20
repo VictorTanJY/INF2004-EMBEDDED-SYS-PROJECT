@@ -379,8 +379,8 @@ static void plant_step (int16_t duty_l, int16_t duty_r)
 
     for (width = 0; width < T_WHEELS; width++)
     {
-        /* Cast (float64_t)duty[width]: exact: a 16-bit integer fits a double.
-         */
+        /* Cast (float64_t)duty[width]: exact: a 16-bit integer fits a
+           double. */
         float64_t diff   = (float64_t)duty[width];
         float64_t sum_sq = 0.0;
 

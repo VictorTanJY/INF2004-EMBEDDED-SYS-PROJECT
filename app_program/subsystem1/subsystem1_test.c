@@ -159,15 +159,13 @@ static bool s1_bytes_eq (uint8_t const * p_a, uint8_t const * p_b,
                          uint16_t n_bytes)
 {
     uint16_t idx;
+    bool     b_eq = true;
 
-    for (idx = 0u; idx < n_bytes; idx++)
+    for (idx = 0u; (idx < n_bytes) && b_eq; idx++)
     {
-        if (p_a[idx] != p_b[idx])
-        {
-            return false;
-        }
+        b_eq = (p_a[idx] == p_b[idx]);
     }
-    return true;
+    return b_eq;
 }
 
 /** Parse a command frame into *p_cmd, the result into *p_err.  True if it

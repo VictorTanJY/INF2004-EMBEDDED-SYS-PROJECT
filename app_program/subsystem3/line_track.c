@@ -174,15 +174,16 @@ uint16_t line_track_cal_norm (line_track_cal_t const * p_cal, uint8_t chan,
     int32_t const white = p_cal->white[chan];
     int32_t const black = p_cal->black[chan];
     int32_t       norm;
+    uint16_t      level = 0u;
 
-    if (!p_cal->b_valid || (white == black))
+    if (p_cal->b_valid && (white != black))
     {
-        return 0u;
+        /* Casts (int32_t)raw: every uint16_t value fits;
+           (uint16_t)app_types_clamp_i32(norm ...): the value is 0..1000. */
+        norm  = (((int32_t)raw - white) * 1000) / (black - white);
+        level = (uint16_t)app_types_clamp_i32(norm, 0, 1000);
     }
-    /* Casts (int32_t)raw: every uint16_t value fits;
-       (uint16_t)app_types_clamp_i32(norm ...): the value is 0..1000. */
-    norm = (((int32_t)raw - white) * 1000) / (black - white);
-    return (uint16_t)app_types_clamp_i32(norm, 0, 1000);
+    return level;
 }
 
 /* ------------------------------------------------------------------ */
@@ -307,7 +308,8 @@ uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
         p_cal->b_valid ? slip_centre(p_s, p_cal, LINE_CH_R, &runs_r) : -1;
     int32_t const tot =
         (p_s->n_samples > 0u) ? p_s->h_ddeg[p_s->n_samples - 1u] : 0;
-    int32_t gain;
+    int32_t  gain;
+    uint16_t slip_gain = 0u;
 
     if (!p_cal->b_valid)
     {
@@ -319,16 +321,17 @@ uint16_t line_track_slip_gain (line_track_slip_t const * p_s,
        (uint32_t)app_types_clamp_i32(tot / ...): the value is 0..65535. */
     *p_diag = ((uint32_t)runs_l << 24) | ((uint32_t)runs_r << 16)
               | (uint32_t)app_types_clamp_i32(tot / 10, 0, 0xFFFF);
-    if ((c_l < 0) || (c_r < 0))
+    if ((c_l >= 0) && (c_r >= 0))
     {
-        return 0u;
+        /* Cast (uint16_t)gain: gain is within LINE_SLIP_GAIN_MIN_PM..MAX_PM
+           (1900, tested in the same statement). */
+        gain = ((((c_l + c_r) / 2) * 1000) + 900) / 1800;
+        slip_gain =
+            ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM))
+                ? (uint16_t)gain
+                : 0u;
     }
-    /* Cast (uint16_t)gain: gain is within LINE_SLIP_GAIN_MIN_PM..MAX_PM (1900,
-       tested in the same statement). */
-    gain = ((((c_l + c_r) / 2) * 1000) + 900) / 1800;
-    return ((gain >= LINE_SLIP_GAIN_MIN_PM) && (gain <= LINE_SLIP_GAIN_MAX_PM))
-               ? (uint16_t)gain
-               : 0u;
+    return slip_gain;
 }
 
 void line_track_snap_pack (line_types_snap_t const * p_snap, uint32_t * p_words)

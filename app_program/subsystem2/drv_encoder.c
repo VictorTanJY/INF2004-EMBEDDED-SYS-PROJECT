@@ -60,6 +60,7 @@ static void            sm_setup(uint32_t sm_idx, uint32_t pin_a);
 EXPORT ER drv_encoder_init (void)
 {
     uint32_t idx;
+    ER       err = E_OK;
 
     /* With WIFI=cyw43 the kernel releases PIO0 at boot; otherwise do it. */
     app_reset_release(APP_REGS_RESET_PIO0);
@@ -67,21 +68,24 @@ EXPORT ER drv_encoder_init (void)
     if ((in_w(PIO_CTRL) & (pio_ctrl_sm_enable(0u) | pio_ctrl_sm_enable(1u)))
         != 0u)
     {
-        return E_OBJ; /* someone else is using SM0/SM1 */
+        err = E_OBJ; /* someone else is using SM0/SM1 */
     }
-    for (idx = 0u; idx < QUAD_PROG_LEN; idx++)
+    else
     {
-        out_w(pio_instr_mem(idx), g_quad_prog[idx]);
+        for (idx = 0u; idx < QUAD_PROG_LEN; idx++)
+        {
+            out_w(pio_instr_mem(idx), g_quad_prog[idx]);
+        }
+        pin_setup(S2_PIN_ENC_L_A);
+        pin_setup(S2_PIN_ENC_L_A + 1u);
+        pin_setup(S2_PIN_ENC_R_A);
+        pin_setup(S2_PIN_ENC_R_A + 1u);
+        sm_setup(DRV_ENC_LEFT, S2_PIN_ENC_L_A);
+        sm_setup(DRV_ENC_RIGHT, S2_PIN_ENC_R_A);
+        set_w(PIO_CTRL, pio_ctrl_sm_enable(DRV_ENC_LEFT)
+                            | pio_ctrl_sm_enable(DRV_ENC_RIGHT));
     }
-    pin_setup(S2_PIN_ENC_L_A);
-    pin_setup(S2_PIN_ENC_L_A + 1u);
-    pin_setup(S2_PIN_ENC_R_A);
-    pin_setup(S2_PIN_ENC_R_A + 1u);
-    sm_setup(DRV_ENC_LEFT, S2_PIN_ENC_L_A);
-    sm_setup(DRV_ENC_RIGHT, S2_PIN_ENC_R_A);
-    set_w(PIO_CTRL,
-          pio_ctrl_sm_enable(DRV_ENC_LEFT) | pio_ctrl_sm_enable(DRV_ENC_RIGHT));
-    return E_OK;
+    return err;
 }
 
 EXPORT int32_t drv_encoder_read (uint32_t which)

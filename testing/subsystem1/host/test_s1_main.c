@@ -23,7 +23,8 @@
 #include "golden.h"
 
 #define T_MAP_CHARS    4      /* characters in a MAP command */
-#define T_PARAMS       9      /* entries of names[] */
+#define T_PARAMS       8      /* entries of names[] */
+#define T_NO_PARAM     15     /* index of a name not on the whitelist */
 #define T_RANGE_PARAMS 5u     /* entries of the second names[] */
 #define T_FUZZ_FRAMES  20000u /* random frames */
 #define T_RING_PUSHES  20u    /* more than COMMS_RING_LEN */
@@ -130,15 +131,16 @@ static int32_t param_index (char const * p_name)
         "speed_mm_s",  "slow_cm",    "stop_cm",    "lost_mm",
         "junction_mm", "bench_move", "bench_turn", "bench_speed"};
     int32_t idx;
+    int32_t found = T_NO_PARAM;
 
-    for (idx = 0; idx < T_PARAMS; idx++)
+    for (idx = 0; (idx < T_PARAMS) && (T_NO_PARAM == found); idx++)
     {
         if (0 == strcmp(p_names[idx], p_name))
         {
-            return idx;
+            found = idx;
         }
     }
-    return 15;
+    return found;
 }
 
 /** Skip n bits (any number). */
@@ -161,6 +163,7 @@ static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
 {
     char     text[(2u * COMMS_FRAME_MAX) + 1u];
     uint16_t idx;
+    int32_t  b_eq = 1;
 
     for (idx = 0u; idx < count; idx++)
     {
@@ -170,9 +173,9 @@ static int32_t hex_eq (uint8_t const * p_buf, uint16_t count,
     if (strcmp(text, p_hex) != 0)
     {
         printf("  got %s\n  expected %s\n", text, p_hex);
-        return 0;
+        b_eq = 0;
     }
-    return 1;
+    return b_eq;
 }
 
 /* ------------------------------------------------------------------ */
@@ -780,8 +783,8 @@ static void test_dedup (void)
     {
         comms_proto_cmd_t other;
 
-        /* Cast (uint8_t)(200u + idx): idx < COMMS_DEDUP_LEN (8), so below 208.
-         */
+        /* Cast (uint8_t)(200u + idx): idx < COMMS_DEDUP_LEN (8), so below
+           208. */
         (void)parse((uint8_t)(200u + idx), COMMS_CMD_START, 0, 0, NULL, &other);
         comms_proto_dedup_add(&dedup, &other, 10u + idx);
     }

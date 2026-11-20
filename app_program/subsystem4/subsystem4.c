@@ -31,6 +31,7 @@ EXPORT ER subsystem4_init (void)
 {
     T_CFLG cflg = {0};
     T_CCYC ccyc = {0};
+    ER     err;
 
     /* First of all: the 1 us timer and the watchdog need the 1 MHz tick. */
     drv_watchdog_tick_init();
@@ -47,42 +48,41 @@ EXPORT ER subsystem4_init (void)
     cflg.flgatr  = TA_TFIFO | TA_WMUL;
     cflg.iflgptn = 0;
     g_flg_safety = tk_cre_flg(&cflg);
-    if (g_flg_safety < E_OK)
-    {
-        return g_flg_safety;
-    }
+    err          = (g_flg_safety < E_OK) ? g_flg_safety : E_OK;
 
-    /* Cast (FP)imu_cyc_handler: the kernel stores the entry point as FP; it is
-       called with its own type. */
-    ccyc.cycatr = TA_HLNG;
-    ccyc.cychdr = (FP)imu_cyc_handler;
-    ccyc.cyctim = S4_IMU_PERIOD_MS;
-    ccyc.cycphs = S4_IMU_PERIOD_MS;
-    g_cyc_imu   = tk_cre_cyc(&ccyc);
-    return (g_cyc_imu < E_OK) ? g_cyc_imu : E_OK;
+    if (E_OK == err)
+    {
+        /* Cast (FP)imu_cyc_handler: the kernel stores the entry point as FP;
+           it is called with its own type. */
+        ccyc.cycatr = TA_HLNG;
+        ccyc.cychdr = (FP)imu_cyc_handler;
+        ccyc.cyctim = S4_IMU_PERIOD_MS;
+        ccyc.cycphs = S4_IMU_PERIOD_MS;
+        g_cyc_imu   = tk_cre_cyc(&ccyc);
+        err         = (g_cyc_imu < E_OK) ? g_cyc_imu : E_OK;
+    }
+    return err;
 }
 
 EXPORT ER subsystem4_start (void)
 {
     ID tid;
+    ER err;
 
     /* Cast (FP)safety_task_thread: the kernel stores the entry point as FP; it
        is called with its own type. */
     tid = app_main_start_task((FP)safety_task_thread, S4_PRI_SAFETY,
                               S4_CORE_SAFETY, "safety");
-    if (tid < E_OK)
+    err = (tid < E_OK) ? tid : E_OK;
+    if (E_OK == err)
     {
-        return tid;
+        /* Cast (FP)imu_task_thread: the kernel stores the entry point as FP;
+           it is called with its own type. */
+        g_tid_imu = app_main_start_task((FP)imu_task_thread, S4_PRI_IMU,
+                                        S4_CORE_IMU, "imu");
+        err       = (g_tid_imu < E_OK) ? g_tid_imu : tk_sta_cyc(g_cyc_imu);
     }
-    /* Cast (FP)imu_task_thread: the kernel stores the entry point as FP; it is
-       called with its own type. */
-    g_tid_imu = app_main_start_task((FP)imu_task_thread, S4_PRI_IMU,
-                                    S4_CORE_IMU, "imu");
-    if (g_tid_imu < E_OK)
-    {
-        return g_tid_imu;
-    }
-    return tk_sta_cyc(g_cyc_imu);
+    return err;
 }
 
 EXPORT uint32_t subsystem4_get_latched (void)

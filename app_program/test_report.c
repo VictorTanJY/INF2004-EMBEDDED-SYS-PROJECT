@@ -25,11 +25,15 @@ void test_report_check (test_report_t * p_report, char const * p_id, bool b_ok,
     if (b_ok)
     {
         p_report->pass++;
+        /* Cast (UB *) of the format string: tm_printf() takes UB *; the string
+           bytes are unchanged. */
         tm_printf((UB *)"[TEST] %s PASS  %s\n", p_id, p_desc);
     }
     else
     {
         p_report->fail++;
+        /* Cast (UB *) of the format string: tm_printf() takes UB *; the string
+           bytes are unchanged. */
         tm_printf((UB *)"[TEST] %s FAIL  %s   (%s:%d)\n", p_id, p_desc, p_file,
                   line);
     }
@@ -46,6 +50,8 @@ void test_report_skip (test_report_t * p_report, char const * p_id,
                        char const * p_desc, char const * p_why)
 {
     p_report->skip++;
+    /* Cast (UB *) of the format string: tm_printf() takes UB *; the string
+       bytes are unchanged. */
     tm_printf((UB *)"[TEST] %s SKIP  %s   (%s)\n", p_id, p_desc, p_why);
 }
 
@@ -56,6 +62,8 @@ void test_report_skip (test_report_t * p_report, char const * p_id,
  */
 void test_report_summary (test_report_t const * p_report, char const * p_name)
 {
+    /* Cast (UB *) of the format string: tm_printf() takes UB *; the string
+       bytes are unchanged. */
     tm_printf((UB *)"[TEST] %s SUMMARY %d passed, %d failed, %d skipped\n",
               p_name, p_report->pass, p_report->fail, p_report->skip);
 }

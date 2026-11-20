@@ -33,8 +33,8 @@ uint32_t app_math_isqrt64 (uint64_t value)
         }
         bit >>= 2;
     }
-    /* Cast (uint32_t)result: the square root of a 64-bit value is below 2^32.
-     */
+    /* Cast (uint32_t)result: the square root of a 64-bit value is below
+       2^32. */
     return (uint32_t)result;
 }
 
@@ -75,9 +75,9 @@ int32_t app_math_atan2_cdeg (int32_t y_val, int32_t x_val)
 
     if ((0u == abs_x) && (0u == abs_y))
     {
-        return 0;
+        angle = 0;
     }
-    if (abs_x >= abs_y)
+    else if (abs_x >= abs_y)
     {
         /* Casts (int64_t)(((uint64_t)abs_y << 30) ...): abs_y <= abs_x here, so
            the ratio is at most 2^30; (uint64_t)abs_y: every uint32_t value
@@ -86,9 +86,9 @@ int32_t app_math_atan2_cdeg (int32_t y_val, int32_t x_val)
     }
     else
     {
-        /* Casts (int64_t)(((uint64_t)abs_x << 30) ...): abs_x < abs_y here, so
-           the ratio is below 2^30; (uint64_t)abs_x: every uint32_t value fits.
-         */
+        /* Casts (int64_t)(((uint64_t)abs_x << 30) ...): abs_x < abs_y here,
+           so the ratio is below 2^30; (uint64_t)abs_x: every uint32_t value
+           fits. */
         angle = APP_CDEG_90
                 - atan_unit_cdeg((int64_t)(((uint64_t)abs_x << 30) / abs_y));
     }

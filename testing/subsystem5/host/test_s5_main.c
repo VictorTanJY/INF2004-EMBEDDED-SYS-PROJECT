@@ -133,16 +133,14 @@ static void ev (uint8_t type, uint16_t val_a, int32_t data)
 static void tick (uint32_t delay_ms)
 {
     uint32_t elapsed;
+    bool     b_acts = false; /* the caller inspects the actions */
 
-    for (elapsed = 0u; elapsed < delay_ms; elapsed += 100u)
+    for (elapsed = 0u; (elapsed < delay_ms) && !b_acts; elapsed += 100u)
     {
         g_now += 100u;
         g_out.n_acts = 0u;
         mission_core_tick(&g_mc, &g_in, g_now, &g_out);
-        if (g_out.n_acts > 0u)
-        {
-            return;
-        } /* caller inspects the actions */
+        b_acts = (g_out.n_acts > 0u);
     }
 }
 
@@ -150,32 +148,34 @@ static void tick (uint32_t delay_ms)
 static int32_t find (uint8_t kind, uint8_t cmd)
 {
     uint8_t idx;
+    int32_t found = -1;
 
-    for (idx = 0u; idx < g_out.n_acts; idx++)
+    for (idx = 0u; (idx < g_out.n_acts) && (found < 0); idx++)
     {
         if ((g_out.act[idx].kind == kind) && (g_out.act[idx].cmd == cmd))
         {
-            return idx;
+            found = idx;
         }
     }
-    return -1;
+    return found;
 }
 
 /** Sequence number of the last MOVE / TURN the statechart sent, or 0. */
 static uint8_t last_seq (void)
 {
     int32_t idx;
+    uint8_t seq = 0u;
 
     /* Cast (int32_t)g_out.n_acts: every uint8_t value fits. */
-    for (idx = (int32_t)g_out.n_acts - 1; idx >= 0; idx--)
+    for (idx = (int32_t)g_out.n_acts - 1; (idx >= 0) && (0u == seq); idx--)
     {
         if ((MISSION_ACT_MOTION == g_out.act[idx].kind)
             && (g_out.act[idx].seq != 0u))
         {
-            return g_out.act[idx].seq;
+            seq = g_out.act[idx].seq;
         }
     }
-    return 0u;
+    return seq;
 }
 
 /** Fresh statechart with every self-test passing, taken to IDLE. */
@@ -571,10 +571,12 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
     float64_t const     step = (OBST_BYPASS_SPEED_MM_S * 60.0) / 1000.0;
     obstacle_core_out_t out_state;
     float64_t           time_s;
+    int32_t             lat    = -1;
+    bool                b_done = false;
 
     *p_edge = high;
     obstacle_core_out_start(&out_state, min_lat);
-    for (time_s = 0.0; time_s < 2000.0; time_s += step)
+    for (time_s = 0.0; (time_s < 2000.0) && !b_done; time_s += step)
     {
         float64_t const accel_x = time_s * sin(theta);
         float64_t const accel_y = time_s * cos(theta);
@@ -591,32 +593,36 @@ static int32_t out_sim (float64_t diff, float64_t omega, float64_t coef,
         {
             /* Cast (int32_t)accel_x: time_s < 2000 and sin 45 deg < 1, so below
                1415 mm. */
-            return (int32_t)accel_x;
+            lat    = (int32_t)accel_x;
+            b_done = true;
         }
-        for (x_val = low; x_val <= high; x_val += 1.0)
+        else
         {
-            float64_t const delta_x = x_val - sum_x;
-            float64_t const delta_y = face - sum_y;
-            float64_t const radius2 =
-                sqrt((delta_x * delta_x) + (delta_y * delta_y));
-
-            if ((delta_y > 0.0)
-                && (fabs(atan2(delta_x, delta_y))
-                    <= ((fmax(beam_deg, 0.2) * M_PI) / 180.0))
-                && (radius2 < best))
+            for (x_val = low; x_val <= high; x_val += 1.0)
             {
-                best = radius2;
+                float64_t const delta_x = x_val - sum_x;
+                float64_t const delta_y = face - sum_y;
+                float64_t const radius2 =
+                    sqrt((delta_x * delta_x) + (delta_y * delta_y));
+
+                if ((delta_y > 0.0)
+                    && (fabs(atan2(delta_x, delta_y))
+                        <= ((fmax(beam_deg, 0.2) * M_PI) / 180.0))
+                    && (radius2 < best))
+                {
+                    best = radius2;
+                }
             }
+            /* Casts (uint16_t)best: best is a distance (>= 0) of at most 4000
+               mm on this branch; (int32_t)accel_x, (int32_t)accel_y: time_s <
+               2000 and sin, cos 45 deg < 1, so below 1415 mm; (int32_t)face:
+               OBST_US_AHEAD_MM (85) plus a box distance of 200..326 mm. */
+            ret = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
+            obstacle_core_out_ping(&out_state, (int32_t)accel_x,
+                                   (int32_t)accel_y, 4500, ret, (int32_t)face);
         }
-        /* Casts (uint16_t)best: best is a distance (>= 0) of at most 4000 mm on
-           this branch; (int32_t)accel_x, (int32_t)accel_y: time_s < 2000 and
-           sin, cos 45 deg < 1, so below 1415 mm; (int32_t)face:
-           OBST_US_AHEAD_MM (85) plus a box distance of 200..326 mm. */
-        ret = (best > 4000.0) ? OBST_RANGE_NONE : (uint16_t)best;
-        obstacle_core_out_ping(&out_state, (int32_t)accel_x, (int32_t)accel_y,
-                               4500, ret, (int32_t)face);
     }
-    return -1;
+    return lat;
 }
 
 /** Simulated range of a ping at phi_deg from the car turned diff, box omega
@@ -747,8 +753,8 @@ static void test_obstacle_h09 (void)
             box_t     box = {200.0, (float64_t)width, (float64_t)cnt};
             float64_t err;
 
-            /* Cast (float64_t)prof.w_mm: exact: a 16-bit integer fits a double.
-             */
+            /* Cast (float64_t)prof.w_mm: exact: a 16-bit integer fits a
+               double. */
             scan_box(&box, 1, &prof);
             err = fabs((float64_t)prof.w_mm - width) / width;
             if (err > worst)
@@ -1056,8 +1062,8 @@ static void test_obstacle_h22 (void)
                    widths[val_a], dists[val_b2], (uint32_t)width, elem * 100.0);
         }
     }
-    /* Cast (uint32_t)obstacle_core_edge_width(...): every uint16_t value fits.
-     */
+    /* Cast (uint32_t)obstacle_core_edge_width(...): every uint16_t value
+       fits. */
     CHECK("S5-H22", worst_w <= 0.10);
     memset(&prof, 0, sizeof(prof));
     g_edge_beam = 36.0;

@@ -39,6 +39,8 @@ static void put_header(app_pack_writer_t * p_w, comms_proto_frame_type_t type);
 static int32_t           cdeg_to_tenths(int16_t cdeg);
 static uint32_t          mm_to_cm_field(uint16_t value_mm, bool b_valid,
                                         uint32_t none_code);
+static comms_proto_err_t parse_body(app_pack_reader_t * p_reader, uint16_t len,
+                                    comms_proto_cmd_t * p_cmd);
 static comms_proto_err_t parse_set(app_pack_reader_t * p_reader, uint16_t len,
                                    comms_proto_cmd_t * p_cmd);
 static comms_proto_err_t parse_map(app_pack_reader_t * p_reader, uint16_t len,
@@ -112,8 +114,8 @@ uint16_t comms_proto_build_telemetry (comms_proto_telem_t const * p_t,
 
     /* Casts (uint32_t)p_t->enc_l, (uint32_t)p_t->enc_r: the low 16 bits of the
        two's complement count are sent (a wrap field); (uint32_t)p_t->dist_mm:
-       the low 16 bits of the two's complement distance are sent (a wrap field).
-     */
+       the low 16 bits of the two's complement distance are sent (a wrap
+       field). */
     app_pack_writer_init(&writer, p_buf, cap);
     put_header(&writer, COMMS_FT_TELEMETRY);
     app_pack_put(&writer, p_t->seq, 8u);
@@ -192,8 +194,8 @@ uint16_t comms_proto_build_event (comms_proto_event_t const * p_ev,
     app_pack_put(&writer, dlen, 2u);
     if (width > 0u)
     {
-        /* Cast (uint32_t)data: two's complement: the low width bits are sent.
-         */
+        /* Cast (uint32_t)data: two's complement: the low width bits are
+           sent. */
         app_pack_put(&writer, (uint32_t)data,
                      width); /* two's complement, low bits */
     }
@@ -252,16 +254,17 @@ comms_proto_param_t const * comms_proto_param_by_index (uint8_t param_index)
 
 comms_proto_param_t const * comms_proto_param_by_id (uint8_t param_id)
 {
-    uint8_t idx;
+    uint8_t                     idx;
+    comms_proto_param_t const * p_param = NULL;
 
-    for (idx = 0u; idx < COMMS_PARAM_COUNT; idx++)
+    for (idx = 0u; (idx < COMMS_PARAM_COUNT) && (NULL == p_param); idx++)
     {
         if (g_params[idx].param_id == param_id)
         {
-            return &g_params[idx];
+            p_param = &g_params[idx];
         }
     }
-    return NULL;
+    return p_param;
 }
 
 comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
@@ -284,44 +287,30 @@ comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
     if (reader.b_short || (type != COMMS_FT_CMD)
         || (version != COMMS_FRAME_VERSION))
     {
-        return COMMS_ERR_BAD_FRAME;
+        err = COMMS_ERR_BAD_FRAME;
     }
-    /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..255. */
-    p_cmd->cmd_id = (uint8_t)app_pack_take(&reader, COMMS_ID_BITS);
-    if (reader.b_short)
+    if (COMMS_ERR_NONE == err)
     {
-        return COMMS_ERR_NO_ID;
+        /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..255. */
+        p_cmd->cmd_id = (uint8_t)app_pack_take(&reader, COMMS_ID_BITS);
+        if (reader.b_short)
+        {
+            err = COMMS_ERR_NO_ID;
+        }
     }
-    /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..7. */
-    p_cmd->b_has_id = true;
-    p_cmd->cmd      = (uint8_t)app_pack_take(&reader, COMMS_CMD_BITS);
-    if (reader.b_short)
+    if (COMMS_ERR_NONE == err)
     {
-        return COMMS_ERR_BAD_FRAME;
+        /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..7. */
+        p_cmd->b_has_id = true;
+        p_cmd->cmd      = (uint8_t)app_pack_take(&reader, COMMS_CMD_BITS);
+        if (reader.b_short)
+        {
+            err = COMMS_ERR_BAD_FRAME;
+        }
     }
-
-    switch (p_cmd->cmd)
+    if (COMMS_ERR_NONE == err)
     {
-        case COMMS_CMD_START:
-        case COMMS_CMD_STOP:
-        case COMMS_CMD_RESET:
-            if (len != 3u)
-            {
-                err = COMMS_ERR_BAD_FRAME;
-            }
-        break;
-
-        case COMMS_CMD_SET:
-            err = parse_set(&reader, len, p_cmd);
-        break;
-
-        case COMMS_CMD_MAP:
-            err = parse_map(&reader, len, p_cmd);
-        break;
-
-        default:
-            err = COMMS_ERR_BAD_CMD;
-        break;
+        err = parse_body(&reader, len, p_cmd);
     }
     return err;
 }
@@ -334,23 +323,19 @@ bool comms_proto_map_char_ok (char chr)
 comms_proto_err_t comms_proto_check_ready (comms_proto_cmd_t const * p_cmd,
                                            bool b_calibrated)
 {
-    if ((COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
-    {
-        return COMMS_ERR_NOT_CAL;
-    }
-    return COMMS_ERR_NONE;
+    return ((COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
+               ? COMMS_ERR_NOT_CAL
+               : COMMS_ERR_NONE;
 }
 
 comms_proto_err_t comms_proto_check_cmd (comms_proto_cmd_t const * p_cmd,
                                          bool                      b_idle)
 {
-    if (((COMMS_CMD_START == p_cmd->cmd) || (COMMS_CMD_SET == p_cmd->cmd)
-         || (COMMS_CMD_MAP == p_cmd->cmd))
-        && !b_idle)
-    {
-        return COMMS_ERR_BUSY;
-    }
-    return COMMS_ERR_NONE;
+    return (((COMMS_CMD_START == p_cmd->cmd) || (COMMS_CMD_SET == p_cmd->cmd)
+             || (COMMS_CMD_MAP == p_cmd->cmd))
+            && !b_idle)
+               ? COMMS_ERR_BUSY
+               : COMMS_ERR_NONE;
 }
 
 /* ---------------------------------------------------------------------
@@ -371,9 +356,10 @@ comms_proto_dedup_result_t
 comms_proto_dedup_check (comms_proto_dedup_t const * p_dd,
                          comms_proto_cmd_t const * p_cmd, uint32_t now_ms)
 {
-    uint8_t idx;
+    uint8_t                    idx;
+    comms_proto_dedup_result_t result = COMMS_DEDUP_NEW;
 
-    for (idx = 0u; idx < p_dd->count; idx++)
+    for (idx = 0u; (idx < p_dd->count) && (COMMS_DEDUP_NEW == result); idx++)
     {
         comms_proto_dedup_entry_t const * p_e = &p_dd->entries[idx];
 
@@ -381,15 +367,14 @@ comms_proto_dedup_check (comms_proto_dedup_t const * p_dd,
         if ((p_e->cmd_id == p_cmd->cmd_id)
             && ((now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
         {
-            if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id)
-                && (p_e->value == p_cmd->value))
-            {
-                return COMMS_DEDUP_REPEAT;
-            }
-            return COMMS_DEDUP_CONFLICT;
+            result =
+                ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id)
+                 && (p_e->value == p_cmd->value))
+                    ? COMMS_DEDUP_REPEAT
+                    : COMMS_DEDUP_CONFLICT;
         }
     }
-    return COMMS_DEDUP_NEW;
+    return result;
 }
 
 void comms_proto_dedup_add (comms_proto_dedup_t *     p_dd,
@@ -444,13 +429,14 @@ bool comms_proto_ring_push (comms_proto_ring_t *      p_ring,
 bool comms_proto_ring_peek (comms_proto_ring_t const * p_ring,
                             comms_proto_rec_t * p_rec, uint8_t * p_seq)
 {
-    if (0u == p_ring->count)
+    bool const b_have = (p_ring->count != 0u);
+
+    if (b_have)
     {
-        return false;
+        *p_rec = p_ring->rec[p_ring->head];
+        *p_seq = p_ring->seq[p_ring->head];
     }
-    *p_rec = p_ring->rec[p_ring->head];
-    *p_seq = p_ring->seq[p_ring->head];
-    return true;
+    return b_have;
 }
 
 void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
@@ -463,71 +449,108 @@ void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
     }
 }
 
+/** The part of a command after its header: length and arguments by command
+    (COMMS_CMD_*).  Returns COMMS_ERR_NONE or the first error. */
+static comms_proto_err_t parse_body (app_pack_reader_t * p_reader, uint16_t len,
+                                     comms_proto_cmd_t * p_cmd)
+{
+    comms_proto_err_t err = COMMS_ERR_NONE;
+
+    switch (p_cmd->cmd)
+    {
+        case COMMS_CMD_START:
+        case COMMS_CMD_STOP:
+        case COMMS_CMD_RESET:
+            if (len != 3u)
+            {
+                err = COMMS_ERR_BAD_FRAME;
+            }
+        break;
+
+        case COMMS_CMD_SET:
+            err = parse_set(p_reader, len, p_cmd);
+        break;
+
+        case COMMS_CMD_MAP:
+            err = parse_map(p_reader, len, p_cmd);
+        break;
+
+        default:
+            err = COMMS_ERR_BAD_CMD;
+        break;
+    }
+    return err;
+}
+
 /** SET: parameter index and value, both checked. */
 static comms_proto_err_t parse_set (app_pack_reader_t * p_reader, uint16_t len,
                                     comms_proto_cmd_t * p_cmd)
 {
     comms_proto_param_t const * p_param = NULL;
     uint32_t                    param_index;
+    comms_proto_err_t           err = COMMS_ERR_BAD_FRAME;
 
-    if (len != 5u)
+    if (5u == len)
     {
-        return COMMS_ERR_BAD_FRAME;
+        /* Cast (uint8_t)param_index: a COMMS_PARAM_BITS (4-bit) field:
+           0..15. */
+        param_index  = app_pack_take(p_reader, COMMS_PARAM_BITS);
+        p_cmd->value = app_pack_unoff_s(
+            app_pack_take(p_reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
+        p_param = comms_proto_param_by_index((uint8_t)param_index);
+        if (NULL == p_param)
+        {
+            err = COMMS_ERR_BAD_PARAM;
+        }
+        else
+        {
+            p_cmd->param_id = p_param->param_id;
+            err =
+                ((p_cmd->value < p_param->min) || (p_cmd->value > p_param->max))
+                    ? COMMS_ERR_RANGE
+                    : COMMS_ERR_NONE;
+        }
     }
-    /* Cast (uint8_t)param_index: a COMMS_PARAM_BITS (4-bit) field: 0..15. */
-    param_index  = app_pack_take(p_reader, COMMS_PARAM_BITS);
-    p_cmd->value = app_pack_unoff_s(app_pack_take(p_reader, COMMS_VALUE_BITS),
-                                    COMMS_VALUE_BITS);
-    p_param      = comms_proto_param_by_index((uint8_t)param_index);
-    if (NULL == p_param)
-    {
-        return COMMS_ERR_BAD_PARAM;
-    }
-    p_cmd->param_id = p_param->param_id;
-    if ((p_cmd->value < p_param->min) || (p_cmd->value > p_param->max))
-    {
-        return COMMS_ERR_RANGE;
-    }
-    return COMMS_ERR_NONE;
+    return err;
 }
 
 /** MAP: four different Code 39 data characters, packed one per byte. */
 static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
                                     comms_proto_cmd_t * p_cmd)
 {
-    char     chars[4];
-    uint32_t packed = 0u;
-    uint8_t  kdx;
-    uint8_t  jdx;
+    char              chars[4];
+    uint32_t          packed = 0u;
+    uint8_t           kdx;
+    uint8_t           jdx;
+    comms_proto_err_t err = (6u == len) ? COMMS_ERR_NONE : COMMS_ERR_BAD_FRAME;
 
-    if (len != 6u)
-    {
-        return COMMS_ERR_BAD_FRAME;
-    }
-    for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
+    for (kdx = 0u; (kdx < COMMS_MAP_CHARS) && (COMMS_ERR_NONE == err); kdx++)
     {
         /* Cast (uint8_t)app_pack_take(p_reader ...): the value is 0..63. */
         chars[kdx] =
             comms_proto_symbol_char((uint8_t)app_pack_take(p_reader, 6u));
         if ('\0' == chars[kdx])
         {
-            return COMMS_ERR_BAD_MAP;
+            err = COMMS_ERR_BAD_MAP;
         }
-        for (jdx = 0u; jdx < kdx; jdx++)
+        for (jdx = 0u; (jdx < kdx) && (COMMS_ERR_NONE == err); jdx++)
         {
             if (chars[jdx] == chars[kdx])
             {
-                return COMMS_ERR_BAD_MAP;
+                err = COMMS_ERR_BAD_MAP;
             }
         }
         /* Casts (uint32_t)(uint8_t)chars[kdx]: every uint8_t value fits;
            (uint8_t)chars[kdx]: every char value fits. */
         packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
     }
-    /* Cast (int32_t)packed: bit pattern of four packed characters, carried as
-       int32_t. */
-    p_cmd->value = (int32_t)packed;
-    return COMMS_ERR_NONE;
+    if (COMMS_ERR_NONE == err)
+    {
+        /* Cast (int32_t)packed: bit pattern of four packed characters,
+           carried as int32_t. */
+        p_cmd->value = (int32_t)packed;
+    }
+    return err;
 }
 
 /** Write a frame header: frame type (5 bits) and protocol version (3 bits). */
@@ -549,15 +572,15 @@ static int32_t cdeg_to_tenths (int16_t cdeg)
 static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
                                 uint32_t none_code)
 {
-    uint32_t value_cm;
+    uint32_t value_cm = none_code;
 
-    if (!b_valid || (COMMS_D_NONE == value_mm))
+    if (b_valid && (value_mm != COMMS_D_NONE))
     {
-        return none_code;
+        /* Cast (uint32_t)value_mm: every uint16_t value fits. */
+        value_cm = ((uint32_t)value_mm + 5u) / 10u;
+        value_cm = (value_cm >= none_code) ? (none_code - 1u) : value_cm;
     }
-    /* Cast (uint32_t)value_mm: every uint16_t value fits. */
-    value_cm = ((uint32_t)value_mm + 5u) / 10u;
-    return (value_cm >= none_code) ? (none_code - 1u) : value_cm;
+    return value_cm;
 }
 
 /*** end of file ***/

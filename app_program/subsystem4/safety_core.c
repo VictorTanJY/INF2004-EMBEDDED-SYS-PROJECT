@@ -38,22 +38,24 @@ uint32_t safety_core_hb_check (safety_core_hb_state_t * p_st,
     if (!p_st->b_started)
     {
         safety_core_hb_start(p_st, counts, now_ms);
-        return 0u;
     }
-    for (kdx = 0u; kdx < SAFETY_HB_COUNT; kdx++)
+    else
     {
-        if (counts[kdx] != p_st->last_count[kdx])
+        for (kdx = 0u; kdx < SAFETY_HB_COUNT; kdx++)
         {
-            p_st->last_count[kdx]   = counts[kdx];
-            p_st->last_seen_ms[kdx] = now_ms;
-        }
-        else if ((now_ms - p_st->last_seen_ms[kdx]) > g_timeout_ms[kdx])
-        {
-            missed |= (1uL << kdx);
-        }
-        else
-        {
-            /* within its timeout */
+            if (counts[kdx] != p_st->last_count[kdx])
+            {
+                p_st->last_count[kdx]   = counts[kdx];
+                p_st->last_seen_ms[kdx] = now_ms;
+            }
+            else if ((now_ms - p_st->last_seen_ms[kdx]) > g_timeout_ms[kdx])
+            {
+                missed |= (1uL << kdx);
+            }
+            else
+            {
+                /* within its timeout */
+            }
         }
     }
     return missed;

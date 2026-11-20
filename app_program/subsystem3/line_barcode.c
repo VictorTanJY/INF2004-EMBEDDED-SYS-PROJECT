@@ -17,6 +17,8 @@ static uint16_t runs_to_widths(uint16_t * p_runs, uint16_t n_runs,
                                uint32_t * p_widths, uint16_t max_elems);
 static uint16_t prof_read(line_barcode_capture_t const * p_bc, uint8_t kdx,
                           uint32_t * p_w);
+static uint16_t prof_read_span(line_barcode_capture_t const * p_bc, uint8_t kdx,
+                               uint16_t white, uint16_t dark, uint32_t * p_w);
 static uint16_t trim_specks(uint32_t const * p_w, uint16_t n_elems,
                             uint16_t * p_first);
 static code39_result_t decode_exact(uint32_t const * p_w, uint16_t n_elems,
@@ -167,11 +169,8 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
     bool            b_black    = false;
     bool            b_bar_seen = false;
 
-    if (0u == n_bins)
-    {
-        return 0u;
-    }
-    ext = p_prof[0];
+    /* n_bins 0: no runs, so no elements */
+    ext = (n_bins > 0u) ? p_prof[0] : 0u;
     for (idx = 0u; idx < n_bins; idx++)
     {
         uint16_t const level = p_prof[idx];
@@ -189,8 +188,8 @@ uint16_t line_barcode_prof_swing (uint16_t const * p_prof, uint16_t n_bins,
         }
         else
         {
-            /* Casts (uint32_t)level, (uint32_t)ext: every uint16_t value fits.
-             */
+            /* Casts (uint32_t)level, (uint32_t)ext: every uint16_t value
+               fits. */
             ext = (level < ext) ? level : ext;
             if ((uint32_t)level > ((uint32_t)ext + delta))
             {
@@ -235,9 +234,12 @@ uint16_t line_barcode_reading (line_barcode_capture_t const * p_bc,
         {
             p_widths[kdx] = p_bc->widths[kdx];
         }
-        return kdx;
     }
-    return prof_read(p_bc, reading, p_widths);
+    else
+    {
+        kdx = prof_read(p_bc, reading, p_widths);
+    }
+    return kdx;
 }
 
 line_barcode_result_t line_barcode_sample (line_barcode_capture_t * p_bc,
@@ -308,8 +310,8 @@ static void swing (line_barcode_capture_t * p_bc, uint16_t norm)
     }
     else
     {
-        /* Casts (uint32_t)norm, (uint32_t)p_bc->ext: every uint16_t value fits.
-         */
+        /* Casts (uint32_t)norm, (uint32_t)p_bc->ext: every uint16_t value
+           fits. */
         p_bc->ext = (norm < p_bc->ext) ? norm : p_bc->ext; /* lightest so far */
         if ((norm >= BC_DELTA_MIN)
             && ((uint32_t)norm > ((uint32_t)p_bc->ext + BC_DELTA)))
@@ -552,20 +554,29 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
 {
     uint16_t white;
     uint16_t dark;
-    uint16_t span;
-    uint16_t thr;
+    uint16_t n_read = 0u;
 
-    if (0u == p_bc->prof_n)
+    if (p_bc->prof_n > 0u)
     {
-        return 0u;
+        line_barcode_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
+        if (dark > white)
+        {
+            n_read = prof_read_span(p_bc, kdx, white, dark, p_w);
+        }
     }
-    line_barcode_prof_levels(p_bc->prof, p_bc->prof_n, &white, &dark);
-    if (dark <= white)
-    {
-        return 0u;
-    }
-    /* Cast (uint16_t)(dark - white): dark > white (tested above). */
-    span = (uint16_t)(dark - white);
+    return n_read;
+}
+
+/** prof_read() once the levels are known (dark > white). */
+static uint16_t prof_read_span (line_barcode_capture_t const * p_bc,
+                                uint8_t kdx, uint16_t white, uint16_t dark,
+                                uint32_t * p_w)
+{
+    /* Cast (uint16_t)(dark - white): dark > white (tested by the caller). */
+    uint16_t const span   = (uint16_t)(dark - white);
+    uint16_t       n_read = 0u;
+    uint16_t       thr;
+
     if (kdx >= 3u)
     {
         /* Casts (uint32_t)(p_bc->q_hi - ...): q_hi > q_lo (tested in the same
@@ -583,22 +594,28 @@ static uint16_t prof_read (line_barcode_capture_t const * p_bc, uint8_t kdx,
                     ? (noise * BC_ADAPT_NOISE_X)
                     : delta;
         delta = (delta < BC_ADAPT_MIN) ? BC_ADAPT_MIN : delta;
-        if (delta >= (uint32_t)BC_DELTA)
+        /* No reading if delta is no smaller than the first reading's. */
+        if (delta < (uint32_t)BC_DELTA)
         {
-            return 0u; /* no smaller than the first reading */
+            /* Cast (uint16_t)delta: delta < BC_DELTA (250, tested above). */
+            n_read =
+                line_barcode_prof_swing(p_bc->prof, p_bc->prof_n,
+                                        (uint16_t)delta, p_w, BC_MAX_ELEMENTS);
         }
-        /* Cast (uint16_t)delta: delta < BC_DELTA (250, tested above). */
-        return line_barcode_prof_swing(p_bc->prof, p_bc->prof_n,
-                                       (uint16_t)delta, p_w, BC_MAX_ELEMENTS);
     }
-    /* Casts (uint16_t)(white + ((1u == kdx) ? ...)): white plus at most half
-       the span is at most dark, a uint16_t level; (uint16_t)(span / 16u): the
-       value is 0..4095. */
-    thr = (uint16_t)(white
-                     + ((1u == kdx) ? (span / 2u) : (span / BC_PROF_LOW_DIV)));
-    return line_barcode_prof_elements(p_bc->prof, p_bc->prof_n, thr,
-                                      (uint16_t)(span / 16u), p_w,
-                                      BC_MAX_ELEMENTS);
+    else
+    {
+        /* Casts (uint16_t)(white + ((1u == kdx) ? ...)): white plus at most
+           half the span is at most dark, a uint16_t level;
+           (uint16_t)(span / 16u): the value is 0..4095. */
+        thr    = (uint16_t)(white
+                            + ((1u == kdx) ? (span / 2u)
+                                           : (span / BC_PROF_LOW_DIV)));
+        n_read = line_barcode_prof_elements(p_bc->prof, p_bc->prof_n, thr,
+                                            (uint16_t)(span / 16u), p_w,
+                                            BC_MAX_ELEMENTS);
+    }
+    return n_read;
 }
 
 /** 14 Nov: a speck before the start or after the stop adds a bar and a
@@ -619,37 +636,38 @@ static uint16_t trim_specks (uint32_t const * p_w, uint16_t n_elems,
     uint32_t        med;
 
     *p_first = 0u;
-    if ((n_elems < 11u) || (0u == (n_elems % 2u)))
+    /* A read starts and ends with a bar: otherwise nothing is trimmed. */
+    if ((n_elems >= 11u) && ((n_elems % 2u) != 0u))
     {
-        return n_elems; /* a read starts and ends with a bar */
-    }
-    for (idx = FIRST_INNER_BAR; (idx + FIRST_INNER_BAR) < n_elems;
-         idx += 2u) /* inner bars, insertion sort */
-    {
-        uint32_t const width = p_w[idx];
-
-        for (jdx = mid; (jdx > 0u) && (sorted[jdx - 1u] > width); jdx--)
+        for (idx = FIRST_INNER_BAR; (idx + FIRST_INNER_BAR) < n_elems;
+             idx += 2u) /* inner bars, insertion sort */
         {
-            sorted[jdx] = sorted[jdx - 1u];
+            uint32_t const width = p_w[idx];
+
+            for (jdx = mid; (jdx > 0u) && (sorted[jdx - 1u] > width); jdx--)
+            {
+                sorted[jdx] = sorted[jdx - 1u];
+            }
+            sorted[jdx] = width;
+            mid++;
         }
-        sorted[jdx] = width;
-        mid++;
-    }
-    /* Casts (uint64_t)p_w[0], (uint64_t)med: every uint32_t value fits. */
-    med = sorted[mid / 2u];
-    if (((uint64_t)p_w[0] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
-    {
-        *p_first = 2u;
-    }
-    /* Casts (uint64_t)p_w[n_elems - 1u], (uint64_t)med: every uint32_t value
-       fits. */
-    if (((uint64_t)p_w[n_elems - 1u] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
-    {
-        /* Cast (uint16_t)(n_elems - 2u): n_elems >= 11 (tested above). */
-        last = (uint16_t)(n_elems - 2u);
+        /* Casts (uint64_t)p_w[0], (uint64_t)med: every uint32_t value fits. */
+        med = sorted[mid / 2u];
+        if (((uint64_t)p_w[0] * 100u) < ((uint64_t)med * BC_SPECK_PCT))
+        {
+            *p_first = 2u;
+        }
+        /* Casts (uint64_t)p_w[n_elems - 1u], (uint64_t)med: every uint32_t
+           value fits. */
+        if (((uint64_t)p_w[n_elems - 1u] * 100u)
+            < ((uint64_t)med * BC_SPECK_PCT))
+        {
+            /* Cast (uint16_t)(n_elems - 2u): n_elems >= 11 (tested above). */
+            last = (uint16_t)(n_elems - 2u);
+        }
     }
     /* Cast (uint16_t)(last - *p_first): *p_first is 0 or 2 and last >= n_elems
-       - 2 >= 9. */
+       - 2 >= 9 (or last = n_elems and *p_first = 0). */
     return (uint16_t)(last - *p_first);
 }
 
@@ -699,10 +717,11 @@ static code39_result_t decode_exact (uint32_t const * p_w, uint16_t n_elems,
 static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
                                      line_barcode_out_t *     p_out)
 {
-    static uint32_t read_widths[BC_MAX_ELEMENTS + 1u];
-    code39_result_t result;
-    uint8_t         kdx;
-    bool            b_trim;
+    static uint32_t       read_widths[BC_MAX_ELEMENTS + 1u];
+    code39_result_t       result;
+    line_barcode_result_t bc_result;
+    uint8_t               kdx;
+    bool                  b_trim;
 
     p_out->elements = p_bc->n_elems;
     p_out->length_um =
@@ -742,15 +761,22 @@ static line_barcode_result_t finish (line_barcode_capture_t * p_bc,
         /* A crossing line or a speck: not a barcode, not an error.  The
            white that ended it already counts as the next quiet zone. */
         p_bc->state = LINE_BC_ARMED;
-        return BC_NONE;
+        bc_result   = BC_NONE;
     }
-    start_cooldown(p_bc);
-    if (CODE39_OK == result)
+    else
     {
-        return BC_VALID;
+        start_cooldown(p_bc);
+        if (CODE39_OK == result)
+        {
+            bc_result = BC_VALID;
+        }
+        else
+        {
+            p_out->reason = result;
+            bc_result     = BC_REJECT;
+        }
     }
-    p_out->reason = result;
-    return BC_REJECT;
+    return bc_result;
 }
 
 /** Last pass, best match (8 Nov): the reading whose element count, specks

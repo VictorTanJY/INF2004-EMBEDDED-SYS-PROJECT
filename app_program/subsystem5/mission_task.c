@@ -188,10 +188,10 @@ static void run_actions (mission_core_out_t const * p_out)
                 {
                     /* Casts (int32_t)(((uint32_t) ...)): bit pattern of a
                        packed LOG word, not an arithmetic value;
-                       (uint32_t)(uint16_t)p_a->arg0: every uint16_t value fits;
-                       (uint16_t)p_a->arg0, (uint16_t)p_a->arg1: low 16 bits
-                       (two's complement) of the value, packed into a LOG word.
-                     */
+                       (uint32_t)(uint16_t)p_a->arg0: every uint16_t value
+                       fits; (uint16_t)p_a->arg0, (uint16_t)p_a->arg1: low 16
+                       bits (two's complement) of the value, packed into a LOG
+                       word. */
                     (void)subsystem1_telem_post(
                         COMMS_KIND_LOG, APP_SRC_OBST_MISSION, p_a->cmd,
                         (int32_t)(((uint32_t)(uint16_t)p_a->arg0 << 16)

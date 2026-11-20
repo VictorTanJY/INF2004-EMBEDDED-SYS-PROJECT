@@ -44,6 +44,7 @@
 #define I2C_TIMEOUT_US 2000u
 
 static bool timed_out(uint32_t t_start);
+static ER   read_bytes(uint8_t reg, uint8_t * p_buf, uint8_t n_bytes);
 static ER   set_target(uint8_t addr7);
 static ER   finish(uint32_t t_start);
 static void recovery_delay(void);
@@ -76,11 +77,11 @@ EXPORT ER drv_i2c1_init (void)
     out_w(IC_FS_SCL_LCNT, 750u);
     out_w(IC_FS_SPKLEN, 11u);
     out_w(IC_SDA_HOLD, 38u);
-    if (bus_er != E_OK)
+    if (E_OK == bus_er)
     {
-        return bus_er;
+        bus_er = (750u == in_w(IC_FS_SCL_LCNT)) ? E_OK : E_IO;
     }
-    return (750u == in_w(IC_FS_SCL_LCNT)) ? E_OK : E_IO;
+    return bus_er;
 }
 
 EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
@@ -88,34 +89,54 @@ EXPORT ER drv_i2c1_write_reg (uint8_t addr7, uint8_t reg, uint8_t value)
     uint32_t t_start;
     ER       err = set_target(addr7);
 
-    if (err != E_OK)
+    if (E_OK == err)
     {
-        return err;
+        /* Cast (uint32_t)value: every uint8_t value fits. */
+        t_start = app_time_us();
+        out_w(IC_DATA_CMD, reg);
+        out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
+        err = finish(t_start);
     }
-    /* Cast (uint32_t)value: every uint8_t value fits. */
-    t_start = app_time_us();
-    out_w(IC_DATA_CMD, reg);
-    out_w(IC_DATA_CMD, (uint32_t)value | CMD_STOP);
-    return finish(t_start);
+    return err;
 }
 
 EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
                          uint8_t n_bytes)
 {
-    uint32_t t_start;
-    ER       err;
-    uint8_t  idx;
+    ER err = E_PAR;
 
-    if ((0 == p_buf) || (addr7 > 0x7Fu) || (0u == n_bytes) || (n_bytes > 16u))
+    if ((p_buf != 0) && (addr7 <= 0x7Fu) && (n_bytes != 0u) && (n_bytes <= 16u))
     {
-        return E_PAR;
+        err = set_target(addr7);
+        if (E_OK == err)
+        {
+            err = read_bytes(reg, p_buf, n_bytes);
+        }
     }
-    err = set_target(addr7);
-    if (err != E_OK)
-    {
-        return err;
-    }
-    t_start = app_time_us();
+    return err;
+}
+
+EXPORT ER drv_i2c1_probe (uint8_t addr7)
+{
+    uint8_t byte;
+
+    return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
+}
+
+/** True once I2C_TIMEOUT_US have passed since t_start (us). */
+static bool timed_out (uint32_t t_start)
+{
+    return ((app_time_us() - t_start) > I2C_TIMEOUT_US);
+}
+
+/** drv_i2c1_read() once the target is set: send the register address and
+    n_bytes read commands, wait for the STOP, then collect the bytes. */
+static ER read_bytes (uint8_t reg, uint8_t * p_buf, uint8_t n_bytes)
+{
+    uint32_t const t_start = app_time_us();
+    ER             err;
+    uint8_t        idx;
+
     out_w(IC_DATA_CMD, reg); /* register address */
     for (idx = 0u; idx < n_bytes; idx++)
     {
@@ -132,37 +153,23 @@ EXPORT ER drv_i2c1_read (uint8_t addr7, uint8_t reg, uint8_t * p_buf,
         out_w(IC_DATA_CMD, cmd);
     }
     err = finish(t_start);
-    if (err != E_OK)
+    for (idx = 0u; (E_OK == err) && (idx < n_bytes); idx++)
     {
-        return err;
-    }
-    for (idx = 0u; idx < n_bytes; idx++)
-    {
-        while (0u == in_w(IC_RXFLR))
+        while ((E_OK == err) && (0u == in_w(IC_RXFLR)))
         {
             if (timed_out(t_start))
             {
-                return E_TMOUT;
+                err = E_TMOUT;
             }
         }
-        /* Cast (uint8_t)in_w(IC_DATA_CMD): the data byte is the low 8 bits of
-           the register. */
-        p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
+        if (E_OK == err)
+        {
+            /* Cast (uint8_t)in_w(IC_DATA_CMD): the data byte is the low 8 bits
+               of the register. */
+            p_buf[idx] = (uint8_t)in_w(IC_DATA_CMD);
+        }
     }
-    return E_OK;
-}
-
-EXPORT ER drv_i2c1_probe (uint8_t addr7)
-{
-    uint8_t byte;
-
-    return drv_i2c1_read(addr7, 0x00u, &byte, 1u);
-}
-
-/** True once I2C_TIMEOUT_US have passed since t_start (us). */
-static bool timed_out (uint32_t t_start)
-{
-    return ((app_time_us() - t_start) > I2C_TIMEOUT_US);
+    return err;
 }
 
 /** Disable I2C1, set the 7-bit target address and enable it again.  Returns
@@ -170,39 +177,48 @@ static bool timed_out (uint32_t t_start)
 static ER set_target (uint8_t addr7)
 {
     uint32_t const t_start = app_time_us();
+    ER             err     = E_OK;
 
     out_w(IC_ENABLE, 0u);
-    while ((in_w(IC_ENABLE_STATUS) & 1u) != 0u)
+    while ((E_OK == err) && ((in_w(IC_ENABLE_STATUS) & 1u) != 0u))
     {
         if (timed_out(t_start))
         {
-            return E_TMOUT;
+            err = E_TMOUT;
         }
     }
-    out_w(IC_TAR, addr7);
-    (void)in_w(IC_CLR_INTR);
-    out_w(IC_ENABLE, 1u);
-    return E_OK;
+    if (E_OK == err)
+    {
+        out_w(IC_TAR, addr7);
+        (void)in_w(IC_CLR_INTR);
+        out_w(IC_ENABLE, 1u);
+    }
+    return err;
 }
 
 /** Wait for the STOP of the transfer, then check for an abort (NACK). */
 static ER finish (uint32_t t_start)
 {
-    while (0u == (in_w(IC_RAW_INTR_STAT) & (INTR_STOP_DET | INTR_TX_ABRT)))
+    ER err = E_OK;
+
+    while ((E_OK == err)
+           && (0u == (in_w(IC_RAW_INTR_STAT) & (INTR_STOP_DET | INTR_TX_ABRT))))
     {
         if (timed_out(t_start))
         {
-            return E_TMOUT;
+            err = E_TMOUT;
         }
     }
-    if ((in_w(IC_RAW_INTR_STAT) & INTR_TX_ABRT) != 0u)
+    if (E_OK == err)
     {
-        (void)in_w(IC_CLR_TX_ABRT);
+        if ((in_w(IC_RAW_INTR_STAT) & INTR_TX_ABRT) != 0u)
+        {
+            (void)in_w(IC_CLR_TX_ABRT);
+            err = E_IO;
+        }
         (void)in_w(IC_CLR_INTR);
-        return E_IO;
     }
-    (void)in_w(IC_CLR_INTR);
-    return E_OK;
+    return err;
 }
 
 /** Open-drain recovery: drive LOW or release; never drive either line HIGH.
@@ -222,16 +238,22 @@ static void recovery_delay (void)
 static ER scl_release (void)
 {
     uint32_t const t_start = app_time_us();
+    ER             err     = E_OK;
+
     out_w(APP_REGS_GPIO_OE_CLR, 1uL << S4_PIN_IMU_SCL);
-    while (0u == (in_w(APP_REGS_GPIO_IN) & (1uL << S4_PIN_IMU_SCL)))
+    while ((E_OK == err)
+           && (0u == (in_w(APP_REGS_GPIO_IN) & (1uL << S4_PIN_IMU_SCL))))
     {
         if ((app_time_us() - t_start) >= 100u)
         {
-            return E_TMOUT;
+            err = E_TMOUT;
         }
     }
-    recovery_delay();
-    return E_OK;
+    if (E_OK == err)
+    {
+        recovery_delay();
+    }
+    return err;
 }
 
 /** Free a stuck bus: clock SCL by hand until a device releases SDA, then send

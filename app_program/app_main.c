@@ -81,12 +81,13 @@ EXPORT ID app_main_start_task (FP entry, PRI pri, uint32_t prc,
     if (tid < E_OK)
     {
         check_er(tid, p_name);
-        return tid;
     }
-
-    /* tk_sta_tsk: DORMANT -> READY.  The int is passed as stacd. */
-    err = tk_sta_tsk(tid, 0);
-    check_er(err, p_name);
+    else
+    {
+        /* tk_sta_tsk: DORMANT -> READY.  The int is passed as stacd. */
+        err = tk_sta_tsk(tid, 0);
+        check_er(err, p_name);
+    }
     return tid;
 }
 
@@ -95,7 +96,7 @@ EXPORT INT usermain (void)
     T_RVER ver;
 
     /* tk_ref_ver: ask the kernel who it is */
-    /* Cast (UB *)"\n=== micro T-Kernel on ...: tm_printf() takes UB *; the
+    /* Cast (UB *) of the banner format string: tm_printf() takes UB *; the
        string bytes are unchanged. */
     tk_ref_ver(&ver);
     tm_printf((UB *)"\n=== micro T-Kernel on Raspberry Pi Pico W"
@@ -128,7 +129,7 @@ EXPORT INT usermain (void)
     check_er(subsystem4_start(), "subsystem4_start");
     check_er(subsystem5_start(), "subsystem5_start");
 
-    /* Cast (UB *)"all subsystems started\n\n": tm_printf() takes UB *; the
+    /* Cast (UB *) of the string literal: tm_printf() takes UB *; the
        string bytes are unchanged. */
     tm_printf((UB *)"all subsystems started\n\n");
 
@@ -161,8 +162,8 @@ static void check_er (ER err, char const * p_what)
 {
     if (err < E_OK)
     {
-        /* Cast (UB *)"ERROR %s: %d\n": tm_printf() takes UB *; the string bytes
-           are unchanged. */
+        /* Cast (UB *) of the format string: tm_printf() takes UB *; the string
+           bytes are unchanged. */
         tm_printf((UB *)"ERROR %s: %d\n", p_what, err);
     }
 }

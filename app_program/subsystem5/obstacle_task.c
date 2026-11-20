@@ -248,8 +248,11 @@ static void     edge_finish(void);
 static void     probe_finish(uint32_t now_ms);
 static int32_t  probe_theta(motion_types_odom_t const * p_odom);
 static void     probe_slot(uint32_t now_ms, motion_types_odom_t const * p_odom);
-static void     probe_range(uint16_t range, uint32_t now_ms,
-                            motion_types_odom_t const * p_odom);
+static void probe_face_ping(uint16_t range, motion_types_odom_t const * p_odom);
+static void probe_side_ping(uint16_t range, int32_t lat, int32_t fwd,
+                            int32_t theta);
+static void probe_range(uint16_t range, uint32_t now_ms,
+                        motion_types_odom_t const * p_odom);
 static void handle_request(mission_types_scan_req_t const * p_req,
                            uint32_t now_ms, motion_types_odom_t const * p_odom);
 static void handle_range(uint16_t range, uint32_t now_ms,
@@ -481,9 +484,9 @@ static void drive (int32_t speed, int32_t target_h,
     int32_t const omega =
         app_types_clamp_i32(err * OBST_HOLD_K, -OBST_HOLD_MAX, OBST_HOLD_MAX);
 
-    /* Casts (int16_t)speed: speed is one of the OBST_*_SPEED_MM_S constants (<=
-       60 mm/s); (int16_t)omega: omega is clamped to +-OBST_HOLD_MAX just above.
-     */
+    /* Casts (int16_t)speed: speed is one of the OBST_*_SPEED_MM_S constants
+       (<= 60 mm/s); (int16_t)omega: omega is clamped to +-OBST_HOLD_MAX just
+       above. */
     g_o.drive_seq = motion_types_seq_next(g_o.drive_seq);
     (void)motion_api_drive(MOTION_SRC_AVOID, g_o.drive_seq, (int16_t)speed,
                            (int16_t)omega);
@@ -566,15 +569,17 @@ static uint16_t scan_median (void)
    (*p_r = their median). */
 static bool scan_sample (uint16_t range, uint16_t * p_r)
 {
+    bool b_full;
+
     g_o.scan_pings[g_o.sw_n] = range;
     g_o.sw_n++;
-    if (g_o.sw_n < OBST_SCAN_PINGS)
+    b_full = (g_o.sw_n >= OBST_SCAN_PINGS);
+    if (b_full)
     {
-        return false;
+        *p_r     = scan_median();
+        g_o.sw_n = 0u;
     }
-    *p_r     = scan_median();
-    g_o.sw_n = 0u;
-    return true;
+    return b_full;
 }
 
 /** Send a TURN of ddeg (0.1 deg, + left) at rate_deg_s and wait for its
@@ -603,19 +608,25 @@ static void send_turn (int16_t ddeg, uint16_t rate_deg_s,
 /** 1 = done, -1 = failed, 0 = still running */
 static int32_t motion_result (motion_types_odom_t const * p_odom)
 {
+    int32_t result = 0;
+
     if ((p_odom->last_done_seq == g_o.seq)
         && (MOTION_SRC_AVOID == p_odom->last_done_src))
     {
         g_o.b_wait_motion = false;
-        return 1;
+        result            = 1;
     }
-    if ((p_odom->fail_count != g_o.wait_fail_count)
-        && (p_odom->last_fail_seq == g_o.seq))
+    else if ((p_odom->fail_count != g_o.wait_fail_count)
+             && (p_odom->last_fail_seq == g_o.seq))
     {
         g_o.b_wait_motion = false;
-        return -1;
+        result            = -1;
     }
-    return 0;
+    else
+    {
+        /* still moving */
+    }
+    return result;
 }
 
 /** Remember the pose where the obstacle was found, for SEEK_LINE and ALIGN. */
@@ -1011,12 +1022,27 @@ static void probe_range (uint16_t range, uint32_t now_ms,
 
     if (PB_FACE == g_o.probe_ph)
     {
-        uint16_t range_min;
+        probe_face_ping(range, p_odom);
+    }
+    else if ((PB_LEFT == g_o.probe_ph) || (PB_RIGHT == g_o.probe_ph))
+    {
+        probe_side_ping(range, lat, fwd, theta);
+    }
+    else
+    {
+        /* no ping is needed in the other phases */
+    }
+    (void)now_ms;
+}
 
-        if (!scan_sample(range, &range_min))
-        {
-            return;
-        }
+/** probe_range() in PB_FACE: the face distance from the median of a
+    sweep's pings; move to OBST_PROBE_FACE_MM first if it is not there. */
+static void probe_face_ping (uint16_t range, motion_types_odom_t const * p_odom)
+{
+    uint16_t range_min;
+
+    if (scan_sample(range, &range_min))
+    {
         /* 9 Nov: only a ping near where the face should be is the face
            (02:59 the beam passed an off-centre box, hit something 20 cm
            further, and the approach drove into the box) */
@@ -1044,12 +1070,14 @@ static void probe_range (uint16_t range, uint32_t now_ms,
                 (int32_t)OBST_US_AHEAD_MM + (int32_t)g_o.edge_face;
             g_o.probe_ph = PB_TURN;
         }
-        return;
     }
-    if ((g_o.probe_ph != PB_LEFT) && (g_o.probe_ph != PB_RIGHT))
-    {
-        return;
-    }
+}
+
+/** probe_range() in PB_LEFT / PB_RIGHT: one ping of the side probe at
+    lateral offset lat and forward offset fwd (mm), car turned theta. */
+static void probe_side_ping (uint16_t range, int32_t lat, int32_t fwd,
+                             int32_t theta)
+{
     if (obstacle_core_probe_ping(
             &g_o.probe, obstacle_core_probe_sensor_lat(lat, theta), range,
             obstacle_core_out_expect_mm(g_o.probe_face_mm, fwd, theta)))
@@ -1080,7 +1108,6 @@ static void probe_range (uint16_t range, uint32_t now_ms,
     {
         /* still on the face, or not there yet */
     }
-    (void)now_ms;
 }
 
 /* ------------------------------------------------------------------ */

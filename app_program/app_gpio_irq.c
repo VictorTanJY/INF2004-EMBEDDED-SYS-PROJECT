@@ -43,28 +43,28 @@ EXPORT ER app_gpio_irq_attach (uint32_t pin, uint32_t edges,
     uint32_t const reg   = pin / 8u;
     uint32_t const shift = (pin % 8u) * 4u;
     UINT           intsts;
+    ER             err = E_PAR;
 
-    if ((pin >= APP_REGS_GPIO_NUM) || (NULL == p_callback)
-        || ((edges & ~IO_EDGE_BITS) != 0u) || !gb_defined)
+    if ((pin < APP_REGS_GPIO_NUM) && (p_callback != NULL)
+        && (0u == (edges & ~IO_EDGE_BITS)) && gb_defined)
     {
-        return E_PAR;
-    }
+        DI(intsts);
+        g_cb[pin] = p_callback;
+        out_w(io_intr(reg), IO_EDGE_BITS << shift); /* drop stale edges */
+        if (0u == this_core())
+        {
+            set_w(io_proc0_inte(reg), edges << shift);
+        }
+        else
+        {
+            set_w(io_proc1_inte(reg), edges << shift);
+        }
+        EI(intsts);
 
-    DI(intsts);
-    g_cb[pin] = p_callback;
-    out_w(io_intr(reg), IO_EDGE_BITS << shift); /* drop stale edges */
-    if (0u == this_core())
-    {
-        set_w(io_proc0_inte(reg), edges << shift);
+        EnableInt(APP_GPIO_IRQ_NO, APP_GPIO_IRQ_LEVEL); /* this core's NVIC */
+        err = E_OK;
     }
-    else
-    {
-        set_w(io_proc1_inte(reg), edges << shift);
-    }
-    EI(intsts);
-
-    EnableInt(APP_GPIO_IRQ_NO, APP_GPIO_IRQ_LEVEL); /* this core's NVIC */
-    return E_OK;
+    return err;
 }
 
 EXPORT void app_gpio_irq_detach (uint32_t pin)
@@ -73,15 +73,14 @@ EXPORT void app_gpio_irq_detach (uint32_t pin)
     uint32_t const shift = (pin % 8u) * 4u;
     UINT           intsts;
 
-    if (pin >= APP_REGS_GPIO_NUM)
+    if (pin < APP_REGS_GPIO_NUM)
     {
-        return;
+        DI(intsts);
+        clr_w(io_proc0_inte(reg), 0xFuL << shift);
+        clr_w(io_proc1_inte(reg), 0xFuL << shift);
+        g_cb[pin] = NULL;
+        EI(intsts);
     }
-    DI(intsts);
-    clr_w(io_proc0_inte(reg), 0xFuL << shift);
-    clr_w(io_proc1_inte(reg), 0xFuL << shift);
-    g_cb[pin] = NULL;
-    EI(intsts);
 }
 
 EXPORT uint32_t app_gpio_irq_count (void)

@@ -81,6 +81,7 @@ static uint32_t g_ring_lost;        /* events overwritten while offline     */
 static uint32_t g_pub_errors;       /* mqtt_publish() refused (ERR_MEM ...) */
 static uint8_t  g_tx[COMMS_TX_BUF_SIZE];
 
+static void comms_poll(ID mbf);
 static bool topic_eq(char const * p_a, char const * p_b);
 static void comms_set_wifi_loss(bool b_lost);
 static bool comms_publish(char const * p_topic, uint16_t len, uint8_t qos,
@@ -119,17 +120,43 @@ void mqtt_utk_app_disconnected (void)
 
 void mqtt_utk_app_poll (void)
 {
-    ID                mbf = subsystem1_mbf_telem();
+    ID const mbf = subsystem1_mbf_telem();
+
+    if (mbf > 0) /* else subsystem1_init() has not run yet */
+    {
+        comms_poll(mbf);
+    }
+}
+
+void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
+                      uint16_t len)
+{
+    comms_proto_cmd_t cmd;
+    comms_proto_err_t err;
+    uint16_t          ack_len;
+
+    if ((subsystem1_mbf_telem() > 0) && topic_eq(p_topic, COMMS_TOPIC_CMD))
+    {
+        err = comms_proto_parse_cmd(p_data, len, &cmd);
+        if (COMMS_ERR_NONE == err)
+        {
+            err = comms_handle(&cmd);
+        }
+        ack_len = comms_proto_build_ack(&cmd, err, g_tx, sizeof(g_tx));
+        (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
+    }
+}
+
+/** One poll of the WiFi task: the offline ring, new records from mbf, then
+    telemetry and status when they are due. */
+static void comms_poll (ID mbf)
+{
     uint32_t          now_ms;
     comms_proto_rec_t rec;
     uint8_t           seq;
     uint32_t          count;
     bool              b_sent;
 
-    if (mbf <= 0)
-    {
-        return; /* subsystem1_init() has not run yet */
-    }
     now_ms = app_time_ms();
 
     if (!gb_flag_synced)
@@ -177,25 +204,6 @@ void mqtt_utk_app_poll (void)
         && gb_online)
     {
         comms_publish_status(now_ms);
-    }
-}
-
-void mqtt_utk_app_rx (char const * p_topic, uint8_t const * p_data,
-                      uint16_t len)
-{
-    comms_proto_cmd_t cmd;
-    comms_proto_err_t err;
-    uint16_t          ack_len;
-
-    if ((subsystem1_mbf_telem() > 0) && topic_eq(p_topic, COMMS_TOPIC_CMD))
-    {
-        err = comms_proto_parse_cmd(p_data, len, &cmd);
-        if (COMMS_ERR_NONE == err)
-        {
-            err = comms_handle(&cmd);
-        }
-        ack_len = comms_proto_build_ack(&cmd, err, g_tx, sizeof(g_tx));
-        (void)comms_publish(COMMS_TOPIC_ACK, ack_len, 1u, 0u);
     }
 }
 
@@ -276,17 +284,22 @@ static void comms_set_wifi_loss (bool b_lost)
 static bool comms_publish (char const * p_topic, uint16_t len, uint8_t qos,
                            uint8_t retain)
 {
+    bool b_done = true;
+
     if (0u == len)
     {
-        g_pub_errors++; /* did not fit COMMS_TX_BUF_SIZE        */
-        return true;    /* nothing to retry                     */
+        g_pub_errors++; /* did not fit COMMS_TX_BUF_SIZE: nothing to retry */
     }
-    if (mqtt_utk_publish(p_topic, g_tx, len, qos, retain) != 0)
+    else if (mqtt_utk_publish(p_topic, g_tx, len, qos, retain) != 0)
     {
         g_pub_errors++;
-        return false;
+        b_done = false;
     }
-    return true;
+    else
+    {
+        /* published */
+    }
+    return b_done;
 }
 
 /** Publish one telemetry record as an event frame (QoS 1).  Returns
@@ -368,18 +381,19 @@ static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
 {
     /* Cast (int32_t)(now_ms - *p_next_ms): signed difference of two wrapping
        time stamps; they are less than 2^31 apart. */
-    if ((int32_t)(now_ms - *p_next_ms) < 0)
+    bool const b_due = ((int32_t)(now_ms - *p_next_ms) >= 0);
+
+    if (b_due)
     {
-        return false;
+        /* Cast (int32_t)(now_ms - *p_next_ms): signed difference of two
+           wrapping time stamps; they are less than 2^31 apart. */
+        *p_next_ms += period_ms;
+        if ((int32_t)(now_ms - *p_next_ms) >= 0)
+        {
+            *p_next_ms = now_ms + period_ms; /* fell behind: do not burst */
+        }
     }
-    /* Cast (int32_t)(now_ms - *p_next_ms): signed difference of two wrapping
-       time stamps; they are less than 2^31 apart. */
-    *p_next_ms += period_ms;
-    if ((int32_t)(now_ms - *p_next_ms) >= 0)
-    {
-        *p_next_ms = now_ms + period_ms; /* fell behind: do not burst */
-    }
-    return true;
+    return b_due;
 }
 
 /** Execute a checked command by posting the matching event to MissionTask.
@@ -387,7 +401,8 @@ static bool comms_due (uint32_t now_ms, uint32_t * p_next_ms,
 static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
 {
     ER                 err;
-    mission_types_ev_t event;
+    mission_types_ev_t event  = MISSION_EV_REMOTE_START;
+    comms_proto_err_t  result = COMMS_ERR_NONE;
 
     switch (p_cmd->cmd)
     {
@@ -412,22 +427,29 @@ static comms_proto_err_t comms_execute (comms_proto_cmd_t const * p_cmd)
         break;
 
         default:
-            return COMMS_ERR_BAD_CMD;
+            result = COMMS_ERR_BAD_CMD;
+        break;
     }
 
-    if (subsystem5_mbf_mission() <= 0)
+    if ((COMMS_ERR_NONE == result) && (subsystem5_mbf_mission() <= 0))
     {
-        return COMMS_ERR_FULL;
+        result = COMMS_ERR_FULL;
     }
-    err = subsystem5_mission_post(event, APP_SRC_COMMS, p_cmd->param_id,
-                                  p_cmd->value);
-    if (err != E_OK)
+    if (COMMS_ERR_NONE == result)
     {
-        return COMMS_ERR_FULL;
+        err = subsystem5_mission_post(event, APP_SRC_COMMS, p_cmd->param_id,
+                                      p_cmd->value);
+        if (err != E_OK)
+        {
+            result = COMMS_ERR_FULL;
+        }
+        else
+        {
+            (void)subsystem1_telem_post(COMMS_KIND_EVENT, APP_SRC_COMMS, event,
+                                        p_cmd->value);
+        }
     }
-    (void)subsystem1_telem_post(COMMS_KIND_EVENT, APP_SRC_COMMS, event,
-                                p_cmd->value);
-    return COMMS_ERR_NONE;
+    return result;
 }
 
 #endif /* TM_MQTT */

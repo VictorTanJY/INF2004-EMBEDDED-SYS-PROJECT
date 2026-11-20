@@ -36,6 +36,7 @@ EXPORT ER subsystem2_init (void)
 {
     T_CMBF cmbf = {0};
     T_CCYC ccyc = {0};
+    ER     err;
 
     app_lock_init(&g_odom_lock);
     {
@@ -49,32 +50,39 @@ EXPORT ER subsystem2_init (void)
     cmbf.bufsz   = S2_MBF_MOTION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
     cmbf.maxmsz  = sizeof(uint32_t); /* one packed command word (CR1) */
     g_mbf_motion = tk_cre_mbf(&cmbf);
-    if (g_mbf_motion < E_OK)
-    {
-        return g_mbf_motion;
-    }
+    err          = (g_mbf_motion < E_OK) ? g_mbf_motion : E_OK;
 
-    /* Cast (FP)motion_cyc_handler: the kernel stores the entry point as FP; it
-       is called with its own type. */
-    ccyc.cycatr  = TA_HLNG; /* started in subsystem2_start() */
-    ccyc.cychdr  = (FP)motion_cyc_handler;
-    ccyc.cyctim  = S2_PERIOD_MS;
-    ccyc.cycphs  = S2_PERIOD_MS;
-    g_cyc_motion = tk_cre_cyc(&ccyc);
-    return (g_cyc_motion < E_OK) ? g_cyc_motion : E_OK;
+    if (E_OK == err)
+    {
+        /* Cast (FP)motion_cyc_handler: the kernel stores the entry point as
+           FP; it is called with its own type. */
+        ccyc.cycatr  = TA_HLNG; /* started in subsystem2_start() */
+        ccyc.cychdr  = (FP)motion_cyc_handler;
+        ccyc.cyctim  = S2_PERIOD_MS;
+        ccyc.cycphs  = S2_PERIOD_MS;
+        g_cyc_motion = tk_cre_cyc(&ccyc);
+        err          = (g_cyc_motion < E_OK) ? g_cyc_motion : E_OK;
+    }
+    return err;
 }
 
 EXPORT ER subsystem2_start (void)
 {
+    ER err;
+
     /* Cast (FP)motion_task_thread: the kernel stores the entry point as FP; it
        is called with its own type. */
     g_tid_motion = app_main_start_task((FP)motion_task_thread, S2_PRI_MOTION,
                                        S2_CORE_MOTION, "motion");
     if (g_tid_motion < E_OK)
     {
-        return g_tid_motion;
+        err = g_tid_motion;
     }
-    return tk_sta_cyc(g_cyc_motion);
+    else
+    {
+        err = tk_sta_cyc(g_cyc_motion);
+    }
+    return err;
 }
 
 EXPORT ER subsystem2_send (motion_types_cmd_t const * p_cmd)

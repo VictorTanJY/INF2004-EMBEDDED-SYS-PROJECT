@@ -210,16 +210,19 @@ static uint16_t level_at (uint32_t const * p_w, uint16_t n_elems, uint32_t x_um)
 {
     uint32_t pos = T_LEAD_UM;
     uint16_t elem;
+    uint16_t level   = T_WHITE;
+    bool     b_found = false;
 
-    for (elem = 0u; elem < n_elems; elem++)
+    for (elem = 0u; (elem < n_elems) && !b_found; elem++)
     {
         if ((x_um >= pos) && (x_um < (pos + p_w[elem])))
         {
-            return (0u == (elem % 2u)) ? T_BLACK : T_WHITE;
+            level   = (0u == (elem % 2u)) ? T_BLACK : T_WHITE;
+            b_found = true;
         }
         pos += p_w[elem];
     }
-    return T_WHITE;
+    return level;
 }
 
 #endif

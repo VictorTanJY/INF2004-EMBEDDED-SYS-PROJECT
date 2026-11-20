@@ -125,51 +125,61 @@ void mqtt_utk_start (void)
     mqtt_utk_cfg_t const * p_cfg;
     err_t                  err;
 
-    if (gb_busy || ((gp_client != NULL) && mqtt_client_is_connected(gp_client)))
-    {
-        return;
-    }
+    /* Nothing to do while a connect is in progress or the client is up. */
+    bool b_go =
+        !(gb_busy
+          || ((gp_client != NULL) && mqtt_client_is_connected(gp_client)));
 
-    if (NULL == gp_client)
+    if (b_go && (NULL == gp_client))
     {
         gp_client = mqtt_client_new();
         if (NULL == gp_client)
         {
+            /* Cast (UB *) of the string literal: tm_printf() takes UB *; the
+               string bytes are unchanged. */
             tm_printf((UB *)"mqtt: mqtt_client_new() failed\n");
             schedule_retry();
-            return;
+            b_go = false;
         }
     }
 
-    if (!ip4addr_aton(MQTT_BROKER_IP, ip_2_ip4(&g_broker_addr)))
+    if (b_go && !ip4addr_aton(MQTT_BROKER_IP, ip_2_ip4(&g_broker_addr)))
     {
+        /* Cast (UB *) of the string literal: tm_printf() takes UB *; the
+           string bytes are unchanged. */
         tm_printf((UB *)"mqtt: bad MQTT_BROKER_IP\n");
         schedule_retry();
-        return;
+        b_go = false;
     }
-    IP_SET_TYPE(&g_broker_addr, IPADDR_TYPE_V4);
 
-    client_info.client_id  = MQTT_CLIENT_ID;
-    client_info.keep_alive = MQTT_UTK_KEEPALIVE_S;
-
-    p_cfg = mqtt_utk_app_config();
-    if ((p_cfg != NULL) && (p_cfg->p_will_topic != NULL)
-        && (p_cfg->p_will_msg != NULL))
+    if (b_go)
     {
-        client_info.will_topic  = p_cfg->p_will_topic;
-        client_info.will_msg    = p_cfg->p_will_msg;
-        client_info.will_qos    = p_cfg->will_qos;
-        client_info.will_retain = p_cfg->will_retain;
-    }
+        IP_SET_TYPE(&g_broker_addr, IPADDR_TYPE_V4);
 
-    gb_busy = true;
-    err     = mqtt_client_connect(gp_client, &g_broker_addr, MQTT_BROKER_PORT,
+        client_info.client_id  = MQTT_CLIENT_ID;
+        client_info.keep_alive = MQTT_UTK_KEEPALIVE_S;
+
+        p_cfg = mqtt_utk_app_config();
+        if ((p_cfg != NULL) && (p_cfg->p_will_topic != NULL)
+            && (p_cfg->p_will_msg != NULL))
+        {
+            client_info.will_topic  = p_cfg->p_will_topic;
+            client_info.will_msg    = p_cfg->p_will_msg;
+            client_info.will_qos    = p_cfg->will_qos;
+            client_info.will_retain = p_cfg->will_retain;
+        }
+
+        gb_busy = true;
+        err = mqtt_client_connect(gp_client, &g_broker_addr, MQTT_BROKER_PORT,
                                   connection_cb, NULL, &client_info);
-    if (err != ERR_OK)
-    {
-        tm_printf((UB *)"mqtt: mqtt_client_connect() failed, err=%d\n",
-                  (INT)err);
-        schedule_retry();
+        if (err != ERR_OK)
+        {
+            /* Casts (UB *) of the format string: tm_printf() takes UB *;
+               (INT)err: every err_t value fits. */
+            tm_printf((UB *)"mqtt: mqtt_client_connect() failed, err=%d\n",
+                      (INT)err);
+            schedule_retry();
+        }
     }
 }
 
@@ -182,12 +192,15 @@ uint8_t mqtt_utk_is_connected (void)
 int32_t mqtt_utk_publish (char const * p_topic, uint8_t const * p_data,
                           uint16_t len, uint8_t qos, uint8_t retain)
 {
-    if ((NULL == gp_client) || !mqtt_client_is_connected(gp_client))
+    int32_t result = MQTT_UTK_E_OFFLINE;
+
+    if ((gp_client != NULL) && mqtt_client_is_connected(gp_client))
     {
-        return MQTT_UTK_E_OFFLINE;
+        /* Cast (int32_t)mqtt_publish(...): every err_t (s8_t) value fits. */
+        result = (int32_t)mqtt_publish(gp_client, p_topic, p_data, len, qos,
+                                       retain, publish_done_cb, NULL);
     }
-    return (int32_t)mqtt_publish(gp_client, p_topic, p_data, len, qos, retain,
-                                 publish_done_cb, NULL);
+    return result;
 }
 
 uint32_t mqtt_utk_pub_failures (void)
@@ -224,6 +237,9 @@ static void retry_timeout (void * p_arg)
     it. */
 static void schedule_retry (void)
 {
+    /* Casts (UB *) of the format string: tm_printf() takes UB *; the string
+       bytes are unchanged; (UINT)(g_backoff_ms / 1000u): UINT and uint32_t
+       are both 32 bits. */
     tm_printf((UB *)"mqtt: retry in %u s\n", (UINT)(g_backoff_ms / 1000u));
     gb_busy = true;
     sys_untimeout(retry_timeout, NULL);
@@ -291,6 +307,8 @@ static void subscribe_done_cb (void * p_arg, err_t result)
     (void)p_arg;
     if (result != ERR_OK)
     {
+        /* Casts (UB *) of the format string: tm_printf() takes UB *; the
+           string bytes are unchanged; (INT)result: every err_t value fits. */
         tm_printf((UB *)"mqtt: subscribe failed, err=%d\n", (INT)result);
     }
 }
@@ -319,6 +337,8 @@ static void connection_cb (mqtt_client_t * p_client, void * p_arg,
     {
         gb_busy      = false;
         g_backoff_ms = MQTT_UTK_BACKOFF_MIN_MS;
+        /* Cast (UB *) of the string literal: tm_printf() takes UB *; the
+           string bytes are unchanged. */
         tm_printf((UB *)"mqtt: connected to " MQTT_BROKER_IP "\n");
 
         /* Callbacks must be registered before subscribing, or the
@@ -331,6 +351,8 @@ static void connection_cb (mqtt_client_t * p_client, void * p_arg,
                                        p_cfg->sub_qos, subscribe_done_cb, NULL);
             if (err != ERR_OK)
             {
+                /* Casts (UB *) of the format string: tm_printf() takes UB *;
+                   (INT)err: every err_t value fits. */
                 tm_printf((UB *)"mqtt: mqtt_subscribe() failed, err=%d\n",
                           (INT)err);
             }
@@ -342,6 +364,8 @@ static void connection_cb (mqtt_client_t * p_client, void * p_arg,
         /* Refused, timed out (keep-alive lost) or disconnected. lwIP has
          * already closed the client, so it can be connected again after
          * the back-off. */
+        /* Casts (UB *) of the format string: tm_printf() takes UB *;
+           (INT)status: an mqtt_connection_status_t value (0..257) fits. */
         tm_printf((UB *)"mqtt: connection status %d\n", (INT)status);
         mqtt_utk_app_disconnected();
         schedule_retry();
