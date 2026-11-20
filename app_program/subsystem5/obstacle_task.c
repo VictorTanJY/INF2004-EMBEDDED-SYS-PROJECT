@@ -90,6 +90,11 @@
 /* step-out: face edge seen at mm (0xFFFF none) << 16 | stepped out mm */
 #define OBST_LOG_OUT 60u
 
+/* raw servo-scan point (20 Nov): coarse << 18 | servo deg << 10 | range mm
+   (OBST_SCAN_PT_NONE = no echo or beyond 1022 mm) */
+#define OBST_LOG_SCAN_PT  85u
+#define OBST_SCAN_PT_NONE 1023u
+
 /* line scan phases */
 #define LS_PH_SWEEP 0u
 #define LS_PH_ALIGN 1u
@@ -243,11 +248,13 @@ static int32_t  motion_result(motion_types_odom_t const * p_odom);
 static void     store_pose(motion_types_odom_t const * p_odom);
 static void     start_scan(uint32_t now_ms);
 static void     publish_profile(void);
-static void     plan(uint32_t now_ms, motion_types_odom_t const * p_odom);
-static void     edge_finish(void);
-static void     probe_finish(uint32_t now_ms);
-static int32_t  probe_theta(motion_types_odom_t const * p_odom);
-static void     probe_slot(uint32_t now_ms, motion_types_odom_t const * p_odom);
+static void     log_scan(void);
+static void log_scan_point(obstacle_core_point_t const * p_pt, bool b_coarse);
+static void plan(uint32_t now_ms, motion_types_odom_t const * p_odom);
+static void edge_finish(void);
+static void probe_finish(uint32_t now_ms);
+static int32_t probe_theta(motion_types_odom_t const * p_odom);
+static void    probe_slot(uint32_t now_ms, motion_types_odom_t const * p_odom);
 static void probe_face_ping(uint16_t range, motion_types_odom_t const * p_odom);
 static void probe_side_ping(uint16_t range, int32_t lat, int32_t fwd,
                             int32_t theta);
@@ -684,6 +691,39 @@ static void publish_profile (void)
     subsystem5_put_obst_snap(&snap);
 }
 
+/** Every point of the servo scan that just finished, as LOG records (20 Nov:
+    the raw data behind the width estimate). */
+static void log_scan (void)
+{
+    uint8_t idx;
+
+    for (idx = 0u; idx < g_scan.n_coarse; idx++)
+    {
+        log_scan_point(&g_scan.coarse[idx], true);
+    }
+
+    for (idx = 0u; idx < g_scan.n_fine; idx++)
+    {
+        log_scan_point(&g_scan.fine[idx], false);
+    }
+}
+
+/** One scan point: servo angle (8 bits), range (10 bits), coarse flag. */
+static void log_scan_point (obstacle_core_point_t const * p_pt, bool b_coarse)
+{
+    uint32_t const range =
+        (p_pt->r_mm >= OBST_SCAN_PT_NONE) ? OBST_SCAN_PT_NONE : p_pt->r_mm;
+
+    /* Cast (uint32_t)app_types_clamp_i32(...): the value is 0..255. */
+    uint32_t const angle =
+        (uint32_t)app_types_clamp_i32(p_pt->angle_deg, 0, 255);
+
+    /* Cast (int32_t)(...): bit pattern of a packed LOG word (19 bits), not an
+       arithmetic value. */
+    log_ev(OBST_LOG_SCAN_PT,
+           (int32_t)(((b_coarse ? 1uL : 0uL) << 18) | (angle << 10) | range));
+}
+
 /** The scan finished: decide (PLAN). */
 static void plan (uint32_t now_ms, motion_types_odom_t const * p_odom)
 {
@@ -694,6 +734,7 @@ static void plan (uint32_t now_ms, motion_types_odom_t const * p_odom)
         &g_scan, g_o.det_mm,
         (uint16_t)app_types_clamp_i32(g_o.back_mm, 0, 1000), &g_prof);
     publish_profile();
+    log_scan();
 
     if (p_pr->b_valid)
     {

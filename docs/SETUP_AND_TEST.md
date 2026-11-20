@@ -531,6 +531,7 @@ Integration tests T1–T7 are run at this phase; log them in
 | 67 | S5 | run summary: highest hump peak, mm |
 | 68 | S5 | parameter set: id << 16 \| value |
 | 69 / 70 | S5 | mbf_mission / mbf_motion was full (decision may be lost) |
+| 85 | S5 | servo-scan point: coarse << 18 \| servo deg << 10 \| range mm (1023 none); every point of each sweep |
 
 ### Known limits and open points (say these in the report)
 
