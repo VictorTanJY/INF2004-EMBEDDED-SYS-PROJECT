@@ -70,8 +70,7 @@ def track_bypass(t, now):
         if ep is None or ep.get('done'):
             ep = DATA['bypass'] = {'start': now, 'start_tms': num(t.get('t_ms')), 'end': None, 'done': False,
                                    'end_state': None, 'd_cm': num(ob.get('d_cm')), 'w_mm': None, 'samples': [prev] if prev else []}
-        if num(ob.get('w_mm')) is not None:
-            ep['w_mm'] = ob['w_mm']
+        ep['w_mm'] = num(ob.get('w_mm'))  # None while the robot is still scanning
         if ep['d_cm'] is None and num(ob.get('d_cm')) is not None:
             ep['d_cm'] = ob['d_cm']
         if len(ep['samples']) < 1500:

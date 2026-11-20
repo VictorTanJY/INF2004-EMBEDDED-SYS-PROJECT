@@ -655,9 +655,12 @@ static void store_pose (motion_types_odom_t const * p_odom)
     g_o.b_have_pose = true;
 }
 
-/** Start a servo scan: coarse sweep first. */
+/** Start a servo scan: coarse sweep first.  20 Nov: the previous profile is
+    withdrawn first, so telemetry reports no width until this scan's. */
 static void start_scan (uint32_t now_ms)
 {
+    g_prof.b_valid = false;
+    publish_profile();
     g_o.sw_n = 0u;
     obstacle_core_scan_start(&g_scan);
     goto_state(OBST_ST_COARSE_SCAN);

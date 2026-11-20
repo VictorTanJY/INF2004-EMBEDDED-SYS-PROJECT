@@ -343,7 +343,7 @@ function render() {
     const err = Math.abs(ob.w_mm - tw) / tw * 100, b = band(err, [10, 20, 30]);
     $('widthGrade').className = 'grade ' + b;
     $('widthGrade').innerHTML = `<b>${fmt(err, 1)} % error</b>${bandText(b)} (${fmt(ob.w_mm)} vs ${fmt(tw)} mm)`;
-  } else { $('widthGrade').className = 'grade'; $('widthGrade').textContent = isNum(ob.w_mm) ? 'Enter the box width to see the error' : 'No width measured yet'; }
+  } else { $('widthGrade').className = 'grade'; $('widthGrade').textContent = isNum(ob.w_mm) ? 'Enter the box width to see the error' : BYPASS_STATES.includes(t.state) ? 'Measuring…' : 'No width measured yet'; }
   $('beamCal').textContent = tw > 0 ? beamCalText(tw) : '';
   const br = bypassResult();
   if (br && isNum(br.sec)) {
@@ -373,15 +373,20 @@ function renderPath() {
     el.innerHTML = '<text x="200" y="135" text-anchor="middle" font-size="12" fill="#9aa292">No bypass yet</text>';
     $('pathLabel').textContent = 'LAST BYPASS'; return;
   }
-  const pts = pathPoints(ep), d = isNum(ep.d_cm) ? ep.d_cm * 10 : 200, w = isNum(ep.w_mm) ? ep.w_mm : 150;
+  /* 20 Nov: no box until this obstacle's width has arrived (150 only sizes the view) */
+  const hasW = isNum(ep.w_mm), pts = pathPoints(ep), d = isNum(ep.d_cm) ? ep.d_cm * 10 : 200, w = hasW ? ep.w_mm : 150;
   const xs = pts.map(p => p[0]).concat([0, d + w]), ys = pts.map(p => p[1]).concat([-w / 2 - 60, w / 2 + 60]);
   const minX = Math.min(...xs) - 40, maxX = Math.max(...xs) + 40, minY = Math.min(...ys) - 30, maxY = Math.max(...ys) + 30;
   const sc = Math.min(380 / (maxX - minX), 240 / (maxY - minY));
   /* forward = right on screen, left of the robot = up */
   const X = x => 10 + (x - minX) * sc, Y = y => 250 - (y - minY) * sc;
   let svg = `<line x1="0" x2="400" y1="${Y(0)}" y2="${Y(0)}" stroke="#2a3a33" stroke-width="${Math.max(2, 18 * sc)}" opacity=".85"/>`;
-  svg += `<rect x="${X(d)}" y="${Y(w / 2)}" width="${Math.max(4, w * sc)}" height="${w * sc}" fill="#e7c7a3" stroke="#a8662d" rx="3"/>`;
-  svg += `<text x="${X(d) + w * sc / 2}" y="${Y(w / 2) - 6}" text-anchor="middle" font-size="10" fill="#8a5a2a">${esc(fmt(w))} mm</text>`;
+  if (hasW) {
+    svg += `<rect x="${X(d)}" y="${Y(w / 2)}" width="${Math.max(4, w * sc)}" height="${w * sc}" fill="#e7c7a3" stroke="#a8662d" rx="3"/>`;
+    svg += `<text x="${X(d) + w * sc / 2}" y="${Y(w / 2) - 6}" text-anchor="middle" font-size="10" fill="#8a5a2a">${esc(fmt(w))} mm</text>`;
+  } else {
+    svg += `<text x="${X(d)}" y="${Y(0) - 12}" text-anchor="middle" font-size="10" fill="#8a5a2a">${ep.done ? 'width not measured' : 'measuring…'}</text>`;
+  }
   svg += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('')}" fill="none" stroke="#3f8a5e" stroke-width="2.5" stroke-linejoin="round"/>`;
   svg += `<circle cx="${X(0)}" cy="${Y(0)}" r="4" fill="#3f8a5e"/>`;
   const last = pts[pts.length - 1];
