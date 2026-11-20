@@ -112,7 +112,7 @@ uint16_t line_track_slip_gain(line_track_slip_t const * p_s,
                               uint32_t *                p_diag);
 
 /* Change Requirement 1: the line snapshot (IF-04) as stored between tasks. */
-#define LINE_SNAP_BITS  208u /* sum of the layout widths      */
+#define LINE_SNAP_BITS  209u /* sum of the layout widths      */
 #define LINE_SNAP_WORDS 7u   /* 28 B instead of 36 B          */
 /** Pack the line snapshot into LINE_SNAP_WORDS words. */
 void line_track_snap_pack(line_types_snap_t const * p_snap, uint32_t * p_words);

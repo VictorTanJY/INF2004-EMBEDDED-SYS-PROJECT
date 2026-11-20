@@ -2059,7 +2059,8 @@ static void test_pack_s3 (void)
     snap.last_barcode  = 'Z';
     snap.last_reject   = 8u;
     snap.turn_gain_pm  = 1180u;
-    snap.sens          = 7u;
+    snap.sens          = LINE_SENS_L | LINE_SENS_R | LINE_SENS_ALL_BLACK
+                         | LINE_SENS_NO_FLOOR; /* every LINE_SENS_* bit */
     line_track_snap_pack(&snap, widths);
     memset(&ret, 0x5A, sizeof(ret)); /* every field must be written */
     line_track_snap_unpack(widths, &ret);

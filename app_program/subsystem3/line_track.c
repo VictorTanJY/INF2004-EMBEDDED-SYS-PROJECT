@@ -57,7 +57,7 @@ static app_pack_field_t const g_line_layout[] = {
      sizeof(((line_types_snap_t){0}).turn_gain_pm), 11u,
      PK_U}, /* 0..2047 permille */
     {offsetof(line_types_snap_t, sens), sizeof(((line_types_snap_t){0}).sens),
-     3u, PK_U} /* LINE_SENS_* (3 bits) */
+     4u, PK_U} /* LINE_SENS_* (4 bits) */
 };
 
 static int32_t steer_toward(int32_t now, int32_t target);

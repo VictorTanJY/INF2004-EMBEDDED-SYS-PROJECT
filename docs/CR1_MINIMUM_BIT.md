@@ -12,7 +12,7 @@ Raw measurements: `testing/system/logs/2026-11-15_cr1_before_after.txt`.
 | # | Area | What is stored in minimum bits | Where |
 |---|---|---|---|
 | 1 | Motion control and encoder data | `mbf_motion` command: one 32-bit word. Odometry snapshot: 329 bits (11 words) | `motion_core.c` (`motion_core_cmd_pack`, `g_odom_layout`) |
-| 2 | Line and barcode sensing | Line snapshot: 208 bits (7 words); barcode character as a 6-bit Code 39 symbol | `line_track.c` (`g_line_layout`) |
+| 2 | Line and barcode sensing | Line snapshot: 209 bits (7 words); barcode character as a 6-bit Code 39 symbol | `line_track.c` (`g_line_layout`) |
 | 3 | Obstacle detection | Obstacle snapshot: 166 bits (6 words); `mbf_scan` request: 16 bits | `obstacle_core.c`, `mission_core.c` |
 | 4 | Hump estimation | IMU snapshot (pitch, humps, motion class): 164 bits (6 words) | `imu_core.c` (`g_imu_layout`) |
 | 5 | Vehicle and controller states | Every state stored outside its task in 2-4 bits (mission 4, obstacle 4, motion 3, phase 3, barcode 2, hump 2, motion class 3) | the layout tables above |
@@ -74,7 +74,7 @@ Field order and none codes: `app_program/subsystem1/comms_proto.h`.
 | Snapshot | Bits | Before -> after | Notable widths |
 |---|---|---|---|
 | odometry (IF-02) | 329 | 52 -> 44 B | wheel speeds 10, duty 11, state 3, phase 3, authority 2, seq 5; encoder counts, distance and heading stay 32 (running totals that readers difference) |
-| line (IF-04) | 208 | 36 -> 28 B | IR readings 10, line error 11, omega 12, flags 7, barcode state 2, last barcode 6 |
+| line (IF-04) | 209 | 36 -> 28 B | IR readings 10, line error 11, omega 12, flags 7, barcode state 2, last barcode 6 |
 | IMU (IF-08) | 164 | 32 -> 24 B | pitch 15, roll 16, hump peaks 10, hump count 8, hump state 2, motion class 3 |
 | mission (IF-10) | 165 | 36 -> 24 B | state 4, cruise 9, ranges 6-10, map 4 x 6, pending command 3, cause 3 |
 | obstacle (IF-10) | 166 | 28 -> 24 B | range 12 (with "none"), width 11, lateral edges 12, state 4, plan 3 |
