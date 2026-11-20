@@ -20,7 +20,7 @@
 #define MOTION_WHEEL_CIRC_UM 213628 /* measured 2026-11-01 */
 /* Effective track width (wheel contact centre to centre).  MEASURE (A5):
    10 x 360 deg turns, scale by commanded / actual angle.                */
-#define MOTION_TRACK_MM 110
+#define MOTION_TRACK_MM 117
 /* Encoder direction: +1 if the count rises when the wheel drives the robot
    forward, otherwise -1.  MEASURE (A4).                                 */
 #define MOTION_ENC_SIGN_L (-1)
