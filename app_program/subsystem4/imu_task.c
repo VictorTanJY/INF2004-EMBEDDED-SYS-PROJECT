@@ -43,6 +43,9 @@
 /* largest up-axis rise while driving this run, mg */
 #define IMU_LOG_RISE_MAX 78u
 
+/* hump events held while all three IR sensors are black (20 Nov) */
+#define IMU_HELD_MAX 4u
+
 /* level calibration: up-axis mean, mg (>= 500) */
 #define IMU_LOG_LVL_UP 59u
 
@@ -61,6 +64,10 @@ typedef struct
     bool     b_was_black; /**< line snapshot: all IR black last cycle     */
     bool     b_was_air;   /**< line snapshot: no floor last cycle         */
     bool     b_air_start; /**< the IR sensors just found no floor         */
+    bool     b_release;   /**< the floor is back: post the held events    */
+    uint8_t  held_n;      /**< hump events held while all IR black        */
+    uint8_t  held_type[IMU_HELD_MAX]; /**< MISSION_EV_HUMP_START or _END  */
+    uint16_t held_mm[IMU_HELD_MAX];   /**< peak of a held HUMP_END, mm    */
     UINT     safety_bits; /**< flg_safety bits to set after the snapshot  */
     uint32_t still_ms;    /**< start of the stand-still phase             */
     uint16_t prev_runs;
@@ -83,6 +90,9 @@ static void imu_cal_sample(imu_task_state_t const * p_st, uint8_t phase,
 static bool imu_floor_check(imu_task_state_t * p_st);
 static void imu_report(imu_task_state_t * p_st, uint8_t events,
                        mission_types_snap_t const * p_mission);
+static void imu_hump_event(imu_task_state_t * p_st, uint8_t type,
+                           uint16_t peak_mm);
+static void imu_hump_release(imu_task_state_t * p_st);
 static void imu_safety_bits(imu_task_state_t * p_st, uint8_t events,
                             mission_types_snap_t const * p_mission);
 static void imu_log_events(uint8_t events);
@@ -252,6 +262,7 @@ static void imu_read_ok (imu_task_state_t * p_st, int32_t const acc[IMU_AXES],
 
     /* ---- 14 Nov: humps while the floor may have gone ---- */
     p_st->b_air_start = false;
+    p_st->b_release   = false;
     p_st->safety_bits = 0u;
 
     if (imu_floor_check(p_st))
@@ -386,11 +397,21 @@ static bool imu_floor_check (imu_task_state_t * p_st)
     {
         imu_core_hump_restore(&g_ic);
         p_st->b_air_start = true;
+        p_st->held_n      = 0u; /* humps measured in the air: dropped */
     }
 
     if (!b_black && p_st->b_was_black && !p_st->b_was_air)
     {
         imu_core_hump_drop(&g_ic);
+        p_st->b_release = true; /* it was the track, not a lift */
+    }
+    else if (!b_black && p_st->b_was_black)
+    {
+        p_st->held_n = 0u; /* back on the floor after a lift */
+    }
+    else
+    {
+        /* still black, or still not */
     }
 
     p_st->b_was_black = b_black;
@@ -402,20 +423,61 @@ static bool imu_floor_check (imu_task_state_t * p_st)
 static void imu_report (imu_task_state_t * p_st, uint8_t events,
                         mission_types_snap_t const * p_mission)
 {
+    if (p_st->b_release)
+    {
+        imu_hump_release(p_st);
+    }
+
     if ((events & IMU_EV_HUMP_START) != 0u)
     {
-        (void)subsystem5_mission_post(MISSION_EV_HUMP_START, APP_SRC_SAFETY_IMU,
-                                      0u, 0);
+        imu_hump_event(p_st, MISSION_EV_HUMP_START, 0u);
     }
 
     if ((events & IMU_EV_HUMP_END) != 0u)
     {
-        (void)subsystem5_mission_post(MISSION_EV_HUMP_END, APP_SRC_SAFETY_IMU,
-                                      0u, g_ic.last_hump_mm);
+        imu_hump_event(p_st, MISSION_EV_HUMP_END, g_ic.last_hump_mm);
     }
 
     imu_safety_bits(p_st, events, p_mission);
     imu_log_events(events);
+}
+
+/** A hump event for MissionTask (and the dashboard).  While all three IR
+    sensors are black the robot may have been lifted, so the event is held:
+    it is posted when the floor comes back, and dropped if the sensors find
+    no floor (humps are only recorded on the ground, 20 Nov). */
+static void imu_hump_event (imu_task_state_t * p_st, uint8_t type,
+                            uint16_t peak_mm)
+{
+    if (!p_st->b_was_black)
+    {
+        (void)subsystem5_mission_post(type, APP_SRC_SAFETY_IMU, 0u, peak_mm);
+    }
+    else if (p_st->held_n < IMU_HELD_MAX)
+    {
+        p_st->held_type[p_st->held_n] = type;
+        p_st->held_mm[p_st->held_n]   = peak_mm;
+        p_st->held_n++;
+    }
+    else
+    {
+        /* more than IMU_HELD_MAX in one black stretch: not a real hump */
+    }
+}
+
+/** The floor came back without a lift: post the held hump events in order.
+ */
+static void imu_hump_release (imu_task_state_t * p_st)
+{
+    uint8_t idx;
+
+    for (idx = 0u; idx < p_st->held_n; idx++)
+    {
+        (void)subsystem5_mission_post(p_st->held_type[idx], APP_SRC_SAFETY_IMU,
+                                      0u, p_st->held_mm[idx]);
+    }
+
+    p_st->held_n = 0u;
 }
 
 /** 14 Nov: tilt (overturned) and lift brake the motors while a run is
