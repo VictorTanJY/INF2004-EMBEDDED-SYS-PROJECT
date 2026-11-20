@@ -103,6 +103,14 @@ static int32_t  width_lat(int32_t phi_cdeg, uint16_t r_mm, int32_t side);
 static void     profile_clear(obstacle_core_profile_t * p_out);
 static uint16_t nearest_echo(obstacle_core_point_t const * p_fine,
                              uint8_t n_fine, uint8_t * p_nearest);
+static void face_width(obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                       uint8_t nearest, uint16_t r_min,
+                       obstacle_core_profile_t * p_out);
+static uint8_t face_seed(obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                         uint8_t nearest, uint16_t r_min);
+static uint8_t face_end(obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                        uint8_t seed, bool b_left);
+static int32_t forward_mm(int32_t angle_cdeg, uint16_t r_mm);
 static void profile_measure(obstacle_core_point_t const * p_fine,
                             uint8_t                       n_fine,
                             obstacle_core_point_t const * p_coarse,
@@ -761,6 +769,125 @@ static int32_t lateral_mm (int32_t angle_cdeg, uint16_t r_mm)
     return lateral2_mm(angle_cdeg, angle_cdeg, r_mm);
 }
 
+/** Forward distance of a servo-scan echo from the servo shaft (21 Nov), the
+    companion of lateral_mm(). */
+static int32_t forward_mm (int32_t angle_cdeg, uint16_t r_mm)
+{
+    /* Casts (int64_t)r_mm: every uint16_t value fits;
+       (int64_t)OBST_SERVO_ARM_MM: a constant that fits. */
+    int64_t const proj =
+        ((int64_t)r_mm + (int64_t)OBST_SERVO_ARM_MM)
+        * app_math_sin_q15(angle_cdeg);
+
+    /* Cast (int32_t)(proj / 32768): a projection of a distance in mm with a Q15
+       factor (<= 1.0). */
+    return (int32_t)(proj / 32768);
+}
+
+/** Reported edges and width (21 Nov, mission_cfg.h OBST_WIDTH_BAND_MM): the
+    face around face_seed(), its outermost echoes as the edges, the straight
+    line between them as the width.  The plan edges are not changed. */
+static void face_width (obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                        uint8_t nearest, uint16_t r_min,
+                        obstacle_core_profile_t * p_out)
+{
+    uint8_t const seed = face_seed(p_fine, n_fine, nearest, r_min);
+    uint8_t const low  = face_end(p_fine, n_fine, seed, false);
+    uint8_t const high = face_end(p_fine, n_fine, seed, true);
+
+    /* Casts (int32_t)p_fine[high].angle_deg, (int32_t)p_fine[low].angle_deg:
+       every int16_t value fits. */
+    int32_t const a_l = (int32_t)p_fine[high].angle_deg * 100;
+    int32_t const a_r = (int32_t)p_fine[low].angle_deg * 100;
+    int32_t const x_l = lateral_mm(a_l, p_fine[high].r_mm);
+    int32_t const x_r = lateral_mm(a_r, p_fine[low].r_mm);
+    int32_t const d_x = x_l - x_r;
+    int32_t const d_y =
+        forward_mm(a_l, p_fine[high].r_mm) - forward_mm(a_r, p_fine[low].r_mm);
+
+    /* Casts (int16_t)x_l, (int16_t)x_r: echoes within OBST_MAX_RANGE_MM (800)
+       are within +-830 mm of the shaft; (uint32_t)((d_x * d_x) + ...): both
+       differences are within +-1660 mm, so the sum is 0..5.6e6;
+       (uint16_t)app_math_isqrt32(...): the root is 0..2348. */
+    p_out->left_lat_mm  = (int16_t)x_l;
+    p_out->right_lat_mm = (int16_t)x_r;
+    p_out->w_mm =
+        (uint16_t)app_math_isqrt32((uint32_t)((d_x * d_x) + (d_y * d_y)));
+}
+
+/** Where the face search starts: the nearest echo within 5 deg of straight
+    ahead when it is part of the obstacle (the obstacle is on the line),
+    else the nearest echo of the scan. */
+static uint8_t face_seed (obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                          uint8_t nearest, uint16_t r_min)
+{
+    uint8_t  idx;
+    uint8_t  seed  = nearest;
+    uint16_t ahead = OBST_RANGE_NONE;
+
+    for (idx = 0u; idx < n_fine; idx++)
+    {
+        int32_t const off =
+            app_types_abs_i32(p_fine[idx].angle_deg - OBST_SERVO_CENTRE_DEG);
+
+        if (usable(&p_fine[idx]) && (off <= 5) && (p_fine[idx].r_mm < ahead))
+        {
+            ahead = p_fine[idx].r_mm;
+            seed  = idx;
+        }
+    }
+
+    /* Cast (uint32_t)r_min: every uint16_t value fits. */
+    if ((OBST_RANGE_NONE == ahead)
+        || (ahead > ((uint32_t)r_min + DEPTH_TOL_MM)))
+    {
+        seed = nearest; /* nothing on the line ahead: start at the nearest */
+    }
+
+    return seed;
+}
+
+/** The outermost face echo from seed towards the left (b_left) or the right:
+    within OBST_WIDTH_BAND_MM of the seed's range, skipping up to
+    OBST_WIDTH_GAP_PTS other readings in a row. */
+static uint8_t face_end (obstacle_core_point_t const * p_fine, uint8_t n_fine,
+                         uint8_t seed, bool b_left)
+{
+    /* Cast (uint32_t)p_fine[seed].r_mm: every uint16_t value fits. */
+    uint32_t const limit = (uint32_t)p_fine[seed].r_mm + OBST_WIDTH_BAND_MM;
+    uint8_t        last  = seed;
+    uint8_t        gap   = 0u;
+    uint8_t        idx   = seed;
+    bool           b_run = true;
+
+    while (b_run)
+    {
+        if (b_left ? ((idx + 1u) >= n_fine) : (0u == idx))
+        {
+            b_run = false;
+        }
+        else
+        {
+            /* Casts (uint8_t)(idx + 1u), (uint8_t)(idx - 1u): idx stays within
+               0..n_fine - 1 (checked above). */
+            idx = b_left ? (uint8_t)(idx + 1u) : (uint8_t)(idx - 1u);
+
+            if (usable(&p_fine[idx]) && (p_fine[idx].r_mm <= limit))
+            {
+                last = idx;
+                gap  = 0u;
+            }
+            else
+            {
+                gap++;
+                b_run = (gap <= OBST_WIDTH_GAP_PTS);
+            }
+        }
+    }
+
+    return last;
+}
+
 /** An echo that can be part of an obstacle: in range. */
 static bool usable (obstacle_core_point_t const * p_point)
 {
@@ -1009,6 +1136,7 @@ static void profile_measure (obstacle_core_point_t const * p_fine,
     p_out->left_lat_mm   = (int16_t)lat_l;
     p_out->right_lat_mm  = (int16_t)lat_r;
     p_out->w_mm          = (uint16_t)app_types_max_i32(lat_l - lat_r, 0);
+    face_width(p_fine, n_fine, nearest, r_min, p_out); /* 21 Nov: reported */
     decide(p_fine, n_fine, p_coarse, n_coarse, low, high, r_min, pl_l, pl_r,
            p_out);
 }
@@ -1165,6 +1293,12 @@ static void coarse_done (obstacle_core_scan_t * p_s)
         /* Casts (int16_t)app_types_max_i32(centre ...): the value
            is 20..32727; (int16_t)app_types_min_i32(centre ...): the
            value is -32728..160. */
+        /* 21 Nov: centred midway between the nearest echo and straight
+           ahead, so a box on the line is covered on both sides even when
+           its nearest echo is off to one side */
+        /* Cast (int16_t)((centre + ...) / 2): the mean of two servo angles
+           within 0..180 deg. */
+        centre       = (int16_t)((centre + OBST_SERVO_CENTRE_DEG) / 2);
         p_s->phase   = OBST_SCAN_FINE;
         p_s->angle   = (int16_t)app_types_max_i32(centre - OBST_FINE_HALF_DEG,
                                                   OBST_SCAN_MIN_DEG);

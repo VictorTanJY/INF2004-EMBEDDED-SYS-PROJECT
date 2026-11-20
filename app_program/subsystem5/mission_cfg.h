@@ -67,6 +67,16 @@
    < 30 mm. MEASURE with angled boxes (A11) */
 #define OBST_DEPTH_TOL_MM   60
 #define OBST_HALF_BEAM_CDEG 750 /* servo scan: HC-SR04 ~15 deg beam */
+/* Reported width (21 Nov).  The face is every fine-scan echo within
+   OBST_WIDTH_BAND_MM of the face range, starting straight ahead (or at the
+   nearest echo when nothing is straight ahead); up to OBST_WIDTH_GAP_PTS
+   bad readings in a row inside the face are skipped (a 185 mm face also
+   returned single 265-305 mm echoes); no beam correction.  The width is the
+   straight line between the outermost face echoes.  Four runs on a 150 mm
+   box (21 Nov 00:41-00:45, the raw scan points): 112-149 mm with these
+   values, against 47-117 mm before.  MEASURE: 10, 15 and 20 cm boxes. */
+#define OBST_WIDTH_BAND_MM 25
+#define OBST_WIDTH_GAP_PTS 2u
 /* Step-out leg (7 Nov): how far a box keeps echoing past its corner
    depends on the box (9.5 cm black box: 33-36 deg off the beam; blue box
    left side: ~20), so no beam angle is assumed.  The edge scan gives a
