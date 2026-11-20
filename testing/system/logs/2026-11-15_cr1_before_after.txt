@@ -1,0 +1,78 @@
+CR1 baseline (before), commit e22e527, measured 2026-11-15
+
+== MQTT payloads (JSON), host build of app_program/subsystem1/comms_proto.c
+telemetry typical       297 B  {"seq":1234,"t_ms":123456,"state":"LINE_FOLLOW","v_mm_s":[182,176],"enc":[12345,12210],"dist_mm":1024,"line":{"err":-125,"lost":false,"bc":87},"barcode":"A","pitch_deg":3.1,"roll_deg":-0.5,"hump_max_mm":21,"obstacle":{"d_cm":null,"w_cm":null,"w_mm":null,"clr_l_cm":null,"clr_r_cm":null},"nav":"A"}
+telemetry worst case    340 B
+event BARCODE            60 B  {"seq":57,"t_ms":123456,"type":"BARCODE","data":"F","src":3}
+event LOG (32-bit data)  72 B  {"seq":58,"t_ms":123456,"type":"LOG","data":305419896,"code":81,"src":2}
+status with map         110 B  {"online":true,"uptime_s":3600,"rssi":-61,"drops":0,"map":{"left":"A","right":"F","straight":"Z","uturn":"W"}}
+ack ok                   27 B  {"id":1763150000,"ok":true}
+ack rejected             41 B  {"id":1763150000,"ok":false,"err":"busy"}
+command (dashboard)      31 B  {"id":1763150000,"cmd":"start"}
+command (dashboard)      63 B  {"id":1763150001,"cmd":"set","param":"bench_move","value":1000}
+command (dashboard)      79 B  {"id":1763150002,"cmd":"map","left":"A","right":"F","straight":"Z","uturn":"W"}
+
+== Shared structures, arm-none-eabi-gcc -mcpu=cortex-m0plus (symbol sizes)
+scan_req_t           4 B
+mission_evt_t        8 B
+motion_cmd_t         8 B
+comms_rec_t          12 B
+obst_snap_t          28 B
+imu_snap_t           32 B
+line_snap_t          36 B
+mission_snap_t       36 B
+motion_odom_t        52 B
+
+== Message buffers (bufsz = depth x (4 B header + message))
+mbf_motion   8 x (4 + 8)  =   96 B
+mbf_mission 16 x (4 + 8)  =  192 B
+mbf_scan     4 x (4 + 4)  =   32 B
+mbf_telem   1024 B fixed  (64 records of 4 + 12 B)
+total                       1344 B
+
+== Release image (make NET=lwip MQTT=1), arm-none-eabi-size
+text 389290  data 100  bss 101800
+
+
+CR1 after, working tree on top of 619b823 (committed with this log), measured 2026-11-15, same method
+
+== MQTT payloads (binary frames), host build of comms_proto.c + app_pack.c (frame in hex)
+telemetry typical         27 B  21d2393000632bac3930b22f00048373c5b27c70ff2afeffffff03
+telemetry worst case      27 B  21ff999999e5830f0100010001001880feb2f0011ffe21a3eff703
+event BARCODE              8 B  22393930000c9111
+event LOG (32-bit data)   11 B  223a3930002b3a9e158d04
+status with map            9 B  23100e7a0017880c01
+status without map         6 B  23100e7a0000
+ack ok                     3 B  246101
+ack rejected               3 B  24610d
+command start / set / map   3 B
+                           5 B
+                           6 B
+
+== Shared structures as stored / sent, arm-none-eabi-gcc -mcpu=cortex-m0plus (symbol sizes)
+mbf_scan_word        2 B
+mbf_mission_word     4 B
+mbf_motion_word      4 B
+comms_rec_t          8 B
+imu_packed           24 B
+mission_packed       24 B
+obst_packed          24 B
+line_packed          28 B
+odom_packed          44 B
+
+== Message buffers (bufsz = depth x (4 B header + message rounded to 4))
+mbf_motion   8 x (4 + 4)  =   64 B
+mbf_mission 16 x (4 + 4)  =  128 B
+mbf_scan     4 x (4 + 4)  =   32 B
+mbf_telem   64 x (4 + 8)  =  768 B
+total                        992 B
+
+== Release image (make NET=lwip MQTT=1), arm-none-eabi-size
+ 384798	    100	 101252	 486150	  76b06	mtk3pico_smp1_usb_cdc_wifi_lwip_mqtt.elf
+
+== Static objects, arm-none-eabi-nm -S (before at e22e527 -> after)
+g_tx 384 -> 32, g_ring 260 -> 148, g_dedup 132 -> 100, g_odom 52 -> 44, g_line_snap 36 -> 28,
+g_imu_snap 32 -> 24, g_mission_snap 36 -> 24, g_obst_snap 28 -> 24, g_hb 20 -> 5  (total 980 -> 429 B)
+
+== MotionTask run time per cycle, emulator self-test S2-U07 (same SMP=0 image type)
+before (843f105): max 331 us; after: max 363 us; period 9 928..10 010 us

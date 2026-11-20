@@ -1,0 +1,5 @@
+info: telemetry frame = 27 B (+22 B topic); the JSON it replaces was 297 B typical, 340 B worst case
+host tests: 193 passed, 0 failed
+info: telemetry frame = 27 B (+22 B topic); the JSON it replaces was 297 B typical, 340 B worst case
+host tests: 193 passed, 0 failed
+host tests: 16 passed, 0 failed

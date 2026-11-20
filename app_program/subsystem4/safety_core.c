@@ -1,0 +1,66 @@
+/** @file safety_core.c
+ *
+ *  @brief Subsystem 4 -- heartbeat supervision (pure).  See safety_core.h.
+ */
+
+#include "safety_core.h"
+
+static uint32_t const g_timeout_ms[SAFETY_HB_COUNT] = {50u, 50u, 300u, 300u,
+                                                       100u};
+
+uint32_t safety_core_hb_timeout_ms (imu_types_safety_hb_t task)
+{
+    /* Cast (uint32_t)task: every imu_types_safety_hb_t value fits. */
+    return ((uint32_t)task < SAFETY_HB_COUNT) ? g_timeout_ms[task] : 0u;
+}
+
+void safety_core_hb_start (safety_core_hb_state_t * p_st,
+                           uint32_t const           counts[SAFETY_HB_COUNT],
+                           uint32_t                 now_ms)
+{
+    uint8_t kdx;
+
+    for (kdx = 0u; kdx < SAFETY_HB_COUNT; kdx++)
+    {
+        p_st->last_count[kdx]   = counts[kdx];
+        p_st->last_seen_ms[kdx] = now_ms;
+    }
+
+    p_st->b_started = true;
+}
+
+uint32_t safety_core_hb_check (safety_core_hb_state_t * p_st,
+                               uint32_t const           counts[SAFETY_HB_COUNT],
+                               uint32_t                 now_ms)
+{
+    uint32_t missed = 0u;
+    uint8_t  kdx;
+
+    if (!p_st->b_started)
+    {
+        safety_core_hb_start(p_st, counts, now_ms);
+    }
+    else
+    {
+        for (kdx = 0u; kdx < SAFETY_HB_COUNT; kdx++)
+        {
+            if (counts[kdx] != p_st->last_count[kdx])
+            {
+                p_st->last_count[kdx]   = counts[kdx];
+                p_st->last_seen_ms[kdx] = now_ms;
+            }
+            else if ((now_ms - p_st->last_seen_ms[kdx]) > g_timeout_ms[kdx])
+            {
+                missed |= (1uL << kdx);
+            }
+            else
+            {
+                /* within its timeout */
+            }
+        }
+    }
+
+    return missed;
+}
+
+/*** end of file ***/

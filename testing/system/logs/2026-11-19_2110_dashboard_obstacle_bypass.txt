@@ -1,0 +1,581 @@
+↗
+State → IDLE
+Standing by
+09:10:24 PM
+·
+IMU start result
+0x00004900
+09:10:24 PM
+·
+IMU configuration
+Value 0
+09:10:24 PM
+·
+IMU identity value
+Value 73
+09:10:24 PM
+·
+IMU identity read
+Value 0
+09:10:24 PM
+·
+IMU bus start
+Value 0
+09:10:24 PM
+·
+Motion class
+cruising
+09:10:18 PM
+·
+Motion class
+turning
+09:10:18 PM
+·
+Motion class
+cruising
+09:10:18 PM
+·
+Motion class
+turning
+09:10:18 PM
+·
+Motion class
+cruising
+09:10:18 PM
+·
+Motion class
+turning
+09:10:17 PM
+↗
+Slowing for an obstacle
+-0.1 cm
+09:10:17 PM
+·
+Motion class
+cruising
+09:10:17 PM
+·
+Motion class
+turning
+09:10:17 PM
+·
+Motion class
+cruising
+09:10:17 PM
+·
+Motion class
+accelerating
+09:10:16 PM
+·
+Motion class
+cruising
+09:10:16 PM
+·
+Motion class
+turning
+09:10:16 PM
+·
+Motion class
+cruising
+09:10:16 PM
+·
+Motion class
+turning
+09:10:15 PM
+↗
+Slowing for an obstacle
+37.7 cm
+09:10:15 PM
+·
+Motion class
+cruising
+09:10:15 PM
+↗
+State → LINE_FOLLOW
+Following the line
+09:10:15 PM
+↗
+Back on the line
+09:10:15 PM
+·
+Motion class
+stationary
+09:10:15 PM
+↗
+State → LINE_RECOVERY
+Finding the line again
+09:10:15 PM
+↗
+Bypass manoeuvre done
+09:10:15 PM
+·
+Bypass: turned onto the line
+only one sensor crossed it (bend?): turned to it, 88° from where the scan began; line following takes over
+09:10:15 PM
+↗
+Move done
+09:10:15 PM
+·
+Motion class
+cruising
+09:10:15 PM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 51.0+, bar 10.6
+09:10:15 PM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 19.4, gap 51.0+, bar 10.8
+09:10:15 PM
+·
+Barcode widths (mm)
+swing #7-9: bar 10.4
+09:10:15 PM
+·
+Barcode widths (mm)
+swing #4-6: gap 51.0+, bar 10.6, gap 51.0+
+09:10:15 PM
+·
+Barcode widths (mm)
+swing #1-3: bar 51.0+, gap 50.6, bar 19.2
+09:10:15 PM
+·
+Barcode: elements found by each reading
+swing 7, low threshold 5, adaptive 20% 5, adaptive 10% 5 (a letter has 29; 0 = not tried)
+09:10:15 PM
+·
+Barcode sensor levels
+white 173 / 1000, white noise 55, darkest 1000 (a bar must rise 250 above white; noise 55 leaves 195 margin)
+09:10:15 PM
+·
+Barcode rejected: bar widths
+narrowest 10.3 mm, widest 79.5 mm
+09:10:15 PM
+·
+Barcode rejected: what the sensor saw
+7 elements (a letter has 29), 420 mm long, darkest 1000 / 1000
+09:10:15 PM
+·
+Barcode rejected
+too long
+09:10:15 PM
+·
+Barcode decode time (µs, line task limit 50 000)
+Value 7
+09:10:15 PM
+·
+Motion class
+turning
+09:10:15 PM
+·
+Motion class
+stationary
+09:10:15 PM
+↗
+Move done
+09:10:15 PM
+·
+Motion class
+cruising
+09:10:13 PM
+·
+Motion class
+turning
+09:10:10 PM
+↗
+Move done
+09:10:10 PM
+·
+Motion class
+cruising
+09:10:10 PM
+↗
+Line found
+09:10:10 PM
+·
+Motion class
+turning
+09:10:08 PM
+·
+Motion class
+cruising
+09:10:08 PM
+↗
+Move done
+09:10:08 PM
+·
+Motion class
+decelerating
+09:10:08 PM
+↗
+Line lost
+09:10:08 PM
+·
+Motion class
+cruising
+09:10:05 PM
+·
+Motion class
+decelerating
+09:10:05 PM
+·
+Bypass: back on the line
+line touched after 17.9 cm
+09:10:05 PM
+↗
+Line found
+09:10:05 PM
+·
+Motion class
+cruising
+09:10:00 PM
+·
+Motion class
+stationary
+09:10:00 PM
+↗
+Move done
+09:10:00 PM
+·
+Motion class
+cruising
+09:10:00 PM
+·
+Motion class
+turning
+09:09:59 PM
+·
+Motion class
+decelerating
+09:09:59 PM
+·
+Bypass pass leg
+drove 44.4 cm, side ping did not see the obstacle
+09:09:59 PM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 25.0, gap 41.0, bar 51.0+
+09:09:57 PM
+·
+Barcode widths (mm)
+swing #1-3: bar 25.4, gap 41.2, bar 51.0+
+09:09:57 PM
+·
+Barcode: elements found by each reading
+swing 3, low threshold 3, adaptive 20% 3, adaptive 10% 3 (a letter has 29; 0 = not tried)
+09:09:57 PM
+·
+Barcode sensor levels
+white 42 / 1000, white noise 42, darkest 1000 (a bar must rise 250 above white; noise 42 leaves 208 margin)
+09:09:57 PM
+·
+Barcode rejected: bar widths
+narrowest 25.3 mm, widest 239.4 mm
+09:09:57 PM
+·
+Barcode rejected: what the sensor saw
+3 elements (a letter has 29), 420 mm long, darkest 1000 / 1000
+09:09:57 PM
+·
+Barcode rejected
+too long
+09:09:57 PM
+·
+Barcode decode time (µs, line task limit 50 000)
+Value 8
+09:09:57 PM
+↗
+Line lost
+09:09:50 PM
+·
+Motion class
+cruising
+09:09:48 PM
+·
+Motion class
+stationary
+09:09:48 PM
+↗
+Move done
+09:09:48 PM
+·
+Motion class
+cruising
+09:09:48 PM
+·
+Motion class
+turning
+09:09:47 PM
+·
+Motion class
+decelerating
+09:09:47 PM
+·
+Bypass step-out (measured)
+stepped out 19.3 cm; face last seen with the sensor 6.2 cm out
+09:09:47 PM
+↗
+Line found
+09:09:46 PM
+↗
+Line lost
+09:09:42 PM
+·
+Motion class
+cruising
+09:09:40 PM
+·
+Motion class
+accelerating
+09:09:40 PM
+↗
+Move done
+09:09:40 PM
+·
+Motion class
+cruising
+09:09:40 PM
+·
+Motion class
+turning
+09:09:39 PM
+·
+Motion class
+cruising
+09:09:39 PM
+↗
+Move done
+09:09:39 PM
+·
+Motion class
+decelerating
+09:09:39 PM
+·
+Motion class
+cruising
+09:09:36 PM
+·
+Bypass plan
+left, 11.1 cm to the side, pass at least 52.4 cm
+09:09:36 PM
+↗
+State → AVOIDING
+Driving around the obstacle
+09:09:36 PM
+↗
+Obstacle profiled
+width 123 mm
+09:09:36 PM
+·
+Obstacle position (servo scan)
+left edge 4.5 cm right of the line, right edge 16.8 cm right
+09:09:36 PM
+·
+Motion class
+stationary
+09:09:31 PM
+·
+Motion class
+decelerating
+09:09:31 PM
+↗
+State → OBSTACLE_HANDLING
+Scanning an obstacle
+09:09:31 PM
+↗
+Obstacle ahead
+19.8 cm
+09:09:31 PM
+·
+Motion class
+accelerating
+09:09:31 PM
+↗
+Slowing for an obstacle
+22.4 cm
+09:09:30 PM
+·
+Motion class
+cruising
+09:09:30 PM
+↗
+State → LINE_FOLLOW
+Following the line
+09:09:30 PM
+↗
+Start/stop button
+Value 0
+09:09:30 PM
+↗
+Start/stop button
+Value 0
+09:09:30 PM
+·
+Motion class
+stationary
+09:09:29 PM
+↗
+State → IDLE
+Standing by
+09:09:28 PM
+·
+Calibration / self-test result
+0x00030000
+09:09:28 PM
+↗
+Calibration step done
+ok
+09:09:28 PM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 1, spun 360° (encoders)
+09:09:28 PM
+·
+Turn slip (calibration spin)
+turns asked for ×1.04 (encoders count 104% of a real turn)
+09:09:28 PM
+·
+IR calibration (barcode)
+Value 238223589
+09:09:28 PM
+·
+IR calibration (right)
+Value 197001338
+09:09:28 PM
+·
+IR calibration (left)
+Value 168427732
+09:09:28 PM
+↗
+Calibration step done
+ok
+09:09:28 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 878
+09:09:28 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 4
+09:09:28 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+09:09:28 PM
+↗
+Move done
+09:09:28 PM
+·
+Motion class
+cruising
+09:09:28 PM
+·
+Motion class
+turning
+09:09:27 PM
+·
+Motion class
+cruising
+09:09:27 PM
+↗
+State → CALIBRATING
+Calibrating
+09:09:27 PM
+↗
+Calibrate button
+Value 0
+09:09:27 PM
+↗
+Calibrate button
+Value 0
+09:09:27 PM
+↗
+State → IDLE
+Standing by
+09:09:27 PM
+·
+IMU start result
+0x00004900
+09:09:27 PM
+·
+IMU configuration
+Value 0
+09:09:27 PM
+·
+IMU identity value
+Value 73
+09:09:27 PM
+·
+IMU identity read
+Value 0
+09:09:27 PM
+·
+IMU bus start
+Value 0
+09:09:27 PM
+↗
+State → IDLE
+Standing by
+09:05:26 PM
+·
+IMU start result
+0x00004900
+09:05:26 PM
+·
+IMU configuration
+Value 0
+09:05:26 PM
+·
+IMU identity value
+Value 73
+09:05:26 PM
+·
+IMU identity read
+Value 0
+09:05:26 PM
+·
+IMU bus start
+Value 0
+09:05:26 PM
+·
+Motion class
+cruising
+09:05:16 PM
+·
+Motion class
+accelerating
+09:05:16 PM
+·
+Motion class
+cruising
+09:05:16 PM
+·
+Motion class
+turning
+09:05:16 PM
+↗
+Slowing for an obstacle
+38.4 cm
+09:05:16 PM
+·
+Motion class
+cruising
+09:05:16 PM
+·
+Motion class
+decelerating
+09:05:15 PM
+·
+Motion class
+cruising
+09:05:15 PM
+↗
+State → LINE_FOLLOW
+Following the line
+09:05:15 PM
+↗
+Back on the line
+09:05:15 PM
+↗
+State → LINE_RECOVERY
+Finding the line again

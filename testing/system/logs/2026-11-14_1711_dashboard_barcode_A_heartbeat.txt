@@ -1,0 +1,593 @@
+↗
+Line lost
+05:12:13 PM
+·
+Motion class
+stationary
+05:12:03 PM
+↗
+State → FAULT
+Safety stop active
+05:12:03 PM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #31-33: bar 9.0, gap 3.4, bar 3.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #28-30: gap 3.4, bar 8.6, gap 3.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #25-27: bar 2.4, gap 9.6, bar 3.0
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #22-24: gap 3.6, bar 8.2, gap 3.6
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #19-21: bar 3.6, gap 9.6, bar 2.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #16-18: gap 3.0, bar 2.4, gap 3.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #13-15: bar 2.6, gap 2.0, bar 10.0
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #10-12: gap 1.0, bar 9.6, gap 2.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #7-9: bar 10.0, gap 2.0, bar 2.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 8.6, bar 3.4, gap 2.4
+05:12:03 PM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 1.4, gap 2.6, bar 3.0
+05:12:03 PM
+·
+Barcode widths (mm)
+swing #31-33: bar 8.8, gap 3.4, bar 2.8
+05:12:03 PM
+·
+Barcode widths (mm)
+swing #28-30: gap 3.6, bar 8.4, gap 3.6
+05:12:03 PM
+·
+Barcode widths (mm)
+swing #25-27: bar 2.4, gap 9.6, bar 3.0
+05:12:03 PM
+·
+Barcode widths (mm)
+swing #7-9: bar 9.8, gap 2.4, bar 2.0
+05:12:03 PM
+·
+Barcode: elements found by each reading
+swing 33, low threshold 31, adaptive 20% 31, adaptive 10% 33 (a letter has 29; 0 = not tried)
+05:12:03 PM
+·
+Barcode sensor levels
+white 19 / 1000, white noise 33, darkest 1000 (a bar must rise 250 above white; noise 33 leaves 217 margin)
+05:12:03 PM
+·
+Barcode rejected: bar widths
+narrowest 0.4 mm, widest 10.0 mm
+05:12:03 PM
+·
+Barcode rejected: what the sensor saw
+33 elements (a letter has 29), 187 mm long, darkest 1000 / 1000
+05:12:03 PM
+·
+Barcode rejected
+wrong element count
+05:12:03 PM
+·
+Motion class
+decelerating
+05:12:03 PM
+·
+Heartbeat missed
+Value 2
+05:12:03 PM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+05:12:03 PM
+·
+Motion class
+cruising
+05:12:02 PM
+·
+Motion class
+decelerating
+05:12:01 PM
+·
+Motion class
+cruising
+05:12:01 PM
+·
+Motion class
+turning
+05:12:01 PM
+·
+Motion class
+cruising
+05:12:01 PM
+·
+Motion class
+turning
+05:12:01 PM
+·
+Motion class
+cruising
+05:12:00 PM
+·
+Motion class
+decelerating
+05:12:00 PM
+·
+Motion class
+cruising
+05:12:00 PM
+·
+Motion class
+accelerating
+05:12:00 PM
+·
+Motion class
+cruising
+05:11:59 PM
+·
+Motion class
+turning
+05:11:59 PM
+·
+Motion class
+cruising
+05:11:59 PM
+↗
+State → LINE_FOLLOW
+Following the line
+05:11:59 PM
+↗
+Start/stop button
+Value 0
+05:11:59 PM
+↗
+Start/stop button
+Value 0
+05:11:59 PM
+·
+Motion class
+stationary
+05:11:57 PM
+↗
+State → IDLE
+Standing by
+05:11:57 PM
+·
+Calibration / self-test result
+0x00030000
+05:11:57 PM
+↗
+Calibration step done
+ok
+05:11:57 PM
+·
+Turn slip: line crossings seen
+left sensor 1, right sensor 0, spun 360° (encoders)
+05:11:57 PM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+05:11:57 PM
+·
+IR calibration (barcode)
+Value 252707028
+05:11:57 PM
+·
+IR calibration (right)
+Value 171442312
+05:11:57 PM
+·
+IR calibration (left)
+Value 166658230
+05:11:57 PM
+↗
+Calibration step done
+ok
+05:11:57 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 889
+05:11:57 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 5
+05:11:57 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+05:11:57 PM
+↗
+Move done
+05:11:57 PM
+·
+Motion class
+cruising
+05:11:57 PM
+·
+Motion class
+turning
+05:11:55 PM
+·
+Motion class
+cruising
+05:11:55 PM
+↗
+State → CALIBRATING
+Calibrating
+05:11:55 PM
+↗
+Calibrate button
+Value 0
+05:11:55 PM
+↗
+Calibrate button
+Value 0
+05:11:55 PM
+↗
+State → IDLE
+Standing by
+05:11:55 PM
+·
+IMU start result
+0x00004900
+05:11:55 PM
+·
+IMU configuration
+Value 0
+05:11:55 PM
+·
+IMU identity value
+Value 73
+05:11:55 PM
+·
+IMU identity read
+Value 0
+05:11:55 PM
+·
+IMU bus start
+Value 0
+05:11:55 PM
+·
+Start refused: not calibrated
+Value 65536
+05:11:49 PM
+↗
+Start/stop button
+Value 0
+05:11:49 PM
+↗
+Start/stop button
+Value 0
+05:11:49 PM
+·
+Start refused: not calibrated
+Value 65536
+05:11:48 PM
+↗
+Start/stop button
+Value 0
+05:11:48 PM
+↗
+Start/stop button
+Value 0
+05:11:48 PM
+·
+Motion class
+stationary
+05:11:47 PM
+↗
+State → IDLE
+Standing by
+05:11:47 PM
+·
+Calibration / self-test result
+0x00010000
+05:11:47 PM
+↗
+Calibration step done
+ok
+05:11:47 PM
+·
+Turn slip: line crossings seen
+left sensor 1, right sensor 0, spun 360° (encoders)
+05:11:47 PM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+05:11:47 PM
+·
+IR calibration (barcode)
+Value 253952200
+05:11:47 PM
+·
+IR calibration (right)
+Value 170721376
+05:11:47 PM
+·
+IR calibration (left)
+Value 166396092
+05:11:47 PM
+!
+Calibration step done
+failed
+05:11:47 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 894
+05:11:47 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 68
+05:11:47 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+05:11:47 PM
+↗
+Move done
+05:11:47 PM
+·
+Motion class
+cruising
+05:11:47 PM
+·
+Motion class
+turning
+05:11:46 PM
+·
+Motion class
+cruising
+05:11:46 PM
+↗
+State → CALIBRATING
+Calibrating
+05:11:46 PM
+↗
+Calibrate button
+Value 0
+05:11:46 PM
+↗
+Calibrate button
+Value 0
+05:11:46 PM
+↗
+State → IDLE
+Standing by
+05:11:46 PM
+·
+IMU start result
+0x00004900
+05:11:46 PM
+·
+IMU configuration
+Value 0
+05:11:46 PM
+·
+IMU identity value
+Value 73
+05:11:46 PM
+·
+IMU identity read
+Value 0
+05:11:46 PM
+·
+IMU bus start
+Value 0
+05:11:46 PM
+·
+Motion class
+stationary
+05:11:39 PM
+·
+Motion class
+cruising
+05:11:39 PM
+·
+Motion class
+stationary
+05:11:39 PM
+·
+Motion class
+cruising
+05:11:39 PM
+↗
+State → IDLE
+Standing by
+05:11:39 PM
+·
+IMU start result
+0x00004900
+05:11:39 PM
+·
+IMU configuration
+Value 0
+05:11:39 PM
+·
+IMU identity value
+Value 73
+05:11:39 PM
+·
+IMU identity read
+Value 0
+05:11:39 PM
+·
+IMU bus start
+Value 0
+05:11:39 PM
+·
+Motion class
+stationary
+05:11:31 PM
+↗
+State → FAULT
+Safety stop active
+05:11:31 PM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #31-33: bar 1.4
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #28-30: gap 4.2, bar 2.6, gap 8.2
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #25-27: bar 7.6, gap 4.2, bar 8.0
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #22-24: gap 9.6, bar 2.4, gap 3.4
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #19-21: bar 8.0, gap 4.2, bar 2.4
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #16-18: gap 10.2, bar 2.0, gap 4.2
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #13-15: bar 2.6, gap 4.2, bar 2.0
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #10-12: gap 3.4, bar 8.0, gap 4.6
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #7-9: bar 9.0, gap 3.6, bar 2.6
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 3.4, bar 8.0, gap 4.0
+05:11:31 PM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 2.4, gap 9.0, bar 3.4
+05:11:31 PM
+·
+Barcode widths (mm)
+swing #31-33: bar 1.2
+05:11:31 PM
+·
+Barcode widths (mm)
+swing #28-30: gap 4.0, bar 2.6, gap 8.2
+05:11:31 PM
+·
+Barcode widths (mm)
+swing #7-9: bar 9.2, gap 3.6, bar 2.4
+05:11:31 PM
+·
+Barcode widths (mm)
+swing #4-6: gap 3.2, bar 8.4, gap 3.4
+05:11:31 PM
+·
+Barcode widths (mm)
+swing #1-3: bar 2.6, gap 9.0, bar 3.0
+05:11:31 PM
+·
+Barcode: elements found by each reading
+swing 31, low threshold 31, adaptive 20% 31, adaptive 10% 31 (a letter has 29; 0 = not tried)
+05:11:31 PM
+·
+Barcode sensor levels
+white 25 / 1000, white noise 21, darkest 967 (a bar must rise 250 above white; noise 21 leaves 229 margin)
+05:11:31 PM
+·
+Barcode rejected: bar widths
+narrowest 1.1 mm, widest 10.2 mm
+05:11:31 PM
+·
+Barcode rejected: what the sensor saw
+31 elements (a letter has 29), 192 mm long, darkest 964 / 1000
+05:11:31 PM
+·
+Barcode rejected
+wrong element count
+05:11:31 PM
+·
+Heartbeat missed
+Value 2
+05:11:31 PM
+!
+Heartbeat timeout
+Code 32 · A monitored task stopped responding.
+05:11:31 PM
+·
+Motion class
+turning
+05:11:31 PM
+·
+Motion class
+cruising
+05:11:31 PM
+·
+Motion class
+turning
+05:11:31 PM
+!
+Move did not complete
+05:11:31 PM
+↗
+State → LINE_FOLLOW
+Following the line
+05:11:31 PM
+↗
+Line found
+05:11:31 PM
+·
+Motion class
+decelerating
+05:11:31 PM
+↗
+State → LINE_SEARCH
+Searching for the line
+05:11:30 PM
+↗
+Line lost
+05:11:30 PM
+·
+Motion class
+cruising
+05:11:30 PM
+·
+Motion class
+turning
+05:11:30 PM
+·
+Motion class
+cruising
+05:11:30 PM
+·
+Motion class
+turning

@@ -1,0 +1,590 @@
+↗
+State → IDLE
+Standing by
+04:26:09 PM
+·
+IMU start result
+0x00004900
+04:26:09 PM
+·
+IMU configuration
+Value 0
+04:26:09 PM
+·
+IMU identity value
+Value 73
+04:26:09 PM
+·
+IMU identity read
+Value 0
+04:26:09 PM
+·
+IMU bus start
+Value 0
+04:26:09 PM
+·
+Motion class
+decelerating
+04:26:04 PM
+·
+Barcode widths (mm)
+adaptive 10% #13-15: bar 14.6, gap 5.0, bar 6.6
+04:26:04 PM
+·
+Barcode widths (mm)
+adaptive 10% #10-12: gap 19.8, bar 13.8, gap 14.6
+04:26:04 PM
+·
+Barcode widths (mm)
+adaptive 10% #7-9: bar 4.2, gap 13.2, bar 5.6
+04:26:04 PM
+·
+Barcode widths (mm)
+adaptive 10% #4-6: gap 6.6, bar 14.2, gap 6.0
+04:26:04 PM
+·
+Barcode widths (mm)
+adaptive 10% #1-3: bar 11.6, gap 20.4, bar 5.2
+04:26:04 PM
+·
+Barcode widths (mm)
+swing #13-15: bar 14.6, gap 5.4, bar 6.4
+04:26:04 PM
+·
+Barcode widths (mm)
+swing #10-12: gap 19.8, bar 14.8, gap 13.4
+04:26:04 PM
+·
+Barcode widths (mm)
+swing #7-9: bar 4.4, gap 13.2, bar 5.6
+04:26:04 PM
+·
+Barcode widths (mm)
+swing #4-6: gap 6.6, bar 14.4, gap 6.4
+04:26:02 PM
+·
+Barcode widths (mm)
+swing #1-3: bar 23.2, gap 19.8, bar 5.0
+04:26:02 PM
+·
+Barcode: elements found by each reading
+swing 15, low threshold 7, adaptive 20% 15, adaptive 10% 15 (a letter has 29; 0 = not tried)
+04:26:02 PM
+·
+Barcode sensor levels
+white 216 / 1000, white noise 30, darkest 1000 (a bar must rise 250 above white; noise 30 leaves 220 margin)
+04:26:02 PM
+·
+Barcode rejected: bar widths
+narrowest 4.4 mm, widest 23.2 mm
+04:26:02 PM
+·
+Barcode rejected: what the sensor saw
+15 elements (a letter has 29), 231 mm long, darkest 1000 / 1000
+04:26:02 PM
+·
+Barcode rejected
+wrong element count
+04:26:02 PM
+·
+Motion class
+cruising
+04:26:02 PM
+·
+Motion class
+accelerating
+04:26:00 PM
+·
+Motion class
+cruising
+04:26:00 PM
+·
+Motion class
+accelerating
+04:25:59 PM
+·
+Motion class
+cruising
+04:25:59 PM
+·
+Motion class
+turning
+04:25:59 PM
+·
+Motion class
+cruising
+04:25:59 PM
+·
+Motion class
+turning
+04:25:58 PM
+·
+Motion class
+cruising
+04:25:58 PM
+·
+Motion class
+decelerating
+04:25:58 PM
+·
+Motion class
+cruising
+04:25:58 PM
+·
+Motion class
+turning
+04:25:58 PM
+·
+Motion class
+cruising
+04:25:57 PM
+·
+Motion class
+turning
+04:25:57 PM
+!
+Move did not complete
+04:25:57 PM
+↗
+State → LINE_FOLLOW
+Following the line
+04:25:57 PM
+↗
+Line found
+04:25:57 PM
+·
+Motion class
+decelerating
+04:25:57 PM
+↗
+State → LINE_SEARCH
+Searching for the line
+04:25:57 PM
+↗
+Line lost
+04:25:57 PM
+·
+Motion class
+cruising
+04:25:56 PM
+·
+Motion class
+accelerating
+04:25:56 PM
+·
+Motion class
+cruising
+04:25:56 PM
+↗
+State → LINE_FOLLOW
+Following the line
+04:25:56 PM
+↗
+Start/stop button
+Value 0
+04:25:56 PM
+↗
+Start/stop button
+Value 0
+04:25:56 PM
+·
+Motion class
+stationary
+04:25:54 PM
+↗
+State → IDLE
+Standing by
+04:25:54 PM
+·
+Calibration / self-test result
+0x00030000
+04:25:54 PM
+↗
+Calibration step done
+ok
+04:25:54 PM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 0, spun 361° (encoders)
+04:25:54 PM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+04:25:54 PM
+·
+IR calibration (barcode)
+Value 239862170
+04:25:54 PM
+·
+IR calibration (right)
+Value 146997356
+04:25:54 PM
+·
+IR calibration (left)
+Value 191758501
+04:25:54 PM
+↗
+Calibration step done
+ok
+04:25:54 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 907
+04:25:54 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 20
+04:25:54 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+04:25:54 PM
+↗
+Move done
+04:25:54 PM
+·
+Motion class
+cruising
+04:25:54 PM
+·
+Motion class
+turning
+04:25:54 PM
+·
+IR calibration (left)
+Value 191496338
+04:25:45 PM
+↗
+Calibration step done
+ok
+04:25:45 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 901
+04:25:45 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 14
+04:25:45 PM
+·
+IMU level: samples (need ≥ 50)
+Value 90
+04:25:45 PM
+↗
+Move done
+04:25:45 PM
+·
+Motion class
+cruising
+04:25:45 PM
+·
+Motion class
+turning
+04:25:45 PM
+↗
+Calibrate button
+Value 0
+04:25:45 PM
+↗
+Calibrate button
+Value 0
+04:25:45 PM
+↗
+State → IDLE
+Standing by
+04:25:45 PM
+·
+IMU start result
+0x00004900
+04:25:45 PM
+·
+IMU configuration
+Value 0
+04:25:45 PM
+·
+IMU identity value
+Value 73
+04:25:45 PM
+·
+IMU identity read
+Value 0
+04:25:45 PM
+·
+IMU bus start
+Value 0
+04:25:45 PM
+·
+Motion class
+stationary
+04:25:35 PM
+·
+Motion class
+decelerating
+04:25:35 PM
+↗
+State → FAULT
+Safety stop active
+04:25:35 PM
+·
+Run summary
+Highest hump 0 mm
+04:25:35 PM
+!
+Lifted
+Code 1 · The robot was lifted during a run: run ended, motors braked.
+04:25:35 PM
+!
+Lifted
+Code 1 · The robot was lifted during a run: run ended, motors braked.
+04:25:35 PM
+·
+No floor under the IR sensors (lifted)
+all three IR black for 40 mm of wheel travel: left 1000, right 1000, barcode 1000 / 1000
+04:25:35 PM
+·
+Motion class
+cruising
+04:25:35 PM
+·
+Motion class
+turning
+04:25:33 PM
+·
+Largest up-axis rise while driving this run (mg)
+Value 151
+04:25:33 PM
+·
+Motion class
+cruising
+04:25:33 PM
+·
+Motion class
+turning
+04:25:33 PM
+·
+Motion class
+cruising
+04:25:33 PM
+·
+Motion class
+turning
+04:25:32 PM
+·
+Motion class
+decelerating
+04:25:32 PM
+·
+Motion class
+cruising
+04:25:32 PM
+·
+Motion class
+accelerating
+04:25:32 PM
+·
+Motion class
+turning
+04:25:32 PM
+·
+Motion class
+cruising
+04:25:32 PM
+·
+Motion class
+decelerating
+04:25:32 PM
+·
+Barcode widths (mm)
+swing #16-18: gap 6.4, bar 5.4
+04:25:30 PM
+·
+Barcode widths (mm)
+swing #13-15: bar 9.8, gap 14.8, bar 12.8
+04:25:30 PM
+·
+Barcode widths (mm)
+swing #10-12: gap 1.4, bar 1.4, gap 2.8
+04:25:30 PM
+·
+Barcode widths (mm)
+swing #7-9: bar 6.6, gap 20.6, bar 6.0
+04:25:30 PM
+·
+Barcode widths (mm)
+swing #4-6: gap 5.2, bar 6.4, gap 10.8
+04:25:30 PM
+·
+Barcode widths (mm)
+swing #1-3: bar 3.0, gap 7.8, bar 13.2
+04:25:30 PM
+·
+Barcode: elements found by each reading
+swing 17, low threshold 9, adaptive 20% 0, adaptive 10% 0 (a letter has 29; 0 = not tried)
+04:25:30 PM
+·
+Barcode sensor levels
+white 36 / 1000, white noise 102, darkest 1000 (a bar must rise 250 above white; noise 102 leaves 148 margin)
+04:25:30 PM
+·
+Barcode rejected: bar widths
+narrowest 1.3 mm, widest 20.6 mm
+04:25:30 PM
+·
+Barcode rejected: what the sensor saw
+17 elements (a letter has 29), 186 mm long, darkest 1000 / 1000
+04:25:30 PM
+·
+Barcode rejected
+wrong element count
+04:25:30 PM
+·
+Motion class
+cruising
+04:25:29 PM
+·
+Motion class
+decelerating
+04:25:29 PM
+·
+Motion class
+cruising
+04:25:29 PM
+·
+Motion class
+turning
+04:25:28 PM
+!
+Move did not complete
+04:25:28 PM
+↗
+State → LINE_FOLLOW
+Following the line
+04:25:28 PM
+↗
+Line found
+04:25:28 PM
+·
+Motion class
+decelerating
+04:25:28 PM
+↗
+State → LINE_SEARCH
+Searching for the line
+04:25:28 PM
+↗
+Line lost
+04:25:28 PM
+·
+Motion class
+cruising
+04:25:27 PM
+·
+Motion class
+accelerating
+04:25:27 PM
+·
+Motion class
+cruising
+04:25:26 PM
+·
+Motion class
+decelerating
+04:25:26 PM
+·
+Motion class
+cruising
+04:25:26 PM
+·
+Motion class
+turning
+04:25:26 PM
+·
+Motion class
+cruising
+04:25:26 PM
+↗
+State → LINE_FOLLOW
+Following the line
+04:25:26 PM
+↗
+Start/stop button
+Value 0
+04:25:26 PM
+↗
+Start/stop button
+Value 0
+04:25:26 PM
+·
+Motion class
+stationary
+04:25:23 PM
+↗
+State → IDLE
+Standing by
+04:25:23 PM
+·
+Calibration / self-test result
+0x00030000
+04:25:23 PM
+↗
+Calibration step done
+ok
+04:25:23 PM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 0, spun 360° (encoders)
+04:25:23 PM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+04:25:23 PM
+·
+IR calibration (barcode)
+Value 237175054
+04:25:23 PM
+·
+IR calibration (right)
+Value 129564776
+04:25:23 PM
+·
+IR calibration (left)
+Value 190906518
+04:25:23 PM
+↗
+Calibration step done
+ok
+04:25:23 PM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 910
+04:25:23 PM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 3
+04:25:23 PM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+04:25:23 PM
+↗
+Move done
+04:25:23 PM
+·
+Motion class
+cruising
+04:25:23 PM
+·
+Motion class
+turning
+04:25:20 PM
+·
+Motion class
+cruising
+04:25:20 PM
+↗
+State → CALIBRATING
+Calibrating
+04:25:20 PM
+↗
+Calibrate button
+Value 0
