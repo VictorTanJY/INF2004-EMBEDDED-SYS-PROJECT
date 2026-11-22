@@ -1,0 +1,579 @@
+↗
+State → IDLE
+Standing by
+03:41:14 AM
+·
+IMU start result
+0x00004900
+03:41:14 AM
+·
+IMU configuration
+Value 0
+03:41:14 AM
+·
+IMU identity value
+Value 73
+03:41:14 AM
+·
+IMU identity read
+Value 0
+03:41:14 AM
+·
+IMU bus start
+Value 0
+03:41:14 AM
+↗
+Cross-junction
+03:41:07 AM
+↗
+Cross-junction
+03:41:05 AM
+·
+Motion class
+cruising
+03:41:04 AM
+·
+Motion class
+turning
+03:41:03 AM
+·
+Motion class
+accelerating
+03:41:03 AM
+·
+Motion class
+cruising
+03:41:03 AM
+·
+Motion class
+decelerating
+03:41:03 AM
+·
+Motion class
+cruising
+03:41:02 AM
+·
+Motion class
+accelerating
+03:41:02 AM
+·
+Motion class
+cruising
+03:41:01 AM
+·
+Motion class
+turning
+03:41:01 AM
+·
+Motion class
+accelerating
+03:41:01 AM
+↗
+State → LINE_FOLLOW
+Following the line
+03:41:01 AM
+↗
+Move done
+03:41:01 AM
+·
+Motion class
+cruising
+03:41:01 AM
+·
+Motion class
+turning
+03:40:59 AM
+·
+Motion class
+stationary
+03:40:59 AM
+↗
+Move done
+03:40:59 AM
+·
+Motion class
+decelerating
+03:40:59 AM
+·
+Motion class
+cruising
+03:40:58 AM
+·
+Motion class
+accelerating
+03:40:58 AM
+↗
+State → EXECUTE_NAV
+Turning at a junction
+03:40:58 AM
+↗
+Cross-junction
+03:40:58 AM
+·
+Barcode latched
+F → U-turn at the next junction
+03:40:58 AM
+↗
+Barcode 'F' read
+03:40:58 AM
+·
+Barcode sensor levels
+white 25 / 1000, white noise 14, darkest 690; decoded from the darkness record (low threshold, faint bars) (a bar must rise 250 above white; noise 14 leaves 236 margin)
+03:40:58 AM
+↗
+Cross-junction
+03:40:56 AM
+·
+Motion class
+cruising
+03:40:53 AM
+·
+Motion class
+accelerating
+03:40:53 AM
+·
+Motion class
+cruising
+03:40:53 AM
+↗
+State → LINE_FOLLOW
+Following the line
+03:40:53 AM
+↗
+Remote start
+Value 0
+03:40:53 AM
+↗
+Remote start
+Value 0
+03:40:53 AM
+✓
+START accepted
+#1794595365
+03:40:53 AM
+·
+Map stored
+Value 1128351300
+03:40:48 AM
+↗
+Map received
+03:40:48 AM
+↗
+Map received
+03:40:48 AM
+✓
+MAP ACDF accepted
+#1794595364
+03:40:48 AM
+·
+Motion class
+stationary
+03:40:41 AM
+↗
+State → IDLE
+Standing by
+03:40:41 AM
+·
+Calibration / self-test result
+0x00030000
+03:40:41 AM
+↗
+Calibration step done
+ok
+03:40:41 AM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 1, spun 360° (encoders)
+03:40:41 AM
+·
+Turn slip (calibration spin)
+turns asked for ×1.03 (encoders count 103% of a real turn)
+03:40:41 AM
+·
+IR calibration (barcode)
+Value 195231933
+03:40:41 AM
+·
+IR calibration (right)
+Value 187695244
+03:40:41 AM
+·
+IR calibration (left)
+Value 135135406
+03:40:41 AM
+↗
+Calibration step done
+ok
+03:40:41 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 940
+03:40:41 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 4
+03:40:41 AM
+·
+IMU level: samples (need ≥ 50)
+Value 102
+03:40:41 AM
+↗
+Move done
+03:40:41 AM
+·
+Motion class
+cruising
+03:40:41 AM
+·
+Motion class
+turning
+03:40:40 AM
+·
+Motion class
+cruising
+03:40:40 AM
+↗
+State → CALIBRATING
+Calibrating
+03:40:40 AM
+↗
+Calibrate button
+Value 0
+03:40:39 AM
+↗
+Calibrate button
+Value 0
+03:40:39 AM
+↗
+State → IDLE
+Standing by
+03:40:39 AM
+·
+IMU start result
+0x00004900
+03:40:39 AM
+·
+IMU configuration
+Value 0
+03:40:39 AM
+·
+IMU identity value
+Value 73
+03:40:39 AM
+·
+IMU identity read
+Value 0
+03:40:39 AM
+·
+IMU bus start
+Value 0
+03:40:39 AM
+·
+Motion class
+stationary
+03:35:01 AM
+↗
+State → IDLE
+Standing by
+03:35:01 AM
+·
+Calibration / self-test result
+0x00030000
+03:35:01 AM
+↗
+Calibration step done
+ok
+03:35:01 AM
+·
+Turn slip: line crossings seen
+left sensor 2, right sensor 1, spun 360° (encoders)
+03:35:01 AM
+·
+Turn slip (calibration spin)
+turns asked for ×1.04 (encoders count 104% of a real turn)
+03:35:01 AM
+·
+IR calibration (barcode)
+Value 196673729
+03:35:01 AM
+·
+IR calibration (right)
+Value 187367581
+03:35:01 AM
+·
+IR calibration (left)
+Value 133300403
+03:35:01 AM
+↗
+Calibration step done
+ok
+03:35:01 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 914
+03:35:01 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 11
+03:35:01 AM
+·
+IMU level: samples (need ≥ 50)
+Value 103
+03:35:01 AM
+↗
+Move done
+03:35:01 AM
+·
+Motion class
+cruising
+03:35:01 AM
+·
+Motion class
+turning
+03:35:01 AM
+·
+Motion class
+cruising
+03:35:01 AM
+↗
+State → CALIBRATING
+Calibrating
+03:35:01 AM
+↗
+Calibrate button
+Value 0
+03:34:58 AM
+↗
+Calibrate button
+Value 0
+03:34:58 AM
+↗
+State → IDLE
+Standing by
+03:34:58 AM
+·
+IMU start result
+0x00004900
+03:34:58 AM
+·
+IMU configuration
+Value 0
+03:34:58 AM
+·
+IMU identity value
+Value 73
+03:34:58 AM
+·
+IMU identity read
+Value 0
+03:34:58 AM
+·
+IMU bus start
+Value 0
+03:34:58 AM
+·
+Motion class
+stationary
+03:34:36 AM
+·
+Motion class
+decelerating
+03:34:36 AM
+·
+Run summary
+Highest hump 0 mm
+03:34:36 AM
+↗
+State → MISSION_COMPLETE
+Run complete
+03:34:36 AM
+↗
+Remote stop
+Value 0
+03:34:36 AM
+↗
+Remote stop
+Value 0
+03:34:36 AM
+✓
+STOP accepted
+#1794595363
+03:34:36 AM
+↗
+Cross-junction
+03:34:34 AM
+·
+Motion class
+cruising
+03:34:31 AM
+·
+Motion class
+turning
+03:34:31 AM
+·
+Motion class
+accelerating
+03:34:31 AM
+↗
+State → LINE_FOLLOW
+Following the line
+03:34:31 AM
+↗
+Move done
+03:34:31 AM
+·
+Motion class
+cruising
+03:34:31 AM
+·
+Motion class
+turning
+03:34:29 AM
+·
+Motion class
+stationary
+03:34:29 AM
+↗
+Move done
+03:34:29 AM
+·
+Motion class
+decelerating
+03:34:29 AM
+·
+Motion class
+cruising
+03:34:28 AM
+·
+Motion class
+accelerating
+03:34:28 AM
+↗
+State → EXECUTE_NAV
+Turning at a junction
+03:34:28 AM
+↗
+Cross-junction
+03:34:28 AM
+·
+Barcode latched
+F → U-turn at the next junction
+03:34:28 AM
+↗
+Barcode 'F' read
+03:34:28 AM
+·
+Barcode sensor levels
+white 26 / 1000, white noise 13, darkest 685 (a bar must rise 250 above white; noise 13 leaves 237 margin)
+03:34:28 AM
+↗
+Cross-junction
+03:34:26 AM
+↗
+Cross-junction
+03:34:24 AM
+·
+Motion class
+cruising
+03:34:23 AM
+·
+Motion class
+accelerating
+03:34:23 AM
+·
+Motion class
+cruising
+03:34:22 AM
+↗
+State → LINE_FOLLOW
+Following the line
+03:34:22 AM
+↗
+Remote start
+Value 0
+03:34:22 AM
+↗
+Remote start
+Value 0
+03:34:22 AM
+✓
+START accepted
+#1794595362
+03:34:22 AM
+·
+Map stored
+Value 1128351300
+03:34:18 AM
+↗
+Map received
+03:34:18 AM
+↗
+Map received
+03:34:18 AM
+✓
+MAP ACDF accepted
+#1794595361
+03:34:18 AM
+·
+Motion class
+stationary
+03:34:12 AM
+↗
+State → IDLE
+Standing by
+03:34:12 AM
+·
+Calibration / self-test result
+0x00030000
+03:34:12 AM
+↗
+Calibration step done
+ok
+03:34:12 AM
+·
+Turn slip: line crossings seen
+left sensor 4, right sensor 0, spun 360° (encoders)
+03:34:12 AM
+·
+Turn slip (calibration spin)
+not measured: turns not corrected
+03:34:12 AM
+·
+IR calibration (barcode)
+Value 191496376
+03:34:12 AM
+·
+IR calibration (right)
+Value 187760786
+03:34:12 AM
+·
+IR calibration (left)
+Value 132513956
+03:34:12 AM
+↗
+Calibration step done
+ok
+03:34:12 AM
+·
+IMU level: up axis, mg (need 500–1500)
+Value 922
+03:34:12 AM
+·
+IMU level: shake, mg (need ≤ 60)
+Value 4
+03:34:12 AM
+·
+IMU level: samples (need ≥ 50)
+Value 102
+03:34:12 AM
+↗
+Move done
+03:34:12 AM
+·
+Motion class
+cruising
+03:34:12 AM
+·
+Motion class
+turning
+03:34:11 AM

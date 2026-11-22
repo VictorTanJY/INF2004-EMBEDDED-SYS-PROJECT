@@ -1,20 +1,39 @@
-/*
- *  comms_proto.h
- *  Subsystem 1 -- MQTT message formats (Week 6 Section 6.5).
+/** @file comms_proto.h
+ *
+ *  @brief Subsystem 1 -- MQTT message formats (Week 6 Section 6.5).
  *  Owner: Buddy 1 (Victor).
  *
  *  Pure C: no kernel, lwIP or SDK dependency, so the same file is built
  *  into the firmware and into the host unit tests
  *  (testing/subsystem1/host/).  Nothing here touches shared state.
  *
- *  Payloads (base topic COMMS_TOPIC_BASE, e.g. "picocar/is23"):
- *    telemetry  {seq,t_ms,state,v_mm_s:[l,r],enc:[l,r],dist_mm,
- *                line:{err,lost},barcode,pitch_deg,hump_max_mm,
- *                obstacle:{d_cm,w_cm,clr_l_cm,clr_r_cm}}       QoS 0, 5 Hz
- *    event      {seq,t_ms,type,data,src}                      QoS 1
- *    status     {online,uptime_s,rssi,drops}           QoS 1, retained, 1 Hz
- *    cmd (in)   {id,cmd:"start"|"stop"|"estop"|"reset"|"set",param,value}
- *    ack        {id,ok,err}                                   QoS 1
+ *  Change Requirement 1 (minimum-bit data): every MQTT payload is a binary
+ *  frame of bit fields, each only as wide as its valid range, written LSB
+ *  first with app_pack.h (explicit masks and shifts, never a C struct).
+ *  The laptop decodes them with dashboard/picocar_codec.py.  Field order
+ *  and widths are listed below; "off" = offset-binary (signed), "sat" =
+ *  saturates at its largest value, "wrap" = low bits of a counter.
+ *
+ *  Every frame starts with one byte: type (5 bits) + version (3 bits).
+ *
+ *  telemetry (type 1, QoS 0, 5 Hz), 210 bits = 27 bytes:
+ *  seq 8 wrap | t 24 (10 ms units, wrap) | state 4 | v_l 10 off |
+ *  v_r 10 off (mm/s) | enc_l 16 wrap | enc_r 16 wrap | dist 16 wrap (mm) |
+ *  line_err 11 off | lost 1 | line_bc 10 sat (0..1000) | barcode 6 |
+ *  nav 6 (Code 39 symbol: 0 none, 1..43) | pitch 11 off | roll 12 off
+ *  (0.1 deg) | hump_max 8 sat (mm) | d 9 (cm, 511 none) | w 10 (mm,
+ *  1023 none) | clr_l 7 | clr_r 7 (cm, 127 none)
+ *  event (type 2, QoS 1), 54 bits + data = 7..11 bytes:
+ *  seq 8 wrap | t 24 | kind 2 (kind - 1) | src 3 | code 7 | dlen 2 |
+ *  data 0 / 8 / 16 / 32 bits (two's complement; dlen 0 means data 0)
+ *  status (type 3, QoS 1, retained, 1 Hz), 41 or 65 bits = 6 or 9 bytes:
+ *  uptime 17 sat (s) | rssi 7 sat (-dBm) | drops 8 sat | has_map 1 |
+ *  [left 6 | right 6 | straight 6 | uturn 6]
+ *  The Last Will is the header byte alone: 1 byte = offline.
+ *  ack (type 4, QoS 1), 21 bits = 3 bytes:
+ *  has_id 1 | id 8 | err 4 (0 = accepted, else comms_proto_err_t)
+ *  cmd (type 5, in), 19 / 39 / 43 bits = 3 / 5 / 6 bytes:
+ *  id 8 | cmd 3 | SET: param 4 (index) value 16 off | MAP: 4 x 6
  */
 
 #ifndef COMMS_PROTO_H
@@ -22,144 +41,212 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../app_config.h"
+/* one per navigation: left, right, straight, U-turn */
+#define COMMS_MAP_CHARS 4u
 
 /* ---------------------------------------------------------------------
- *  Telemetry record posted by any task to mbf_telem (IF-12).  12 bytes.
+ *  Telemetry record posted by any task to mbf_telem (IF-12).  8 bytes:
+ *  word 0 = kind-1 (2 bits) | src (3) | code (7) | sender time in 10 ms
+ *  units (20 bits, wraps every 2.9 h); word 1 = data (all 32 bits: LOG
+ *  records carry packed values).  CommsTask rebuilds the full time from
+ *  its own clock, as a record is never older than a few seconds.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    COMMS_KIND_EVENT = 1,       /* code = mission_ev_t, data = its data   */
-    COMMS_KIND_FAULT = 2,       /* code = 0, data = SAFETY_FLT_* bits     */
-    COMMS_KIND_STATE = 3,       /* code = new mission_state_t             */
-    COMMS_KIND_LOG   = 4        /* code, data: free use by the sender     */
-} comms_kind_t;
+typedef uint8_t comms_proto_kind_t; /* one of the constants below */
+#define COMMS_KIND_EVENT 1u /* code = mission_types_ev_t, data = its data */
+#define COMMS_KIND_FAULT 2u /* code = 0, data = SAFETY_FLT_* bits */
+#define COMMS_KIND_STATE 3u /* code = new mission_types_state_t */
+#define COMMS_KIND_LOG   4u /* code, data: free use by the sender */
+
+#define COMMS_REC_KIND_SHIFT 0u
+#define COMMS_REC_KIND_BITS  2u
+#define COMMS_REC_SRC_SHIFT  2u
+#define COMMS_REC_SRC_BITS   3u
+#define COMMS_REC_CODE_SHIFT 5u
+#define COMMS_REC_CODE_BITS  7u
+#define COMMS_REC_T_SHIFT    12u
+#define COMMS_REC_T_BITS     20u
 
 typedef struct
 {
-    uint8_t  kind;              /* comms_kind_t                           */
-    uint8_t  src;               /* APP_SRC_* (subsystem number)           */
+    uint32_t hdr; /**< kind, src, code, time: see above       */
+    int32_t  data;
+} comms_proto_rec_t;
+
+/** Unpacked view of a record (task-local, never shared). */
+typedef struct
+{
+    uint8_t  kind; /**< comms_proto_kind_t                           */
+    uint8_t  src;  /**< APP_SRC_* (subsystem number)           */
     uint16_t code;
     int32_t  data;
-    uint32_t t_ms;              /* sender's app_time_ms()                 */
-} comms_rec_t;
+    uint32_t t_ms;
+} comms_proto_event_t;
+
+/** Fill a telemetry record (kind, source, code, data) stamped with now_ms. */
+void comms_proto_rec_pack(comms_proto_rec_t * p_rec, uint8_t kind, uint8_t src,
+                          uint16_t code, int32_t data, uint32_t now_ms);
+/** Expand a telemetry record into an event; now_ms restores the full time from
+    the record's low time bits. */
+void comms_proto_rec_unpack(comms_proto_rec_t const * p_rec, uint32_t now_ms,
+                            comms_proto_event_t * p_ev);
 
 /* ---------------------------------------------------------------------
- *  Bounded JSON writer.  Never writes past cap; on overflow the result
- *  is discarded (jw_finish returns 0).
+ *  Frames
  * --------------------------------------------------------------------- */
-typedef struct
-{
-    char    *p_buf;
-    uint16_t cap;
-    uint16_t len;
-    bool     b_overflow;
-} jw_t;
+#define COMMS_FRAME_VERSION 1u
+#define COMMS_FRAME_MAX     32u /* largest frame: telemetry, 27 B */
 
-void     jw_init(jw_t * p_jw, char * p_buf, uint16_t cap);
-void     jw_raw(jw_t * p_jw, char const * p_text);
-void     jw_int(jw_t * p_jw, int32_t value);
-void     jw_uint(jw_t * p_jw, uint32_t value);
-void     jw_fixed1(jw_t * p_jw, int32_t tenths);   /* -12 -> "-1.2" */
-void     jw_str(jw_t * p_jw, char const * p_text); /* quoted, escaped */
-uint16_t jw_finish(jw_t * p_jw);                   /* length, 0 on overflow */
+typedef uint8_t comms_proto_frame_type_t; /* one of the constants below */
+#define COMMS_FT_TELEMETRY 1u
+#define COMMS_FT_EVENT     2u
+#define COMMS_FT_STATUS    3u
+#define COMMS_FT_ACK       4u
+#define COMMS_FT_CMD       5u
+
+/* Last Will on the status topic: the status header byte alone (0x23). */
+#define COMMS_WILL_MSG "\x23"
+
+/* Code 39 data symbols, index 1..43 (0 = none). */
+#define COMMS_SYMBOL_COUNT 43u
+uint8_t comms_proto_symbol_index(char chr); /**< 0 if c is not a data symbol */
+char    comms_proto_symbol_char(
+    uint8_t sym_index); /**< NUL for 0 or out of range */
 
 /* ---------------------------------------------------------------------
  *  Telemetry (built by CommsTask from the status snapshots).
  * --------------------------------------------------------------------- */
-#define COMMS_D_NONE    0xFFFFu     /* no obstacle range */
+#define COMMS_D_NONE 0xFFFFu /* no obstacle range */
 
 typedef struct
 {
     uint32_t seq;
     uint32_t t_ms;
-    uint8_t  state;             /* mission_state_t                        */
+    uint8_t  state; /**< mission_types_state_t                        */
     bool     b_line_lost;
-    char     barcode;           /* 0 = none yet                           */
-    bool     b_obst_valid;      /* profile fields valid                   */
+    char     barcode;      /**< 0 = none yet                           */
+    char     nav;          /**< latched barcode command char, 0 = none */
+    bool     b_obst_valid; /**< profile fields valid                   */
     int16_t  v_l_mm_s;
     int16_t  v_r_mm_s;
     int32_t  enc_l;
     int32_t  enc_r;
     int32_t  dist_mm;
     int16_t  line_err;
+    uint16_t line_bc; /**< barcode sensor, 0..1000 (1000 = black) */
     int16_t  pitch_cdeg;
+    int16_t  roll_cdeg; /**< + = right side up (one-wheel humps)    */
     uint16_t hump_max_mm;
-    uint16_t obst_d_mm;         /* COMMS_D_NONE = nothing in range        */
+    uint16_t obst_d_mm; /**< COMMS_D_NONE = nothing in range        */
     uint16_t obst_w_mm;
     uint16_t clr_l_mm;
     uint16_t clr_r_mm;
-} comms_telem_t;
+} comms_proto_telem_t;
 
-uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t cap);
-uint16_t comms_build_event(comms_rec_t const * p_rec, uint32_t seq, char * p_buf, uint16_t cap);
-uint16_t comms_build_status(bool b_online, uint32_t uptime_s, int32_t rssi,
-                            uint32_t drops, char * p_buf, uint16_t cap);
+/** Each builder returns the frame length in bytes, 0 if cap is too small. */
+uint16_t comms_proto_build_telemetry(comms_proto_telem_t const * p_t,
+                                     uint8_t * p_buf, uint16_t cap);
+/** Build the binary event frame for p_ev with sequence number seq into p_buf
+    (cap bytes).  Returns its length, or 0 if it does not fit. */
+uint16_t comms_proto_build_event(comms_proto_event_t const * p_ev, uint32_t seq,
+                                 uint8_t * p_buf, uint16_t cap);
+/** p_map: the 4 mapped characters (left, right, straight, U-turn) or NULL. */
+uint16_t comms_proto_build_status(uint32_t uptime_s, int32_t rssi,
+                                  uint32_t drops, char const * p_map,
+                                  uint8_t * p_buf, uint16_t cap);
 
-/* Names used in the JSON.  Index = mission_state_t / mission_ev_t. */
-#define COMMS_STATE_NAME_COUNT  11u
-#define COMMS_EVENT_NAME_COUNT  27u
-char const * comms_state_name(uint8_t state);
-char const * comms_event_name(uint16_t event);
+/* Field widths the other subsystems' enums must fit (checked at build). */
+#define COMMS_STATE_BITS 4u /* mission_types_state_t                */
+#define COMMS_SRC_BITS   3u /* APP_SRC_*                      */
 
 /* ---------------------------------------------------------------------
  *  Remote commands.
  * --------------------------------------------------------------------- */
-typedef enum
-{
-    COMMS_CMD_NONE  = 0,
-    COMMS_CMD_START = 1,
-    COMMS_CMD_STOP  = 2,
-    COMMS_CMD_ESTOP = 3,
-    COMMS_CMD_RESET = 4,
-    COMMS_CMD_SET   = 5
-} comms_cmd_code_t;
+typedef uint8_t comms_proto_cmd_code_t; /* one of the constants below */
+#define COMMS_CMD_NONE  0u
+#define COMMS_CMD_START 1u
+/* 3 unused: the remote E-stop was removed (14 Nov) */
+#define COMMS_CMD_STOP  2u
+#define COMMS_CMD_RESET 4u
+#define COMMS_CMD_SET   5u
+/* value = 4 packed chars: left, right, straight, U-turn */
+#define COMMS_CMD_MAP 6u
 
 typedef enum
 {
-    COMMS_ERR_NONE      = 0,
-    COMMS_ERR_BAD_JSON  = 1,    /* not a flat JSON object                  */
-    COMMS_ERR_NO_ID     = 2,    /* "id" missing or not 0..2^31-1           */
-    COMMS_ERR_BAD_CMD   = 3,    /* "cmd" missing or unknown                */
-    COMMS_ERR_BAD_PARAM = 4,    /* set: "param" missing or not whitelisted */
-    COMMS_ERR_RANGE     = 5,    /* set: "value" missing or out of range    */
-    COMMS_ERR_BUSY      = 6,    /* start/set outside IDLE (FR14)           */
-    COMMS_ERR_FULL      = 7,    /* mbf_mission full                        */
-    COMMS_ERR_REUSED    = 8,    /* id seen recently with a different command */
-    COMMS_ERR_COUNT     = 9
-} comms_err_t;
+    COMMS_ERR_NONE = 0,
+    COMMS_ERR_BAD_FRAME =
+        1, /**< wrong header, or wrong length for the command */
+    COMMS_ERR_NO_ID     = 2,  /**< frame too short to hold an id           */
+    COMMS_ERR_BAD_CMD   = 3,  /**< unknown command code                    */
+    COMMS_ERR_BAD_PARAM = 4,  /**< set: parameter index not whitelisted    */
+    COMMS_ERR_RANGE     = 5,  /**< set: value out of the parameter's range */
+    COMMS_ERR_BUSY      = 6,  /**< start/set outside IDLE (FR14)           */
+    COMMS_ERR_FULL      = 7,  /**< mbf_mission full                        */
+    COMMS_ERR_REUSED    = 8,  /**< id seen recently with a different command */
+    COMMS_ERR_NOT_CAL   = 9,  /**< start before a valid calibration        */
+    COMMS_ERR_BAD_MAP   = 10, /**< map: a movement missing, not one Code 39
+                                 character, '*', or a character used twice */
+    COMMS_ERR_COUNT = 11
+} comms_proto_err_t;
 
+#define COMMS_ID_BITS    8u /* command id, wraps (see dedup)  */
+#define COMMS_CMD_BITS   3u
+#define COMMS_PARAM_BITS 4u  /* index into the whitelist       */
+#define COMMS_VALUE_BITS 16u /* set value, offset-binary       */
+#define COMMS_ERR_BITS   4u
+
+/** Unpacked command (task-local). */
 typedef struct
 {
-    uint32_t id;
-    bool     b_has_id;
-    uint8_t  cmd;               /* comms_cmd_code_t                       */
-    uint8_t  param_id;          /* set only                               */
-    int32_t  value;             /* set only                               */
-} comms_cmd_t;
+    uint8_t cmd_id;
+    bool    b_has_id;
+    uint8_t cmd;      /**< comms_proto_cmd_code_t                       */
+    uint8_t param_id; /**< set only: comms_proto_param_t.id             */
+    int32_t value;    /**< set: value; map: 4 packed chars        */
+} comms_proto_cmd_t;
 
-/* Parse one command payload (not NUL-terminated; len is authoritative). */
-comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd);
+/** Parse one binary command frame (len is authoritative). */
+comms_proto_err_t comms_proto_parse_cmd(uint8_t const * p_data, uint16_t len,
+                                        comms_proto_cmd_t * p_cmd);
 
-/* State rule (FR14): START and SET only in IDLE.  b_idle = mission IDLE. */
-comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle);
+/** State rule (FR14): START, SET and MAP only in IDLE.  b_idle = mission IDLE.
+ */
+comms_proto_err_t comms_proto_check_cmd(comms_proto_cmd_t const * p_cmd,
+                                        bool                      b_idle);
 
-uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
-                         char * p_buf, uint16_t cap);
-char const * comms_err_name(comms_err_t err);
+/** START also needs a valid calibration (Week 6 Section 5). */
+comms_proto_err_t comms_proto_check_ready(comms_proto_cmd_t const * p_cmd,
+                                          bool b_calibrated);
 
-/* Whitelisted parameters for "set".  PROPOSED: the owning buddy confirms
+/** A character the map may use: any Code 39 data character (not '*'). */
+bool comms_proto_map_char_ok(char chr);
+
+/** Build the acknowledgement frame for p_cmd with result err into p_buf (cap
+    bytes).  Returns its length, or 0 if it does not fit. */
+uint16_t comms_proto_build_ack(comms_proto_cmd_t const * p_cmd,
+                               comms_proto_err_t err, uint8_t * p_buf,
+                               uint16_t cap);
+
+/** Whitelisted parameters for "set".  PROPOSED: the owning buddy confirms
    each range before Week 10 (TEAM.md IF-11). */
 typedef struct
 {
     char const * p_name;
-    uint8_t      id;
+    uint8_t      param_id;
     int32_t      min;
     int32_t      max;
-} comms_param_t;
+} comms_proto_param_t;
 
-#define COMMS_PARAM_COUNT       5u
-comms_param_t const * comms_param_by_name(char const * p_name, uint16_t name_len);
-comms_param_t const * comms_param_by_id(uint8_t id);
+#if APP_BENCH
+#define COMMS_PARAM_COUNT 9u /* + bench_move/turn/speed/servo (ids 101-104) */
+#else
+#define COMMS_PARAM_COUNT 5u
+#endif
+comms_proto_param_t const *
+comms_proto_param_by_index(uint8_t param_index); /**< frame index */
+/** The settable parameter with this id, or NULL. */
+comms_proto_param_t const * comms_proto_param_by_id(uint8_t param_id);
 
 /* ---------------------------------------------------------------------
  *  Duplicate suppression (Tribunal 1 Version C gap 9).
@@ -169,60 +256,79 @@ comms_param_t const * comms_param_by_id(uint8_t id);
  *  accepted commands are kept for COMMS_DEDUP_WINDOW_MS:
  *    - same id, same command  -> acknowledged again, not executed again;
  *    - same id, other command -> rejected with COMMS_ERR_REUSED;
- *    - STOP and ESTOP are always executed (repeating them is safe).
- *  The cache is RAM only and empty after a reboot, so the laptop must not
- *  reuse an id within one robot session (e.g. start ids from the time).
+ *    - STOP is always executed (repeating it is safe).
+ *  The cache is RAM only and empty after a reboot.  Ids are 8 bits and
+ *  wrap; the laptop counts them up, so an id comes back only after 256
+ *  further commands, far outside the 60 s window.
  * --------------------------------------------------------------------- */
-#define COMMS_DEDUP_LEN         8u
-#define COMMS_DEDUP_WINDOW_MS   60000u
+#define COMMS_DEDUP_LEN       8u
+#define COMMS_DEDUP_WINDOW_MS 60000u
 
 typedef struct
 {
-    uint32_t id;
     uint32_t t_ms;
     int32_t  value;
+    uint8_t  cmd_id;
     uint8_t  cmd;
     uint8_t  param_id;
-} comms_dedup_entry_t;
+} comms_proto_dedup_entry_t;
 
 typedef struct
 {
-    comms_dedup_entry_t e[COMMS_DEDUP_LEN];
-    uint8_t             next;       /* slot to overwrite next          */
-    uint8_t             count;
-} comms_dedup_t;
+    comms_proto_dedup_entry_t entries[COMMS_DEDUP_LEN];
+    uint8_t                   next; /**< slot to overwrite next          */
+    uint8_t                   count;
+} comms_proto_dedup_t;
 
 typedef enum
 {
-    COMMS_DEDUP_NEW      = 0,       /* not seen: execute               */
-    COMMS_DEDUP_REPEAT   = 1,       /* same command again: ack only    */
-    COMMS_DEDUP_CONFLICT = 2        /* id reused for another command   */
-} comms_dedup_result_t;
+    COMMS_DEDUP_NEW      = 0, /**< not seen: execute               */
+    COMMS_DEDUP_REPEAT   = 1, /**< same command again: ack only    */
+    COMMS_DEDUP_CONFLICT = 2  /* id reused for another command   */
+} comms_proto_dedup_result_t;
 
-void                 comms_dedup_init(comms_dedup_t * p_dd);
-bool                 comms_cmd_repeat_safe(uint8_t cmd);
-comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
-                                       comms_cmd_t const * p_cmd, uint32_t now_ms);
-void                 comms_dedup_add(comms_dedup_t * p_dd,
-                                     comms_cmd_t const * p_cmd, uint32_t now_ms);
+/** Empty the table of recently accepted command ids. */
+void comms_proto_dedup_init(comms_proto_dedup_t * p_dd);
+/** True if executing this command twice does no harm (STOP), so it skips the
+    duplicate check. */
+bool comms_proto_cmd_repeat_safe(uint8_t cmd);
+/** Whether p_cmd is new, a repeat of a command accepted within the window, or
+    a reused id with different content. */
+comms_proto_dedup_result_t
+comms_proto_dedup_check(comms_proto_dedup_t const * p_dd,
+                        comms_proto_cmd_t const * p_cmd, uint32_t now_ms);
+/** Remember an accepted command (its id and content) at now_ms. */
+void comms_proto_dedup_add(comms_proto_dedup_t *     p_dd,
+                           comms_proto_cmd_t const * p_cmd, uint32_t now_ms);
 
 /* ---------------------------------------------------------------------
  *  Offline event ring: the last COMMS_RING_LEN events, re-published in
  *  order after a reconnection (Week 6 Section 6.5 BACKOFF).
  * --------------------------------------------------------------------- */
-#define COMMS_RING_LEN          16u
+#define COMMS_RING_LEN 16u
 
 typedef struct
 {
-    comms_rec_t rec[COMMS_RING_LEN];
-    uint32_t    seq[COMMS_RING_LEN];
-    uint8_t     head;           /* index of the oldest entry */
-    uint8_t     count;
-} comms_ring_t;
+    comms_proto_rec_t rec[COMMS_RING_LEN]; /**< packed, 8 B each              */
+    uint8_t seq[COMMS_RING_LEN]; /**< event seq (8 bits on the wire) */
+    uint8_t head;                /**< index of the oldest entry */
+    uint8_t count;
+} comms_proto_ring_t;
 
-void comms_ring_init(comms_ring_t * p_ring);
-bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint32_t seq); /* true = oldest overwritten */
-bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint32_t * p_seq);
-void comms_ring_pop(comms_ring_t * p_ring);
+/** Empty the offline event ring. */
+void comms_proto_ring_init(comms_proto_ring_t * p_ring);
+/** Append a record with its sequence number.  Returns true if the oldest
+    record was overwritten. */
+bool comms_proto_ring_push(comms_proto_ring_t *      p_ring,
+                           comms_proto_rec_t const * p_rec,
+                           uint8_t seq); /* true = oldest overwritten */
+/** Copy the oldest record and its sequence number, without removing it.
+    Returns false if the ring is empty. */
+bool comms_proto_ring_peek(comms_proto_ring_t const * p_ring,
+                           comms_proto_rec_t * p_rec, uint8_t * p_seq);
+/** Remove the oldest record (none if the ring is empty). */
+void comms_proto_ring_pop(comms_proto_ring_t * p_ring);
 
 #endif /* COMMS_PROTO_H */
+
+/*** end of file ***/

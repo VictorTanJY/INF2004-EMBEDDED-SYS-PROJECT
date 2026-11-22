@@ -1,0 +1,9 @@
+# host tests, 2026-11-15, commit 3d35428: make -C testing/subsystem1/host (gcc, ASan + UBSan)
+cc -std=c11 -Wall -Wextra -Werror -O1 -g -I../../../app_program/subsystem1 -fsanitize=address,undefined -fno-omit-frame-pointer -o test_s1 test_s1.c ../../../app_program/subsystem1/comms_proto.c ../../../app_program/subsystem1/hmi_button.c
+cc -std=c11 -Wall -Wextra -Werror -O1 -g -I../../../app_program/subsystem1 -DAPP_BENCH=1 -fsanitize=address,undefined -fno-omit-frame-pointer -o test_s1_bench test_s1.c ../../../app_program/subsystem1/comms_proto.c ../../../app_program/subsystem1/hmi_button.c
+./test_s1
+info: worst-case telemetry payload = 351 B (+22 B topic)
+host tests: 657 passed, 0 failed
+./test_s1_bench
+info: worst-case telemetry payload = 351 B (+22 B topic)
+host tests: 658 passed, 0 failed

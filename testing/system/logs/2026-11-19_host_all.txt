@@ -1,0 +1,16 @@
+# host tests, 2026-11-19, commit e9e3515 (all subsystems)
+== testing/shared/host
+host tests: 21 passed, 0 failed
+== testing/subsystem1/host
+host tests: 193 passed, 0 failed
+host tests: 193 passed, 0 failed
+host tests: 16 passed, 0 failed
+== testing/subsystem2/host
+host tests: 59 passed, 0 failed
+== testing/subsystem3/host
+host tests: 161 passed, 0 failed
+== testing/subsystem4/host
+host tests: 70 passed, 0 failed
+== testing/subsystem5/host
+host tests: 271 passed, 0 failed
+host tests: 275 passed, 0 failed

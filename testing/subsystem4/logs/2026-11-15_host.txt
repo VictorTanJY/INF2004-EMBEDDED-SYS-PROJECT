@@ -1,0 +1,14 @@
+# host tests, 2026-11-15, commit 3d35428: make -C testing/subsystem4/host (gcc, ASan + UBSan)
+cc -std=c11 -Wall -Wextra -Werror -O1 -g -D_DEFAULT_SOURCE -I../../../app_program/subsystem4 -I../../../app_program -fsanitize=address,undefined -fno-omit-frame-pointer -o test_s4 test_s4.c ../../../app_program/subsystem4/imu_core.c ../../../app_program/subsystem4/safety_core.c ../../../app_program/app_math.c -lm
+./test_s4
+hump 15 mm x 300 mm: reported 13 mm
+hump 20 mm x 300 mm: reported 18 mm
+hump 30 mm x 300 mm: reported 26 mm
+hump 10 mm x 300 mm: not detected (peak pitch below 5 deg) - known limit
+one-wheel hump 10 mm x 300 mm: reported 10 mm
+one-wheel hump 20 mm x 300 mm: reported 20 mm
+one-wheel hump 30 mm x 300 mm: reported 30 mm
+lift: rise 359 mg
+largest rise while driving: 449 mg
+in the air: 1 fake hump(s), max 30 mm (real 19)
+host tests: 66 passed, 0 failed

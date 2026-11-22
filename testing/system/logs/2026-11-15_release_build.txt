@@ -1,0 +1,47 @@
+# release build, 2026-11-15, commit 3d35428: make SMP=1 CONSOLE=usb_cdc WIFI=cyw43 NET=lwip MQTT=1 (APP_BENCH 0); app_program is compiled with -Wall -Wextra
+Building file: ../app_program/app_gpio_irq.c
+Building file: ../app_program/app_main.c
+Building file: ../app_program/app_math.c
+Building file: ../app_program/subsystem1/comms_proto.c
+Building file: ../app_program/subsystem1/comms_service.c
+Building file: ../app_program/subsystem1/hmi_button.c
+Building file: ../app_program/subsystem1/subsystem1.c
+Building file: ../app_program/subsystem1/subsystem1_test.c
+Building file: ../app_program/subsystem1/task_hmi.c
+Building file: ../app_program/subsystem2/drv_encoder.c
+Building file: ../app_program/subsystem2/drv_motor.c
+Building file: ../app_program/subsystem2/motion_api.c
+Building file: ../app_program/subsystem2/motion_core.c
+Building file: ../app_program/subsystem2/motion_rec.c
+Building file: ../app_program/subsystem2/motion_task.c
+Building file: ../app_program/subsystem2/subsystem2.c
+Building file: ../app_program/subsystem2/subsystem2_test.c
+Building file: ../app_program/subsystem3/code39.c
+Building file: ../app_program/subsystem3/drv_adc.c
+Building file: ../app_program/subsystem3/line_barcode.c
+Building file: ../app_program/subsystem3/line_task.c
+Building file: ../app_program/subsystem3/line_track.c
+Building file: ../app_program/subsystem3/subsystem3.c
+Building file: ../app_program/subsystem3/subsystem3_test.c
+Building file: ../app_program/subsystem4/drv_i2c1.c
+Building file: ../app_program/subsystem4/drv_lsm303.c
+Building file: ../app_program/subsystem4/drv_watchdog.c
+Building file: ../app_program/subsystem4/imu_core.c
+Building file: ../app_program/subsystem4/imu_task.c
+Building file: ../app_program/subsystem4/safety_core.c
+Building file: ../app_program/subsystem4/safety_task.c
+Building file: ../app_program/subsystem4/subsystem4.c
+Building file: ../app_program/subsystem4/subsystem4_test.c
+Building file: ../app_program/subsystem5/drv_servo.c
+Building file: ../app_program/subsystem5/drv_ultrasonic.c
+Building file: ../app_program/subsystem5/mission_core.c
+Building file: ../app_program/subsystem5/mission_task.c
+Building file: ../app_program/subsystem5/obstacle_core.c
+Building file: ../app_program/subsystem5/obstacle_task.c
+Building file: ../app_program/subsystem5/subsystem5.c
+Building file: ../app_program/subsystem5/subsystem5_test.c
+tools/elf2uf2 mtk3pico_smp1_usb_cdc_wifi_lwip_mqtt.elf mtk3pico_smp1_usb_cdc_wifi_lwip_mqtt.uf2
+
+# arm-none-eabi-size
+   text	   data	    bss	    dec	    hex	filename
+ 389290	    100	 101800	 491190	  77eb6	build_make/mtk3pico_smp1_usb_cdc_wifi_lwip_mqtt.elf

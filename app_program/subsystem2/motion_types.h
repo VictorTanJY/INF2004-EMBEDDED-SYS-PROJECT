@@ -1,0 +1,122 @@
+/** @file motion_types.h
+ *
+ *  @brief Subsystem 2 -- motion message and snapshot formats (IF-01, IF-02).
+ *  Owner: Buddy 2 (Jedrek).
+ *
+ *  Pure C (no kernel), so motion_core.c, mission_core.c and the host tests
+ *  can use it.  subsystem2.h adds the kernel objects.
+ */
+
+#ifndef MOTION_TYPES_H
+#define MOTION_TYPES_H
+
+#include <stdint.h>
+#include <stdbool.h>
+
+/* ---------------------------------------------------------------------
+ *  IF-01  mbf_motion message.
+ *  Authority rule (Week 6 Section 6.1): MotionTask obeys only the source
+ *  that MissionTask granted with SET_AUTH.  MISSION may always send STOP,
+ *  SET_AUTH and CLEAR_ESTOP; its MOVE/TURN need MISSION authority.  A
+ *  command from a source without authority is rejected and counted.
+ *  Queued commands are judged against the authority in force when
+ *  MotionTask reads them; SET_AUTH travels through the same FIFO.
+ * --------------------------------------------------------------------- */
+typedef uint8_t motion_types_src_t; /* one of the constants below */
+#define MOTION_SRC_MISSION 0u       /* MissionTask: STOP, MOVE/TURN, SET_AUTH */
+#define MOTION_SRC_LINE    1u       /* LineBarcodeTask: DRIVE */
+#define MOTION_SRC_AVOID   2u       /* ObstacleTask during a bypass */
+#define MOTION_SRC_COUNT   3u
+
+typedef uint8_t motion_types_cmd_code_t; /* one of the constants below */
+#define MOTION_CMD_NONE 0u
+#define MOTION_CMD_DRIVE \
+    1u /* p0 = v [mm/s, +fwd], p1 = omega [mrad/s, +left] */
+#define MOTION_CMD_MOVE \
+    2u /* p0 = distance [mm, +fwd], p1 = cruise v [mm/s, > 0] */
+#define MOTION_CMD_TURN \
+    3u /* p0 = angle [0.1 deg, +left], p1 = rate [deg/s, > 0] */
+#define MOTION_CMD_STOP 4u /* ramp down (MOTION_STOP_DECEL), then brake */
+#define MOTION_CMD_SET_AUTH \
+    5u /* p0 = new authority (motion_types_src_t); MISSION only */
+#define MOTION_CMD_CLEAR_ESTOP 6u /* MISSION only, after an operator reset */
+
+/* Unpacked command (task-local).  Through mbf_motion it travels as ONE
+   32-bit word (Change Requirement 1, motion_core_cmd_pack()):
+     src 2 | cmd 3 | seq 5 | payload 22, the payload by command:
+     DRIVE  v 10 (+-511 mm/s) | omega 12 (+-2047 mrad/s), offset-binary
+     MOVE   distance 13 (+-4095 mm) | speed 9 (0..511 mm/s)
+     TURN   angle 13 (+-4095 x 0.1 deg) | rate 9 (0..511 deg/s)
+     SET_AUTH  authority 2;  STOP, CLEAR_ESTOP: none
+   Values outside a field saturate; the named API (motion_api.c) rejects
+   them before they get here. */
+#define MOTION_SEQ_BITS 5u
+#define MOTION_SEQ_MASK 0x1Fu
+
+typedef struct
+{
+    uint8_t src;      /**< motion_types_src_t                          */
+    uint8_t seq;      /**< sender's sequence number, 5 bits, wraps */
+    uint8_t cmd;      /**< motion_types_cmd_code_t                     */
+    uint8_t reserved; /**< 0                                     */
+    int16_t arg0;     /**< see motion_types_cmd_code_t                 */
+    int16_t arg1;
+} motion_types_cmd_t;
+
+/** Next sequence number of a sender (wraps at MOTION_SEQ_BITS). */
+static inline uint8_t motion_types_seq_next (uint8_t seq)
+{
+    /* Cast (uint8_t)((seq + 1u) & ...): the value is 0..31. */
+    return (uint8_t)((seq + 1u) & MOTION_SEQ_MASK);
+}
+
+/* ---------------------------------------------------------------------
+ *  IF-02  Odometry snapshot (written by MotionTask every 10 ms).
+ *  Pose: x forward / y left from the power-on position, heading
+ *  accumulated (not wrapped), + left.  Encoder odometry only (A5).
+ * --------------------------------------------------------------------- */
+typedef uint8_t motion_types_state_t; /* one of the constants below */
+#define MOTION_ST_IDLE_BRAKED    0u
+#define MOTION_ST_VELOCITY_TRACK 1u
+#define MOTION_ST_MANEUVER       2u
+#define MOTION_ST_STOPPING       3u
+#define MOTION_ST_ESTOP_LATCHED  4u
+
+typedef uint8_t motion_types_phase_t; /* one of the constants below */
+#define MOTION_PH_NONE   0u
+#define MOTION_PH_ACCEL  1u
+#define MOTION_PH_CRUISE 2u
+#define MOTION_PH_DECEL  3u
+#define MOTION_PH_SETTLE 4u
+
+typedef struct
+{
+    uint32_t t_ms;  /**< time of the update (app_time_ms)      */
+    int32_t  enc_l; /**< accumulated encoder counts, x4        */
+    int32_t  enc_r;
+    int32_t  dist_mm; /**< mean of both wheels, signed           */
+    int32_t  x_mm;    /**< dead-reckoned pose                    */
+    int32_t  y_mm;
+    int32_t  heading_cdeg; /**< accumulated, + left (0.01 deg)        */
+    int16_t  v_l_mm_s;     /**< measured wheel speeds                 */
+    int16_t  v_r_mm_s;
+    int16_t  v_mm_s;          /**< mean speed                            */
+    int16_t  yaw_rate_cdeg_s; /**< + left                                */
+    int16_t  duty_l;          /**< applied duty, per mille, signed       */
+    int16_t  duty_r;
+    uint16_t rejected;      /**< commands rejected (wrong authority)   */
+    uint8_t  state;         /**< motion_types_state_t                        */
+    uint8_t  phase;         /**< motion_types_phase_t (MANEUVER only)        */
+    uint8_t  auth;          /**< motion_types_src_t currently obeyed         */
+    uint8_t  last_done_seq; /**< seq of the last completed MOVE/TURN   */
+    uint8_t  last_done_src; /**< its source                            */
+    uint8_t  last_fail_seq; /**< seq of the last failed MOVE/TURN      */
+    uint8_t  done_count;    /**< + 1 per completion (wraps)            */
+    uint8_t  fail_count;    /**< + 1 per failure (wraps)               */
+    uint8_t  hw_ok;         /**< 1 = PWM and PIO encoders initialised  */
+    uint8_t  reserved;
+} motion_types_odom_t;
+
+#endif /* MOTION_TYPES_H */
+
+/*** end of file ***/
