@@ -205,11 +205,6 @@ void obstacle_core_out_ping(obstacle_core_out_t * p_o, int32_t axle_lat,
 int32_t obstacle_core_out_target(obstacle_core_out_t const * p_o);
 /** True when the step-out leg has gone far enough sideways (axle_lat, mm). */
 bool obstacle_core_out_done(obstacle_core_out_t const * p_o, int32_t axle_lat);
-/** 22 Nov: how much shorter (mm, 0..rear + OBST_MARGIN_MM) the PASS leg
-   may be than "the car's rear OBST_MARGIN_MM past the obstacle's back",
-   for an axle lat_mm out (+ away from the obstacle) and the obstacle's
-   edge edge_mm out on the same side. */
-int32_t obstacle_core_pass_cut_mm(int32_t lat_mm, int32_t edge_mm);
 /** The car's front corner is within OBST_MARGIN_MM of the face plane: the
    leg must end here, whatever it has seen. */
 bool obstacle_core_out_blocked(int32_t face_mm, int32_t axle_fwd_mm,

@@ -121,7 +121,7 @@ function describe(e) {
       : 'no sensor crossed it: searching';
     if (p.code === 45) { const d = p.data >>> 0; detail = `left sensor ${d >>> 24}, right sensor ${(d >>> 16) & 0xFF}, spun ${d & 0xFFFF}° (encoders)`; }
     if (p.code === 39) { const d = p.data >>> 0, off = ((d >>> 16) << 16) >> 16; detail = `${off >= 0 ? 'left' : 'right'}, ${Math.abs(off) / 10} cm to the side, pass at least ${(d & 0xFFFF) / 10} cm`; }
-    if (p.code === 40) { const d = p.data >>> 0, cut = d >>> 24; detail = `drove ${(d & 0xFFFF) / 10} cm, side ping ${((d >>> 16) & 1) ? 'saw' : 'did not see'} the obstacle${cut ? `, ${cut / 10} cm shorter than the old rule` : ''}`; }
+    if (p.code === 40) { const d = p.data >>> 0; detail = `drove ${(d & 0xFFFF) / 10} cm, side ping ${(d >>> 16) ? 'saw' : 'did not see'} the obstacle`; }
     if (p.code === 44) detail = p.data ? `line touched after ${p.data / 10} cm` : 'line not found on the way back in';
     if (p.code === 53 || p.code === 62) detail = `0x${(p.data >>> 0).toString(16).padStart(8, '0')}`;
     const cat = [63, 64, 31, 65, 66, 67].includes(p.code) ? 'mission' : 'diagnostic';
