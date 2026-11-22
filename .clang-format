@@ -1,0 +1,49 @@
+# Barr-C 2018 layout (rules 1.2, 1.3, 3.1-3.5).  Run:  tools/barr_format.sh
+BasedOnStyle: LLVM
+Language: Cpp
+ColumnLimit: 80
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+BreakBeforeBraces: Allman
+InsertBraces: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+IndentCaseLabels: true
+IndentPPDirectives: None
+PointerAlignment: Middle
+QualifierAlignment: Right
+SpaceBeforeParens: Custom
+SpaceBeforeParensOptions:
+  AfterControlStatements: true
+  AfterFunctionDefinitionName: true
+  AfterFunctionDeclarationName: false
+SpaceAfterCStyleCast: false
+SpacesInParens: Never
+AlignConsecutiveAssignments:
+  Enabled: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+AlignConsecutiveMacros:
+  Enabled: true
+AlignTrailingComments:
+  Kind: Always
+AlignEscapedNewlines: Left
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+BreakBeforeBinaryOperators: NonAssignment
+BinPackArguments: true
+BinPackParameters: BinPack
+ReflowComments: Always
+SortIncludes: Never
+MaxEmptyLinesToKeep: 2
+KeepEmptyLines:
+  AtEndOfFile: false
+  AtStartOfBlock: false
+InsertNewlineAtEOF: true
+AttributeMacros: [EXPORT, IMPORT, LOCAL]

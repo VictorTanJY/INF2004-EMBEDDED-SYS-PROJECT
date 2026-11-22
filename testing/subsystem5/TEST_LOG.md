@@ -1,24 +1,40 @@
 # Subsystem 5 — test log
 
-**Subsystem:** Obstacle scanning (ObstacleTask) and mission state machine (MissionTask)  ·  **Student ID:** 2500443  ·  **Code:** `app_program/subsystem5/`
+**Subsystem:** Obstacle scanning & avoidance (ObstacleTask) and system state machine (MissionTask)  ·  **Student ID:** 2500443  ·  **Code:** `app_program/subsystem5/`
 
-See `testing/README.md` for how to run tests and record results.
+See `testing/README.md` for how to run tests and record results, and
+`docs/SETUP_AND_TEST.md` for the bring-up order on the robot.
 
 ## Test cases
 
-Define a test here before running it. Test IDs never change.
+Define a test here before running it. Test IDs never change (retired IDs stay listed).
 
 | ID | What is tested | Requirement / interface | Method | Steps / how | Expected result |
 |---|---|---|---|---|---|
 | S5-U01 | mbf_mission exists | IF-06 | auto | `subsystem5_test.c` | PASS |
 | S5-U02 | mbf_scan exists | IF-09 | auto | `subsystem5_test.c` | PASS |
 | S5-U03 | flg_obst exists | IF-09 | auto | `subsystem5_test.c` | PASS |
-| S5-U04 | mission snapshot starts in BOOT | IF-10 | auto | `subsystem5_test.c` | PASS |
-
-_Shared-base checks (interface objects and snapshots). The owner adds the subsystem's own tests below them._
+| S5-U04 | *retired 25 Oct:* mission snapshot starts in BOOT (MissionTask now runs and may already be past BOOT) | IF-10 | – | – | – |
+| S5-U05 | mission snapshot valid; no barcode map until MQTT sends one (not hard-coded) | IF-10, FR4 (instructor 24 Oct) | auto | `subsystem5_test.c` | PASS |
+| S5-U06 | ObstacleTask runs (range_cyc / 100 ms wait) | IF-09 | auto | `subsystem5_test.c` | PASS |
+| S5-U07 | echo conversion and median on the target | FR9 | auto | `subsystem5_test.c` | PASS |
+| S5-U08 | ultrasonic pings every 60 ms | FR9, NFR6, IF-09 | auto | the test puts ObstacleTask in MONITOR (`subsystem5_scan_request(MONITOR)`), waits 600 ms, counts pings over 1.2 s, then sends STOP | 19–21 pings |
+| S5-U09 | one ultrasonic range against an object in front | FR9 | auto + manual | flat object 30–100 cm in front of the sensor. Prints the median range; write the tape-measured distance next to it | echo received, 20–4 000 mm, `no_echo` 0. Manual: printed range within ±1 cm of the tape. SKIP if no echo |
+| S5-H01–H08 | statechart: BOOT self-test / FAULT; start refused uncalibrated; CALIBRATING phases; MQTT map (refused while running, duplicates, '*'); barcode latched until the next junction, LEFT/RIGHT/U-turn/STRAIGHT manoeuvres, a barcode read during a manoeuvre latched for the next junction; obstacle -> profile -> bypass -> recovery; CONTINUE; BLOCKED_TIMEOUT; FAULT reset via SafetyTask; bounded line search; set only in IDLE; hump / slow-down speed caps; mbf_mission drop while running = FAULT | Section 5, FR4, FR9–FR12, FR14, FR15 | host | `make -C testing/subsystem5/host` | `host tests: N passed, 0 failed` |
+| S5-H09–H13 | geometry on a 15 deg beam model: 10/15/20 cm boxes at 20 cm, centred and +-4 cm: width within 10 %, <= 30 pings; plan side, wall on one side, blocked, beside the path, nothing; bypass path returns to the line with heading 0, deviation within FR11, >= 50 mm clearance; seek-line window; hump mask 600 mm / 4 s | FR10–FR12, A11 | host | same | same |
+| S5-H26 | CR1: the `mbf_mission` word (data -65536..65535 exact, saturation, the map as four symbols), the `mbf_scan` half-word, the mission (165 bits) and obstacle (166 bits) snapshot layouts round-trip exactly; "none" range and NONE command survive; 4095 mm saturates below "none" | CR1, IF-06, IF-09, IF-10 | auto (host) | `make -C testing/subsystem5/host` | no S5-H26 FAIL line |
+| S5-M01 | servo angles 0 / 90 / 180 deg | FR10 | manual | set angles, protractor | set `OBST_SERVO_MIN_US` / `_MAX_US`, `OBST_SERVO_LEFT_IS_HIGH` |
+| S5-M02 | HC-SR04P on 3.3 V: 10 / 30 / 100 cm against a ruler | A11 | manual | `d_cm` in telemetry, servo at 90 | within +-1 cm, no lost echoes |
+| S5-M03 | approach and stop, 5 straight approaches at cruise speed | FR9, NFR6 | manual | dashboard log + tape measure at rest | slow-down below 40 cm; rests >= 10 cm from the obstacle; else raise `stop_cm` |
+| S5-M04 | width estimate: 10 / 15 / 20 cm boxes, left / centre / right | FR10 (instructor 23 Oct: 10–20 cm, accuracy graded) | manual | `w_mm` in telemetry vs ruler | grade A <= 10 %, B <= 20 %, C <= 30 % |
+| S5-M05 | bypass, 3 runs per offset (left / centre / right) | FR11 | manual | video + dashboard log | no contact; the side taken matches the logged "Bypass plan"; time from OBSTACLE to RECOVERY_DONE logged (instructor grading: A < 3 s, B < 5 s, C < 7 s) |
+| S5-M06 | line reacquisition | FR12 | manual | the S5-M05 runs | >= 2 of 3 runs per offset end in LINE_FOLLOW on the original line |
+| S5-M07 | barcode map over MQTT, then a run: barcode -> next junction -> movement | FR3, FR4 | manual | send `map`, check `status.map`; run the junction track | the mapped movement at the next cross-junction, every time |
+| S5-M08 | blocked path | Section 5 | manual | box with walls both sides | 2 reverse-and-rescans, then BLOCKED, FAULT after 10 s |
 
 *Method:* **auto** = `TEST_CHECK` in code, result printed on the console;
-**manual** = a person observes the result (LED, scope, meter, phone app…).
+**host** = pure-logic test on a PC (`make -C testing/subsystem5/host`, gcc with ASan + UBSan);
+**manual** = a person observes the result on the robot (scope, tape measure, MQTT log...).
 
 ## Results
 
@@ -26,4 +42,21 @@ Add a new row for every run. Never edit or delete old rows.
 
 | Date | Test ID | Commit | Tester | Result | Log / evidence | Notes |
 |---|---|---|---|---|---|---|
-| YYYY-MM-DD | S5-U01 | `abc1234` | | PASS / FAIL | `logs/YYYY-MM-DD_….txt` | |
+| 2026-10-25 | S5-H* | feature/subsystems-2-5 | Victor | PASS | console output of `make -C testing/subsystem5/host` | host PC, gcc with ASan + UBSan; logic only, on models |
+| 2026-10-25 | S5-U* | feature/subsystems-2-5 | Victor | PASS | `../integration/logs/2026-10-25_emulator_smp0_test.txt` | **emulator** (rp2040js, `SMP=0 CONSOLE=uart WIFI=none TEST=1`), core 0 only, no sensors: repeat on the Pico |
+| 2026-11-14 | S5-M07 | `cf3e2d7` | Victor | PARTIAL | `../system/logs/2026-11-14_0334_dashboard_map_barcode_F.txt` | Map sent, F read and latched "F → U-turn at the next junction", EXECUTE_NAV at the next junction (03:34:28, 03:40:58). That junction was detected on the plain line just after the barcode, so the U-turn came early. |
+| 2026-11-14 | S5-M03 | `cf3e2d7` | Victor | PARTIAL | `../system/logs/2026-11-14_0351_dashboard_obstacle_slowdown.txt` | "Slowing for an obstacle" at 39.8, 39.6 and 39.6 cm on three approaches; a second line reads −0.1 cm (display value to check). Rest distance not measured yet. |
+| 2026-11-15 | S5-H01–H25 | `3d35428` | Victor | PASS (259 + 263 checks) | `logs/2026-11-15_host.txt` | Run twice: normal build and APP_BENCH. |
+| 2026-11-15 | S5-U01–U03, U05–U07 | `3d35428` | Victor | PASS (6 / 6) | `../integration/logs/2026-11-15_emulator_smp0_test.txt` | **emulator**: kernel objects, mission snapshot without a map, ObstacleTask running, echo conversion. |
+| 2026-11-15 | S5-U01–U03, U05–U09 | `843f105` | Victor | PASS (7 / 7), 1 SKIP | `../integration/logs/2026-11-15_emulator_smp0_test_843f105.txt` | **emulator**: 20 pings in 1 200 ms. S5-U09 SKIP (no echo on the emulator). Run on the robot with a wall in front. |
+| 2026-11-15 | S5-U01–U03, U05–U09 | `843f105` | Victor | PASS (8 / 8) | `../integration/logs/2026-11-15_board_selftest_843f105.txt`, run 1 (lines 171–181) | **Pico on the car, dual core, image `make SMP=1 CONSOLE=usb_cdc WIFI=none TEST=1`**. U08: 20 pings in 1 200 ms. U09 (automatic part): echo received, 673 mm. Tape comparison (manual part) not valid: the car had turned 90° left in S2-U11 before ranging, so the sensor was not facing the measured wall. Run 2 (held by hand): 709 mm; tape 700 mm from the wheel centre, ≈ 615 mm from the sensor if `OBST_US_AHEAD_MM` (85 mm) is right; not decided. Repeat: wall on the car's left, tape from the sensor face after the run. |
+| 2026-11-15 | S5-H01–H26 | `ee142d8` | Victor | PASS (271 + 275) | `logs/2026-11-15_host_cr1.txt` | Normal and APP_BENCH builds; includes S5-H26 (CR1 messages and snapshots). The 5-bit motion seq did not change any statechart result. |
+| 2026-11-15 | S5-U01–U03, U05–U09 | `ee142d8` | Victor | PASS (7 / 7), 1 SKIP | `../integration/logs/2026-11-15_emulator_smp0_test_cr1.txt` | **emulator**, CR1 image: 20 pings in 1.2 s through the packed echo word. |
+| 2026-11-19 | S5-M03 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | "Slowing for an obstacle" at 36.8 cm (20:31:19), 38.4 cm (21:05:16), 22.4 cm (21:09:30, started close) and 37.7 cm (21:10:15); at 21:09:31 "Obstacle ahead 19.8 cm", stopped and scanned. Rest distance not tape-measured in the logs. "−0.1 cm" slow-down lines at 20:31:21 and 21:10:17 (display value, open since 14 Nov). Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
+| 2026-11-19 | S5-M04 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | 21:09:36: width 123 mm, edges 4.5 to 16.8 cm right of the line. Box width not recorded in the log. Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
+| 2026-11-19 | S5-M05 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | 21:09:36 "Bypass plan: left, 11.1 cm to the side, pass at least 52.4 cm" for a box right of the line; bypass done and back on the line 21:10:15. OBSTACLE 21:09:31 → back on the line 21:10:15: 44 s. No contact reported by the tester. Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
+| 2026-11-19 | S5-M06 | `4defd67` | Victor | PASS (tester-reported) | `../system/logs/2026-11-19_2059_dashboard_barcode_A_obstacle.txt`, `../system/logs/2026-11-19_2110_dashboard_obstacle_bypass.txt` | Ended in LINE_FOLLOW on the line after the bypass at 21:05:15 and 21:10:15 ("Back on the line"). Further runs on the car 21:24–21:45 reported consistent by the tester (logs not saved). |
+| 2026-11-19 | S5-M01 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M02 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M07 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |
+| 2026-11-19 | S5-M08 | `4defd67` | Victor | PASS | — | Demonstrated working on the car. |

@@ -1,106 +1,239 @@
-/*
- *  subsystem5.c
- *  Subsystem 5 -- Obstacle and mission.  Owner: Buddy 5 (Ryan).
+/** @file subsystem5.c
  *
- *  STATUS: shared-base stub.  Creates mbf_mission, mbf_scan and
- *  flg_obst, and provides the mission and obstacle snapshots.
- *  TODO (owner): MissionTask (statechart, motion authority, rule for
- *  commands already queued in mbf_motion when authority changes),
- *  ObstacleTask, range_cyc, echo_isr (32-bit TIMERAWL difference, clamp
- *  >= 65535 us to "no echo"), drv_ultrasonic, drv_servo.
+ *  @brief Subsystem 5 -- Obstacle and mission: kernel objects and snapshots.
+ *  Owner: Buddy 5 (Ryan).  Tasks: mission_task.c,
+ *  obstacle_task.c. Logic: mission_core.c, obstacle_core.c.
  */
 
 #include "subsystem5.h"
+#include "mission_core.h"
+#include "obstacle_core.h"
 
-EXPORT ID g_mbf_mission;
-EXPORT ID g_mbf_scan;
-EXPORT ID g_flg_obst;
+static ID g_mbf_mission;
+static ID g_mbf_scan;
+static ID g_flg_obst;
 
-static app_lock_t       g_mission_lock;
-static mission_snap_t   g_mission_snap;
-static app_lock_t       g_obst_lock;
-static obst_snap_t      g_obst_snap;
+/** Snapshots are stored packed (Change Requirement 1).  The writer packs
+   and the readers unpack in their own task; only whole records are copied
+   under the lock, so nobody read-modify-writes the shared words. */
+static app_lock_t g_mission_lock;
+static uint32_t   g_mission_snap[MISSION_SNAP_WORDS];
+static app_lock_t g_obst_lock;
+static uint32_t   g_obst_snap[OBST_SNAP_WORDS];
+static uint32_t   g_drops;
+static ID         g_cyc_range;
 
-EXPORT ER subsystem5_init(void)
+static void range_cyc_handler(void * p_exinf);
+
+EXPORT ER subsystem5_init (void)
 {
-    T_CMBF  cmbf = {0};
-    T_CFLG  cflg = {0};
+    T_CMBF cmbf = {0};
+    T_CFLG cflg = {0};
+    T_CCYC ccyc = {0};
+    ER     err;
 
     app_lock_init(&g_mission_lock);
     app_lock_init(&g_obst_lock);
-    g_mission_snap.state = (uint8_t)MISSION_ST_BOOT;
-    g_obst_snap.d_mm     = OBST_RANGE_NONE;
+    {
+        mission_types_snap_t      mission = {0};
+        mission_types_obst_snap_t obst    = {0};
 
-    cmbf.mbfatr  = TA_TFIFO;
-    cmbf.bufsz   = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(mission_evt_t));
-    cmbf.maxmsz  = sizeof(mission_evt_t);
+        mission.state       = MISSION_ST_BOOT;
+        mission.pending_nav = MISSION_NAV_NONE;
+        obst.d_mm           = OBST_RANGE_NONE;
+        mission_core_snap_pack(&mission, g_mission_snap);
+        obstacle_core_snap_pack(&obst, g_obst_snap);
+    }
+
+    /* Messages are one packed word each (CR1); the kernel adds a 4-byte
+       header and rounds the message up to 4 bytes (messagebuf.h). */
+    cmbf.mbfatr   = TA_TFIFO;
+    cmbf.bufsz    = S5_MBF_MISSION_DEPTH * (sizeof(INT) + sizeof(uint32_t));
+    cmbf.maxmsz   = sizeof(uint32_t);
     g_mbf_mission = tk_cre_mbf(&cmbf);
-    if (g_mbf_mission < E_OK)
+    err           = (g_mbf_mission < E_OK) ? g_mbf_mission : E_OK;
+
+    if (E_OK == err)
     {
-        return g_mbf_mission;
+        cmbf.bufsz  = S5_MBF_SCAN_DEPTH
+                      * (sizeof(INT) + sizeof(INT)); /* 2 B rounded to 4 */
+        cmbf.maxmsz = sizeof(uint16_t);
+        g_mbf_scan  = tk_cre_mbf(&cmbf);
+        err         = (g_mbf_scan < E_OK) ? g_mbf_scan : E_OK;
     }
 
-    cmbf.bufsz  = S5_MBF_SCAN_DEPTH * (sizeof(INT) + sizeof(scan_req_t));
-    cmbf.maxmsz = sizeof(scan_req_t);
-    g_mbf_scan  = tk_cre_mbf(&cmbf);
-    if (g_mbf_scan < E_OK)
+    if (E_OK == err)
     {
-        return g_mbf_scan;
+        cflg.flgatr  = TA_TFIFO | TA_WSGL; /* only ObstacleTask waits */
+        cflg.iflgptn = 0;
+        g_flg_obst   = tk_cre_flg(&cflg);
+        err          = (g_flg_obst < E_OK) ? g_flg_obst : E_OK;
     }
 
-    cflg.flgatr  = TA_TFIFO | TA_WSGL;  /* only ObstacleTask waits */
-    cflg.iflgptn = 0;
-    g_flg_obst   = tk_cre_flg(&cflg);
+    if (E_OK == err)
+    {
+        /* Cast (FP)range_cyc_handler: the kernel stores the entry point as FP;
+           it is called with its own type. */
+        ccyc.cycatr = TA_HLNG;
+        ccyc.cychdr = (FP)range_cyc_handler;
+        ccyc.cyctim = S5_RANGE_PERIOD_MS;
+        ccyc.cycphs = S5_RANGE_PERIOD_MS;
+        g_cyc_range = tk_cre_cyc(&ccyc);
+        err         = (g_cyc_range < E_OK) ? g_cyc_range : E_OK;
+    }
 
-    return (g_flg_obst < E_OK) ? g_flg_obst : E_OK;
+    return err;
 }
 
-EXPORT ER subsystem5_start(void)
+EXPORT ER subsystem5_start (void)
 {
-    /* TODO (owner): start MissionTask (S5_PRI_MISSION) and ObstacleTask
-       (S5_PRI_OBSTACLE), both on S5_CORE. */
-    return E_OK;
+    ID tid;
+    ER err;
+
+    /* Cast (FP)mission_task_thread: the kernel stores the entry point as FP; it
+       is called with its own type. */
+    tid = app_main_start_task((FP)mission_task_thread, S5_PRI_MISSION, S5_CORE,
+                              "mission");
+    err = (tid < E_OK) ? tid : E_OK;
+
+    if (E_OK == err)
+    {
+        /* Cast (FP)obstacle_task_thread: the kernel stores the entry point as
+           FP; it is called with its own type. */
+        tid = app_main_start_task((FP)obstacle_task_thread, S5_PRI_OBSTACLE,
+                                  S5_CORE, "obstacle");
+        err = (tid < E_OK) ? tid : tk_sta_cyc(g_cyc_range);
+    }
+
+    return err;
 }
 
-EXPORT ER mission_post(uint8_t type, uint8_t src, uint16_t a, int32_t data)
+EXPORT ER subsystem5_mission_post (uint8_t type, uint8_t src, uint16_t arg,
+                                   int32_t data)
 {
-    mission_evt_t evt;
+    mission_types_evt_t evt;
+    uint32_t            word;
+    ER                  err;
 
     evt.type = type;
     evt.src  = src;
-    evt.a    = a;
+    evt.arg  = arg;
     evt.data = data;
-    return tk_snd_mbf(g_mbf_mission, &evt, sizeof(evt), TMO_POL);
+    word     = mission_core_evt_pack(&evt);
+    err      = tk_snd_mbf(g_mbf_mission, &word, sizeof(word), TMO_POL);
+
+    if (err != E_OK)
+    {
+        app_atomic_inc(&g_drops); /* senders on both cores */
+    }
+
+    return err;
 }
 
-EXPORT void mission_get_snap(mission_snap_t * p_out)
+EXPORT uint32_t subsystem5_mission_drops (void)
 {
-    UINT sts = app_lock(&g_mission_lock);
+    return g_drops;
+}
 
-    *p_out = g_mission_snap;
+EXPORT ER subsystem5_scan_request (uint8_t type, uint8_t seq, int16_t param)
+{
+    mission_types_scan_req_t req;
+    uint16_t                 word;
+    ER                       err;
+
+    req.type  = type;
+    req.seq   = seq;
+    req.param = param;
+    word      = mission_core_scan_req_pack(&req);
+    err       = tk_snd_mbf(g_mbf_scan, &word, sizeof(word), TMO_POL);
+    (void)tk_set_flg(g_flg_obst, OBST_FLG_REQ);
+    return err;
+}
+
+EXPORT void subsystem5_get_mission_snap (mission_types_snap_t * p_out)
+{
+    uint32_t words[MISSION_SNAP_WORDS];
+    uint32_t idx;
+    UINT     sts = app_lock(&g_mission_lock);
+
+    for (idx = 0u; idx < MISSION_SNAP_WORDS; idx++)
+    {
+        words[idx] = g_mission_snap[idx];
+    }
+
+    app_unlock(&g_mission_lock, sts);
+    mission_core_snap_unpack(words, p_out);
+}
+
+EXPORT void subsystem5_put_mission_snap (mission_types_snap_t const * p_in)
+{
+    uint32_t words[MISSION_SNAP_WORDS];
+    UINT     sts;
+    uint32_t idx;
+
+    mission_core_snap_pack(p_in, words);
+    sts = app_lock(&g_mission_lock);
+
+    for (idx = 0u; idx < MISSION_SNAP_WORDS; idx++)
+    {
+        g_mission_snap[idx] = words[idx];
+    }
+
     app_unlock(&g_mission_lock, sts);
 }
 
-EXPORT void mission_put_snap(mission_snap_t const * p_in)
+EXPORT void subsystem5_get_obst_snap (mission_types_obst_snap_t * p_out)
 {
-    UINT sts = app_lock(&g_mission_lock);
+    uint32_t words[OBST_SNAP_WORDS];
+    uint32_t idx;
+    UINT     sts = app_lock(&g_obst_lock);
 
-    g_mission_snap = *p_in;
-    app_unlock(&g_mission_lock, sts);
+    for (idx = 0u; idx < OBST_SNAP_WORDS; idx++)
+    {
+        words[idx] = g_obst_snap[idx];
+    }
+
+    app_unlock(&g_obst_lock, sts);
+    obstacle_core_snap_unpack(words, p_out);
 }
 
-EXPORT void obst_get_snap(obst_snap_t * p_out)
+EXPORT void subsystem5_put_obst_snap (mission_types_obst_snap_t const * p_in)
 {
-    UINT sts = app_lock(&g_obst_lock);
+    uint32_t words[OBST_SNAP_WORDS];
+    UINT     sts;
+    uint32_t idx;
 
-    *p_out = g_obst_snap;
+    obstacle_core_snap_pack(p_in, words);
+    sts = app_lock(&g_obst_lock);
+
+    for (idx = 0u; idx < OBST_SNAP_WORDS; idx++)
+    {
+        g_obst_snap[idx] = words[idx];
+    }
+
     app_unlock(&g_obst_lock, sts);
 }
 
-EXPORT void obst_put_snap(obst_snap_t const * p_in)
+EXPORT ID subsystem5_mbf_mission (void)
 {
-    UINT sts = app_lock(&g_obst_lock);
-
-    g_obst_snap = *p_in;
-    app_unlock(&g_obst_lock, sts);
+    return g_mbf_mission;
 }
+
+EXPORT ID subsystem5_mbf_scan (void)
+{
+    return g_mbf_scan;
+}
+
+EXPORT ID subsystem5_flg_obst (void)
+{
+    return g_flg_obst;
+}
+
+/** range_cyc: every 60 ms, the HC-SR04 minimum cycle. */
+static void range_cyc_handler (void * p_exinf)
+{
+    (void)p_exinf;
+    (void)tk_set_flg(g_flg_obst, OBST_FLG_RANGE);
+}
+
+/*** end of file ***/

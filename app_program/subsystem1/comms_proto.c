@@ -1,805 +1,408 @@
-/*
- *  comms_proto.c
- *  Subsystem 1 -- MQTT message formats.  Owner: Buddy 1 (Victor).
+/** @file comms_proto.c
  *
- *  Pure C, no kernel calls (see comms_proto.h).  Built into the firmware
- *  and into testing/subsystem1/host/ for the host unit tests.
+ *  @brief Subsystem 1 -- MQTT message formats.  Owner: Buddy 1 (Victor).
+ *
+ *  Pure C, no kernel calls (see comms_proto.h for the frame layouts).
+ *  Built into the firmware and into testing/subsystem1/host/ for the host
+ *  unit tests.  Every field is written with app_pack.h: masks and shifts,
+ *  only as many bits as its valid range needs (Change Requirement 1).
  */
 
 #include <stddef.h>
 #include "comms_proto.h"
+#include "../app_pack.h"
+
+typedef uint8_t
+    comms_check_symbols_t[(PK_SYM_COUNT == COMMS_SYMBOL_COUNT) ? 1 : -1];
+
+#define NONE_D_CM   511u  /* telemetry d: nothing in range      */
+#define NONE_W_MM   1023u /* telemetry w: no profile            */
+#define NONE_CLR_CM 127u  /* telemetry clr_l / clr_r: no profile */
+#define T10_BITS    24u   /* frame time, 10 ms units (46.6 h)   */
+
+/** Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
+static comms_proto_param_t const g_params[COMMS_PARAM_COUNT] = {
+    {"speed_mm_s", 1u, 150, 350}, /* cruise speed, NFR11 (Buddy 2/3)       */
+    {"slow_cm", 2u, 25, 60},      /* slow-down range, FR9, default 40 (B5) */
+    {"stop_cm", 3u, 15, 40},      /* stop range, FR9/NFR6, default 20 (B5) */
+    {"lost_mm", 4u, 55, 150},     /* line-lost length, FR2, default 80 (B3) */
+    {"junction_mm", 5u, 10, 40}   /* junction length, FR2, default 12 (B3) */
+#if APP_BENCH
+    ,
+    {"bench_move", 101u, -2000, 2000}, /* app_config.h: bring-up only */
+    {"bench_turn", 102u, -3600, 3600},
+    {"bench_speed", 103u, 50, 450}
+#endif
+};
+
+static void put_header(app_pack_writer_t * p_w, comms_proto_frame_type_t type);
+static int32_t           cdeg_to_tenths(int16_t cdeg);
+static uint32_t          mm_to_cm_field(uint16_t value_mm, bool b_valid,
+                                        uint32_t none_code);
+static comms_proto_err_t parse_body(app_pack_reader_t * p_reader, uint16_t len,
+                                    comms_proto_cmd_t * p_cmd);
+static comms_proto_err_t parse_set(app_pack_reader_t * p_reader, uint16_t len,
+                                   comms_proto_cmd_t * p_cmd);
+static comms_proto_err_t parse_map(app_pack_reader_t * p_reader, uint16_t len,
+                                   comms_proto_cmd_t * p_cmd);
 
 /* ---------------------------------------------------------------------
- *  Name tables.  Index = mission_state_t / mission_ev_t (subsystem5.h);
- *  comms_service.c checks the counts at compile time.
+ *  Helpers
  * --------------------------------------------------------------------- */
-static char const * const k_state_names[COMMS_STATE_NAME_COUNT] =
+uint8_t comms_proto_symbol_index (char chr)
 {
-    "BOOT", "IDLE", "CALIBRATING", "LINE_FOLLOW", "EXECUTE_NAV",
-    "OBSTACLE_HANDLING", "AVOIDING", "LINE_RECOVERY", "LINE_SEARCH",
-    "MISSION_COMPLETE", "FAULT"
-};
-
-static char const * const k_event_names[COMMS_EVENT_NAME_COUNT] =
-{
-    "NONE", "BTN_START_STOP", "BTN_CALIBRATE", "BTN_RESET",
-    "REMOTE_START", "REMOTE_STOP", "REMOTE_RESET", "REMOTE_SET",
-    "BARCODE", "JUNCTION", "LINE_LOST", "LINE_FOUND",
-    "MOTION_DONE", "MOTION_FAILED", "OBSTACLE", "SLOW_DOWN",
-    "PROFILE_DONE", "CONTINUE", "BYPASS_DONE", "RECOVERY_DONE",
-    "RECOVERY_FAILED", "BLOCKED_TIMEOUT", "HUMP_START", "HUMP_END",
-    "MOTION_CLASS", "FAULT", "CAL_DONE"
-};
-
-#define COMMS_EV_BARCODE    8u      /* MISSION_EV_BARCODE */
-
-static char const * const k_err_names[COMMS_ERR_COUNT] =
-{
-    "", "bad_json", "no_id", "bad_cmd", "bad_param", "range", "busy", "full", "id_reused"
-};
-
-/* Whitelist for "set" (PROPOSED ranges; owners confirm, TEAM.md IF-11). */
-static comms_param_t const k_params[COMMS_PARAM_COUNT] =
-{
-    { "speed_mm_s",  1u, 150, 350 },  /* cruise speed, NFR11 (Buddy 2/3)       */
-    { "slow_cm",     2u,  25,  60 },  /* slow-down range, FR9, default 40 (B5) */
-    { "stop_cm",     3u,  15,  40 },  /* stop range, FR9/NFR6, default 20 (B5) */
-    { "lost_mm",     4u,  55, 150 },  /* line-lost length, FR2, default 80 (B3) */
-    { "junction_mm", 5u,  10,  40 }   /* junction length, FR2, default 20 (B3) */
-};
-
-char const * comms_state_name(uint8_t state)
-{
-    return (state < COMMS_STATE_NAME_COUNT) ? k_state_names[state] : "UNKNOWN";
+    return app_pack_sym_index(chr);
 }
 
-char const * comms_event_name(uint16_t event)
+char comms_proto_symbol_char (uint8_t sym_index)
 {
-    return (event < COMMS_EVENT_NAME_COUNT) ? k_event_names[event] : "UNKNOWN";
-}
-
-char const * comms_err_name(comms_err_t err)
-{
-    return ((uint32_t)err < (uint32_t)COMMS_ERR_COUNT) ? k_err_names[err] : "unknown";
+    return app_pack_sym_char(sym_index);
 }
 
 /* ---------------------------------------------------------------------
- *  JSON writer
+ *  Telemetry record (mbf_telem)
  * --------------------------------------------------------------------- */
-static void jw_putc(jw_t * p_jw, char c)
+void comms_proto_rec_pack (comms_proto_rec_t * p_rec, uint8_t kind, uint8_t src,
+                           uint16_t code, int32_t data, uint32_t now_ms)
 {
-    /* Keep one byte for the terminator written by jw_finish(). */
-    if ((uint32_t)p_jw->len + 1u < (uint32_t)p_jw->cap)
-    {
-        p_jw->p_buf[p_jw->len] = c;
-        p_jw->len++;
-    }
-    else
-    {
-        p_jw->b_overflow = true;
-    }
+    uint32_t       word = 0u;
+    uint32_t const kind_idx =
+        ((kind >= 1u) && (kind <= 4u)) ? (kind - 1u) : 3u; /* unknown -> LOG */
+
+    word =
+        app_pack_set(word, COMMS_REC_KIND_SHIFT, COMMS_REC_KIND_BITS, kind_idx);
+    word       = app_pack_set(word, COMMS_REC_SRC_SHIFT, COMMS_REC_SRC_BITS,
+                              app_pack_sat_u(src, COMMS_REC_SRC_BITS));
+    word       = app_pack_set(word, COMMS_REC_CODE_SHIFT, COMMS_REC_CODE_BITS,
+                              app_pack_sat_u(code, COMMS_REC_CODE_BITS));
+    word       = app_pack_set(word, COMMS_REC_T_SHIFT, COMMS_REC_T_BITS,
+                              (now_ms / 10u) & app_pack_mask(COMMS_REC_T_BITS));
+    p_rec->hdr = word;
+    p_rec->data = data;
 }
 
-void jw_init(jw_t * p_jw, char * p_buf, uint16_t cap)
+void comms_proto_rec_unpack (comms_proto_rec_t const * p_rec, uint32_t now_ms,
+                             comms_proto_event_t * p_ev)
 {
-    p_jw->p_buf      = p_buf;
-    p_jw->cap        = cap;
-    p_jw->len        = 0u;
-    p_jw->b_overflow = (cap == 0u);
-}
+    uint32_t const now10 = now_ms / 10u;
+    uint32_t const t10 =
+        app_pack_get(p_rec->hdr, COMMS_REC_T_SHIFT, COMMS_REC_T_BITS);
+    uint32_t const age10 = (now10 - t10) & app_pack_mask(COMMS_REC_T_BITS);
 
-void jw_raw(jw_t * p_jw, char const * p_text)
-{
-    while (*p_text != '\0')
-    {
-        jw_putc(p_jw, *p_text);
-        p_text++;
-    }
-}
-
-void jw_uint(jw_t * p_jw, uint32_t value)
-{
-    char    digits[10];
-    uint8_t n = 0u;
-
-    do
-    {
-        digits[n] = (char)('0' + (char)(value % 10u));
-        n++;
-        value /= 10u;
-    } while (value != 0u);
-
-    while (n > 0u)
-    {
-        n--;
-        jw_putc(p_jw, digits[n]);
-    }
-}
-
-void jw_int(jw_t * p_jw, int32_t value)
-{
-    if (value < 0)
-    {
-        jw_putc(p_jw, '-');
-        jw_uint(p_jw, (uint32_t)0u - (uint32_t)value);   /* safe for INT32_MIN */
-    }
-    else
-    {
-        jw_uint(p_jw, (uint32_t)value);
-    }
-}
-
-void jw_fixed1(jw_t * p_jw, int32_t tenths)
-{
-    uint32_t mag;
-
-    if (tenths < 0)
-    {
-        jw_putc(p_jw, '-');
-        mag = (uint32_t)0u - (uint32_t)tenths;
-    }
-    else
-    {
-        mag = (uint32_t)tenths;
-    }
-    jw_uint(p_jw, mag / 10u);
-    jw_putc(p_jw, '.');
-    jw_putc(p_jw, (char)('0' + (char)(mag % 10u)));
-}
-
-void jw_str(jw_t * p_jw, char const * p_text)
-{
-    static char const k_hex[] = "0123456789abcdef";
-
-    jw_putc(p_jw, '"');
-    while (*p_text != '\0')
-    {
-        uint8_t c = (uint8_t)*p_text;
-
-        if ((c == (uint8_t)'"') || (c == (uint8_t)'\\'))
-        {
-            jw_putc(p_jw, '\\');
-            jw_putc(p_jw, (char)c);
-        }
-        else if (c < 0x20u)
-        {
-            jw_raw(p_jw, "\\u00");
-            jw_putc(p_jw, k_hex[c >> 4]);
-            jw_putc(p_jw, k_hex[c & 0x0Fu]);
-        }
-        else
-        {
-            jw_putc(p_jw, (char)c);
-        }
-        p_text++;
-    }
-    jw_putc(p_jw, '"');
-}
-
-uint16_t jw_finish(jw_t * p_jw)
-{
-    if (p_jw->b_overflow)
-    {
-        if (p_jw->cap > 0u)
-        {
-            p_jw->p_buf[0] = '\0';
-        }
-        return 0u;
-    }
-    p_jw->p_buf[p_jw->len] = '\0';
-    return p_jw->len;
-}
-
-static void jw_bool(jw_t * p_jw, bool b_value)
-{
-    jw_raw(p_jw, b_value ? "true" : "false");
-}
-
-/* mm -> cm rounded, or null. */
-static void jw_cm_or_null(jw_t * p_jw, uint16_t mm, bool b_valid)
-{
-    if (b_valid && (mm != COMMS_D_NONE))
-    {
-        jw_uint(p_jw, ((uint32_t)mm + 5u) / 10u);
-    }
-    else
-    {
-        jw_raw(p_jw, "null");
-    }
-}
-
-static int32_t cdeg_to_tenths(int16_t cdeg)
-{
-    int32_t c = (int32_t)cdeg;
-
-    return (c >= 0) ? ((c + 5) / 10) : -((5 - c) / 10);
+    /* Casts (uint8_t)(app_pack_get(p_rec->hdr ...)): the value is 1..4;
+       (uint8_t)app_pack_get(p_rec->hdr ...): the value is 0..7;
+       (uint16_t)app_pack_get(p_rec->hdr ...): the value is 0..127. */
+    p_ev->kind = (uint8_t)(app_pack_get(p_rec->hdr, COMMS_REC_KIND_SHIFT,
+                                        COMMS_REC_KIND_BITS)
+                           + 1u);
+    p_ev->src  = (uint8_t)app_pack_get(p_rec->hdr, COMMS_REC_SRC_SHIFT,
+                                       COMMS_REC_SRC_BITS);
+    p_ev->code = (uint16_t)app_pack_get(p_rec->hdr, COMMS_REC_CODE_SHIFT,
+                                        COMMS_REC_CODE_BITS);
+    p_ev->data = p_rec->data;
+    p_ev->t_ms = (now10 - age10) * 10u;
 }
 
 /* ---------------------------------------------------------------------
  *  Builders
  * --------------------------------------------------------------------- */
-uint16_t comms_build_telemetry(comms_telem_t const * p_t, char * p_buf, uint16_t cap)
+uint16_t comms_proto_build_telemetry (comms_proto_telem_t const * p_t,
+                                      uint8_t * p_buf, uint16_t cap)
 {
-    jw_t jw;
-    char code[2];
+    app_pack_writer_t writer;
+    bool const        b_prof = p_t->b_obst_valid;
 
-    jw_init(&jw, p_buf, cap);
-    jw_raw(&jw, "{\"seq\":");          jw_uint(&jw, p_t->seq);
-    jw_raw(&jw, ",\"t_ms\":");         jw_uint(&jw, p_t->t_ms);
-    jw_raw(&jw, ",\"state\":");        jw_str(&jw, comms_state_name(p_t->state));
-    jw_raw(&jw, ",\"v_mm_s\":[");      jw_int(&jw, p_t->v_l_mm_s);
-    jw_raw(&jw, ",");                  jw_int(&jw, p_t->v_r_mm_s);
-    jw_raw(&jw, "],\"enc\":[");        jw_int(&jw, p_t->enc_l);
-    jw_raw(&jw, ",");                  jw_int(&jw, p_t->enc_r);
-    jw_raw(&jw, "],\"dist_mm\":");     jw_int(&jw, p_t->dist_mm);
-    jw_raw(&jw, ",\"line\":{\"err\":"); jw_int(&jw, p_t->line_err);
-    jw_raw(&jw, ",\"lost\":");         jw_bool(&jw, p_t->b_line_lost);
-    jw_raw(&jw, "},\"barcode\":");
-    if (p_t->barcode != '\0')
+    /* Casts (uint32_t)p_t->enc_l, (uint32_t)p_t->enc_r: the low 16 bits of the
+       two's complement count are sent (a wrap field); (uint32_t)p_t->dist_mm:
+       the low 16 bits of the two's complement distance are sent (a wrap
+       field). */
+    app_pack_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_TELEMETRY);
+    app_pack_put(&writer, p_t->seq, 8u);
+    app_pack_put(&writer, p_t->t_ms / 10u, T10_BITS);
+    app_pack_put(&writer, app_pack_sat_u(p_t->state, COMMS_STATE_BITS),
+                 COMMS_STATE_BITS);
+    app_pack_put(&writer, app_pack_off_s(p_t->v_l_mm_s, 10u), 10u);
+    app_pack_put(&writer, app_pack_off_s(p_t->v_r_mm_s, 10u), 10u);
+    app_pack_put(&writer, (uint32_t)p_t->enc_l, 16u);
+    app_pack_put(&writer, (uint32_t)p_t->enc_r, 16u);
+    app_pack_put(&writer, (uint32_t)p_t->dist_mm, 16u);
+    app_pack_put(&writer, app_pack_off_s(p_t->line_err, 11u), 11u);
+    app_pack_put(&writer, p_t->b_line_lost ? 1u : 0u, 1u);
+    app_pack_put(&writer, app_pack_sat_u(p_t->line_bc, 10u), 10u);
+    app_pack_put(&writer, comms_proto_symbol_index(p_t->barcode), 6u);
+    app_pack_put(&writer, comms_proto_symbol_index(p_t->nav), 6u);
+    app_pack_put(&writer, app_pack_off_s(cdeg_to_tenths(p_t->pitch_cdeg), 11u),
+                 11u);
+    app_pack_put(&writer, app_pack_off_s(cdeg_to_tenths(p_t->roll_cdeg), 12u),
+                 12u);
+    app_pack_put(&writer, app_pack_sat_u(p_t->hump_max_mm, 8u), 8u);
+    app_pack_put(&writer, mm_to_cm_field(p_t->obst_d_mm, true, NONE_D_CM), 9u);
+    app_pack_put(&writer,
+                 b_prof ? ((p_t->obst_w_mm >= NONE_W_MM) ? (NONE_W_MM - 1u)
+                                                         : p_t->obst_w_mm)
+                        : NONE_W_MM,
+                 10u);
+    app_pack_put(&writer, mm_to_cm_field(p_t->clr_l_mm, b_prof, NONE_CLR_CM),
+                 7u);
+    app_pack_put(&writer, mm_to_cm_field(p_t->clr_r_mm, b_prof, NONE_CLR_CM),
+                 7u);
+    return app_pack_writer_len(&writer);
+}
+
+uint16_t comms_proto_build_event (comms_proto_event_t const * p_ev,
+                                  uint32_t seq, uint8_t * p_buf, uint16_t cap)
+{
+    app_pack_writer_t writer;
+    int32_t const     data = p_ev->data;
+    uint8_t           dlen;
+    uint8_t           width;
+
+    if (0 == data)
     {
-        code[0] = p_t->barcode;
-        code[1] = '\0';
-        jw_str(&jw, code);
+        dlen  = 0u;
+        width = 0u;
+    }
+    else if ((data >= -128) && (data <= 127))
+    {
+        dlen  = 1u;
+        width = 8u;
+    }
+    else if ((data >= -32768) && (data <= 32767))
+    {
+        dlen  = 2u;
+        width = 16u;
     }
     else
     {
-        jw_raw(&jw, "null");
+        dlen  = 3u;
+        width = 32u;
     }
-    jw_raw(&jw, ",\"pitch_deg\":");    jw_fixed1(&jw, cdeg_to_tenths(p_t->pitch_cdeg));
-    jw_raw(&jw, ",\"hump_max_mm\":");  jw_uint(&jw, p_t->hump_max_mm);
-    jw_raw(&jw, ",\"obstacle\":{\"d_cm\":");
-    jw_cm_or_null(&jw, p_t->obst_d_mm, true);
-    jw_raw(&jw, ",\"w_cm\":");         jw_cm_or_null(&jw, p_t->obst_w_mm, p_t->b_obst_valid);
-    jw_raw(&jw, ",\"clr_l_cm\":");     jw_cm_or_null(&jw, p_t->clr_l_mm, p_t->b_obst_valid);
-    jw_raw(&jw, ",\"clr_r_cm\":");     jw_cm_or_null(&jw, p_t->clr_r_mm, p_t->b_obst_valid);
-    jw_raw(&jw, "}}");
-    return jw_finish(&jw);
+
+    app_pack_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_EVENT);
+    app_pack_put(&writer, seq, 8u);
+    app_pack_put(&writer, p_ev->t_ms / 10u, T10_BITS);
+    app_pack_put(&writer,
+                 ((p_ev->kind >= 1u) && (p_ev->kind <= 4u)) ? (p_ev->kind - 1u)
+                                                            : 3u,
+                 2u);
+    app_pack_put(&writer, app_pack_sat_u(p_ev->src, COMMS_SRC_BITS),
+                 COMMS_SRC_BITS);
+    app_pack_put(&writer, app_pack_sat_u(p_ev->code, COMMS_REC_CODE_BITS),
+                 COMMS_REC_CODE_BITS);
+    app_pack_put(&writer, dlen, 2u);
+
+    if (width > 0u)
+    {
+        /* Cast (uint32_t)data: two's complement: the low width bits are
+           sent. */
+        app_pack_put(&writer, (uint32_t)data,
+                     width); /* two's complement, low bits */
+    }
+
+    return app_pack_writer_len(&writer);
 }
 
-uint16_t comms_build_event(comms_rec_t const * p_rec, uint32_t seq, char * p_buf, uint16_t cap)
+uint16_t comms_proto_build_status (uint32_t uptime_s, int32_t rssi,
+                                   uint32_t drops, char const * p_map,
+                                   uint8_t * p_buf, uint16_t cap)
 {
-    jw_t jw;
-    char code[2];
+    /* Casts (uint32_t)(-(int64_t)rssi): rssi < 0 (tested in the same
+       statement); negated in 64 bits, so even INT32_MIN fits; (int64_t)rssi:
+       every int32_t value fits. */
+    app_pack_writer_t writer;
+    uint32_t          neg_rssi = (rssi < 0) ? (uint32_t)(-(int64_t)rssi) : 0u;
+    bool const        b_map    = (p_map != NULL) && (p_map[0] != '\0');
+    uint8_t           kdx;
 
-    jw_init(&jw, p_buf, cap);
-    jw_raw(&jw, "{\"seq\":");   jw_uint(&jw, seq);
-    jw_raw(&jw, ",\"t_ms\":");  jw_uint(&jw, p_rec->t_ms);
-    jw_raw(&jw, ",\"type\":");
+    app_pack_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_STATUS);
+    app_pack_put(&writer, app_pack_sat_u(uptime_s, 17u), 17u);
+    app_pack_put(&writer, app_pack_sat_u(neg_rssi, 7u), 7u);
+    app_pack_put(&writer, app_pack_sat_u(drops, 8u), 8u);
+    app_pack_put(&writer, b_map ? 1u : 0u, 1u);
 
-    switch (p_rec->kind)
+    if (b_map)
     {
-        case COMMS_KIND_EVENT:
-            jw_str(&jw, comms_event_name(p_rec->code));
-            jw_raw(&jw, ",\"data\":");
-            if ((p_rec->code == COMMS_EV_BARCODE) &&
-                (p_rec->data >= 0x20) && (p_rec->data < 0x7F))
-            {
-                code[0] = (char)p_rec->data;
-                code[1] = '\0';
-                jw_str(&jw, code);
-            }
-            else
-            {
-                jw_int(&jw, p_rec->data);
-            }
-            break;
-
-        case COMMS_KIND_FAULT:
-            jw_str(&jw, "FAULT");
-            jw_raw(&jw, ",\"data\":");
-            jw_int(&jw, p_rec->data);
-            break;
-
-        case COMMS_KIND_STATE:
-            jw_str(&jw, "STATE");
-            jw_raw(&jw, ",\"data\":");
-            jw_str(&jw, comms_state_name((uint8_t)p_rec->code));
-            break;
-
-        default:    /* COMMS_KIND_LOG and anything unknown */
-            jw_str(&jw, "LOG");
-            jw_raw(&jw, ",\"data\":");
-            jw_int(&jw, p_rec->data);
-            jw_raw(&jw, ",\"code\":");
-            jw_uint(&jw, p_rec->code);
-            break;
+        for (kdx = 0u; kdx < COMMS_MAP_CHARS; kdx++)
+        {
+            app_pack_put(&writer, comms_proto_symbol_index(p_map[kdx]), 6u);
+        }
     }
-    jw_raw(&jw, ",\"src\":");
-    jw_uint(&jw, p_rec->src);
-    jw_raw(&jw, "}");
-    return jw_finish(&jw);
+
+    return app_pack_writer_len(&writer);
 }
 
-uint16_t comms_build_status(bool b_online, uint32_t uptime_s, int32_t rssi,
-                            uint32_t drops, char * p_buf, uint16_t cap)
+uint16_t comms_proto_build_ack (comms_proto_cmd_t const * p_cmd,
+                                comms_proto_err_t err, uint8_t * p_buf,
+                                uint16_t cap)
 {
-    jw_t jw;
+    app_pack_writer_t writer;
 
-    jw_init(&jw, p_buf, cap);
-    jw_raw(&jw, "{\"online\":");     jw_bool(&jw, b_online);
-    jw_raw(&jw, ",\"uptime_s\":");   jw_uint(&jw, uptime_s);
-    jw_raw(&jw, ",\"rssi\":");       jw_int(&jw, rssi);
-    jw_raw(&jw, ",\"drops\":");      jw_uint(&jw, drops);
-    jw_raw(&jw, "}");
-    return jw_finish(&jw);
-}
-
-uint16_t comms_build_ack(comms_cmd_t const * p_cmd, comms_err_t err,
-                         char * p_buf, uint16_t cap)
-{
-    jw_t jw;
-
-    jw_init(&jw, p_buf, cap);
-    jw_raw(&jw, "{\"id\":");
-    if (p_cmd->b_has_id)
-    {
-        jw_uint(&jw, p_cmd->id);
-    }
-    else
-    {
-        jw_raw(&jw, "null");
-    }
-    jw_raw(&jw, ",\"ok\":");
-    jw_bool(&jw, err == COMMS_ERR_NONE);
-    if (err != COMMS_ERR_NONE)
-    {
-        jw_raw(&jw, ",\"err\":");
-        jw_str(&jw, comms_err_name(err));
-    }
-    jw_raw(&jw, "}");
-    return jw_finish(&jw);
+    app_pack_writer_init(&writer, p_buf, cap);
+    put_header(&writer, COMMS_FT_ACK);
+    app_pack_put(&writer, p_cmd->b_has_id ? 1u : 0u, 1u);
+    app_pack_put(&writer, p_cmd->b_has_id ? p_cmd->cmd_id : 0u, COMMS_ID_BITS);
+    app_pack_put(&writer, app_pack_sat_u(err, COMMS_ERR_BITS), COMMS_ERR_BITS);
+    return app_pack_writer_len(&writer);
 }
 
 /* ---------------------------------------------------------------------
- *  Command parser: one flat JSON object of string / integer / true /
- *  false / null values.  Nested objects and arrays are rejected.
+ *  Command parser
  * --------------------------------------------------------------------- */
-typedef struct
+comms_proto_param_t const * comms_proto_param_by_index (uint8_t param_index)
 {
-    uint8_t const * p;
-    uint16_t        len;
-    uint16_t        pos;
-} rd_t;
-
-typedef enum
-{
-    VAL_NONE = 0,
-    VAL_STR,
-    VAL_INT,
-    VAL_OTHER           /* non-integer number, true, false, null */
-} val_kind_t;
-
-typedef struct
-{
-    val_kind_t kind;
-    uint16_t   start;   /* VAL_STR: content offset */
-    uint16_t   n;       /* VAL_STR: content length */
-    int32_t    value;   /* VAL_INT                 */
-} val_t;
-
-static bool rd_more(rd_t const * p_rd)
-{
-    return (p_rd->pos < p_rd->len);
+    return (param_index < COMMS_PARAM_COUNT) ? &g_params[param_index] : NULL;
 }
 
-static uint8_t rd_peek(rd_t const * p_rd)
+comms_proto_param_t const * comms_proto_param_by_id (uint8_t param_id)
 {
-    return rd_more(p_rd) ? p_rd->p[p_rd->pos] : 0u;
+    uint8_t                     idx;
+    comms_proto_param_t const * p_param = NULL;
+
+    for (idx = 0u; (idx < COMMS_PARAM_COUNT) && (NULL == p_param); idx++)
+    {
+        if (g_params[idx].param_id == param_id)
+        {
+            p_param = &g_params[idx];
+        }
+    }
+
+    return p_param;
 }
 
-static void rd_skip_ws(rd_t * p_rd)
+comms_proto_err_t comms_proto_parse_cmd (uint8_t const * p_data, uint16_t len,
+                                         comms_proto_cmd_t * p_cmd)
 {
-    while (rd_more(p_rd))
-    {
-        uint8_t c = p_rd->p[p_rd->pos];
+    app_pack_reader_t reader;
+    uint32_t          type;
+    uint32_t          version;
+    comms_proto_err_t err = COMMS_ERR_NONE;
 
-        if ((c != (uint8_t)' ') && (c != (uint8_t)'\t') &&
-            (c != (uint8_t)'\r') && (c != (uint8_t)'\n'))
-        {
-            break;
-        }
-        p_rd->pos++;
-    }
-}
-
-/* At the opening quote.  Escapes are skipped over, not decoded. */
-static bool rd_string(rd_t * p_rd, uint16_t * p_start, uint16_t * p_n)
-{
-    p_rd->pos++;                            /* opening quote */
-    *p_start = p_rd->pos;
-    while (rd_more(p_rd))
-    {
-        uint8_t c = p_rd->p[p_rd->pos];
-
-        if (c == (uint8_t)'"')
-        {
-            *p_n = (uint16_t)(p_rd->pos - *p_start);
-            p_rd->pos++;
-            return true;
-        }
-        if (c == (uint8_t)'\\')
-        {
-            p_rd->pos++;                    /* skip the escaped byte too */
-        }
-        else if (c < 0x20u)
-        {
-            return false;                   /* raw control char */
-        }
-        p_rd->pos++;
-    }
-    return false;                           /* unterminated */
-}
-
-static bool rd_number(rd_t * p_rd, val_t * p_val)
-{
-    bool     b_neg    = false;
-    bool     b_digits = false;
-    bool     b_int    = true;
-    uint32_t mag      = 0u;
-    uint32_t const lim = 0x7FFFFFFFuL;
-
-    if (rd_peek(p_rd) == (uint8_t)'-')
-    {
-        b_neg = true;
-        p_rd->pos++;
-    }
-    while (rd_more(p_rd) && (rd_peek(p_rd) >= (uint8_t)'0') && (rd_peek(p_rd) <= (uint8_t)'9'))
-    {
-        uint32_t d = (uint32_t)(rd_peek(p_rd) - (uint8_t)'0');
-
-        b_digits = true;
-        if (mag > ((lim - d) / 10u))
-        {
-            b_int = false;                  /* does not fit an int32 */
-        }
-        else
-        {
-            mag = (mag * 10u) + d;
-        }
-        p_rd->pos++;
-    }
-    if (!b_digits)
-    {
-        return false;
-    }
-    /* Fraction or exponent: valid JSON, but not an integer. */
-    while (rd_more(p_rd))
-    {
-        uint8_t c = rd_peek(p_rd);
-
-        if (((c >= (uint8_t)'0') && (c <= (uint8_t)'9')) || (c == (uint8_t)'.') ||
-            (c == (uint8_t)'e') || (c == (uint8_t)'E') || (c == (uint8_t)'+') ||
-            (c == (uint8_t)'-'))
-        {
-            b_int = false;
-            p_rd->pos++;
-        }
-        else
-        {
-            break;
-        }
-    }
-    if (b_int)
-    {
-        p_val->kind  = VAL_INT;
-        p_val->value = b_neg ? -(int32_t)mag : (int32_t)mag;
-    }
-    else
-    {
-        p_val->kind = VAL_OTHER;
-    }
-    return true;
-}
-
-static bool rd_literal(rd_t * p_rd, char const * p_word)
-{
-    while (*p_word != '\0')
-    {
-        if (rd_peek(p_rd) != (uint8_t)*p_word)
-        {
-            return false;
-        }
-        p_rd->pos++;
-        p_word++;
-    }
-    return true;
-}
-
-static bool rd_value(rd_t * p_rd, val_t * p_val)
-{
-    uint8_t c = rd_peek(p_rd);
-
-    p_val->kind = VAL_NONE;
-    if (c == (uint8_t)'"')
-    {
-        p_val->kind = VAL_STR;
-        return rd_string(p_rd, &p_val->start, &p_val->n);
-    }
-    if ((c == (uint8_t)'-') || ((c >= (uint8_t)'0') && (c <= (uint8_t)'9')))
-    {
-        return rd_number(p_rd, p_val);
-    }
-    p_val->kind = VAL_OTHER;
-    if (c == (uint8_t)'t')
-    {
-        return rd_literal(p_rd, "true");
-    }
-    if (c == (uint8_t)'f')
-    {
-        return rd_literal(p_rd, "false");
-    }
-    if (c == (uint8_t)'n')
-    {
-        return rd_literal(p_rd, "null");
-    }
-    return false;                           /* '{', '[' or junk */
-}
-
-static bool str_eq(uint8_t const * p_s, uint16_t n, char const * p_lit)
-{
-    uint16_t i;
-
-    for (i = 0u; i < n; i++)
-    {
-        if ((p_lit[i] == '\0') || (p_s[i] != (uint8_t)p_lit[i]))
-        {
-            return false;
-        }
-    }
-    return (p_lit[n] == '\0');
-}
-
-comms_param_t const * comms_param_by_name(char const * p_name, uint16_t name_len)
-{
-    uint8_t i;
-
-    for (i = 0u; i < COMMS_PARAM_COUNT; i++)
-    {
-        if (str_eq((uint8_t const *)p_name, name_len, k_params[i].p_name))
-        {
-            return &k_params[i];
-        }
-    }
-    return NULL;
-}
-
-comms_param_t const * comms_param_by_id(uint8_t id)
-{
-    uint8_t i;
-
-    for (i = 0u; i < COMMS_PARAM_COUNT; i++)
-    {
-        if (k_params[i].id == id)
-        {
-            return &k_params[i];
-        }
-    }
-    return NULL;
-}
-
-comms_err_t comms_parse_cmd(uint8_t const * p_data, uint16_t len, comms_cmd_t * p_cmd)
-{
-    rd_t    rd;
-    val_t   cmd_val   = { VAL_NONE, 0u, 0u, 0 };
-    val_t   param_val = { VAL_NONE, 0u, 0u, 0 };
-    val_t   value_val = { VAL_NONE, 0u, 0u, 0 };
-    bool    b_done    = false;
-
-    p_cmd->id       = 0u;
+    p_cmd->cmd_id   = 0u;
     p_cmd->b_has_id = false;
-    p_cmd->cmd      = (uint8_t)COMMS_CMD_NONE;
+    p_cmd->cmd      = COMMS_CMD_NONE;
     p_cmd->param_id = 0u;
     p_cmd->value    = 0;
 
-    rd.p   = p_data;
-    rd.len = len;
-    rd.pos = 0u;
+    app_pack_reader_init(&reader, p_data, len);
+    type    = app_pack_take(&reader, 5u);
+    version = app_pack_take(&reader, 3u);
 
-    rd_skip_ws(&rd);
-    if (rd_peek(&rd) != (uint8_t)'{')
+    if (reader.b_short || (type != COMMS_FT_CMD)
+        || (version != COMMS_FRAME_VERSION))
     {
-        return COMMS_ERR_BAD_JSON;
-    }
-    rd.pos++;
-    rd_skip_ws(&rd);
-    if (rd_peek(&rd) == (uint8_t)'}')
-    {
-        rd.pos++;
-        b_done = true;
+        err = COMMS_ERR_BAD_FRAME;
     }
 
-    while (!b_done)
+    if (COMMS_ERR_NONE == err)
     {
-        uint16_t key_start;
-        uint16_t key_n;
-        val_t    val;
+        /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..255. */
+        p_cmd->cmd_id = (uint8_t)app_pack_take(&reader, COMMS_ID_BITS);
 
-        rd_skip_ws(&rd);
-        if ((rd_peek(&rd) != (uint8_t)'"') || !rd_string(&rd, &key_start, &key_n))
+        if (reader.b_short)
         {
-            return COMMS_ERR_BAD_JSON;
-        }
-        rd_skip_ws(&rd);
-        if (rd_peek(&rd) != (uint8_t)':')
-        {
-            return COMMS_ERR_BAD_JSON;
-        }
-        rd.pos++;
-        rd_skip_ws(&rd);
-        if (!rd_value(&rd, &val))
-        {
-            return COMMS_ERR_BAD_JSON;
-        }
-
-        if (str_eq(&p_data[key_start], key_n, "id"))
-        {
-            if ((val.kind == VAL_INT) && (val.value >= 0))
-            {
-                p_cmd->id       = (uint32_t)val.value;
-                p_cmd->b_has_id = true;
-            }
-            else
-            {
-                p_cmd->b_has_id = false;
-            }
-        }
-        else if (str_eq(&p_data[key_start], key_n, "cmd"))
-        {
-            cmd_val = val;
-        }
-        else if (str_eq(&p_data[key_start], key_n, "param"))
-        {
-            param_val = val;
-        }
-        else if (str_eq(&p_data[key_start], key_n, "value"))
-        {
-            value_val = val;
-        }
-        else
-        {
-            /* unknown keys are ignored */
-        }
-
-        rd_skip_ws(&rd);
-        if (rd_peek(&rd) == (uint8_t)',')
-        {
-            rd.pos++;
-        }
-        else if (rd_peek(&rd) == (uint8_t)'}')
-        {
-            rd.pos++;
-            b_done = true;
-        }
-        else
-        {
-            return COMMS_ERR_BAD_JSON;
+            err = COMMS_ERR_NO_ID;
         }
     }
 
-    /* Only whitespace or NUL may follow the object. */
-    while (rd_more(&rd))
+    if (COMMS_ERR_NONE == err)
     {
-        uint8_t c = rd_peek(&rd);
+        /* Cast (uint8_t)app_pack_take(&reader ...): the value is 0..7. */
+        p_cmd->b_has_id = true;
+        p_cmd->cmd      = (uint8_t)app_pack_take(&reader, COMMS_CMD_BITS);
 
-        if ((c != 0u) && (c != (uint8_t)' ') && (c != (uint8_t)'\t') &&
-            (c != (uint8_t)'\r') && (c != (uint8_t)'\n'))
+        if (reader.b_short)
         {
-            return COMMS_ERR_BAD_JSON;
+            err = COMMS_ERR_BAD_FRAME;
         }
-        rd.pos++;
-    }
-
-    if (!p_cmd->b_has_id)
-    {
-        return COMMS_ERR_NO_ID;
-    }
-    if (cmd_val.kind != VAL_STR)
-    {
-        return COMMS_ERR_BAD_CMD;
     }
 
-    if (str_eq(&p_data[cmd_val.start], cmd_val.n, "start"))
+    if (COMMS_ERR_NONE == err)
     {
-        p_cmd->cmd = (uint8_t)COMMS_CMD_START;
+        err = parse_body(&reader, len, p_cmd);
     }
-    else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "stop"))
-    {
-        p_cmd->cmd = (uint8_t)COMMS_CMD_STOP;
-    }
-    else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "estop"))
-    {
-        p_cmd->cmd = (uint8_t)COMMS_CMD_ESTOP;
-    }
-    else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "reset"))
-    {
-        p_cmd->cmd = (uint8_t)COMMS_CMD_RESET;
-    }
-    else if (str_eq(&p_data[cmd_val.start], cmd_val.n, "set"))
-    {
-        comms_param_t const * p_param;
 
-        p_cmd->cmd = (uint8_t)COMMS_CMD_SET;
-        if (param_val.kind != VAL_STR)
-        {
-            return COMMS_ERR_BAD_PARAM;
-        }
-        p_param = comms_param_by_name((char const *)&p_data[param_val.start], param_val.n);
-        if (p_param == NULL)
-        {
-            return COMMS_ERR_BAD_PARAM;
-        }
-        p_cmd->param_id = p_param->id;
-        if ((value_val.kind != VAL_INT) ||
-            (value_val.value < p_param->min) || (value_val.value > p_param->max))
-        {
-            return COMMS_ERR_RANGE;
-        }
-        p_cmd->value = value_val.value;
-    }
-    else
-    {
-        return COMMS_ERR_BAD_CMD;
-    }
-    return COMMS_ERR_NONE;
+    return err;
 }
 
-comms_err_t comms_check_cmd(comms_cmd_t const * p_cmd, bool b_idle)
+bool comms_proto_map_char_ok (char chr)
 {
-    if (((p_cmd->cmd == (uint8_t)COMMS_CMD_START) ||
-         (p_cmd->cmd == (uint8_t)COMMS_CMD_SET)) && !b_idle)
-    {
-        return COMMS_ERR_BUSY;
-    }
-    return COMMS_ERR_NONE;
+    return (app_pack_sym_index(chr) != 0u);
+}
+
+comms_proto_err_t comms_proto_check_ready (comms_proto_cmd_t const * p_cmd,
+                                           bool b_calibrated)
+{
+    return ((COMMS_CMD_START == p_cmd->cmd) && !b_calibrated)
+               ? COMMS_ERR_NOT_CAL
+               : COMMS_ERR_NONE;
+}
+
+comms_proto_err_t comms_proto_check_cmd (comms_proto_cmd_t const * p_cmd,
+                                         bool                      b_idle)
+{
+    return (((COMMS_CMD_START == p_cmd->cmd) || (COMMS_CMD_SET == p_cmd->cmd)
+             || (COMMS_CMD_MAP == p_cmd->cmd))
+            && !b_idle)
+               ? COMMS_ERR_BUSY
+               : COMMS_ERR_NONE;
 }
 
 /* ---------------------------------------------------------------------
  *  Duplicate suppression
  * --------------------------------------------------------------------- */
-void comms_dedup_init(comms_dedup_t * p_dd)
+void comms_proto_dedup_init (comms_proto_dedup_t * p_dd)
 {
     p_dd->next  = 0u;
     p_dd->count = 0u;
 }
 
-bool comms_cmd_repeat_safe(uint8_t cmd)
+bool comms_proto_cmd_repeat_safe (uint8_t cmd)
 {
-    return (cmd == (uint8_t)COMMS_CMD_STOP) || (cmd == (uint8_t)COMMS_CMD_ESTOP);
+    return (COMMS_CMD_STOP == cmd);
 }
 
-comms_dedup_result_t comms_dedup_check(comms_dedup_t const * p_dd,
-                                       comms_cmd_t const * p_cmd, uint32_t now_ms)
+comms_proto_dedup_result_t
+comms_proto_dedup_check (comms_proto_dedup_t const * p_dd,
+                         comms_proto_cmd_t const * p_cmd, uint32_t now_ms)
 {
-    uint8_t i;
+    uint8_t                    idx;
+    comms_proto_dedup_result_t result = COMMS_DEDUP_NEW;
 
-    for (i = 0u; i < p_dd->count; i++)
+    for (idx = 0u; (idx < p_dd->count) && (COMMS_DEDUP_NEW == result); idx++)
     {
-        comms_dedup_entry_t const * p_e = &p_dd->e[i];
+        comms_proto_dedup_entry_t const * p_e = &p_dd->entries[idx];
 
         /* Unsigned difference: correct across the 32-bit ms wrap. */
-        if ((p_e->id == p_cmd->id) && ((uint32_t)(now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
+        if ((p_e->cmd_id == p_cmd->cmd_id)
+            && ((now_ms - p_e->t_ms) < COMMS_DEDUP_WINDOW_MS))
         {
-            if ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id) &&
-                (p_e->value == p_cmd->value))
-            {
-                return COMMS_DEDUP_REPEAT;
-            }
-            return COMMS_DEDUP_CONFLICT;
+            result =
+                ((p_e->cmd == p_cmd->cmd) && (p_e->param_id == p_cmd->param_id)
+                 && (p_e->value == p_cmd->value))
+                    ? COMMS_DEDUP_REPEAT
+                    : COMMS_DEDUP_CONFLICT;
         }
     }
-    return COMMS_DEDUP_NEW;
+
+    return result;
 }
 
-void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd, uint32_t now_ms)
+void comms_proto_dedup_add (comms_proto_dedup_t *     p_dd,
+                            comms_proto_cmd_t const * p_cmd, uint32_t now_ms)
 {
-    comms_dedup_entry_t * p_e = &p_dd->e[p_dd->next];
+    comms_proto_dedup_entry_t * p_e = &p_dd->entries[p_dd->next];
 
-    p_e->id       = p_cmd->id;
+    /* Cast (uint8_t)((p_dd->next + 1u) % ...): the value is 0..7. */
+    p_e->cmd_id   = p_cmd->cmd_id;
     p_e->t_ms     = now_ms;
     p_e->cmd      = p_cmd->cmd;
     p_e->param_id = p_cmd->param_id;
     p_e->value    = p_cmd->value;
     p_dd->next    = (uint8_t)((p_dd->next + 1u) % COMMS_DEDUP_LEN);
+
     if (p_dd->count < COMMS_DEDUP_LEN)
     {
         p_dd->count++;
@@ -809,23 +412,28 @@ void comms_dedup_add(comms_dedup_t * p_dd, comms_cmd_t const * p_cmd, uint32_t n
 /* ---------------------------------------------------------------------
  *  Offline event ring
  * --------------------------------------------------------------------- */
-void comms_ring_init(comms_ring_t * p_ring)
+void comms_proto_ring_init (comms_proto_ring_t * p_ring)
 {
     p_ring->head  = 0u;
     p_ring->count = 0u;
 }
 
-bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint32_t seq)
+bool comms_proto_ring_push (comms_proto_ring_t *      p_ring,
+                            comms_proto_rec_t const * p_rec, uint8_t seq)
 {
     bool    b_overwrote = false;
     uint8_t idx;
 
-    if (p_ring->count == COMMS_RING_LEN)
+    if (COMMS_RING_LEN == p_ring->count)
     {
-        p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);  /* drop oldest */
+        /* Cast (uint8_t)((p_ring->head + 1u) % ...): the value is 0..15. */
+        p_ring->head =
+            (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN); /* drop oldest */
         p_ring->count--;
         b_overwrote = true;
     }
+
+    /* Cast (uint8_t)((p_ring->head + ...)): the value is 0..15. */
     idx = (uint8_t)((p_ring->head + p_ring->count) % COMMS_RING_LEN);
     p_ring->rec[idx] = *p_rec;
     p_ring->seq[idx] = seq;
@@ -833,22 +441,171 @@ bool comms_ring_push(comms_ring_t * p_ring, comms_rec_t const * p_rec, uint32_t 
     return b_overwrote;
 }
 
-bool comms_ring_peek(comms_ring_t const * p_ring, comms_rec_t * p_rec, uint32_t * p_seq)
+bool comms_proto_ring_peek (comms_proto_ring_t const * p_ring,
+                            comms_proto_rec_t * p_rec, uint8_t * p_seq)
 {
-    if (p_ring->count == 0u)
+    bool const b_have = (p_ring->count != 0u);
+
+    if (b_have)
     {
-        return false;
+        *p_rec = p_ring->rec[p_ring->head];
+        *p_seq = p_ring->seq[p_ring->head];
     }
-    *p_rec = p_ring->rec[p_ring->head];
-    *p_seq = p_ring->seq[p_ring->head];
-    return true;
+
+    return b_have;
 }
 
-void comms_ring_pop(comms_ring_t * p_ring)
+void comms_proto_ring_pop (comms_proto_ring_t * p_ring)
 {
     if (p_ring->count > 0u)
     {
+        /* Cast (uint8_t)((p_ring->head + 1u) % ...): the value is 0..15. */
         p_ring->head = (uint8_t)((p_ring->head + 1u) % COMMS_RING_LEN);
         p_ring->count--;
     }
 }
+
+/** The part of a command after its header: length and arguments by command
+    (COMMS_CMD_*).  Returns COMMS_ERR_NONE or the first error. */
+static comms_proto_err_t parse_body (app_pack_reader_t * p_reader, uint16_t len,
+                                     comms_proto_cmd_t * p_cmd)
+{
+    comms_proto_err_t err = COMMS_ERR_NONE;
+
+    switch (p_cmd->cmd)
+    {
+        case COMMS_CMD_START:
+        case COMMS_CMD_STOP:
+        case COMMS_CMD_RESET:
+            if (len != 3u)
+            {
+                err = COMMS_ERR_BAD_FRAME;
+            }
+        break;
+
+        case COMMS_CMD_SET:
+            err = parse_set(p_reader, len, p_cmd);
+        break;
+
+        case COMMS_CMD_MAP:
+            err = parse_map(p_reader, len, p_cmd);
+        break;
+
+        default:
+            err = COMMS_ERR_BAD_CMD;
+        break;
+    }
+
+    return err;
+}
+
+/** SET: parameter index and value, both checked. */
+static comms_proto_err_t parse_set (app_pack_reader_t * p_reader, uint16_t len,
+                                    comms_proto_cmd_t * p_cmd)
+{
+    comms_proto_param_t const * p_param = NULL;
+    uint32_t                    param_index;
+    comms_proto_err_t           err = COMMS_ERR_BAD_FRAME;
+
+    if (5u == len)
+    {
+        /* Cast (uint8_t)param_index: a COMMS_PARAM_BITS (4-bit) field:
+           0..15. */
+        param_index  = app_pack_take(p_reader, COMMS_PARAM_BITS);
+        p_cmd->value = app_pack_unoff_s(
+            app_pack_take(p_reader, COMMS_VALUE_BITS), COMMS_VALUE_BITS);
+        p_param = comms_proto_param_by_index((uint8_t)param_index);
+
+        if (NULL == p_param)
+        {
+            err = COMMS_ERR_BAD_PARAM;
+        }
+        else
+        {
+            p_cmd->param_id = p_param->param_id;
+            err =
+                ((p_cmd->value < p_param->min) || (p_cmd->value > p_param->max))
+                    ? COMMS_ERR_RANGE
+                    : COMMS_ERR_NONE;
+        }
+    }
+
+    return err;
+}
+
+/** MAP: four different Code 39 data characters, packed one per byte. */
+static comms_proto_err_t parse_map (app_pack_reader_t * p_reader, uint16_t len,
+                                    comms_proto_cmd_t * p_cmd)
+{
+    char              chars[4];
+    uint32_t          packed = 0u;
+    uint8_t           kdx;
+    uint8_t           jdx;
+    comms_proto_err_t err = (6u == len) ? COMMS_ERR_NONE : COMMS_ERR_BAD_FRAME;
+
+    for (kdx = 0u; (kdx < COMMS_MAP_CHARS) && (COMMS_ERR_NONE == err); kdx++)
+    {
+        /* Cast (uint8_t)app_pack_take(p_reader ...): the value is 0..63. */
+        chars[kdx] =
+            comms_proto_symbol_char((uint8_t)app_pack_take(p_reader, 6u));
+
+        if ('\0' == chars[kdx])
+        {
+            err = COMMS_ERR_BAD_MAP;
+        }
+
+        for (jdx = 0u; (jdx < kdx) && (COMMS_ERR_NONE == err); jdx++)
+        {
+            if (chars[jdx] == chars[kdx])
+            {
+                err = COMMS_ERR_BAD_MAP;
+            }
+        }
+
+        /* Casts (uint32_t)(uint8_t)chars[kdx]: every uint8_t value fits;
+           (uint8_t)chars[kdx]: every char value fits. */
+        packed |= ((uint32_t)(uint8_t)chars[kdx]) << (8u * kdx);
+    }
+
+    if (COMMS_ERR_NONE == err)
+    {
+        /* Cast (int32_t)packed: bit pattern of four packed characters,
+           carried as int32_t. */
+        p_cmd->value = (int32_t)packed;
+    }
+
+    return err;
+}
+
+/** Write a frame header: frame type (5 bits) and protocol version (3 bits). */
+static void put_header (app_pack_writer_t * p_w, comms_proto_frame_type_t type)
+{
+    app_pack_put(p_w, type, 5u);
+    app_pack_put(p_w, COMMS_FRAME_VERSION, 3u);
+}
+
+/** centi-degrees -> tenths of a degree, rounded half away from zero. */
+static int32_t cdeg_to_tenths (int16_t cdeg)
+{
+    int32_t value = cdeg;
+
+    return (value >= 0) ? ((value + 5) / 10) : -((5 - value) / 10);
+}
+
+/** mm -> cm, rounded; none_code if absent or too large for the field. */
+static uint32_t mm_to_cm_field (uint16_t value_mm, bool b_valid,
+                                uint32_t none_code)
+{
+    uint32_t value_cm = none_code;
+
+    if (b_valid && (value_mm != COMMS_D_NONE))
+    {
+        /* Cast (uint32_t)value_mm: every uint16_t value fits. */
+        value_cm = ((uint32_t)value_mm + 5u) / 10u;
+        value_cm = (value_cm >= none_code) ? (none_code - 1u) : value_cm;
+    }
+
+    return value_cm;
+}
+
+/*** end of file ***/

@@ -1,123 +1,173 @@
-/*
- *	app_main.c
- *	START HERE.  usermain() below is your program's entry point.
+/** @file app_main.c
  *
- *	How micro T-Kernel starts your code
- *	-----------------------------------
- *	  reset -> kernel initialises itself -> creates the "initial task"
- *	        -> initial task calls usermain()
+ *  @brief START HERE.  usermain() below is your program's entry point.
  *
- *	usermain() runs inside that initial task at priority 1 (the highest).
- *	On a single core nothing you create runs until usermain() blocks, but
- *	on the dual-core build the OTHER core may start a new task at once.
- *	So usermain() works in two phases:
- *	  1. every subsystem creates its kernel objects  (subsystemN_init)
- *	  2. every subsystem starts its tasks             (subsystemN_start)
- *	and then puts the initial task to sleep forever.
- *	If usermain() RETURNS, the kernel shuts the whole system down.
+ *  How micro T-Kernel starts your code
+ *  -----------------------------------
+ *  reset -> kernel initialises itself -> creates the "initial task"
+ *  -> initial task calls usermain()
  *
- *	PicoCar (team IS-23): one subsystem per buddy (TEAM.md section 1)
- *	-----------------------------------------------------------------
- *	  subsystem1/  Comms + HMI     CommsTask (= kernel WiFi task), HmiTask
- *	  subsystem2/  Motion          MotionTask
- *	  subsystem3/  Line + barcode  LineBarcodeTask
- *	  subsystem4/  IMU + safety    ImuTask, SafetyTask
- *	  subsystem5/  Obstacle + mission  ObstacleTask, MissionTask
- *	Interfaces IF-01 .. IF-12 are listed in TEAM.md section 5.  The
- *	subsystem that RECEIVES or OWNS the data creates the object and
- *	publishes its ID in its header; the other side just uses it.
+ *  usermain() runs inside that initial task at priority 1 (the highest).
+ *  On a single core nothing you create runs until usermain() blocks, but
+ *  on the dual-core build the OTHER core may start a new task at once.
+ *  So usermain() works in two phases:
+ *  1. every subsystem creates its kernel objects  (subsystemN_init)
+ *  2. every subsystem starts its tasks             (subsystemN_start)
+ *  and then puts the initial task to sleep forever.
+ *  If usermain() RETURNS, the kernel shuts the whole system down.
  *
- *	The template's example subsystems, which showed every kernel API
- *	(tasks, semaphores, pools, mailboxes, mutexes, message buffers, event
- *	flags, cyclic and alarm handlers), are in commit 5b39f92 of this repo.
+ *  PicoCar (team IS-23): one subsystem per buddy (TEAM.md section 1)
+ *  -----------------------------------------------------------------
+ *  subsystem1/  Comms + HMI     CommsTask (= kernel WiFi task), HmiTask
+ *  subsystem2/  Motion          MotionTask
+ *  subsystem3/  Line + barcode  LineBarcodeTask
+ *  subsystem4/  IMU + safety    ImuTask, SafetyTask
+ *  subsystem5/  Obstacle + mission  ObstacleTask, MissionTask
+ *  Interfaces IF-01 .. IF-12 are listed in TEAM.md section 5.  The
+ *  subsystem that RECEIVES or OWNS the data creates the object and
+ *  publishes its ID in its header; the other side just uses it.
  *
- *	Output appears on the USB serial port (115200 8N1 in any terminal).
+ *  The template's example subsystems, which showed every kernel API
+ *  (tasks, semaphores, pools, mailboxes, mutexes, message buffers, event
+ *  flags, cyclic and alarm handlers), are in commit 5b39f92 of this repo.
+ *
+ *  Output appears on the USB serial port (115200 8N1 in any terminal).
  */
 
+#include "app_main.h"
 #include "app.h"
+#include "app_gpio_irq.h"
+#include "subsystem1/subsystem1.h"
+#include "subsystem2/subsystem2.h"
+#include "subsystem3/subsystem3.h"
+#include "subsystem4/subsystem4.h"
+#include "subsystem5/subsystem5.h"
+#include "subsystem1/subsystem1_test.h"
+#include "subsystem2/subsystem2_test.h"
+#include "subsystem3/subsystem3_test.h"
+#include "subsystem4/subsystem4_test.h"
+#include "subsystem5/subsystem5_test.h"
 
-/*
+static void check_er(ER err, char const * p_what);
+
+/**
  * Create and start one task (declared in app.h for every subsystem).
  *   prc = TP_PRC1 (core 0), TP_PRC2 (core 1), or 0 for "any core".
  */
-EXPORT ID app_start_task(FP entry, PRI pri, UW prc, const char *name)
+EXPORT ID app_main_start_task (FP entry, PRI pri, uint32_t prc,
+                               char const * p_name)
 {
-	T_CTSK	ctsk = {0};
-	ID	tid;
-	ER	er;
+    T_CTSK ctsk = {0};
+    ID     tid;
+    ER     err;
 
-	ctsk.task    = entry;		/* function the task runs */
-	ctsk.itskpri = pri;		/* initial priority (1 = highest) */
-	ctsk.stksz   = TASK_STACK_SIZE;	/* kernel allocates the stack */
-	ctsk.tskatr  = TA_HLNG		/* written in a high-level language (C) */
-		     | TA_RNG3;		/* runs at user protection level */
+    ctsk.task    = entry;           /* function the task runs */
+    ctsk.itskpri = pri;             /* initial priority (1 = highest) */
+    ctsk.stksz   = TASK_STACK_SIZE; /* kernel allocates the stack */
+    ctsk.tskatr  = TA_HLNG          /* written in a high-level language (C) */
+                   | TA_RNG3;       /* runs at user protection level */
 #if TK_SUPPORT_SMP
-	if (prc != 0) {
-		ctsk.tskatr |= TA_ASSPRC;	/* honour the affinity below */
-		ctsk.assprc  = prc;		/* which core(s) it may run on */
-	}
+    if (prc != 0u)
+    {
+        ctsk.tskatr |= TA_ASSPRC; /* honour the affinity below */
+        ctsk.assprc = prc;        /* which core(s) it may run on */
+    }
 #else
-	(void)prc;			/* single-core build: no affinity */
+    (void)prc; /* single-core build: no affinity */
 #endif
 
-	/* tk_cre_tsk: create the task.  It starts in the DORMANT state. */
-	tid = tk_cre_tsk(&ctsk);
-	if (tid < E_OK) {
-		CHECK(tid, name);
-		return tid;
-	}
+    /* tk_cre_tsk: create the task.  It starts in the DORMANT state. */
+    tid = tk_cre_tsk(&ctsk);
 
-	/* tk_sta_tsk: DORMANT -> READY.  The int is passed as stacd. */
-	er = tk_sta_tsk(tid, 0);
-	CHECK(er, name);
-	return tid;
+    if (tid < E_OK)
+    {
+        check_er(tid, p_name);
+    }
+    else
+    {
+        /* tk_sta_tsk: DORMANT -> READY.  The int is passed as stacd. */
+        err = tk_sta_tsk(tid, 0);
+        check_er(err, p_name);
+    }
+
+    return tid;
 }
 
-EXPORT INT usermain(void)
+EXPORT INT usermain (void)
 {
-	T_RVER	ver;
+    T_RVER ver;
 
-	/* tk_ref_ver: ask the kernel who it is */
-	tk_ref_ver(&ver);
-	tm_printf((UB*)"\n=== micro T-Kernel on Raspberry Pi Pico W"
-		  " (spec 0x%04x, product 0x%04x) ===\n", ver.spver, ver.prver);
+    /* tk_ref_ver: ask the kernel who it is */
+    /* Cast (UB *) of the banner format string: tm_printf() takes UB *; the
+       string bytes are unchanged. */
+    tk_ref_ver(&ver);
+    tm_printf((UB *)"\n=== micro T-Kernel on Raspberry Pi Pico W"
+                    " (spec 0x%04x, product 0x%04x) ===\n",
+              ver.spver, ver.prver);
 #if TK_SUPPORT_SMP
-	tm_printf((UB*)"dual-core (SMP) build, usermain on core %d\n",
-		  tk_get_prc() - 1);	/* tk_get_prc() counts from 1 */
+    /* Cast (UB *)"dual-core (SMP) build ...: tm_printf() takes UB *; the string
+       bytes are unchanged. */
+    tm_printf((UB *)"dual-core (SMP) build, usermain on core %d\n",
+              tk_get_prc() - 1); /* tk_get_prc() counts from 1 */
 #else
-	tm_printf((UB*)"single-core build\n");
+    tm_printf((UB *)"single-core build\n");
 #endif
 
-	/* Phase 1: every subsystem creates its kernel objects */
-	CHECK(subsystem1_init(), "subsystem1_init");
-	CHECK(subsystem2_init(), "subsystem2_init");
-	CHECK(subsystem3_init(), "subsystem3_init");
-	CHECK(subsystem4_init(), "subsystem4_init");
-	CHECK(subsystem5_init(), "subsystem5_init");
+    /* Shared GPIO bank-0 interrupt (GP1 echo, GP19 IMU INT1): registered
+       once here; each owner enables its pin on core 1 (app_gpio_irq.h). */
+    check_er(app_gpio_irq_init(), "app_gpio_irq_init");
 
-	/* Phase 2: every subsystem starts its tasks */
-	CHECK(subsystem1_start(), "subsystem1_start");
-	CHECK(subsystem2_start(), "subsystem2_start");
-	CHECK(subsystem3_start(), "subsystem3_start");
-	CHECK(subsystem4_start(), "subsystem4_start");
-	CHECK(subsystem5_start(), "subsystem5_start");
+    /* Phase 1: every subsystem creates its kernel objects */
+    check_er(subsystem1_init(), "subsystem1_init");
+    check_er(subsystem2_init(), "subsystem2_init");
+    check_er(subsystem3_init(), "subsystem3_init");
+    check_er(subsystem4_init(), "subsystem4_init");
+    check_er(subsystem5_init(), "subsystem5_init");
 
-	tm_printf((UB*)"all subsystems started\n\n");
+    /* Phase 2: every subsystem starts its tasks */
+    check_er(subsystem1_start(), "subsystem1_start");
+    check_er(subsystem2_start(), "subsystem2_start");
+    check_er(subsystem3_start(), "subsystem3_start");
+    check_er(subsystem4_start(), "subsystem4_start");
+    check_er(subsystem5_start(), "subsystem5_start");
+
+    /* Cast (UB *) of the string literal: tm_printf() takes UB *; the
+       string bytes are unchanged. */
+    tm_printf((UB *)"all subsystems started\n\n");
 
 #if APP_TEST
-	/* Test build (make TEST=1): run every subsystem's tests in turn,
-	   here in the initial task, while the system is running.  Tests may
-	   call tk_dly_tsk() to let the other tasks work for a while. */
-	tm_printf((UB*)"[TEST] === test run start ===\n");
-	subsystem1_test();
-	subsystem2_test();
-	subsystem3_test();
-	subsystem4_test();
-	subsystem5_test();
-	tm_printf((UB*)"[TEST] === test run end ===\n");
+    /* Test build (make TEST=1): run every subsystem's tests in turn,
+       here in the initial task, while the system is running.  Tests may
+       call tk_dly_tsk() to let the other tasks work for a while. */
+    /* Casts (UB *)"[TEST] === test run ..., (UB *)"[TEST] === test run end ...:
+       tm_printf() takes UB *; the string bytes are unchanged. */
+    tm_printf((UB *)"[TEST] === test run start ===\n");
+    subsystem1_test_run();
+    subsystem2_test_run();
+    subsystem3_test_run();
+    subsystem4_test_run();
+    subsystem5_test_run();
+    tm_printf((UB *)"[TEST] === test run end ===\n");
 #endif
 
-	/* Sleep forever.  Returning from usermain() would shut down. */
-	tk_slp_tsk(TMO_FEVR);
-	return 0;
+    /* Sleep forever.  Returning from usermain() would shut down. */
+    tk_slp_tsk(TMO_FEVR);
+    return 0;
 }
+
+/*!
+ * @brief Print a readable message if a kernel call failed.
+ * @param[in] err The call's result: negative is a kernel error code.
+ * @param[in] p_what What was called.
+ */
+static void check_er (ER err, char const * p_what)
+{
+    if (err < E_OK)
+    {
+        /* Cast (UB *) of the format string: tm_printf() takes UB *; the string
+           bytes are unchanged. */
+        tm_printf((UB *)"ERROR %s: %d\n", p_what, err);
+    }
+}
+
+/*** end of file ***/

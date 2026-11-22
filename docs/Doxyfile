@@ -1,0 +1,41 @@
+# Doxygen configuration for the PicoCar application code (Barr-C 2.2h:
+# every module and function is documented for automatic generation).
+# Run from the repository root:   doxygen docs/Doxyfile
+# Output: docs/html/index.html (not committed).  Warnings: docs/doxygen.log.
+
+PROJECT_NAME           = "PicoCar (IS-23)"
+PROJECT_BRIEF          = "Autonomous line-following car on micro T-Kernel 3.0 SMP"
+OUTPUT_DIRECTORY       = docs
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_LATEX         = NO
+
+INPUT                  = app_program \
+                         lib/liblwip/sysdepend/pico_rp2040/mqtt_utk.c \
+                         lib/liblwip/sysdepend/pico_rp2040/mqtt_utk.h \
+                         testing/shared/host testing/subsystem1/host \
+                         testing/subsystem2/host testing/subsystem3/host \
+                         testing/subsystem4/host testing/subsystem5/host
+FILE_PATTERNS          = *.c *.h
+RECURSIVE              = YES
+
+OPTIMIZE_OUTPUT_FOR_C  = YES
+JAVADOC_AUTOBRIEF      = YES
+EXTRACT_ALL            = NO
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+SOURCE_BROWSER         = YES
+
+# The kernel's storage-class macros, and the self-test code (APP_TEST).
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = IMPORT=extern EXPORT= LOCAL=static \
+                         "Inline=static inline" "__attribute__(x)=" \
+                         APP_TEST=1 TM_MQTT=1
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_NO_PARAMDOC       = NO
+WARN_LOGFILE           = docs/doxygen.log
