@@ -556,6 +556,63 @@ bool obstacle_core_out_done (obstacle_core_out_t const * p_o, int32_t axle_lat)
            || (axle_lat >= (OBST_WIDTH_MAX_MM + OUT_EXTRA_MM));
 }
 
+int32_t obstacle_core_pass_cut_mm (int32_t lat_mm, int32_t edge_mm)
+{
+    /* Axle frame after the PASS leg: x forward (the obstacle's back at 0),
+       y out (the obstacle's edge at edge_mm, the axle at lat_mm).  Old
+       end: the axle rear + margin past the back.  After the turn in place
+       by theta toward the line the car drives along (cos, -sin); its
+       inner side is the line (p - axle).(sin, cos) = -half width, so it
+       passes the back corner (0, edge) with the margin when
+       axle_x >= (cos x (edge - lat) + half width + margin) / sin.  Checked
+       at the nominal turn and +- OBST_TURN_IN_SLACK_DDEG (turn slip).
+       While the car spins, no part of it is more than front + half width
+       (> the reach of its front inner corner) inside the axle: if that
+       still clears the edge by the margin, the spin cannot touch the
+       obstacle; otherwise the axle must first be the margin past the back
+       (then everything ahead of it is past the back, and everything
+       behind it stays the half width inside the axle at most).        */
+    int32_t const rear = OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM;
+    int32_t const half = OBST_ROBOT_WIDTH_MM / 2;
+    int32_t const old  = rear + OBST_MARGIN_MM;
+    int32_t       need = OBST_MARGIN_MM;
+    int32_t       cut  = 0;
+    int32_t       idx;
+
+    if ((lat_mm - edge_mm) >= (half + OBST_MARGIN_MM))
+    {
+        if ((lat_mm - edge_mm) >= (OBST_US_AHEAD_MM + half + OBST_MARGIN_MM))
+        {
+            need = -old; /* the spin cannot reach the obstacle */
+        }
+
+        for (idx = -1; idx <= 1; idx++)
+        {
+            int32_t const theta =
+                (OBST_TURN_OUT_DDEG + (idx * OBST_TURN_IN_SLACK_DDEG)) * 10;
+            int32_t const sin_q = app_math_sin_q15(theta);
+            int32_t const cos_q = app_math_cos_q15(theta);
+            /* Casts (int32_t)(((int64_t)cos_q * ...)): |cos| <= 1.0 in Q15
+               times a lateral difference below 2 m;
+               (int64_t)cos_q, (int64_t)(edge_mm - lat_mm): every int32_t
+               value fits; (int64_t)num: every int32_t value fits;
+               (int32_t)(((int64_t)num * 32768) / sin_q): sin_q
+               is at least sin(35 deg) and num below 2 m. */
+            int32_t const num =
+                (int32_t)(((int64_t)cos_q * (int64_t)(edge_mm - lat_mm))
+                          / 32768)
+                + half + OBST_MARGIN_MM;
+            int32_t const corner = (int32_t)(((int64_t)num * 32768) / sin_q);
+
+            need = app_types_max_i32(need, corner);
+        }
+
+        cut = app_types_clamp_i32(old - need, 0, old);
+    }
+
+    return cut;
+}
+
 bool obstacle_core_out_blocked (int32_t face_mm, int32_t axle_fwd_mm,
                                 int32_t theta_cdeg)
 {

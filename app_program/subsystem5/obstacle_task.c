@@ -63,7 +63,8 @@
 /* Event-history diagnostics (3 Nov) */
 /* bypass plan: offset mm (+ left) << 16 | pass mm */
 #define OBST_LOG_PLAN 39u
-#define OBST_LOG_PASS 40u /* pass leg: driven mm | side ping saw it << 16 */
+#define OBST_LOG_PASS \
+    40u /* pass leg: driven mm | side ping saw it << 16 | cut mm << 24 */
 #define OBST_LOG_JOIN 44u /* back in: line touched after mm, 0 = not found */
 
 /* turned onto the line after 0.1 deg (< 0: one sensor only), 0 = not found */
@@ -153,6 +154,7 @@ typedef struct
     int32_t  last_seen_mm;
     bool     b_seen;
     int16_t  pass_limit_mm;
+    uint8_t  pass_cut_mm; /**< 22 Nov: PASS shortened by (mm, 0..145) */
     uint8_t  drive_seq;
     uint32_t pings;
     /** 3 Nov */
@@ -1169,11 +1171,12 @@ static void start_bypass (uint8_t type, uint32_t now_ms)
                                     g_o.b_edge_has[1], g_o.edge_min[1]);
     }
 
-    g_o.n_steps   = obstacle_core_bypass_plan(&g_prof, g_o.side, g_steps);
-    g_o.step_i    = 0u;
-    g_o.b_joined  = false;
-    g_o.scan_pass = 0u;
-    g_o.scan_ph   = LS_PH_SWEEP;
+    g_o.n_steps     = obstacle_core_bypass_plan(&g_prof, g_o.side, g_steps);
+    g_o.step_i      = 0u;
+    g_o.pass_cut_mm = 0u;
+    g_o.b_joined    = false;
+    g_o.scan_pass   = 0u;
+    g_o.scan_ph     = LS_PH_SWEEP;
     {
         uint8_t kdx;
 
@@ -1871,6 +1874,7 @@ static void out_end (uint32_t now_ms, obstacle_core_step_t const * p_st,
     int32_t const extra_fwd =
         (int32_t)(((int64_t)(done_mm - p_st->value) * app_math_cos_q15(theta))
                   / 32768);
+    int32_t edge;
     uint8_t kdx;
 
     /* Casts (int32_t)(((g_o.out.b_seen ? ...))): bit pattern of a packed LOG
@@ -1884,6 +1888,28 @@ static void out_end (uint32_t now_ms, obstacle_core_step_t const * p_st,
                       << 16)
                      | (uint32_t)app_types_clamp_i32(lat, 0, 0xFFFF)));
 
+    /* 22 Nov: PASS ends once the car's inner side clears the obstacle's
+       back corner after the turn in, not its whole rear: the obstacle's
+       edge on this side is the furthest of the plan's, the corrected one
+       and the step-out leg's last face echo. */
+    /* Casts (uint8_t)app_types_clamp_i32(...): the value is 0..255;
+       (int32_t)g_prof.plan_l_mm, (int32_t)g_prof.left_lat_mm,
+       (int32_t)g_prof.plan_r_mm, (int32_t)g_prof.right_lat_mm: every
+       int16_t value fits. */
+    edge = (OBST_PLAN_LEFT == g_o.side)
+               ? app_types_max_i32((int32_t)g_prof.plan_l_mm,
+                                   (int32_t)g_prof.left_lat_mm)
+               : app_types_max_i32(-(int32_t)g_prof.plan_r_mm,
+                                   -(int32_t)g_prof.right_lat_mm);
+
+    if (g_o.out.b_seen)
+    {
+        edge = app_types_max_i32(edge, g_o.out.seen_lat);
+    }
+
+    g_o.pass_cut_mm = (uint8_t)app_types_clamp_i32(
+        obstacle_core_pass_cut_mm(lat, edge), 0, 255);
+
     /* Cast (uint8_t)(g_o.step_i + 1u): step_i < n_steps <=
        OBST_BYPASS_MAX_STEPS (10). */
     for (kdx = (uint8_t)(g_o.step_i + 1u); kdx < g_o.n_steps; kdx++)
@@ -1892,9 +1918,12 @@ static void out_end (uint32_t now_ms, obstacle_core_step_t const * p_st,
         {
             /* Casts (int16_t)app_types_max_i32(...): the planned PASS leg (<=
                OBST_PASS_MAX_MM) only gets shorter, never below 0;
-               (int32_t)g_steps[kdx].value: every int16_t value fits. */
+               (int32_t)g_steps[kdx].value: every int16_t value fits;
+               (int32_t)g_o.pass_cut_mm: every uint8_t value fits. */
             g_steps[kdx].value = (int16_t)app_types_max_i32(
-                (int32_t)g_steps[kdx].value - extra_fwd, 0);
+                ((int32_t)g_steps[kdx].value - extra_fwd)
+                    - (int32_t)g_o.pass_cut_mm,
+                0);
         }
         else if (OBST_STEP_JOIN == g_steps[kdx].kind)
         {
@@ -1942,20 +1971,25 @@ static void bypass_pass (uint32_t now_ms, motion_types_odom_t const * p_odom,
        follows (the 6 Nov skip fired on straight track) */
     /* 3 Nov: at least the planned distance; then on until the
        side ping has not seen the obstacle for a car length +
-       margin; never beyond OBST_PASS_MAX_MM */
+       margin (22 Nov: less pass_cut_mm, as the planned leg); never
+       beyond OBST_PASS_MAX_MM */
+    /* Cast (int32_t)g_o.pass_cut_mm: every uint8_t value fits. */
     if (((done_mm >= p_st->value)
          && (!g_o.b_seen
              || ((p_odom->dist_mm - g_o.last_seen_mm)
-                 >= (OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM))))
+                 >= ((OBST_ROBOT_LENGTH_MM + OBST_MARGIN_MM)
+                     - (int32_t)g_o.pass_cut_mm))))
         || (done_mm >= OBST_PASS_MAX_MM))
     {
-        /* Casts (int32_t)(((g_o.b_seen ? 1u : 0u) ...)): bit pattern of a
-           packed LOG word, not an arithmetic value;
+        /* Casts (int32_t)(((uint32_t)g_o.pass_cut_mm << 24) ...): bit
+           pattern of a packed LOG word, not an arithmetic value;
+           (uint32_t)g_o.pass_cut_mm: every uint8_t value fits;
            (uint32_t)app_types_clamp_i32(...): the value is 0..65535. */
         stop_motion();
         servo_to(OBST_SERVO_CENTRE_DEG, now_ms);
         log_ev(OBST_LOG_PASS,
-               (int32_t)(((g_o.b_seen ? 1u : 0u) << 16)
+               (int32_t)(((uint32_t)g_o.pass_cut_mm << 24)
+                         | ((g_o.b_seen ? 1u : 0u) << 16)
                          | (uint32_t)app_types_clamp_i32(done_mm, 0, 0xFFFF)));
         g_o.b_wait_motion = false;
         g_o.step_i++;

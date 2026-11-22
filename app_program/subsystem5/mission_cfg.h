@@ -146,6 +146,13 @@
    slip; back in at 45 deg until a line sensor touches the line, then
    OBST_IR_AHEAD_MM on (axle on the line), then turn onto it.            */
 #define OBST_TURN_OUT_DDEG 450 /* bypass turn-out 45.0 deg        */
+/* 22 Nov: the PASS leg used to end with the car's whole rear (sensor to
+   rear + margin) past the obstacle's back.  The turn back in spins in
+   place, so the rear swings away from the obstacle; the leg now ends as
+   soon as the car's inner side, after the turn, clears the back corner
+   by OBST_MARGIN_MM (obstacle_core_pass_cut_mm).  The turn-in may turn
+   up to this much more than OBST_TURN_OUT_DDEG (turn slip).            */
+#define OBST_TURN_IN_SLACK_DDEG 100 /* 10.0 deg */
 /* 5 Nov: slower legs slip less; MOTION_PROFILE_V_MIN is 40 */
 #define OBST_BYPASS_SPEED_MM_S 40
 #define OBST_BYPASS_TURN_DEG_S MISSION_CAL_SPIN_RATE
