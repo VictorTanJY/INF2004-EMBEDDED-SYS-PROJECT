@@ -17,7 +17,9 @@
  *  -> PROFILE_DONE(plan, width).  No clearance: reverse 100 mm and
  *  rescan (twice), then BLOCKED: rescan every 2 s, 5 times; after
  *  10 s BLOCKED_TIMEOUT.
- *  BYPASS    turn out 45, offset, turn parallel, PASS (servo looking at the
+ *  BYPASS    (23 Nov: no back-up first unless the step-out would pass
+ *  the corner by less than the margin, obstacle_core_bypass_back_mm())
+ *  turn out 45, offset, turn parallel, PASS (servo looking at the
  *  obstacle until it has been seen and passed), turn in 45, JOIN
  *  (on until a line sensor touches the line), OBST_IR_AHEAD_MM on,
  *  LINESCAN (spin slowly until the line is centred under the
@@ -228,6 +230,7 @@ static void     post(uint8_t type, uint16_t arg, int32_t data);
 static void     log_ev(uint16_t code, int32_t data);
 static int32_t  turn_gain(void);
 static int32_t  out_theta(motion_types_odom_t const * p_odom, int32_t sign);
+static int32_t  out_edge_lat(void);
 static int16_t  slip_ddeg(int16_t ddeg);
 static void     goto_state(uint8_t state);
 static void     drive(int32_t speed, int32_t target_h,
@@ -1123,7 +1126,7 @@ static void probe_side_ping (uint16_t range, int32_t lat, int32_t fwd,
            obstacle could reach, or too close to the face */
         if (((g_o.probe.off >= OBST_PROBE_OFF) && (lat >= 20))
             || (lat >= OBST_PROBE_MAX_MM)
-            || obstacle_core_out_blocked(g_o.probe_face_mm, fwd, theta))
+            || obstacle_core_face_blocked(g_o.probe_face_mm, fwd, theta))
         {
             stop_motion();
             g_o.b_pb_seen = false;
@@ -1820,9 +1823,9 @@ static void bypass_out (uint32_t now_ms, motion_types_odom_t const * p_odom,
        int32_t value fits. */
     if (obstacle_core_out_done(&g_o.out, lat)
         || obstacle_core_out_blocked(
-            g_o.out_face_mm,
+            g_o.out_face_mm, out_edge_lat(),
             (int32_t)(((int64_t)done_mm * app_math_cos_q15(theta)) / 32768),
-            theta))
+            lat, theta))
     {
         out_end(now_ms, p_st, done_mm, lat, theta);
     }
@@ -1835,6 +1838,18 @@ static void bypass_out (uint32_t now_ms, motion_types_odom_t const * p_odom,
             ping();
         }
     }
+}
+
+/** OUT: the obstacle's edge on the bypass side (mm from the line): the
+   plan's edge, or further out if the face echoed further out on the leg. */
+static int32_t out_edge_lat (void)
+{
+    int32_t const plan_edge =
+        app_types_abs_i32(g_prof.deviation_mm)
+        - (OBST_MARGIN_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_EDGE_ALLOW_MM);
+
+    return g_o.out.b_seen ? app_types_max_i32(plan_edge, g_o.out.seen_lat)
+                          : plan_edge;
 }
 
 /** Start OUT: the sensor looks along the line at the face. */

@@ -26,6 +26,10 @@
 /* servo shaft ahead of the axle */
 #define OUT_SHAFT_MM (OBST_US_AHEAD_MM - OBST_SERVO_ARM_MM)
 
+/* 23 Nov: the car's outline for the step-out clearance */
+#define CAR_CORNERS 4u /* rectangle */
+#define CAR_AXES    4u /* region's two sides, the car's two axes */
+
 /* Cast (uint16_t)(sizeof ...): the layout table has fewer than 64 entries. */
 #define OBST_FIELDS \
     ((uint16_t)(sizeof(g_obst_layout) / sizeof(g_obst_layout[0])))
@@ -108,6 +112,13 @@ static void profile_measure(obstacle_core_point_t const * p_fine,
                             obstacle_core_point_t const * p_coarse,
                             uint8_t n_coarse, uint8_t nearest, uint16_t r_min,
                             obstacle_core_profile_t * p_out);
+static void car_corners(int64_t ax, int64_t ay, int64_t cos_q, int64_t sin_q,
+                        int64_t cx[CAR_CORNERS], int64_t cy[CAR_CORNERS]);
+static bool car_separated(int64_t const cx[CAR_CORNERS],
+                          int64_t const cy[CAR_CORNERS], int64_t px, int64_t py,
+                          int64_t cos_q, int64_t sin_q);
+static int64_t seg_dist2(int64_t px, int64_t py, int64_t ax, int64_t ay,
+                         int64_t bx, int64_t by);
 
 uint16_t obstacle_core_median3 (uint16_t val_a, uint16_t val_b, uint16_t val_c)
 {
@@ -388,6 +399,45 @@ void obstacle_core_edge_plan_min (obstacle_core_profile_t * p_prof,
 }
 
 /* ---- bypass ----------------------------------------------------------- */
+int32_t obstacle_core_bypass_back_mm (obstacle_core_profile_t const * p_prof)
+{
+    /* On the turned heading theta the car's inner side (half a width toward
+       the line from the axle) runs along one straight line through the
+       stop point.  Its distance from the obstacle's corner (face F ahead
+       of the axle, planning edge E to the side) is F sin - E cos - W/2;
+       F is the shortest face distance that leaves OBST_MARGIN_MM.  The
+       turn-out on the spot needs the face clear of a front corner
+       (within US_AHEAD + W/2 of the axle) by OBST_MARGIN_MM too. */
+    /* Casts (int32_t)p_prof->closest_mm: every uint16_t value fits;
+       (int64_t)edge, (int64_t)(...) * 32768: the products are below 2^40;
+       (int32_t)((...) / sin_q): sin_q is at least sin(45 deg) in Q15, so
+       the quotient is a few hundred mm. */
+    int32_t const sin_q = app_math_sin_q15(OBST_TURN_OUT_DDEG * 10);
+    int32_t const cos_q = app_math_cos_q15(OBST_TURN_OUT_DDEG * 10);
+    int32_t const edge = app_types_abs_i32(p_prof->deviation_mm) - OUT_EXTRA_MM;
+    int32_t const face = (int32_t)p_prof->closest_mm + OBST_US_AHEAD_MM;
+    int32_t const need_side =
+        (int32_t)(((((int64_t)((OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM)
+                     * 32768)
+                    + ((int64_t)edge * cos_q))
+                   + (sin_q - 1))
+                  / sin_q);
+    int32_t const need_turn =
+        OBST_US_AHEAD_MM + (OBST_ROBOT_WIDTH_MM / 2) + OBST_MARGIN_MM;
+    int32_t back = app_types_max_i32(need_side, need_turn) - face;
+
+    if (back > 0)
+    {
+        back = app_types_min_i32(back + OBST_BACK_SPARE_MM, 1000);
+    }
+    else
+    {
+        back = 0;
+    }
+
+    return back;
+}
+
 uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
                                    uint8_t side, obstacle_core_step_t * p_steps)
 {
@@ -402,23 +452,16 @@ uint8_t obstacle_core_bypass_plan (obstacle_core_profile_t const * p_prof,
     int32_t const cos_q = app_math_cos_q15(OBST_TURN_OUT_DDEG * 10);
     int32_t const diag  = (int32_t)(((int64_t)dev * 32768) / sin_q);
     int32_t const fwd   = (int32_t)(((int64_t)diag * cos_q) / 32768);
-    int32_t const room  = (int32_t)p_prof->closest_mm - OBST_MARGIN_MM;
-    /* 7 Nov: the step-out leg may go OBST_OUT_SPARE further out */
-    /* Casts (int32_t)(((int64_t)(dev + ...))): dev is below 1 m and sin_q is at
-       least sin(45 deg); (int64_t)(dev + OBST_OUT_SPARE_MM): every int value
-       fits. */
-    int32_t const fwd_r =
-        (int32_t)(((int64_t)(dev + OBST_OUT_SPARE_MM) * cos_q) / sin_q);
-    int32_t pass;
-    int32_t back = 0;
-    int32_t depth;
-    uint8_t n_steps = 0u;
+    int32_t const back  = obstacle_core_bypass_back_mm(p_prof);
+    int32_t       pass;
+    int32_t       depth;
+    uint8_t       n_steps = 0u;
 
-    /* Not enough room to get sideways before reaching the face: back up. */
-    if (fwd_r > room)
+    /* 23 Nov: back up only if the step-out would pass the obstacle's
+       corner too closely (obstacle_core_bypass_back_mm()). */
+    if (back > 0)
     {
         /* Cast (int16_t)-back: back is a back-off of at most 1000 mm. */
-        back                   = (fwd_r - room) + 20;
         p_steps[n_steps].kind  = OBST_STEP_MOVE;
         p_steps[n_steps].value = (int16_t)-back;
         n_steps++;
@@ -556,8 +599,17 @@ bool obstacle_core_out_done (obstacle_core_out_t const * p_o, int32_t axle_lat)
            || (axle_lat >= (OBST_WIDTH_MAX_MM + OUT_EXTRA_MM));
 }
 
-bool obstacle_core_out_blocked (int32_t face_mm, int32_t axle_fwd_mm,
+bool obstacle_core_out_blocked (int32_t face_mm, int32_t edge_lat,
+                                int32_t axle_fwd_mm, int32_t axle_lat,
                                 int32_t theta_cdeg)
+{
+    return obstacle_core_out_clear_mm(face_mm, edge_lat, axle_fwd_mm, axle_lat,
+                                      theta_cdeg)
+           < OBST_OUT_BLOCK_MM;
+}
+
+bool obstacle_core_face_blocked (int32_t face_mm, int32_t axle_fwd_mm,
+                                 int32_t theta_cdeg)
 {
     /* the front corner on the line's side sits half a width further on */
     /* Casts (int32_t)(((int64_t) ...)): the value is -4259840..4259839;
@@ -568,6 +620,159 @@ bool obstacle_core_out_blocked (int32_t face_mm, int32_t axle_fwd_mm,
 
     return obstacle_core_out_expect_mm(face_mm, axle_fwd_mm, theta_cdeg)
            <= (OBST_MARGIN_MM + corner);
+}
+
+int32_t obstacle_core_out_clear_mm (int32_t face_mm, int32_t edge_lat,
+                                    int32_t axle_fwd_mm, int32_t axle_lat,
+                                    int32_t theta_cdeg)
+{
+    /* The car: a rectangle US_AHEAD in front of the axle, LENGTH - US_AHEAD
+       behind it, W/2 to each side.  The obstacle: everything at or beyond
+       the face (fwd >= face_mm) and on the line's side of its edge
+       (lat <= edge_lat).  Both are convex: if no axis separates them they
+       touch (0); otherwise the distance is the shortest from a car corner
+       to the obstacle or from the obstacle's corner to a car side. */
+    /* Casts (int64_t)...: positions are within +-2 m, Q15 factors within
+       +-32768, so every product fits; (int32_t)app_math_isqrt64(...): the
+       root of a squared distance below (4 m)^2. */
+    int64_t const cos_q = app_math_cos_q15(theta_cdeg);
+    int64_t const sin_q = app_math_sin_q15(theta_cdeg);
+    int64_t const ax    = (int64_t)axle_fwd_mm * 32768;
+    int64_t const ay    = (int64_t)axle_lat * 32768;
+    int64_t const px    = (int64_t)face_mm * 32768;
+    int64_t const py    = (int64_t)edge_lat * 32768;
+    int64_t       cx[CAR_CORNERS];
+    int64_t       cy[CAR_CORNERS];
+    int64_t       best;
+    uint8_t       idx;
+
+    car_corners(ax, ay, cos_q, sin_q, cx, cy);
+
+    if (!car_separated(cx, cy, px, py, cos_q, sin_q))
+    {
+        best = 0;
+    }
+    else
+    {
+        best = INT64_MAX;
+
+        for (idx = 0u; idx < CAR_CORNERS; idx++)
+        {
+            /* Cast (uint8_t)((idx + 1u) % CAR_CORNERS): below CAR_CORNERS. */
+            uint8_t const next = (uint8_t)((idx + 1u) % CAR_CORNERS);
+            int64_t const dx   = (px > cx[idx]) ? ((px - cx[idx]) / 32768) : 0;
+            int64_t const dy   = (cy[idx] > py) ? ((cy[idx] - py) / 32768) : 0;
+            int64_t const d2   = (dx * dx) + (dy * dy);
+            int64_t const s2 =
+                seg_dist2(px, py, cx[idx], cy[idx], cx[next], cy[next]);
+
+            best = (d2 < best) ? d2 : best;
+            best = (s2 < best) ? s2 : best;
+        }
+    }
+
+    /* Cast (uint64_t)best: a squared distance, never negative. */
+    return (int32_t)app_math_isqrt64((uint64_t)best);
+}
+
+/** The car's corners, Q15 mm, in order round the outline: front inner,
+   front outer, rear outer, rear inner (inner = toward the line). */
+static void car_corners (int64_t ax, int64_t ay, int64_t cos_q, int64_t sin_q,
+                         int64_t cx[CAR_CORNERS], int64_t cy[CAR_CORNERS])
+{
+    int64_t const front = OBST_US_AHEAD_MM;
+    int64_t const rear  = OBST_ROBOT_LENGTH_MM - OBST_US_AHEAD_MM;
+    int64_t const half  = OBST_ROBOT_WIDTH_MM / 2;
+
+    /* heading (cos, sin); toward the line (sin, -cos) */
+    cx[0] = (ax + (front * cos_q)) + (half * sin_q);
+    cy[0] = (ay + (front * sin_q)) - (half * cos_q);
+    cx[1] = (ax + (front * cos_q)) - (half * sin_q);
+    cy[1] = (ay + (front * sin_q)) + (half * cos_q);
+    cx[2] = (ax - (rear * cos_q)) - (half * sin_q);
+    cy[2] = (ay - (rear * sin_q)) + (half * cos_q);
+    cx[3] = (ax - (rear * cos_q)) + (half * sin_q);
+    cy[3] = (ay - (rear * sin_q)) - (half * cos_q);
+}
+
+/** True when an axis separates the car from the obstacle region
+   {x >= px, y <= py}: the region's two sides and the car's two axes. */
+static bool car_separated (int64_t const cx[CAR_CORNERS],
+                           int64_t const cy[CAR_CORNERS], int64_t px,
+                           int64_t py, int64_t cos_q, int64_t sin_q)
+{
+    int64_t const ux[CAR_AXES] = {32768, 0, cos_q, sin_q};
+    int64_t const uy[CAR_AXES] = {0, -32768, sin_q, -cos_q};
+    bool          b_sep        = false;
+    uint8_t       adx;
+
+    for (adx = 0u; (adx < CAR_AXES) && !b_sep; adx++)
+    {
+        /* Q15 x Q15 mm: still within +-2^58 */
+        int64_t const pp = ((px / 32768) * ux[adx]) + ((py / 32768) * uy[adx]);
+        int64_t       cmin = INT64_MAX;
+        int64_t       cmax = INT64_MIN;
+        uint8_t       idx;
+
+        for (idx = 0u; idx < CAR_CORNERS; idx++)
+        {
+            int64_t const v =
+                ((cx[idx] / 32768) * ux[adx]) + ((cy[idx] / 32768) * uy[adx]);
+
+            cmin = (v < cmin) ? v : cmin;
+            cmax = (v > cmax) ? v : cmax;
+        }
+
+        /* the region {p + a(1,0) + b(0,-1), a, b >= 0} on axis u starts
+           at u.p if u.x >= 0 and u.y <= 0, ends there if the reverse */
+        if ((ux[adx] >= 0) && (uy[adx] <= 0))
+        {
+            b_sep = (cmax < pp);
+        }
+        else if ((ux[adx] <= 0) && (uy[adx] >= 0))
+        {
+            b_sep = (cmin > pp);
+        }
+        else
+        {
+            /* the region covers the whole axis */
+        }
+    }
+
+    return b_sep;
+}
+
+/** Squared distance (mm^2) from p to the segment a-b (all Q15 mm). */
+static int64_t seg_dist2 (int64_t px, int64_t py, int64_t ax, int64_t ay,
+                          int64_t bx, int64_t by)
+{
+    /* in whole mm: the segment is a car side (<= 180 mm) */
+    int64_t const ex  = (bx - ax) / 32768;
+    int64_t const ey  = (by - ay) / 32768;
+    int64_t const wx  = (px - ax) / 32768;
+    int64_t const wy  = (py - ay) / 32768;
+    int64_t const len = (ex * ex) + (ey * ey);
+    int64_t const dot = (wx * ex) + (wy * ey);
+    int64_t       dx;
+    int64_t       dy;
+
+    if ((dot <= 0) || (0 == len))
+    {
+        dx = wx;
+        dy = wy;
+    }
+    else if (dot >= len)
+    {
+        dx = wx - ex;
+        dy = wy - ey;
+    }
+    else
+    {
+        dx = wx - ((dot * ex) / len);
+        dy = wy - ((dot * ey) / len);
+    }
+
+    return (dx * dx) + (dy * dy);
 }
 
 uint16_t obstacle_core_probe_face (uint16_t r_mm, uint16_t expect_mm)

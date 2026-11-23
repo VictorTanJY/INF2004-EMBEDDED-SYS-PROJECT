@@ -106,9 +106,17 @@
    15 cm box last saw the face with the sensor 9.5 / 9.7 cm out (edge 7.5
    cm), ~20 mm.  MEASURE again with the probe (dashboard LOG 74).      */
 #define OBST_PROBE_EDGE_OVER_MM 20
-/* Room planned for the leg to go this much further out than the first
-   edge (the back-up before the turn-out allows for it).               */
-#define OBST_OUT_SPARE_MM 100
+/* 23 Nov: no back-up after the scan when the 45 deg step-out already
+   clears.  On the turned heading the car's inner side runs along one
+   straight line; the back-up is planned only if that line passes the
+   obstacle's corner (planning edge, face) by less than OBST_MARGIN_MM,
+   or a front corner would swing within OBST_MARGIN_MM of the face in
+   the turn-out, and then OBST_BACK_SPARE_MM further than that.  The
+   step-out leg ends early (blocked) only when the car's outline comes
+   within OBST_OUT_BLOCK_MM of the obstacle (its edge widened to the
+   furthest face echo seen on the leg). */
+#define OBST_BACK_SPARE_MM 20
+#define OBST_OUT_BLOCK_MM  25
 /* 3 Nov, after the instructor's guidance (25 Oct forum: estimate, not
    measure; median-filtered pings, background subtraction, consecutive-
    angle edges, conservative margins, more than one scan position, plan
