@@ -1250,11 +1250,16 @@ static void test_obstacle_h21_part2 (void)
     obstacle_core_profile_t prof;
 
     /* S5-H21: the servo looks back along the line (> 90 = left), and the
-       leg ends before the front corner reaches the face */
+       leg ends before the car's outline comes within OBST_OUT_BLOCK_MM of
+       the obstacle.  23 Nov: no back-up (22 Nov 13:03 run: face 19.8 cm
+       from the sensor, plan 23.6 cm out = edge 10.6 cm): 45 deg passes the
+       corner by >= 50 mm; the same pose with the edge 20 cm out is blocked */
     CHECK("S5-H21", (45 == obstacle_core_out_servo_deg(4500, 1))
                         && (135 == obstacle_core_out_servo_deg(4500, -1)));
-    CHECK("S5-H21", !obstacle_core_out_blocked(411, 100, 4500)
-                        && obstacle_core_out_blocked(411, 250, 4500));
+    CHECK("S5-H21", !obstacle_core_out_blocked(283, 106, 160, 160, 4500)
+                        && obstacle_core_out_blocked(283, 200, 160, 160, 4500)
+                        && (obstacle_core_out_clear_mm(283, 106, 160, 160, 4500)
+                            >= OBST_MARGIN_MM));
 
     /* S5-H17 (4 Nov): edge scan with the car turning.  The wide edges
        (side choice) never inside the truth; side away from the centre.

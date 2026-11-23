@@ -173,6 +173,11 @@ typedef struct
 
 #define OBST_BYPASS_MAX_STEPS 10u
 
+/** 23 Nov: how far (mm, 0 = not at all) the car must back up before the
+    turn-out so that its inner side passes the obstacle's corner, and its
+    front corners the face in the turn, by OBST_MARGIN_MM. */
+int32_t obstacle_core_bypass_back_mm(obstacle_core_profile_t const * p_prof);
+
 /** The steps of the bypass on side (OBST_PLAN_LEFT / RIGHT) for this profile
     into p_steps.  Returns how many. */
 uint8_t obstacle_core_bypass_plan(obstacle_core_profile_t const * p_prof,
@@ -205,9 +210,23 @@ void obstacle_core_out_ping(obstacle_core_out_t * p_o, int32_t axle_lat,
 int32_t obstacle_core_out_target(obstacle_core_out_t const * p_o);
 /** True when the step-out leg has gone far enough sideways (axle_lat, mm). */
 bool obstacle_core_out_done(obstacle_core_out_t const * p_o, int32_t axle_lat);
-/** The car's front corner is within OBST_MARGIN_MM of the face plane: the
-   leg must end here, whatever it has seen. */
-bool obstacle_core_out_blocked(int32_t face_mm, int32_t axle_fwd_mm,
+/** Shortest distance (mm, 0 = touching) from the car's outline, axle at
+   (axle_fwd, axle_lat) on heading theta, to the obstacle: from its face
+   (face_mm ahead of the stop point) on, from its edge (edge_lat) toward
+   the line. */
+int32_t obstacle_core_out_clear_mm(int32_t face_mm, int32_t edge_lat,
+                                   int32_t axle_fwd_mm, int32_t axle_lat,
+                                   int32_t theta_cdeg);
+/** The car's front corner is within OBST_MARGIN_MM of the face plane
+   (the width probe's limit; the step-out leg uses
+   obstacle_core_out_blocked() since 23 Nov). */
+bool obstacle_core_face_blocked(int32_t face_mm, int32_t axle_fwd_mm,
+                                int32_t theta_cdeg);
+/** 23 Nov: the car's outline is within OBST_OUT_BLOCK_MM of the obstacle
+   (obstacle_core_out_clear_mm()): the leg must end here, whatever it has
+   seen. */
+bool obstacle_core_out_blocked(int32_t face_mm, int32_t edge_lat,
+                               int32_t axle_fwd_mm, int32_t axle_lat,
                                int32_t theta_cdeg);
 /* ---- Width probe (7 Nov): sensor lateral positions (mm, + left) of the
    face echoes while the car side-steps past both edges. */
